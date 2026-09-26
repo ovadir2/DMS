@@ -51,6 +51,8 @@ Two language switches:
 - `-Language en|he` sets the DMS content language (column, list, view and group names).
 - `-SiteLanguage en|he` sets the SharePoint interface language (site locale 1033 / 1037). It defaults to `-Language`. Example: `-SiteLanguage he -Language en` gives Hebrew SharePoint menus with English DMS content.
 
+- `-Multilingual` makes the sites bilingual. Each user sees menus, the site title, list, column and content-type names in the language of their own Microsoft 365 profile (Hebrew or English). Stored choice values stay English keys, and view and group names use the `-Language` language.
+
 The site locale is fixed when the site is created and can't be changed later. Pick it before the first run.
 
 ## Deployment sequence (maps to blueprint section 10)

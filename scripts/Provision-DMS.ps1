@@ -53,6 +53,11 @@
 .PARAMETER AllowedGuestDomains
     Optional list of external domains allowed to be invited to the Exchange site.
 
+.PARAMETER Multilingual
+    Makes both sites bilingual (Hebrew + English). Each user then sees menus, site title,
+    list, column and content-type names in the language of their own Microsoft 365
+    profile. The site's default language still comes from -SiteLanguage / -Language.
+
 .PARAMETER LogoPath
     Optional site logo (PNG/JPG, ideally square, at least 64x64). Default: ..\assets\logo.png
     next to this script. Skipped if the file does not exist.
@@ -90,7 +95,8 @@ param(
     [guid] $WorkflowServiceAppId,
     [switch] $SkipSiteCreation,
     [switch] $SkipSeedData,
-    [string] $LogoPath = (Join-Path $PSScriptRoot '..\assets\logo.png')
+    [string] $LogoPath = (Join-Path $PSScriptRoot '..\assets\logo.png'),
+    [switch] $Multilingual
 )
 
 Set-StrictMode -Version Latest
@@ -875,6 +881,45 @@ function Add-Seed([string]$ListUrl, [object[]]$Rows) {
     Write-Ok "$ListUrl seeded ($($Rows.Count) rows)"
 }
 
+function Install-DmsTranslation([string]$SiteKey) {
+    # English + Hebrew names for the site title, site columns, content types, lists and list columns.
+    Write-Step "Translations ($SiteKey)"
+    $cultures = @('en-US', 'he-IL')
+    $siteNames = if ($SiteKey -eq 'DC') { @('Document Control System (DMS)', 'מערכת בקרת מסמכים (DMS)') } else { @('DMS - Large File Exchange', 'DMS - העברת קבצים גדולים') }
+    $web = Get-PnPWeb -Includes TitleResource
+    for ($i = 0; $i -lt 2; $i++) { $web.TitleResource.SetValueForUICulture($cultures[$i], $siteNames[$i]) }
+    $web.Update()
+    foreach ($n in (Get-NeededField $SiteKey)) {
+        $f = Get-PnPField -Identity $n -Includes TitleResource
+        $names = @($FieldMap[$n].En, $FieldMap[$n].He)
+        for ($i = 0; $i -lt 2; $i++) { $f.TitleResource.SetValueForUICulture($cultures[$i], $names[$i]) }
+        $f.Update()
+    }
+    foreach ($k in @($Lists | Where-Object Site -eq $SiteKey | ForEach-Object { $_.Ct } | Select-Object -Unique)) {
+        $ct = Get-PnPContentType -Identity (Get-ContentTypeId $k $ContentTypes[$k].Parent) -Includes NameResource
+        $names = @($ContentTypes[$k].En, $ContentTypes[$k].He)
+        for ($i = 0; $i -lt 2; $i++) { $ct.NameResource.SetValueForUICulture($cultures[$i], $names[$i]) }
+        $ct.Update($false)
+    }
+    Invoke-PnPQuery
+    foreach ($L in $Lists | Where-Object Site -eq $SiteKey) {
+        $list = Get-PnPList -Identity $L.Url -Includes TitleResource
+        $names = @($L.En, $L.He)
+        for ($i = 0; $i -lt 2; $i++) { $list.TitleResource.SetValueForUICulture($cultures[$i], $names[$i]) }
+        $list.Update()
+        $cols = @($ContentTypes[$L.Ct].Fields)
+        if ($L.ContainsKey('TitleEn')) { $cols += 'Title' }
+        foreach ($n in $cols) {
+            $lf = Get-PnPField -List $L.Url -Identity $n -Includes TitleResource
+            $names = if ($n -eq 'Title') { @($L.TitleEn, $L.TitleHe) } else { @($FieldMap[$n].En, $FieldMap[$n].He) }
+            for ($i = 0; $i -lt 2; $i++) { $lf.TitleResource.SetValueForUICulture($cultures[$i], $names[$i]) }
+            $lf.Update()
+        }
+        Invoke-PnPQuery
+        Write-Ok "translated $($L.En)"
+    }
+}
+
 function Get-NeededField([string]$SiteKey) {
     $cts = $Lists | Where-Object Site -eq $SiteKey | ForEach-Object { $_.Ct } | Select-Object -Unique
     $cts | ForEach-Object { $ContentTypes[$_].Fields } | Select-Object -Unique
@@ -936,14 +981,19 @@ try {
             catch { Write-Warn2 "logo: $($_.Exception.Message)" }
         } else { Write-Skip "no logo file at $LogoPath" }
 
-        # With -SiteLanguage, show the SharePoint UI in the site language for everyone
-        # (turns off alternate UI languages, which otherwise follow each user's personal language).
-        if ($SiteLanguage) {
-            try {
-                $w = Get-PnPWeb -Includes IsMultilingual
-                if ($w.IsMultilingual) { $w.IsMultilingual = $false; $w.Update(); Invoke-PnPQuery; Write-Ok "UI language fixed to $SiteLanguage" }
-            } catch { Write-Warn2 "UI language: $($_.Exception.Message)" }
-        }
+        # UI language: -Multilingual = Hebrew + English per user; -SiteLanguage alone = site language for everyone.
+        try {
+            $w = Get-PnPWeb -Includes IsMultilingual
+            if ($Multilingual) {
+                $w.IsMultilingual = $true
+                $w.AddSupportedUILanguage($(if ($Script:Lcid -eq 1037) { 1033 } else { 1037 }))
+                $w.Update(); Invoke-PnPQuery
+                Write-Ok 'bilingual UI enabled (he + en)'
+            } elseif ($SiteLanguage -and $w.IsMultilingual) {
+                $w.IsMultilingual = $false; $w.Update(); Invoke-PnPQuery
+                Write-Ok "UI language fixed to $SiteLanguage"
+            }
+        } catch { Write-Warn2 "UI language: $($_.Exception.Message)" }
         try { Set-PnPSite -DisableSharingForNonOwners | Out-Null }
         catch { Write-Warn2 "DisableSharingForNonOwners: $($_.Exception.Message)" }
 
@@ -952,6 +1002,7 @@ try {
         Install-DmsGroup $site.Key $roles
         Install-DmsSiteColumn (Get-NeededField $site.Key)
         foreach ($L in $Lists | Where-Object Site -eq $site.Key) { Install-DmsList $L $roles }
+        if ($Multilingual) { Install-DmsTranslation $site.Key }
 
         if (-not $SkipSeedData -and $site.Key -eq 'DC') {
             Write-Step 'Seed data'
