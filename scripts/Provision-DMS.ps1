@@ -426,7 +426,7 @@ $ContentTypes = [ordered]@{
                  'MandatoryApprovers','ConditionalApprovers','AdditionalReviewers','FinalApprover','ChangeImpact','ChangeSummary',
                  'SubmittedSHA256','SubmittedUncPath','DecisionDueDate','CompletedUtc','FinalComment') }
     ApprovalDecision = @{ En='DMS Approval Decision'; He='החלטת מאשר'; Parent='Item'
-        Fields=@('WorkflowId','DocumentId','Revision','Approver','ApproverRole','ApprovalStage','Decision','DecisionComment',
+        Fields=@('WorkflowId','DocumentId','DocumentType','Revision','Approver','ApproverRole','ApprovalStage','Decision','DecisionComment',
                  'DecisionUtc','DelegatedFrom','DecisionDueDate','ApprovalRef') }
     ApproverRule = @{ En='DMS Approver Rule'; He='כלל מאשרים'; Parent='Item'
         Fields=@('DocumentArea','DocumentType','MandatoryRoles','MandatoryApprovers','ConditionalRoles','ConditionalApprovers',
@@ -505,7 +505,7 @@ $Lists = @(
            Fields=@('WorkflowId','DocumentId','Revision','ApproverRole','ApprovalStage','Decision','DecisionDueDate')
            Query="<Where><And>$(& $Q_Me 'Approver')<Eq><FieldRef Name='Decision' /><Value Type='Text'>Pending</Value></Eq></And></Where><OrderBy><FieldRef Name='DecisionDueDate' /></OrderBy>"}
          @{En='All Decisions'; He='כל ההחלטות'
-           Fields=@('WorkflowId','DocumentId','Revision','Approver','ApproverRole','ApprovalStage','Decision','DecisionUtc','DelegatedFrom')
+           Fields=@('WorkflowId','DocumentId','DocumentType','Revision','Approver','ApproverRole','ApprovalStage','Decision','DecisionUtc','DelegatedFrom')
            Query="<OrderBy><FieldRef Name='WorkflowId' /><FieldRef Name='ApprovalStage' /></OrderBy>"}
        ) }
     @{ Site='DC'; Key='ApproverMatrix'; Url='Lists/ApproverMatrix'; Tpl='GenericList'; Ct='ApproverRule'
