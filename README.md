@@ -55,6 +55,8 @@ Two language switches:
 
 - `-ChoiceLanguage en|he` sets the language of the stored dropdown values (default `en`). For a SharePoint site with no English at all, use `-SiteLanguage he -Language he -ChoiceLanguage he` without `-Multilingual`. Flows and apps must then compare against the Hebrew values listed in `docs/01` (the "Hebrew label" column).
 
+Re-running the script on an existing site brings list, column, content-type, view and group names and dropdown values to the current language. Add `-ReseedData` to also reload the Approver Matrix, Impact Routing and UI Labels rows (this removes any people already assigned there, so use it only before go-live).
+
 The site locale is fixed when the site is created and can't be changed later. Pick it before the first run.
 
 ## Deployment sequence (maps to blueprint section 10)
