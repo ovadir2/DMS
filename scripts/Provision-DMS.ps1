@@ -763,11 +763,17 @@ function Install-DmsContentType([string]$Key) {
         Add-PnPContentType -Name $name -ContentTypeId $id -Group $Script:CtGrp | Out-Null
         Write-Ok "content type $name"
     } else { Write-Skip "content type $name" }
-    $ctFields = @(Get-PnPProperty -ClientObject (Get-PnPContentType -Identity $id) -Property Fields | ForEach-Object InternalName)
+    # Load the content type's fields through CSOM (PnP 3.x Get-PnPProperty does not enumerate them).
+    $ctObj = Get-PnPContentType -Identity $id
+    $ctx   = Get-PnPContext
+    $ctx.Load($ctObj.Fields)
+    $ctx.ExecuteQuery()
+    $ctFields = @(foreach ($f in $ctObj.Fields) { $f.InternalName })
     foreach ($n in $def.Fields) {
         if ($ctFields -contains $n) { continue }
         $req = [bool]($FieldMap[$n].ContainsKey('Req') -and $FieldMap[$n].Req)
-        Add-PnPFieldToContentType -Field $n -ContentType $id -Required:$req
+        try { Add-PnPFieldToContentType -Field $n -ContentType $id -Required:$req }
+        catch { if ($_.Exception.Message -notmatch 'already|קיים') { throw } }
     }
     $id
 }
