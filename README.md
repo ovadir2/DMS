@@ -53,6 +53,8 @@ Two language switches:
 
 - `-Multilingual` makes the sites bilingual. Each user sees menus, the site title, list, column and content-type names in the language of their own Microsoft 365 profile (Hebrew or English). Stored choice values stay English keys, and view and group names use the `-Language` language.
 
+- `-ChoiceLanguage en|he` sets the language of the stored dropdown values (default `en`). For a SharePoint site with no English at all, use `-SiteLanguage he -Language he -ChoiceLanguage he` without `-Multilingual`. Flows and apps must then compare against the Hebrew values listed in `docs/01` (the "Hebrew label" column).
+
 The site locale is fixed when the site is created and can't be changed later. Pick it before the first run.
 
 ## Deployment sequence (maps to blueprint section 10)

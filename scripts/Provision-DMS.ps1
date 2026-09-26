@@ -53,6 +53,11 @@
 .PARAMETER AllowedGuestDomains
     Optional list of external domains allowed to be invited to the Exchange site.
 
+.PARAMETER ChoiceLanguage
+    en (default) or he. Language of the STORED dropdown values (Working / בעבודה ...).
+    'he' gives a site with no English at all in SharePoint (use with -SiteLanguage he
+    -Language he). Flows and apps must then compare against the Hebrew values.
+
 .PARAMETER Multilingual
     Makes both sites bilingual (Hebrew + English). Each user then sees menus, site title,
     list, column and content-type names in the language of their own Microsoft 365
@@ -96,7 +101,8 @@ param(
     [switch] $SkipSiteCreation,
     [switch] $SkipSeedData,
     [string] $LogoPath = (Join-Path $PSScriptRoot '..\assets\logo.png'),
-    [switch] $Multilingual
+    [switch] $Multilingual,
+    [ValidateSet('en', 'he')] [string] $ChoiceLanguage = 'en'
 )
 
 Set-StrictMode -Version Latest
@@ -123,6 +129,24 @@ function Write-Skip([string]$Message) { Write-Host "  [skip] $Message" -Foregrou
 function Write-Warn2([string]$Message){ Write-Host "  [warn] $Message" -ForegroundColor Yellow }
 
 function T([string]$En, [string]$HeText) { if ($Script:He -and $HeText) { $HeText } else { $En } }
+
+# Stored dropdown value for a choice key (-ChoiceLanguage he stores the Hebrew label).
+function CV([string]$Set, [string]$Key) {
+    if ($ChoiceLanguage -ne 'he') { return $Key }
+    $c = $Choices[$Set] | Where-Object { $_[0] -eq $Key } | Select-Object -First 1
+    if ($c) { $c[1] } else { $Key }
+}
+# Rewrites <Value Type='Text'>Key</Value> in view queries to the stored Hebrew value.
+function Convert-CamlValue([string]$Query) {
+    if ($ChoiceLanguage -ne 'he' -or -not $Query) { return $Query }
+    [regex]::Replace($Query, "<Value Type='Text'>([^<]+)</Value>", {
+        param($m)
+        $k = $m.Groups[1].Value
+        $he = foreach ($set in $Choices.Keys) { foreach ($c in $Choices[$set]) { if ($c[0] -eq $k) { $c[1] } } }
+        $v = if ($he) { @($he)[0] } else { $k }
+        "<Value Type='Text'>$(ConvertTo-XmlText $v)</Value>"
+    })
+}
 
 function Get-StableGuid([string]$Seed) {
     # Deterministic GUID so the same column/content type has the same ID in DEV/TEST/PROD.
@@ -349,10 +373,11 @@ function Get-FieldXml([hashtable]$F) {
     $req  = if ($F.ContainsKey('Req') -and $F.Req) { 'TRUE' } else { 'FALSE' }
     $idx  = if ($F.ContainsKey('Idx') -and $F.Idx) { ' Indexed="TRUE"' } else { '' }
     $head = "ID=`"{$id}`" Name=`"$($F.N)`" StaticName=`"$($F.N)`" DisplayName=`"$dn`" Group=`"$Script:FieldGrp`" Required=`"$req`"$idx"
-    $def  = if ($F.ContainsKey('Def')) { "<Default>$(ConvertTo-XmlText $F.Def)</Default>" } else { '' }
+    $defVal = if ($F.ContainsKey('Def') -and $F.ContainsKey('Set')) { CV $F.Set $F.Def } elseif ($F.ContainsKey('Def')) { $F.Def } else { $null }
+    $def  = if ($null -ne $defVal) { "<Default>$(ConvertTo-XmlText $defVal)</Default>" } else { '' }
     $choicesXml = {
         param($set)
-        '<CHOICES>' + (($Choices[$set] | ForEach-Object { "<CHOICE>$(ConvertTo-XmlText $_[0])</CHOICE>" }) -join '') + '</CHOICES>'
+        '<CHOICES>' + (($Choices[$set] | ForEach-Object { "<CHOICE>$(ConvertTo-XmlText (CV $set $_[0]))</CHOICE>" }) -join '') + '</CHOICES>'
     }
     switch ($F.T) {
         'Text'        { $max = if ($F.ContainsKey('Max')) { $F.Max } else { 255 }
@@ -837,7 +862,7 @@ function Install-DmsList([hashtable]$L, [hashtable]$Roles) {
         foreach ($u in $L.Unique) { Set-PnPField -List $L.Url -Identity $u -Values @{ Indexed = $true; EnforceUniqueValues = $true } | Out-Null }
     }
     if ($L.ContainsKey('Defaults')) {
-        foreach ($k in $L.Defaults.Keys) { Set-PnPField -List $L.Url -Identity $k -Values @{ DefaultValue = $L.Defaults[$k] } | Out-Null }
+        foreach ($k in $L.Defaults.Keys) { Set-PnPField -List $L.Url -Identity $k -Values @{ DefaultValue = (CV $FieldMap[$k].Set $L.Defaults[$k]) } | Out-Null }
     }
 
     # --- views
@@ -851,7 +876,7 @@ function Install-DmsList([hashtable]$L, [hashtable]$Roles) {
             Write-Skip "view $vt (fields refreshed)"
         } else {
             $p = @{ List = $L.Url; Title = $vt; Fields = $v.Fields; RowLimit = 100; Paged = $true; SetAsDefault = $isDefault }
-            if ($v.Query) { $p.Query = $v.Query }
+            if ($v.Query) { $p.Query = Convert-CamlValue $v.Query }
             Add-PnPView @p | Out-Null
             Write-Ok "view $vt"
         }
@@ -1007,19 +1032,21 @@ try {
         if (-not $SkipSeedData -and $site.Key -eq 'DC') {
             Write-Step 'Seed data'
             Add-Seed 'Lists/ApproverMatrix' ($ApproverMatrixSeed | ForEach-Object {
-                @{ Title = "$($_[0]) - $($_[1])"; DocumentArea = $_[0]; DocumentType = $_[1]; MandatoryRoles = $_[2]
-                   ConditionalRoles = $_[3]; FinalRole = $_[4]; RoutingMode = 'Hybrid'; SlaDays = 5; IsActive = $true } })
+                $area = CV 'DocumentArea' $_[0]; $type = CV 'DocumentType' $_[1]
+                @{ Title = "$area - $type"; DocumentArea = $area; DocumentType = $type; MandatoryRoles = $_[2]
+                   ConditionalRoles = $_[3]; FinalRole = $_[4]; RoutingMode = (CV 'RoutingMode' 'Hybrid'); SlaDays = 5; IsActive = $true } })
             Add-Seed 'Lists/ImpactRouting' ($ImpactSeed | ForEach-Object {
-                @{ Title = $_[0]; ChangeImpact = $_[0]; IncludeRoles = $_[1]; IsActive = $true } })
+                $imp = CV 'ChangeImpact' $_[0]
+                @{ Title = $imp; ChangeImpact = $imp; IncludeRoles = $_[1]; IsActive = $true } })
 
             $labels = [System.Collections.Generic.List[hashtable]]::new()
-            foreach ($a in $AppLabels) { $labels.Add(@{ Title = $a[0]; LabelArea = 'App';     LabelEN = $a[1]; LabelHE = $a[2] }) }
-            foreach ($m in $MsgLabels) { $labels.Add(@{ Title = $m[0]; LabelArea = 'Message'; LabelEN = $m[1]; LabelHE = $m[2] }) }
-            foreach ($f in $Fields)    { $labels.Add(@{ Title = "field.$($f.N)"; LabelArea = 'Field'; LabelEN = $f.En; LabelHE = $f.He }) }
-            foreach ($l in $Lists)     { $labels.Add(@{ Title = "list.$($l.Key)"; LabelArea = 'List'; LabelEN = $l.En; LabelHE = $l.He }) }
+            foreach ($a in $AppLabels) { $labels.Add(@{ Title = $a[0]; LabelArea = (CV 'LabelArea' 'App');     LabelEN = $a[1]; LabelHE = $a[2] }) }
+            foreach ($m in $MsgLabels) { $labels.Add(@{ Title = $m[0]; LabelArea = (CV 'LabelArea' 'Message'); LabelEN = $m[1]; LabelHE = $m[2] }) }
+            foreach ($f in $Fields)    { $labels.Add(@{ Title = "field.$($f.N)"; LabelArea = (CV 'LabelArea' 'Field'); LabelEN = $f.En; LabelHE = $f.He }) }
+            foreach ($l in $Lists)     { $labels.Add(@{ Title = "list.$($l.Key)"; LabelArea = (CV 'LabelArea' 'List'); LabelEN = $l.En; LabelHE = $l.He }) }
             foreach ($set in $Choices.Keys) {
                 foreach ($c in $Choices[$set]) {
-                    $labels.Add(@{ Title = "choice.$set.$($c[0])"; LabelArea = 'Choice'; LabelEN = $c[0]; LabelHE = $c[1] })
+                    $labels.Add(@{ Title = "choice.$set.$($c[0])"; LabelArea = (CV 'LabelArea' 'Choice'); LabelEN = $c[0]; LabelHE = $c[1] })
                 }
             }
             Add-Seed 'Lists/UiLabels' $labels.ToArray()
