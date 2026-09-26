@@ -655,6 +655,30 @@ $ApproverMatrixSeed = @(
     ,@('IT','IT Procedure','IT Manager','Information Security; Quality','CIO')
     ,@('InfoSec','Security Policy','Information Security Manager','Legal; HR; Quality','CEO / CIO')
 )
+# Hebrew names for the roles used in the seed data (-Language he).
+$RoleHe = @{
+    'Marketing Manager' = 'מנהל שיווק'; 'Quality' = 'איכות'; 'Legal' = 'משפטית'; 'CEO' = 'מנכ״ל'
+    'Relevant VP' = 'סמנכ״ל רלוונטי'; 'Finance' = 'כספים'; 'Department Manager' = 'מנהל מחלקה'
+    'IT' = 'מערכות מידע'; 'HR' = 'משאבי אנוש'; 'Authorized Executive' = 'מורשה חתימה בכיר'
+    'IT Security' = 'אבטחת מידע'; 'Quality Manager' = 'מנהל איכות'; 'Sales Manager' = 'מנהל מכירות'
+    'Engineering' = 'הנדסה'; 'Purchasing' = 'רכש'; 'Commercial Manager' = 'מנהל מסחרי'
+    'Business Owner' = 'בעל התהליך העסקי'; 'Signatory' = 'מורשה חתימה'; 'Engineering Manager' = 'מנהל הנדסה'
+    'Operations' = 'תפעול'; 'Customer' = 'לקוח'; 'CTO' = 'סמנכ״ל טכנולוגיות'; 'Test' = 'בדיקות'
+    'Project Manager' = 'מנהל פרויקט'; 'Engineering Lead' = 'ראש צוות הנדסה'; 'Manufacturing' = 'ייצור'
+    'Manufacturing Manager' = 'מנהל ייצור'; 'Safety' = 'בטיחות'; 'Test Manager' = 'מנהל בדיקות'
+    'Development' = 'פיתוח'; 'Planning' = 'תכנון'; 'Document Control' = 'בקרת מסמכים'
+    'IT Manager' = 'מנהל מערכות מידע'; 'Information Security' = 'אבטחת מידע'; 'CIO' = 'מנמ״ר'
+    'Information Security Manager' = 'מנהל אבטחת מידע'; 'CFT' = 'צוות לקוח (CFT)'
+    'Test Engineering' = 'הנדסת בדיקות'; 'System Owner' = 'בעל המערכת'
+}
+# Translates "Quality; Legal" or "Project Manager / CTO" role text when -Language he.
+function Convert-RoleText([string]$Text) {
+    if (-not $Script:He -or -not $Text) { return $Text }
+    ($Text -split '; ' | ForEach-Object {
+        ($_ -split ' / ' | ForEach-Object { if ($RoleHe.ContainsKey($_)) { $RoleHe[$_] } else { $_ } }) -join ' / '
+    }) -join '; '
+}
+
 $ImpactSeed = @(
     ,@('Financial or pricing','Finance')
     ,@('Contractual/customer commitment','Legal; CFT')
@@ -1036,11 +1060,11 @@ try {
             Write-Step 'Seed data'
             Add-Seed 'Lists/ApproverMatrix' ($ApproverMatrixSeed | ForEach-Object {
                 $area = CV 'DocumentArea' $_[0]; $type = CV 'DocumentType' $_[1]
-                @{ Title = "$area - $type"; DocumentArea = $area; DocumentType = $type; MandatoryRoles = $_[2]
-                   ConditionalRoles = $_[3]; FinalRole = $_[4]; RoutingMode = (CV 'RoutingMode' 'Hybrid'); SlaDays = 5; IsActive = $true } })
+                @{ Title = "$area - $type"; DocumentArea = $area; DocumentType = $type; MandatoryRoles = (Convert-RoleText $_[2])
+                   ConditionalRoles = (Convert-RoleText $_[3]); FinalRole = (Convert-RoleText $_[4]); RoutingMode = (CV 'RoutingMode' 'Hybrid'); SlaDays = 5; IsActive = $true } })
             Add-Seed 'Lists/ImpactRouting' ($ImpactSeed | ForEach-Object {
                 $imp = CV 'ChangeImpact' $_[0]
-                @{ Title = $imp; ChangeImpact = $imp; IncludeRoles = $_[1]; IsActive = $true } })
+                @{ Title = $imp; ChangeImpact = $imp; IncludeRoles = (Convert-RoleText $_[1]); IsActive = $true } })
 
             $labels = [System.Collections.Generic.List[hashtable]]::new()
             foreach ($a in $AppLabels) { $labels.Add(@{ Title = $a[0]; LabelArea = (CV 'LabelArea' 'App');     LabelEN = $a[1]; LabelHE = $a[2] }) }
