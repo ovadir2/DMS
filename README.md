@@ -46,7 +46,12 @@ cd dms/scripts
 
 The script can be re-run safely. Existing objects are skipped or refreshed, and seed data is only loaded into empty lists. A transcript is written to `scripts/logs/`.
 
-The language is chosen at site creation (LCID 1033 / 1037) and cannot be changed later on an existing site. Pick it before the first run.
+Two language switches:
+
+- `-Language en|he` sets the DMS content language (column, list, view and group names).
+- `-SiteLanguage en|he` sets the SharePoint interface language (site locale 1033 / 1037). It defaults to `-Language`. Example: `-SiteLanguage he -Language en` gives Hebrew SharePoint menus with English DMS content.
+
+The site locale is fixed when the site is created and can't be changed later. Pick it before the first run.
 
 ## Deployment sequence (maps to blueprint section 10)
 

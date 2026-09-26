@@ -33,7 +33,13 @@
     Required for site creation / tenant settings: SharePoint > Sites.FullControl.All (delegated).
 
 .PARAMETER Language
-    en (default) or he. Controls the site locale (1033 / 1037) and all display names.
+    en (default) or he. Language of the DMS content: column, list, view, content-type
+    and group names. Also the site locale unless -SiteLanguage is given.
+
+.PARAMETER SiteLanguage
+    Optional. en or he. Language of the SharePoint interface itself (site locale
+    1033 / 1037). Example: -SiteLanguage he -Language en gives Hebrew SharePoint menus
+    with English DMS content. Can only be set when the site is created.
 
 .PARAMETER OwnerUpn
     Primary site collection administrator (UPN).
@@ -71,6 +77,7 @@ param(
     [Parameter(Mandatory)] [guid]   $ClientId,
     [Parameter(Mandatory)] [string] $OwnerUpn,
     [ValidateSet('en', 'he')] [string] $Language = 'en',
+    [ValidateSet('en', 'he')] [string] $SiteLanguage,
     [string] $DocControlSiteAlias = 'DocumentControl',
     [string] $ExchangeSiteAlias   = 'LargeFileExchange',
     [hashtable] $GroupMembers = @{},
@@ -85,7 +92,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $Script:He        = ($Language -eq 'he')
-$Script:Lcid      = if ($Script:He) { 1037 } else { 1033 }
+$siteLang         = if ($SiteLanguage) { $SiteLanguage } else { $Language }
+$Script:Lcid      = if ($siteLang -eq 'he') { 1037 } else { 1033 }
 $Script:FieldGrp  = 'DMS Columns'
 $Script:CtGrp     = 'DMS Content Types'
 $TenantRoot       = "https://$TenantName.sharepoint.com"
