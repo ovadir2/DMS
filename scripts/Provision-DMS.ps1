@@ -910,7 +910,7 @@ function Install-DmsTranslation([string]$SiteKey) {
     # English + Hebrew names for the site title, site columns, content types, lists and list columns.
     Write-Step "Translations ($SiteKey)"
     $cultures = @('en-US', 'he-IL')
-    $siteNames = if ($SiteKey -eq 'DC') { @('Document Control System (DMS)', 'מערכת בקרת מסמכים (DMS)') } else { @('DMS - Large File Exchange', 'DMS - העברת קבצים גדולים') }
+    $siteNames = if ($SiteKey -eq 'DC') { @('Documents Management System (DMS)', 'מערכת ניהול מסמכים (DMS)') } else { @('DMS - Large File Exchange', 'DMS - העברת קבצים גדולים') }
     $web = Get-PnPWeb -Includes TitleResource
     for ($i = 0; $i -lt 2; $i++) { $web.TitleResource.SetValueForUICulture($cultures[$i], $siteNames[$i]) }
     $web.Update()
@@ -958,7 +958,7 @@ try {
 
     if (-not $SkipSiteCreation) {
         foreach ($s in @(
-            @{ Url = $DcUrl; Title = (T 'Document Control System (DMS)' 'מערכת בקרת מסמכים (DMS)') },
+            @{ Url = $DcUrl; Title = (T 'Documents Management System (DMS)' 'מערכת ניהול מסמכים (DMS)') },
             @{ Url = $ExUrl; Title = (T 'DMS - Large File Exchange' 'DMS - העברת קבצים גדולים') })) {
             if (Get-PnPTenantSite -Identity $s.Url -ErrorAction SilentlyContinue) { Write-Skip "site $($s.Url)"; continue }
             New-PnPSite -Type TeamSiteWithoutMicrosoft365Group -Title $s.Title -Url $s.Url -Owner $OwnerUpn -Lcid $Script:Lcid | Out-Null
@@ -999,7 +999,7 @@ try {
         Set-PnPWeb -MembersCanShare:$false | Out-Null
 
         # Title (also on re-runs) and logo
-        $siteTitle = if ($site.Key -eq 'DC') { T 'Document Control System (DMS)' 'מערכת בקרת מסמכים (DMS)' } else { T 'DMS - Large File Exchange' 'DMS - העברת קבצים גדולים' }
+        $siteTitle = if ($site.Key -eq 'DC') { T 'Documents Management System (DMS)' 'מערכת ניהול מסמכים (DMS)' } else { T 'DMS - Large File Exchange' 'DMS - העברת קבצים גדולים' }
         Set-PnPWeb -Title $siteTitle | Out-Null
         if ($LogoPath -and (Test-Path $LogoPath)) {
             try { Set-PnPSite -LogoFilePath (Resolve-Path $LogoPath).Path | Out-Null; Write-Ok "logo $LogoPath" }
