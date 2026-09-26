@@ -61,6 +61,10 @@
     Encoding    : UTF-8 with BOM (Hebrew literals; safe for Windows PowerShell hosts and editors)
     Re-runnable : yes. Existing objects are detected and left in place / updated.
 #>
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '',
+    Justification = 'Interactive provisioning script: coloured progress output is intended and is captured by the transcript.')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '',
+    Justification = 'ClientId and GroupMembers are read inside helper functions (Connect-Site, Deploy-DmsGroup) through script scope.')]
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [ValidatePattern('^[a-zA-Z0-9-]+$')] [string] $TenantName,
@@ -320,7 +324,7 @@ $Fields = @(
 )
 $FieldMap = @{}; foreach ($f in $Fields) { $FieldMap[$f.N] = $f }
 
-function New-FieldXml([hashtable]$F) {
+function Get-FieldXml([hashtable]$F) {
     $id   = Get-StableGuid "Field.$($F.N)"
     $dn   = ConvertTo-XmlText (T $F.En $F.He)
     $req  = if ($F.ContainsKey('Req') -and $F.Req) { 'TRUE' } else { 'FALSE' }
@@ -354,7 +358,7 @@ function New-FieldXml([hashtable]$F) {
 
 #region ---------------------------------------------------------------- content types
 # Id: 0x0100 + GUID (Item)  |  0x010100 + GUID (Document)
-function New-CtId([string]$Key, [string]$Parent) {
+function Get-ContentTypeId([string]$Key, [string]$Parent) {
     $g = (Get-StableGuid "CT.$Key").ToString('N').ToUpperInvariant()
     if ($Parent -eq 'Document') { "0x010100$g" } else { "0x0100$g" }
 }
@@ -744,14 +748,14 @@ function Deploy-DmsSiteColumn([string[]]$Needed) {
     Write-Step "Site columns ($($Needed.Count))"
     foreach ($n in $Needed) {
         if (Get-PnPField -Identity $n -ErrorAction SilentlyContinue) { Write-Skip $n; continue }
-        Add-PnPFieldFromXml -FieldXml (New-FieldXml $FieldMap[$n]) | Out-Null
+        Add-PnPFieldFromXml -FieldXml (Get-FieldXml $FieldMap[$n]) | Out-Null
         Write-Ok $n
     }
 }
 
 function Deploy-DmsContentType([string]$Key) {
     $def  = $ContentTypes[$Key]
-    $id   = New-CtId $Key $def.Parent
+    $id   = Get-ContentTypeId $Key $def.Parent
     $name = T $def.En $def.He
     $ct   = Get-PnPContentType -Identity $id -ErrorAction SilentlyContinue
     if (-not $ct) {
