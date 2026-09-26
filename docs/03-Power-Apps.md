@@ -3,11 +3,11 @@
 Two responsive **Canvas** apps, both in the unmanaged solution `RH Document Control` (blueprint Appendix B).
 
 | App | Users | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | **Document Control Center** / מרכז בקרת מסמכים | All employees, approvers, Document Control | Register, revisions, submit for approval with dynamic approvers, history, Document Control queue, administration |
 | **Large File Exchange Control** / בקרת העברת קבצים גדולים | Employees, Document Control | Blueprint 9.3: request, native upload, status, accept or reject |
 
-### Why Canvas and not model-driven
+## Why Canvas and not model-driven
 
 A model-driven app needs Dataverse tables, which are a **premium** capability outside Microsoft 365 Business Premium. The blueprint (Phase 1) keeps the solution on standard connectors: SharePoint, Teams, Office 365 Users, plus Approvals. A Canvas app over SharePoint lists meets every requirement without extra licences. If the company later buys Power Apps Premium, the same data model can move to Dataverse and a model-driven app. The lists map 1:1 to tables.
 
@@ -16,7 +16,7 @@ A model-driven app needs Dataverse tables, which are a **premium** capability ou
 ### 1.1 Data sources
 
 | Source | Document Control Center | Large File Exchange Control |
-|---|---|---|
+| --- | --- | --- |
 | SharePoint `/sites/DocumentControl` | Document Register, Workflow History, Approval Decisions, Approver Matrix, Impact Routing, Delegations, File Action Queue, UI Labels | UI Labels |
 | SharePoint `/sites/LargeFileExchange` | - | Upload Requests, Exchange Audit, Routing Catalog |
 | Office 365 Users | Yes | Yes |
@@ -30,7 +30,7 @@ Build the apps **inside the solution** with the Power Apps setting *Automaticall
 
 All visible text comes from the **UI Labels** list. Nothing is hard-coded, so Document Control can correct a translation without republishing the app.
 
-**App.OnStart**
+#### App.OnStart
 
 ```powerfx
 // 1. Language: saved preference, then the browser / Teams language
@@ -58,19 +58,19 @@ ClearCollect(colMatrix, Filter('Approver Matrix', IsActive = true));
 ClearCollect(colImpactRules, Filter('Impact Routing', IsActive = true));
 ```
 
-**Label lookups**
+#### Label lookups
 
 | Need | Formula |
-|---|---|
+| --- | --- |
 | Static label | `LookUp(colL, Key = "app.nav.register").Text` |
 | Column caption | `LookUp(colL, Key = "field.LifecycleStatus").Text` |
 | Choice value | `LookUp(colL, Key = "choice.LifecycleStatus." & ThisItem.LifecycleStatus.Value).Text` |
 | Message with a token | `Substitute(LookUp(colL, Key = "app.lbl.expiry").Text, "{Date}", Text(ThisItem.ExpiryDate, DateTimeFormat.ShortDate))` |
 
-**Right-to-left layout**
+#### Right-to-left layout
 
 | Property | Formula |
-|---|---|
+| --- | --- |
 | Every label and text input `Align` | `If(gblRTL, Align.Right, Align.Left)` |
 | Gallery template control `X` | `If(gblRTL, Parent.TemplateWidth - Self.Width - 16, 16)` |
 | Horizontal containers | Put controls in the reading order of each language with `If(gblRTL, ...)` on `X`, or use two containers with `Visible = gblRTL` and `Visible = !gblRTL` for complex headers |
@@ -91,7 +91,7 @@ SaveData(colPrefs, "dmsPrefs")     // remembers the choice on this device
 ### 1.3 Design system
 
 | Token | Value |
-|---|---|
+| --- | --- |
 | Font | `Font.'Segoe UI'` (it renders Hebrew correctly) |
 | Primary | `ColorValue("#0F4C81")` |
 | Success / Warning / Danger | `#107C10` / `#C19C00` / `#A4262C` |
@@ -113,7 +113,7 @@ Use responsive containers. Set the screen `Width = Max(App.Width, App.MinScreenW
 ### 2.1 Screens
 
 | Screen | Purpose | Main controls |
-|---|---|---|
+| --- | --- | --- |
 | `scrHome` | Personal dashboard | 5 tiles (my documents, waiting for my approval, in approval, due for review, failed file actions for Document Control), recent activity gallery, **New document** |
 | `scrRegister` | Search and browse | Search box, filters (Area, Type, Status, Owner = me), gallery with status chips, sort |
 | `scrDocument` | Record detail | Metadata form (view mode), paths with Copy, checksum, PLM/MAE/Priority references, **Approval history** gallery, action bar |
@@ -164,13 +164,13 @@ btnObsolete.Visible    = gblMe.isDocumentController
                          && varDoc.LifecycleStatus.Value in ["Approved_ReadOnly", "Released_PLM"]
 ```
 
-**Approval history `galHistory.Items`**
+#### Approval history `galHistory.Items`
 
 ```powerfx
 SortByColumns(Filter('Approval Decisions', DocumentId = varDoc.DocumentId), "Created", SortOrder.Descending)
 ```
 
-**New document `btnSave.OnSelect`**
+#### New document `btnSave.OnSelect`
 
 ```powerfx
 If(
@@ -199,7 +199,7 @@ If(ddType.Selected.Value in ["Policy","Procedure","Contract / NDA","ECO / ECN","
 // ddControlMode.Default: same test → "Workflow Required", else "Workflow Optional"
 ```
 
-**Submit screen - build approvers (`scrSubmit.OnVisible`)**
+#### Submit screen - build approvers (`scrSubmit.OnVisible`)
 
 ```powerfx
 Set(varRule, LookUp(colMatrix, DocumentType.Value = varDoc.DocumentType.Value));
@@ -234,7 +234,7 @@ RemoveIf(colSuggested, Email in colRequired.Email)
 AddColumns(Choices('Workflow History'.ChangeImpact), Label, LookUp(colL, Key = "choice.ChangeImpact." & Value).Text)
 ```
 
-**Add reviewer (`cmbReviewer.Items`, search as you type)**
+#### Add reviewer (`cmbReviewer.Items`, search as you type)
 
 ```powerfx
 Filter(Office365Users.SearchUserV2({searchTerm: Self.SearchText, top: 15, isSearchTermRequired: true}).value,
@@ -243,7 +243,7 @@ Filter(Office365Users.SearchUserV2({searchTerm: Self.SearchText, top: 15, isSear
 Collect(colReviewers, {Email: Lower(cmbReviewer.Selected.Mail), Name: cmbReviewer.Selected.DisplayName, Role: "Reviewer"})
 ```
 
-**Submit (`btnSubmit.OnSelect`)**
+#### Submit (`btnSubmit.OnSelect`)
 
 ```powerfx
 If(
@@ -275,7 +275,7 @@ The flow recomputes the required set from the matrix and impact rules, so a tamp
 
 **Required approver chips (`galRequired`)**. Items = `colRequired`. Show a lock icon, and do **not** show a remove icon. `galSuggested` has a checkbox bound to `Include`, and `galReviewers` has a remove icon (`Remove(colReviewers, ThisItem)`).
 
-**Home tiles**
+#### Home tiles
 
 ```powerfx
 lblMyDocs.Text    = CountRows(Filter('Document Register', DocumentOwner.Email = User().Email))
@@ -338,7 +338,7 @@ translated; support right-to-left layout for Hebrew.
 ### 3.1 Screens
 
 | Screen | Purpose | Main controls |
-|---|---|---|
+| --- | --- | --- |
 | `scrHome` | Dashboard | My requests, pending acceptance (Document Control), failures, **New request** |
 | `scrNewRequest` | Create request | Customer (Routing Catalog), Project (filtered by customer), Direction, Package description, Destination route (from catalog, read-only), Guest email (optional), Submit |
 | `scrRequestStatus` | Track request | State chip, file name, size (GB), SHA-256, destination, expiry, cloud-deletion state, actions |
@@ -346,7 +346,7 @@ translated; support right-to-left layout for Hebrew.
 
 ### 3.2 Formulas (blueprint, adjusted to this data model)
 
-**New Request `btnSubmit.OnSelect`**
+#### New Request `btnSubmit.OnSelect`
 
 ```powerfx
 If(
@@ -380,7 +380,7 @@ Filter('Routing Catalog', IsActive = true && CustomerCode = ddCustomer.Selected.
 
 Destinations always come from the Routing Catalog, never from free text (blueprint guardrail "Destination routes must come from approved customer/project routing data", AC-09).
 
-**Dashboard gallery**
+#### Dashboard gallery
 
 ```powerfx
 SortByColumns(
@@ -388,7 +388,7 @@ SortByColumns(
     "Modified", SortOrder.Descending)
 ```
 
-**Action visibility**
+#### Action visibility
 
 ```powerfx
 btnReadyForTransfer.Visible = ThisItem.ExchangeStatus.Value = "Uploaded"
@@ -418,7 +418,7 @@ SharePoint library opened with Launch(). Support English and Hebrew right-to-lef
 ## 4. Test script (both apps)
 
 | # | Test | Expected |
-|---|---|---|
+| --- | --- | --- |
 | 1 | Switch language on every screen | All text changes, alignment mirrors, and no raw keys (`app.xxx`) are visible |
 | 2 | Register a Policy | Control mode is locked to *Workflow Required*. The ID is `MGT-POL-00001` |
 | 3 | Submit without a summary | Error, nothing is created |
