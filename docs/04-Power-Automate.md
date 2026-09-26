@@ -232,7 +232,7 @@ DC-05 sets `InReview` only after the Workflow Service confirms the file is read-
 
 1. **Guard (idempotent)**: *Get items* `Approval Decisions` filter `WorkflowId eq '<id>'`. If any exist, *Terminate* (Succeeded).
 2. **Stage-1 list** = `union(Mandatory, Conditional, AdditionalReviewers)` emails. When RoutingMode = `Parallel`, append FinalApprover too.
-3. **Delegation**: *Apply to each* stage-1 email (concurrency 1). Run U4, append `Effective` to `arrStage1`, and *Create item* `Approval Decisions` (Approver = Effective, DelegatedFrom, ApproverRole, `ApprovalStage 1`, Decision `Pending`, `DecisionDueDate`).
+3. **Delegation**: *Apply to each* stage-1 email (concurrency 1). Run U4, append `Effective` to `arrStage1`, and *Create item* `Approval Decisions` (Approver = Effective, DocumentType = the register item's DocumentType, DelegatedFrom, ApproverRole, `ApprovalStage 1`, Decision `Pending`, `DecisionDueDate`).
 4. **Approval card**. *Start and wait for an approval*:
    - Type: **Approve/Reject - Everyone must approve** (one rejection completes the approval as *Reject*). For `Sequential`, loop over `arrStage1` with one single-approver approval each, and stop at the first reject.
    - Title: rendered `msg.approval.title` in `dms_Language`.
