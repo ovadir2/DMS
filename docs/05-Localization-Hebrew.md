@@ -8,7 +8,7 @@
 | Column display names | English or Hebrew | `Provision-DMS.ps1` (`$Fields`, `En` / `He`) |
 | List, view, content type, permission level and group names | English or Hebrew | `Provision-DMS.ps1` |
 | **Internal names** | Always English | Stable for Power Fx, OData, Graph and the workers |
-| **Choice stored values** | Always English keys (`Working`, `Submitted`...) | So a language switch never breaks a filter, a flow condition or a report |
+| **Choice stored values** | English keys (`Working`, `Submitted`...) by default. With `-ChoiceLanguage he` the Hebrew label is stored instead (`בעבודה`, `הוגש לאישור`...) | English keys never break when the UI language changes. Hebrew values give an all-Hebrew SharePoint, and flows and apps must then use the Hebrew values |
 | Choice captions in the apps | English or Hebrew per user | `UI Labels` → `choice.<Set>.<Key>` |
 | App text | English or Hebrew per user, with a toggle | `UI Labels` → `app.*` |
 | Teams notifications | Per recipient `preferredLanguage`, with `dms_Language` as the fallback | `UI Labels` → `msg.*`, rendered by DMS-U2 |
