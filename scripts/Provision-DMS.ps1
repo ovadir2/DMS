@@ -155,6 +155,9 @@ function Get-StableGuid([string]$Seed) {
     [guid]::new($hash)
 }
 
+# Content type names may not contain \ / : * ? " # % < > |
+function Get-SafeCtName([string]$Name) { ($Name -replace '[\\/:*?"#%<>|]', '-') -replace '\.\.', '.' }
+
 function ConvertTo-XmlText([string]$Value) { [System.Security.SecurityElement]::Escape($Value) }
 
 function Connect-Site([string]$Url) {
@@ -344,8 +347,8 @@ $Fields = @(
     @{N='LabelArea';         T='Choice';    En='Label Area';           He='אזור תווית';           Req=$true; Idx=$true; Set='LabelArea'; Def='App'}
     # --- Large File Exchange (blueprint section 9.2)
     @{N='RequestId';         T='Text';      En='Request ID';           He='מזהה בקשה';            Req=$true; Idx=$true; Max=40}
-    @{N='UploaderEmail';     T='Text';      En='Uploader Email';       He='דוא"ל המעלה';          Idx=$true; Max=255}
-    @{N='GuestEmail';        T='Text';      En='Customer Guest Email'; He='דוא"ל אורח הלקוח';     Max=255}
+    @{N='UploaderEmail';     T='Text';      En='Uploader Email';       He='דוא״ל המעלה';          Idx=$true; Max=255}
+    @{N='GuestEmail';        T='Text';      En='Customer Guest Email'; He='דוא״ל אורח הלקוח';     Max=255}
     @{N='TransferDirection';         T='Choice';    En='Direction'; He='כיוון';                Req=$true; Set='Direction'; Def='Inbound'}
     @{N='PackageDescription';T='Note';      En='Package Description';  He='תיאור החבילה';         Req=$true}
     @{N='DestinationRelativePath'; T='Note';En='Destination Relative Path'; He='נתיב יעד יחסי'}
@@ -438,7 +441,7 @@ $ContentTypes = [ordered]@{
                  'DestinationRelativePath','ExchangeStatus','DriveItemId','ExchangeFileName','ExpectedSizeBytes','DestinationSizeBytes',
                  'SHA256','UploadFolderUrl','TransferStartedUtc','TransferCompletedUtc','FailureDetail','CloudCopyDeleted',
                  'RetentionClass','ExpiryDate','ReviewedBy','DecisionComment','Attempts') }
-    RoutingEntry = @{ En='DMS Routing Entry'; He='ניתוב לקוח/פרויקט'; Parent='Item'
+    RoutingEntry = @{ En='DMS Routing Entry'; He='ניתוב לקוח ופרויקט'; Parent='Item'
         Fields=@('CustomerCode','CustomerName','ProjectCode','ProjectName','DestinationRelativePath','AllowedGuestDomains','IsActive') }
     ExchangeFile = @{ En='DMS Exchange File'; He='קובץ בהעברה'; Parent='Document'
         Fields=@('RequestId') }
@@ -800,7 +803,7 @@ function Install-DmsSiteColumn([string[]]$Needed) {
 function Install-DmsContentType([string]$Key) {
     $def  = $ContentTypes[$Key]
     $id   = Get-ContentTypeId $Key $def.Parent
-    $name = T $def.En $def.He
+    $name = Get-SafeCtName (T $def.En $def.He)
     $ct   = Get-PnPContentType -Identity $id -ErrorAction SilentlyContinue
     if (-not $ct) {
         # The parent (Item 0x01 / Document 0x0101) is encoded in the ID; PnP 3.x rejects -ParentContentType with -ContentTypeId.
@@ -922,7 +925,7 @@ function Install-DmsTranslation([string]$SiteKey) {
     }
     foreach ($k in @($Lists | Where-Object Site -eq $SiteKey | ForEach-Object { $_.Ct } | Select-Object -Unique)) {
         $ct = Get-PnPContentType -Identity (Get-ContentTypeId $k $ContentTypes[$k].Parent) -Includes NameResource
-        $names = @($ContentTypes[$k].En, $ContentTypes[$k].He)
+        $names = @((Get-SafeCtName $ContentTypes[$k].En), (Get-SafeCtName $ContentTypes[$k].He))
         for ($i = 0; $i -lt 2; $i++) { $ct.NameResource.SetValueForUICulture($cultures[$i], $names[$i]) }
         $ct.Update($false)
     }
