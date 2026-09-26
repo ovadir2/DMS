@@ -64,7 +64,7 @@
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '',
     Justification = 'Interactive provisioning script: coloured progress output is intended and is captured by the transcript.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '',
-    Justification = 'ClientId and GroupMembers are read inside helper functions (Connect-Site, Deploy-DmsGroup) through script scope.')]
+    Justification = 'ClientId and GroupMembers are read inside helper functions (Connect-Site, Install-DmsGroup) through script scope.')]
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [ValidatePattern('^[a-zA-Z0-9-]+$')] [string] $TenantName,
@@ -710,7 +710,7 @@ function Get-RoleNameMap {
     $map
 }
 
-function Deploy-DmsRoleDefinition {
+function Install-DmsRoleDefinition {
     Write-Step 'Permission levels'
     $existing = @(Get-PnPRoleDefinition | ForEach-Object Name)
     $builtIn  = Get-RoleNameMap
@@ -725,7 +725,7 @@ function Deploy-DmsRoleDefinition {
     }
 }
 
-function Deploy-DmsGroup([string]$SiteKey, [hashtable]$Roles) {
+function Install-DmsGroup([string]$SiteKey, [hashtable]$Roles) {
     Write-Step "SharePoint groups ($SiteKey)"
     $existing = @(Get-PnPGroup | ForEach-Object Title)
     foreach ($g in $Groups | Where-Object Site -eq $SiteKey) {
@@ -744,7 +744,7 @@ function Deploy-DmsGroup([string]$SiteKey, [hashtable]$Roles) {
     }
 }
 
-function Deploy-DmsSiteColumn([string[]]$Needed) {
+function Install-DmsSiteColumn([string[]]$Needed) {
     Write-Step "Site columns ($($Needed.Count))"
     foreach ($n in $Needed) {
         if (Get-PnPField -Identity $n -ErrorAction SilentlyContinue) { Write-Skip $n; continue }
@@ -753,7 +753,7 @@ function Deploy-DmsSiteColumn([string[]]$Needed) {
     }
 }
 
-function Deploy-DmsContentType([string]$Key) {
+function Install-DmsContentType([string]$Key) {
     $def  = $ContentTypes[$Key]
     $id   = Get-ContentTypeId $Key $def.Parent
     $name = T $def.En $def.He
@@ -772,7 +772,7 @@ function Deploy-DmsContentType([string]$Key) {
     $id
 }
 
-function Deploy-DmsList([hashtable]$L, [hashtable]$Roles) {
+function Install-DmsList([hashtable]$L, [hashtable]$Roles) {
     $title = T $L.En $L.He
     Write-Step "List: $title"
     $list = Get-PnPList -Identity $L.Url -ErrorAction SilentlyContinue
@@ -791,7 +791,7 @@ function Deploy-DmsList([hashtable]$L, [hashtable]$Roles) {
     } catch { Write-Warn2 "versioning: $($_.Exception.Message) (set the library version limit manually)" }
 
     # --- content type
-    $ctId = Deploy-DmsContentType $L.Ct
+    $ctId = Install-DmsContentType $L.Ct
     $listCts = Get-PnPContentType -List $L.Url
     if (-not ($listCts | Where-Object { $_.Id.StringValue.StartsWith($ctId) })) {
         Add-PnPContentTypeToList -List $L.Url -ContentType $ctId -DefaultContentType
@@ -911,11 +911,11 @@ try {
         try { Set-PnPSite -DisableSharingForNonOwners | Out-Null }
         catch { Write-Warn2 "DisableSharingForNonOwners: $($_.Exception.Message)" }
 
-        Deploy-DmsRoleDefinition
+        Install-DmsRoleDefinition
         $roles = Get-RoleNameMap
-        Deploy-DmsGroup $site.Key $roles
-        Deploy-DmsSiteColumn (Get-NeededField $site.Key)
-        foreach ($L in $Lists | Where-Object Site -eq $site.Key) { Deploy-DmsList $L $roles }
+        Install-DmsGroup $site.Key $roles
+        Install-DmsSiteColumn (Get-NeededField $site.Key)
+        foreach ($L in $Lists | Where-Object Site -eq $site.Key) { Install-DmsList $L $roles }
 
         if (-not $SkipSeedData -and $site.Key -eq 'DC') {
             Write-Step 'Seed data'
