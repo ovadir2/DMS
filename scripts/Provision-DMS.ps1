@@ -915,6 +915,11 @@ function Install-DmsList([hashtable]$L, [hashtable]$Roles) {
     foreach ($v in $L.Views) {
         $vt = T $v.En $v.He
         $vOther = if ($Script:He) { $v.En } else { $v.He }
+        if ($vOther -ne $vt -and $views -contains $vt -and $views -contains $vOther) {
+            Remove-PnPView -List $L.Url -Identity $vOther -Force | Out-Null
+            $views = @($views | Where-Object { $_ -ne $vOther })
+            Write-Ok "duplicate view removed: $vOther"
+        }
         if ($views -notcontains $vt -and $views -contains $vOther) {
             Set-PnPView -List $L.Url -Identity $vOther -Values @{ Title = $vt } | Out-Null
             $views += $vt
@@ -976,17 +981,20 @@ function Install-DmsTranslation([string]$SiteKey) {
     $siteNames = if ($SiteKey -eq 'DC') { & $pick 'Documents Management System (DMS)' 'מערכת לניהול ושיתוף קבצים (DMS)' } else { & $pick 'DMS - Large File Exchange' 'DMS - העברת קבצים גדולים' }
     $web = Get-PnPWeb -Includes TitleResource
     for ($i = 0; $i -lt 2; $i++) { $web.TitleResource.SetValueForUICulture($cultures[$i], $siteNames[$i]) }
+    $web.Title = T $siteNames[0] $siteNames[1]
     $web.Update()
     foreach ($n in (Get-NeededField $SiteKey)) {
         $f = Get-PnPField -Identity $n -Includes TitleResource
         $names = & $pick $FieldMap[$n].En $FieldMap[$n].He
         for ($i = 0; $i -lt 2; $i++) { $f.TitleResource.SetValueForUICulture($cultures[$i], $names[$i]) }
+        $f.Title = T $names[0] $names[1]
         $f.Update()
     }
     foreach ($k in @($Lists | Where-Object Site -eq $SiteKey | ForEach-Object { $_.Ct } | Select-Object -Unique)) {
         $ct = Get-PnPContentType -Identity (Get-ContentTypeId $k $ContentTypes[$k].Parent) -Includes NameResource
         $names = & $pick (Get-SafeCtName $ContentTypes[$k].En) (Get-SafeCtName $ContentTypes[$k].He)
         for ($i = 0; $i -lt 2; $i++) { $ct.NameResource.SetValueForUICulture($cultures[$i], $names[$i]) }
+        $ct.Name = T $names[0] $names[1]
         $ct.Update($false)
     }
     Invoke-PnPQuery
@@ -994,6 +1002,7 @@ function Install-DmsTranslation([string]$SiteKey) {
         $list = Get-PnPList -Identity $L.Url -Includes TitleResource
         $names = & $pick $L.En $L.He
         for ($i = 0; $i -lt 2; $i++) { $list.TitleResource.SetValueForUICulture($cultures[$i], $names[$i]) }
+        $list.Title = T $names[0] $names[1]
         $list.Update()
         $cols = @($ContentTypes[$L.Ct].Fields)
         if ($L.ContainsKey('TitleEn')) { $cols += 'Title' }
@@ -1001,6 +1010,7 @@ function Install-DmsTranslation([string]$SiteKey) {
             $lf = Get-PnPField -List $L.Url -Identity $n -Includes TitleResource
             $names = if ($n -eq 'Title') { & $pick $L.TitleEn $L.TitleHe } else { & $pick $FieldMap[$n].En $FieldMap[$n].He }
             for ($i = 0; $i -lt 2; $i++) { $lf.TitleResource.SetValueForUICulture($cultures[$i], $names[$i]) }
+            $lf.Title = T $names[0] $names[1]
             $lf.Update()
         }
         Invoke-PnPQuery
