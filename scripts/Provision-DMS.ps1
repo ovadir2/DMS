@@ -759,8 +759,8 @@ function Install-DmsContentType([string]$Key) {
     $name = T $def.En $def.He
     $ct   = Get-PnPContentType -Identity $id -ErrorAction SilentlyContinue
     if (-not $ct) {
-        $parent = Get-PnPContentType -Identity ($(if ($def.Parent -eq 'Document') { '0x0101' } else { '0x01' }))
-        Add-PnPContentType -Name $name -ContentTypeId $id -Group $Script:CtGrp -ParentContentType $parent | Out-Null
+        # The parent (Item 0x01 / Document 0x0101) is encoded in the ID; PnP 3.x rejects -ParentContentType with -ContentTypeId.
+        Add-PnPContentType -Name $name -ContentTypeId $id -Group $Script:CtGrp | Out-Null
         Write-Ok "content type $name"
     } else { Write-Skip "content type $name" }
     $ctFields = @(Get-PnPProperty -ClientObject (Get-PnPContentType -Identity $id) -Property Fields | ForEach-Object InternalName)
