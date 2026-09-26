@@ -53,6 +53,10 @@
 .PARAMETER AllowedGuestDomains
     Optional list of external domains allowed to be invited to the Exchange site.
 
+.PARAMETER LogoPath
+    Optional site logo (PNG/JPG, ideally square, at least 64x64). Default: ..\assets\logo.png
+    next to this script. Skipped if the file does not exist.
+
 .PARAMETER TransferWorkerAppId / WorkflowServiceAppId
     Optional Entra app IDs. When supplied, the script grants Sites.Selected "Write"
     on only the matching site (Exchange / Document Control).
@@ -85,7 +89,8 @@ param(
     [guid] $TransferWorkerAppId,
     [guid] $WorkflowServiceAppId,
     [switch] $SkipSiteCreation,
-    [switch] $SkipSeedData
+    [switch] $SkipSeedData,
+    [string] $LogoPath = (Join-Path $PSScriptRoot '..\assets\logo.png')
 )
 
 Set-StrictMode -Version Latest
@@ -883,8 +888,8 @@ try {
 
     if (-not $SkipSiteCreation) {
         foreach ($s in @(
-            @{ Url = $DcUrl; Title = (T 'Document Control' 'בקרת מסמכים') },
-            @{ Url = $ExUrl; Title = (T 'Large File Exchange' 'העברת קבצים גדולים') })) {
+            @{ Url = $DcUrl; Title = (T 'Document Control System (DMS)' 'מערכת בקרת מסמכים (DMS)') },
+            @{ Url = $ExUrl; Title = (T 'DMS - Large File Exchange' 'DMS - העברת קבצים גדולים') })) {
             if (Get-PnPTenantSite -Identity $s.Url -ErrorAction SilentlyContinue) { Write-Skip "site $($s.Url)"; continue }
             New-PnPSite -Type TeamSiteWithoutMicrosoft365Group -Title $s.Title -Url $s.Url -Owner $OwnerUpn -Lcid $Script:Lcid | Out-Null
             Write-Ok "site $($s.Url) (LCID $Script:Lcid)"
@@ -922,6 +927,23 @@ try {
 
         # Members may not reshare; only owners share.
         Set-PnPWeb -MembersCanShare:$false | Out-Null
+
+        # Title (also on re-runs) and logo
+        $siteTitle = if ($site.Key -eq 'DC') { T 'Document Control System (DMS)' 'מערכת בקרת מסמכים (DMS)' } else { T 'DMS - Large File Exchange' 'DMS - העברת קבצים גדולים' }
+        Set-PnPWeb -Title $siteTitle | Out-Null
+        if ($LogoPath -and (Test-Path $LogoPath)) {
+            try { Set-PnPSite -LogoFilePath (Resolve-Path $LogoPath).Path | Out-Null; Write-Ok "logo $LogoPath" }
+            catch { Write-Warn2 "logo: $($_.Exception.Message)" }
+        } else { Write-Skip "no logo file at $LogoPath" }
+
+        # With -SiteLanguage, show the SharePoint UI in the site language for everyone
+        # (turns off alternate UI languages, which otherwise follow each user's personal language).
+        if ($SiteLanguage) {
+            try {
+                $w = Get-PnPWeb -Includes IsMultilingual
+                if ($w.IsMultilingual) { $w.IsMultilingual = $false; $w.Update(); Invoke-PnPQuery; Write-Ok "UI language fixed to $SiteLanguage" }
+            } catch { Write-Warn2 "UI language: $($_.Exception.Message)" }
+        }
         try { Set-PnPSite -DisableSharingForNonOwners | Out-Null }
         catch { Write-Warn2 "DisableSharingForNonOwners: $($_.Exception.Message)" }
 
