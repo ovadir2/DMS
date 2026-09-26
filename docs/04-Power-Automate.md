@@ -7,7 +7,7 @@ All flows live in the solution `RH Document Control`. The owner is the dedicated
 ### 1.1 Connection references
 
 | Reference | Connector | Connected as |
-|---|---|---|
+| --- | --- | --- |
 | `dms_cr_SharePoint` | SharePoint | Flow service account (member of *DMS Service Accounts* / *Exchange Service Accounts*) |
 | `dms_cr_Teams` | Microsoft Teams | Flow service account |
 | `dms_cr_O365Users` | Office 365 Users | Flow service account |
@@ -21,7 +21,7 @@ For every flow with a Power Apps trigger, go to **Run only users** and set every
 ### 1.2 Environment variables
 
 | Name | Example | Used by |
-|---|---|---|
+| --- | --- | --- |
 | `dms_SiteUrl_DC` | `https://contoso.sharepoint.com/sites/DocumentControl` | all DC flows |
 | `dms_SiteUrl_EX` | `https://contoso.sharepoint.com/sites/LargeFileExchange` | all EX flows |
 | `dms_Language` | `en` or `he` | default when a user has no `preferredLanguage` |
@@ -57,7 +57,7 @@ Child flows use the trigger *Manually trigger a flow* and are called with *Run a
 ### DMS-U1 Write Audit
 
 | | |
-|---|---|
+| --- | --- |
 | Inputs | `Site` (DC or EX), `CorrelationId`, `EventType`, `FromStatus`, `ToStatus`, `Actor`, `Source`, `Details` |
 | Logic | *Create item* in `Control Audit` (DC) or `Exchange Audit` (EX). Title = `concat(EventType,' ',CorrelationId)`, `EventUtc = utcNow()` |
 | Output | `ok` |
@@ -67,7 +67,7 @@ The service account has only **Append Only** on audit lists, so the flow cannot 
 ### DMS-U2 Render Message
 
 | | |
-|---|---|
+| --- | --- |
 | Inputs | `Key` (for example `msg.approval.body`), `Lang` (`en`/`he`), `Tokens` (JSON array text `[{"k":"DocumentId","v":"QA-PFM-00042"}]`) |
 | Output | `Text` |
 
@@ -82,7 +82,7 @@ The service account has only **Append Only** on audit lists, so the flow cannot 
 ### DMS-U3 Notify
 
 | | |
-|---|---|
+| --- | --- |
 | Inputs | `Recipients` (`;`-separated emails), `Key`, `Tokens`, `PostToChannel` (`none`/`doccontrol`/`it`) |
 
 1. *Apply to each* `split(Recipients, ';')` where the item is not empty:
@@ -94,7 +94,7 @@ The service account has only **Append Only** on audit lists, so the flow cannot 
 ### DMS-U4 Resolve Delegate
 
 | | |
-|---|---|
+| --- | --- |
 | Input | `Email` |
 | Output | `Effective` (email), `DelegatedFrom` (email or empty) |
 
@@ -105,7 +105,7 @@ If found and `DelegationApprovedBy` is not empty, return the delegate. Otherwise
 ## 3. Document-control flows
 
 | ID | Name | Trigger | Purpose |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | DC-00 | Get User Context | Power Apps V2 | Role flags and language for the app |
 | DC-01 | Register Document | Power Apps V2 | **Creation** - new controlled document |
 | DC-02 | Create New Revision | Power Apps V2 | **Revision** - draft copy of the current revision |
@@ -148,7 +148,7 @@ Inputs: Title, Area, Type, ControlMode, OwnerEmail, Department, CustomerCode, Pr
 6. U1 audit `Created`.
 7. Respond `{status:'ok', documentid}`.
 
-**Copilot prompt**
+#### Copilot prompt
 
 ```text
 When Power Apps calls the flow with inputs Title, Area, Type, ControlMode, OwnerEmail, Department,
@@ -174,7 +174,7 @@ Inputs: DocumentId.
 4. Update the register: `DraftRevision = next`. The status stays at the current value until DC-05 confirms the copy.
 5. U1 audit `FileActionQueued`. Respond ok.
 
-**Copilot prompt**
+#### Copilot prompt
 
 ```text
 When Power Apps calls with DocumentId: get the Document Register item with that DocumentId. If its
@@ -209,7 +209,7 @@ Inputs: DocumentId, Revision, ChangeSummary, Impacts (`;`), RequiredEmails (`;`)
 10. U1 audit `Submitted`. If `Justification` is not empty, add a second audit event whose details list the removed conditional approvers and the reason.
 11. Respond `{status:'ok', workflowid}`.
 
-**Copilot prompt**
+#### Copilot prompt
 
 ```text
 When Power Apps calls with DocumentId, Revision, ChangeSummary, Impacts, RequiredEmails,
@@ -239,7 +239,7 @@ DC-05 sets `InReview` only after the Workflow Service confirms the file is read-
    - Assigned to: `join(variables('arrStage1'), ';')`
    - Details (Markdown, bilingual, one card for all approvers):
 
-     ```
+     ```text
      **@{DocumentId} @{Revision} - @{Title}**
      Change summary: @{ChangeSummary}
      File (read-only): `@{SubmittedUncPath}`
@@ -248,6 +248,7 @@ DC-05 sets `InReview` only after the Workflow Service confirms the file is read-
      ---
      <div dir="rtl">(Hebrew rendering of msg.approval.body)</div>
      ```
+
    - Item link: the register item URL. Item link description: `DocumentId`.
    - Enable notifications: **Yes** (Teams Approvals app and activity feed. There are no attachments).
    - Action **Settings → Timeout**: `P25D` (below the 30-day flow run limit).
@@ -259,7 +260,7 @@ DC-05 sets `InReview` only after the Workflow Service confirms the file is read-
    - **Approved** → Workflow History `Approved`, `CompletedUtc`. Queue `PromoteToCurrent` (SourceUncPath = SubmittedUncPath, TargetUncPath = the `\Current_ReadOnly\` path without `_DRAFT`). U1 audit `Approved`. The owner is notified by DC-05 after the file is really promoted.
 9. **Timeout branch** (configure *run after: has timed out* on the approval action): Decisions → `Expired`, Workflow History → `Cancelled` with FinalComment "Expired after 25 days", queue `ReturnToWorking`, post to `dms_Channel_DocControl`.
 
-**Copilot prompt**
+#### Copilot prompt
 
 ```text
 When an item in the SharePoint list "Workflow History" is created or modified and WorkflowStatus equals
@@ -283,7 +284,7 @@ Trigger condition: `@or(equals(triggerOutputs()?['body/ActionStatus/Value'],'Com
 *Switch* on `ActionType`:
 
 | ActionType | On `Completed` | On `Failed` |
-|---|---|---|
+| --- | --- | --- |
 | `VerifyWorkingFile` | Register: WorkingUncPath = SourceUncPath. Notify the owner (`app.ok.saved`) | Notify the owner and Document Control (`msg.fileaction.failed`) |
 | `CreateDraftCopy` | Register: WorkingUncPath = TargetUncPath, LifecycleStatus `Working`. Notify with `msg.draft.ready` | Register: DraftRevision cleared. Notify |
 | `MoveToSubmitted` | Workflow History: SubmittedUncPath = TargetUncPath, SubmittedSHA256 = ResultSHA256, **WorkflowStatus `InReview`** (starts DC-04). Register: LifecycleStatus `Submitted` | Workflow History `Cancelled`, register ActiveWorkflowId cleared. Notify |
@@ -334,6 +335,7 @@ It runs when `DocumentArea in (Development, Changes, Manufacturing, Test Enginee
 ### DC-11 Delegation Lifecycle
 
 Daily 00:15.
+
 - `ValidTo lt today` and Active → `Expired`.
 - `ValidFrom eq today` and Active and approved → U3 notify the delegator and the delegate with `msg.delegation.active`.
 - An Active item without `DelegationApprovedBy` is ignored by U4. Post a daily reminder to the channel.
@@ -345,7 +347,7 @@ Monthly, on day 1 at 02:00. Register items with `LifecycleStatus eq 'Obsolete_Re
 ## 4. Large-file exchange flows (blueprint 9.4)
 
 | ID | Blueprint name | Trigger |
-|---|---|---|
+| --- | --- | --- |
 | EX-01 | CreateExchangeRequest | Power Apps V2 |
 | EX-02 | FileUploadedMetadata | *When a file is created (properties only)* - Temporary Uploads |
 | EX-03 | SubmitTransferRequest | Power Apps V2 |
@@ -375,7 +377,7 @@ Inputs: CustomerCode, ProjectCode, Direction, PackageDescription, RoutingId, Req
 9. U1 audit (EX) `Created`. U3 notify the requester with `msg.ex.created`.
 10. Respond `{status, requestid, uploadurl}`.
 
-**Copilot prompt**
+#### Copilot prompt
 
 ```text
 When Power Apps calls with CustomerCode, ProjectCode, Direction, PackageDescription, RoutingId,
@@ -409,7 +411,7 @@ Trigger condition: the status is `Transferred`, `TransferFailed`, `Accepted` or 
 Guard: the last Exchange Audit event for RequestId already has `ToStatus` = the current status → stop (no duplicate messages).
 
 | Status | Message | Recipients |
-|---|---|---|
+| --- | --- | --- |
 | Transferred | `msg.ex.transferred` (SizeGB = `div(float(ExpectedSizeBytes), 1073741824)`) | Requester + Document Control channel |
 | TransferFailed | `msg.ex.failed` | Requester + IT channel |
 | Transferred / Accepted with `CloudCopyDeleted = false` and FailureDetail containing `delete` | `msg.ex.deletefailed` | IT channel |
@@ -458,7 +460,7 @@ Its configuration is unchanged from blueprint 9.5 (`solution.parameters.json`). 
 5. Run the acceptance tests AC-01 to AC-15 (blueprint 13), plus these.
 
 | Test | Expected |
-|---|---|
+| --- | --- |
 | Submit with a crafted request that drops a mandatory approver | DC-03 error, no history item |
 | One approver rejects while others are pending | The card completes as Reject immediately, the others are `Cancelled`, the file returns to Working |
 | Change approvers mid-cycle | Old cycle `Restarted`, a new cycle with `CycleNumber = 2`, old cards void |

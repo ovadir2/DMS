@@ -3,7 +3,7 @@
 ## 1. Rules
 
 | Element | Language behaviour | Where it is set |
-|---|---|---|
+| --- | --- | --- |
 | Site locale | `-Language en` → LCID 1033, `-Language he` → LCID 1037 (the SharePoint UI is right-to-left) | `Provision-DMS.ps1` |
 | Column display names | English or Hebrew | `Provision-DMS.ps1` (`$Fields`, `En` / `He`) |
 | List, view, content type, permission level and group names | English or Hebrew | `Provision-DMS.ps1` |
@@ -32,7 +32,7 @@ A Hebrew site shows Hebrew column headers in SharePoint, while the Canvas apps f
 Tokens in `{braces}` are replaced by DMS-U2.
 
 | Key | English | עברית |
-|---|---|---|
+| --- | --- | --- |
 | `msg.approval.title` | Approval required: {DocumentId} {Revision} - {Title} | <div dir="rtl">נדרש אישור: {DocumentId} {Revision} - {Title}</div> |
 | `msg.approval.body` | {Submitter} submitted {DocumentId} revision {Revision} for your approval. Change summary: {ChangeSummary}. File (read-only): {UncPath}. SHA-256: {Sha}. Due: {DueDate}. | <div dir="rtl">{Submitter} הגיש/ה את {DocumentId} גרסה {Revision} לאישורך. תקציר השינוי: {ChangeSummary}. קובץ (קריאה בלבד): {UncPath}. SHA-256: {Sha}. תאריך יעד: {DueDate}.</div> |
 | `msg.approved.owner` | {DocumentId} revision {Revision} was approved and is now the current read-only revision. | <div dir="rtl">{DocumentId} גרסה {Revision} אושרה והיא כעת הגרסה הנוכחית לקריאה בלבד.</div> |
@@ -60,7 +60,7 @@ Tokens in `{braces}` are replaced by DMS-U2.
 Column captions (`field.*`, 108), list names (`list.*`, 13) and choice captions (`choice.*`, 127) are generated from the same definitions as the SharePoint schema, so they always match. They are listed in [01-Architecture-and-Data-Model.md](01-Architecture-and-Data-Model.md).
 
 | Key | English | עברית |
-|---|---|---|
+| --- | --- | --- |
 | `app.title.dcc` | Document Control Center | מרכז בקרת מסמכים |
 | `app.title.lfe` | Large File Exchange Control | בקרת העברת קבצים גדולים |
 | `app.nav.home` | Home | ראשי |
@@ -116,6 +116,7 @@ Column captions (`field.*`, 108), list names (`list.*`, 13) and choice captions 
 **מטרה.** להקים מערכת בקרת מסמכים ארגונית לפי תכנית IT-DOC-BP-001, שבה הקבצים נשארים בשרת הקבצים המקומי ו-Microsoft 365 משמש כשכבת בקרה בלבד (מטא-דאטה, אישורים, התראות והעברת קבצים חיצונית).
 
 **מבנה.** שני אתרי SharePoint:
+
 - **בקרת מסמכים** (פנימי בלבד, שיתוף חיצוני חסום): מרשם מסמכים, היסטוריית תהליכים, החלטות מאשרים, מטריצת מאשרים, ניתוב לפי השפעה, האצלות סמכות, תור פעולות קבצים, יומן ביקורת ותוויות ממשק.
 - **העברת קבצים גדולים** (אורחים מאומתים בלבד, ללא קישורים אנונימיים): העלאות זמניות, בקשות העלאה, יומן ביקורת וקטלוג ניתוב.
 

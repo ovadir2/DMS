@@ -4,7 +4,7 @@ Source: IT-DOC-BP-001 sections 5, 7, 8.4 and Phases 2, 4, 5 and 6.
 
 ## 1. Authorization model
 
-```
+```text
 File server : User → AD Global group (GG_) → AD Domain Local group (DL_) → NTFS ACE
 SharePoint  : User → AD Global group → (Entra Connect sync) → SharePoint group → Permission level
 ```
@@ -17,7 +17,7 @@ SharePoint  : User → AD Global group → (Entra Connect sync) → SharePoint g
 ## 2. Business roles
 
 | Role | Who | Main capabilities |
-|---|---|---|
+| --- | --- | --- |
 | Employee / Author | Licensed users | Collaborate in `Working`, register a document, create a revision, submit, create exchange requests |
 | Document Owner | Named on the register item | Everything an author can do for their documents, plus cancel or restart their workflow |
 | Approver | Anyone in the Approver Matrix, Impact Routing or a delegation | Approve or reject in Teams. Read `Submitted` |
@@ -37,7 +37,7 @@ Create these in a dedicated OU (for example `OU=DMS,OU=Groups`). Global groups h
 ### 3.1 Global role groups (people)
 
 | Group | Members | Synced to Entra |
-|---|---|---|
+| --- | --- | --- |
 | `GG_DMS_Employees` | All licensed employees | Yes |
 | `GG_DMS_Engineers` | Engineering, Development, Test, Manufacturing engineering | Yes |
 | `GG_DMS_Management` | Management, CFT leads | Yes |
@@ -53,7 +53,7 @@ Create these in a dedicated OU (for example `OU=DMS,OU=Groups`). Global groups h
 Pattern `DL_FS_<Scope>_<R|M>` where R = Read and M = Modify.
 
 | Group | Folder | NTFS right | Contains |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `DL_FS_<Area>_Working_M` | `...\Working` | Modify | `GG_DMS_Engineers` or the area's authors, `GG_DMS_DocumentControl` |
 | `DL_FS_<Area>_Submitted_R` | `...\Submitted` | Read | `GG_DMS_Approvers`, area authors |
 | `DL_FS_<Area>_Current_R` | `...\Current_ReadOnly`, `...\Obsolete_ReadOnly` | Read | `GG_DMS_Employees` (or a narrower group for confidential areas) |
@@ -69,7 +69,7 @@ Disable inheritance at the controlled folders and apply these ACEs (Phase 2 step
 ### 3.3 Repository permission matrix (blueprint 5.2, expanded)
 
 | Role | Working | Submitted | Current (Approved) | Obsolete | Quarantine Inbound | Quarantine (other) |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | Employee | Modify (own area) | None | Read | Read | None | None |
 | Engineer / Author | Modify | Read | Read | Read | None | None |
 | Approver | Read | Read | Read | Read | None | None |
@@ -84,7 +84,7 @@ Disable inheritance at the controlled folders and apply these ACEs (Phase 2 step
 Built-in levels are resolved by `RoleTypeKind`, so the script works on Hebrew sites where "Read" is displayed as "קריאה".
 
 | Level (EN / HE) | Based on | Change | Used for |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Full Control | built-in | - | Owners groups |
 | Read | built-in | - | Members, approvers, auditors |
 | Contribute | built-in | - | Exchange service account on Temporary Uploads only (it must delete expired content) |
@@ -100,7 +100,7 @@ Add **Entra security groups** to these SharePoint groups, not individual people.
 ### 5.1 Document Control site
 
 | SharePoint group (EN / HE) | Entra group | Site level |
-|---|---|---|
+| --- | --- | --- |
 | DMS Owners / DMS - בעלים | `GG_DMS_ITAdmins` | Full Control |
 | DMS Document Controllers / DMS - בקרי מסמכים | `GG_DMS_DocumentControl` | DMS Document Controller |
 | DMS Approvers / DMS - מאשרים | `GG_DMS_Approvers` | Read |
@@ -109,7 +109,7 @@ Add **Entra security groups** to these SharePoint groups, not individual people.
 | DMS Service Accounts / DMS - חשבונות שירות | flow service account | DMS Service Contribute |
 
 | List | Owners | Doc Controllers | Approvers | Members | Auditors | Service |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | Document Register | FC | DMS Doc Controller | Read | Read | Read | Service Contribute |
 | Approver Matrix, Impact Routing, Delegations, UI Labels | FC | DMS Doc Controller | Read | Read | Read | Service Contribute |
 | Workflow History, Approval Decisions (unique) | FC | **Read** | Read | Read | Read | Service Contribute |
@@ -123,7 +123,7 @@ The Workflow Service Entra app writes back to `File Action Queue` through Graph 
 ### 5.2 Large File Exchange site
 
 | SharePoint group | Entra group | Site level |
-|---|---|---|
+| --- | --- | --- |
 | Exchange Owners | `GG_DMS_ITAdmins` | Full Control |
 | Exchange Document Control | `GG_DMS_DocumentControl` | DMS Document Controller |
 | Exchange Employees | `GG_DMS_Employees` (**never guests**) | Read |
@@ -131,7 +131,7 @@ The Workflow Service Entra app writes back to `File Action Queue` through Graph 
 | Exchange Service Accounts | flow service account | DMS Service Contribute |
 
 | List | Owners | Doc Control | Employees | Auditors | Service |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | Temporary Uploads (unique) | FC | DMS Doc Controller | - (per-folder grant only) | - | Contribute |
 | Upload Requests (unique) | FC | DMS Doc Controller | Read | Read | Service Contribute |
 | Routing Catalog (unique) | FC | DMS Doc Controller | Read | Read | Read |
@@ -144,7 +144,7 @@ Per-request folder (created by EX-01): inheritance broken, `DMS Upload Only` for
 What each role can do at each document state. SharePoint rows show who may *trigger* the change, and the flow service account performs the write.
 
 | State | Author / Owner | Approver | Document Controller | Workflow Service |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Working | Edit file (SMB). Register, submit | Read file | Edit, re-assign owner | - |
 | Submitted | Read. Cancel or restart own workflow | Read. Approve or reject in Teams | Read. Cancel any workflow | Moves file, sets read-only |
 | Approved_ReadOnly | Read. Create new revision | Read | Controlled modify of metadata. Make obsolete. Release to PLM | Promotes file, obsoletes previous revision |
@@ -157,7 +157,7 @@ What each role can do at each document state. SharePoint rows show who may *trig
 The script does the following.
 
 | Setting | Document Control site | Exchange site |
-|---|---|---|
+| --- | --- | --- |
 | `SharingCapability` | `Disabled` | `ExternalUserSharingOnly` (authenticated guests, **no anonymous links**) |
 | Default link type | - | `Direct` (Specific people) |
 | Allowed guest domains | - | `-AllowedGuestDomains` → allow-list mode |

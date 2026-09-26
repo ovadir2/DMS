@@ -7,7 +7,7 @@ Implementation of **IT-DOC-BP-001 "Enterprise Document Control and Large-File Ex
 ## Package contents
 
 | Path | What it is |
-|---|---|
+| --- | --- |
 | [`scripts/Provision-DMS.ps1`](scripts/Provision-DMS.ps1) | Ready-to-run, idempotent PnP PowerShell. Creates both sites, 108 site columns, 12 content types, 13 lists and libraries, 23 views, 4 permission levels, 11 SharePoint groups, unique permissions, sharing policy, Sites.Selected grants and seed data (approver matrix, impact routing, 316 bilingual UI labels) |
 | [`docs/01-Architecture-and-Data-Model.md`](docs/01-Architecture-and-Data-Model.md) | Site topology, on-prem folder pattern, lifecycles, ID conventions, and the **full column catalogue** (type, required, indexed, default, choices, EN/HE names) generated from the script |
 | [`docs/02-Security-and-Permissions.md`](docs/02-Security-and-Permissions.md) | AD AGDLP groups, NTFS matrix, SharePoint groups and permission levels, lifecycle permission matrix, tenant hardening, dynamic-approver policy |
@@ -51,7 +51,7 @@ The language is chosen at site creation (LCID 1033 / 1037) and cannot be changed
 ## Deployment sequence (maps to blueprint section 10)
 
 | # | Step | Blueprint phase | Reference |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | Governance, licences, DLP (SharePoint, Teams, Office 365 Users, Approvals, Office 365 Groups in *Business*) | 1 | 02 §7 |
 | 2 | AD groups, NTFS ACLs, quarantine folders, controlled-folder pattern, CrowdStrike and Veeam scope | 2 | 02 §3, 01 §4 |
 | 3 | **Run `Provision-DMS.ps1`** | 3 | this README |
@@ -66,7 +66,7 @@ The language is chosen at site creation (LCID 1033 / 1037) and cannot be changed
 ## Requirement traceability
 
 | Req | How it is met |
-|---|---|
+| --- | --- |
 | REQ-01, REQ-02 | Files only on the file server. The register stores UNC and SHA-256 |
 | REQ-03, REQ-16 | AGDLP groups, and SharePoint groups backed by Entra groups (02) |
 | REQ-04, REQ-05 | `ControlMode`: Collaboration / Workflow Optional / Workflow Required / Read-Only Record |
