@@ -239,7 +239,6 @@ All tables below are generated from `scripts/Provision-DMS.ps1`, which is the si
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `WorkflowId` | Workflow ID | מזהה תהליך | Single line of text | Yes | Yes | | max 40 |
 | `DocumentId` | Document ID | מזהה מסמך | Single line of text | Yes | Yes | | max 40 |
-| `DocumentType` | Document Type | סוג מסמך | Choice | Yes | Yes | | Set: `DocumentType` |
 | `Revision` | Revision | גרסה | Single line of text | Yes | | | max 20 |
 | `Approver` | Approver | מאשר | Person | Yes | Yes | | |
 | `ApproverRole` | Approver Role | תפקיד המאשר | Choice | Yes | | | Set: `ApproverRole` |
