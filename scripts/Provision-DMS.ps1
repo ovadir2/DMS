@@ -1006,6 +1006,22 @@ function Install-DmsTranslation([string]$SiteKey) {
         Invoke-PnPQuery
         Write-Ok "names $(T $L.En $L.He)"
     }
+
+    # Left navigation: SharePoint copies the list name into the menu only when the list is
+    # created, so rename the menu links to match.
+    try {
+        $nodes = @(Get-PnPNavigationNode -Location QuickLaunch)
+        foreach ($L in $Lists | Where-Object Site -eq $SiteKey) {
+            $names = & $pick $L.En $L.He
+            foreach ($node in $nodes | Where-Object { $_.Url -and ($_.Url -like "*/$($L.Url)" -or $_.Url -like "*/$($L.Url)/*") }) {
+                $node.Title = $names[1]
+                for ($i = 0; $i -lt 2; $i++) { $node.TitleResource.SetValueForUICulture($cultures[$i], $names[$i]) }
+                $node.Update()
+            }
+        }
+        Invoke-PnPQuery
+        Write-Ok 'navigation names updated'
+    } catch { Write-Warn2 "navigation names: $($_.Exception.Message)" }
 }
 
 function Get-NeededField([string]$SiteKey) {
