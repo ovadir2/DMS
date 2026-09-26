@@ -1,0 +1,64 @@
+{
+  "version": "0.2",
+  "language": "en,en-GB",
+  "ignorePaths": [
+    "scripts/logs/**"
+  ],
+  "ignoreRegExpList": [
+    "HebrewText"
+  ],
+  "patterns": [
+    {
+      "name": "HebrewText",
+      "pattern": "/[\\u0590-\\u05FF]+/gu"
+    }
+  ],
+  "words": [
+    "addreviewers",
+    "addroleassignment",
+    "AGDLP",
+    "Behaviour",
+    "breakroleinheritance",
+    "Caml",
+    "cancelwf",
+    "changeapprovers",
+    "contoso",
+    "copypath",
+    "Dataverse",
+    "deletefailed",
+    "doccontrol",
+    "documentid",
+    "duereview",
+    "ensureuser",
+    "fileaction",
+    "getbyname",
+    "LCID",
+    "licences",
+    "Lifecycles",
+    "Mult",
+    "mydocs",
+    "newrequest",
+    "newrev",
+    "nodata",
+    "NTFS",
+    "openfolder",
+    "PFMEA",
+    "powerfx",
+    "Prefs",
+    "principalid",
+    "requiredapprovers",
+    "reshare",
+    "roleassignments",
+    "roledefid",
+    "roledefinitions",
+    "Segoe",
+    "sitegroups",
+    "subfolders",
+    "Subscopes",
+    "Untick",
+    "unticked",
+    "uploadurl",
+    "Veeam",
+    "workflowid"
+  ]
+}
