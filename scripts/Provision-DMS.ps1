@@ -63,6 +63,11 @@
     list, column and content-type names in the language of their own Microsoft 365
     profile. The site's default language still comes from -SiteLanguage / -Language.
 
+.PARAMETER ReseedData
+    Deletes and reloads the seed rows of Approver Matrix, Impact Routing and UI Labels.
+    Use it after changing -Language / -ChoiceLanguage on an existing site. Any people
+    already assigned in those two lists are lost, so only use it before go-live.
+
 .PARAMETER LogoPath
     Optional site logo (PNG/JPG, ideally square, at least 64x64). Default: ..\assets\logo.png
     next to this script. Skipped if the file does not exist.
@@ -100,6 +105,7 @@ param(
     [guid] $WorkflowServiceAppId,
     [switch] $SkipSiteCreation,
     [switch] $SkipSeedData,
+    [switch] $ReseedData,
     [string] $LogoPath = (Join-Path $PSScriptRoot '..\assets\logo.png'),
     [switch] $Multilingual,
     [ValidateSet('en', 'he')] [string] $ChoiceLanguage = 'en'
@@ -801,6 +807,12 @@ function Install-DmsGroup([string]$SiteKey, [hashtable]$Roles) {
     $existing = @(Get-PnPGroup | ForEach-Object Title)
     foreach ($g in $Groups | Where-Object Site -eq $SiteKey) {
         $title = T $g.En $g.He
+        $other = if ($Script:He) { $g.En } else { $g.He }
+        if ($existing -notcontains $title -and $existing -contains $other) {
+            Set-PnPGroup -Identity $other -Title $title | Out-Null
+            $existing += $title
+            Write-Ok "group renamed $other -> $title"
+        }
         if ($existing -notcontains $title) {
             New-PnPGroup -Title $title -Description (T $g.DescEn $g.DescHe) | Out-Null
             Write-Ok "group $title"
@@ -818,7 +830,13 @@ function Install-DmsGroup([string]$SiteKey, [hashtable]$Roles) {
 function Install-DmsSiteColumn([string[]]$Needed) {
     Write-Step "Site columns ($($Needed.Count))"
     foreach ($n in $Needed) {
-        if (Get-PnPField -Identity $n -ErrorAction SilentlyContinue) { Write-Skip $n; continue }
+        $existingField = Get-PnPField -Identity $n -ErrorAction SilentlyContinue
+        if ($existingField) {
+            # Re-apply name, choices and default in the current language, and push to lists.
+            try { $existingField.SchemaXml = (Get-FieldXml $FieldMap[$n]); $existingField.UpdateAndPushChanges($true); Invoke-PnPQuery; Write-Skip "$n (refreshed)" }
+            catch { Write-Warn2 "refresh $n : $($_.Exception.Message)" }
+            continue
+        }
         Add-PnPFieldFromXml -FieldXml (Get-FieldXml $FieldMap[$n]) | Out-Null
         Write-Ok $n
     }
@@ -896,6 +914,12 @@ function Install-DmsList([hashtable]$L, [hashtable]$Roles) {
     $views = @(Get-PnPView -List $L.Url | ForEach-Object Title)
     foreach ($v in $L.Views) {
         $vt = T $v.En $v.He
+        $vOther = if ($Script:He) { $v.En } else { $v.He }
+        if ($views -notcontains $vt -and $views -contains $vOther) {
+            Set-PnPView -List $L.Url -Identity $vOther -Values @{ Title = $vt } | Out-Null
+            $views += $vt
+            Write-Ok "view renamed $vOther -> $vt"
+        }
         $isDefault = [bool]($v.ContainsKey('Default') -and $v.Default)
         if ($views -contains $vt) {
             Set-PnPView -List $L.Url -Identity $vt -Fields $v.Fields | Out-Null
@@ -924,6 +948,15 @@ function Install-DmsList([hashtable]$L, [hashtable]$Roles) {
     }
 }
 
+function Clear-DmsList([string]$ListUrl) {
+    $items = @(Get-PnPListItem -List $ListUrl -PageSize 500)
+    if (-not $items.Count) { return }
+    $batch = New-PnPBatch
+    foreach ($i in $items) { Remove-PnPListItem -List $ListUrl -Identity $i.Id -Batch $batch }
+    Invoke-PnPBatch -Batch $batch
+    Write-Ok "$ListUrl cleared ($($items.Count) rows)"
+}
+
 function Add-Seed([string]$ListUrl, [object[]]$Rows) {
     $list = Get-PnPList -Identity $ListUrl -Includes ItemCount
     if ($list.ItemCount -gt 0) { Write-Skip "$ListUrl already has $($list.ItemCount) items"; return }
@@ -935,40 +968,43 @@ function Add-Seed([string]$ListUrl, [object[]]$Rows) {
 
 function Install-DmsTranslation([string]$SiteKey) {
     # English + Hebrew names for the site title, site columns, content types, lists and list columns.
-    Write-Step "Translations ($SiteKey)"
+    # Without -Multilingual both cultures get the chosen language, so every user sees the same names
+    # and names left over from an earlier run in another language are replaced.
+    Write-Step "Names ($SiteKey)"
     $cultures = @('en-US', 'he-IL')
-    $siteNames = if ($SiteKey -eq 'DC') { @('Documents Management System (DMS)', 'מערכת לניהול ושיתוף קבצים (DMS)') } else { @('DMS - Large File Exchange', 'DMS - העברת קבצים גדולים') }
+    $pick = { param($En, $He) if ($Multilingual) { @($En, $He) } else { $x = T $En $He; @($x, $x) } }
+    $siteNames = if ($SiteKey -eq 'DC') { & $pick 'Documents Management System (DMS)' 'מערכת לניהול ושיתוף קבצים (DMS)' } else { & $pick 'DMS - Large File Exchange' 'DMS - העברת קבצים גדולים' }
     $web = Get-PnPWeb -Includes TitleResource
     for ($i = 0; $i -lt 2; $i++) { $web.TitleResource.SetValueForUICulture($cultures[$i], $siteNames[$i]) }
     $web.Update()
     foreach ($n in (Get-NeededField $SiteKey)) {
         $f = Get-PnPField -Identity $n -Includes TitleResource
-        $names = @($FieldMap[$n].En, $FieldMap[$n].He)
+        $names = & $pick $FieldMap[$n].En $FieldMap[$n].He
         for ($i = 0; $i -lt 2; $i++) { $f.TitleResource.SetValueForUICulture($cultures[$i], $names[$i]) }
         $f.Update()
     }
     foreach ($k in @($Lists | Where-Object Site -eq $SiteKey | ForEach-Object { $_.Ct } | Select-Object -Unique)) {
         $ct = Get-PnPContentType -Identity (Get-ContentTypeId $k $ContentTypes[$k].Parent) -Includes NameResource
-        $names = @((Get-SafeCtName $ContentTypes[$k].En), (Get-SafeCtName $ContentTypes[$k].He))
+        $names = & $pick (Get-SafeCtName $ContentTypes[$k].En) (Get-SafeCtName $ContentTypes[$k].He)
         for ($i = 0; $i -lt 2; $i++) { $ct.NameResource.SetValueForUICulture($cultures[$i], $names[$i]) }
         $ct.Update($false)
     }
     Invoke-PnPQuery
     foreach ($L in $Lists | Where-Object Site -eq $SiteKey) {
         $list = Get-PnPList -Identity $L.Url -Includes TitleResource
-        $names = @($L.En, $L.He)
+        $names = & $pick $L.En $L.He
         for ($i = 0; $i -lt 2; $i++) { $list.TitleResource.SetValueForUICulture($cultures[$i], $names[$i]) }
         $list.Update()
         $cols = @($ContentTypes[$L.Ct].Fields)
         if ($L.ContainsKey('TitleEn')) { $cols += 'Title' }
         foreach ($n in $cols) {
             $lf = Get-PnPField -List $L.Url -Identity $n -Includes TitleResource
-            $names = if ($n -eq 'Title') { @($L.TitleEn, $L.TitleHe) } else { @($FieldMap[$n].En, $FieldMap[$n].He) }
+            $names = if ($n -eq 'Title') { & $pick $L.TitleEn $L.TitleHe } else { & $pick $FieldMap[$n].En $FieldMap[$n].He }
             for ($i = 0; $i -lt 2; $i++) { $lf.TitleResource.SetValueForUICulture($cultures[$i], $names[$i]) }
             $lf.Update()
         }
         Invoke-PnPQuery
-        Write-Ok "translated $($L.En)"
+        Write-Ok "names $(T $L.En $L.He)"
     }
 }
 
@@ -1054,10 +1090,11 @@ try {
         Install-DmsGroup $site.Key $roles
         Install-DmsSiteColumn (Get-NeededField $site.Key)
         foreach ($L in $Lists | Where-Object Site -eq $site.Key) { Install-DmsList $L $roles }
-        if ($Multilingual) { Install-DmsTranslation $site.Key }
+        Install-DmsTranslation $site.Key
 
         if (-not $SkipSeedData -and $site.Key -eq 'DC') {
             Write-Step 'Seed data'
+            if ($ReseedData) { foreach ($u in 'Lists/ApproverMatrix', 'Lists/ImpactRouting', 'Lists/UiLabels') { Clear-DmsList $u } }
             Add-Seed 'Lists/ApproverMatrix' ($ApproverMatrixSeed | ForEach-Object {
                 $area = CV 'DocumentArea' $_[0]; $type = CV 'DocumentType' $_[1]
                 @{ Title = "$area - $type"; DocumentArea = $area; DocumentType = $type; MandatoryRoles = (Convert-RoleText $_[2])
