@@ -517,45 +517,232 @@ All tables below are generated from `scripts/Provision-DMS.ps1`, which is the si
 
 Stored values are always the English key, so flows and Power Fx never break when the UI language changes. The Hebrew label is loaded from the **UI Labels** list (`choice.<Set>.<Key>`).
 
-**`DocumentArea`**: `Management` ← ניהול · `Commercial` ← מסחרי · `Development` ← פיתוח · `Manufacturing` ← ייצור · `Test Engineering` ← הנדסת בדיקות · `Quality` ← איכות · `Changes` ← שינויים · `IT` ← מערכות מידע · `InfoSec` ← אבטחת מידע
+#### `DocumentArea`
 
-**`DocumentType`**: `Company Profile` ← פרופיל חברה · `Strategy` ← אסטרטגיה · `Policy` ← מדיניות · `Procedure` ← נוהל · `Quotation` ← הצעת מחיר · `Contract / NDA` ← חוזה / NDA · `SOW` ← SOW - הגדרת עבודה · `SRS` ← SRS - דרישות מערכת · `PDR / CDR` ← PDR / CDR - סקר תכן · `FAT / SAT / FDR` ← FAT / SAT / FDR - בדיקות קבלה · `Work Instruction` ← הוראת עבודה · `Test Procedure` ← נוהל בדיקה · `PFMEA / Control Plan` ← PFMEA / תוכנית בקרה · `ECO / ECN` ← ECO / ECN - הודעת שינוי · `IT Procedure` ← נוהל מערכות מידע · `Security Policy` ← מדיניות אבטחת מידע
+| Stored key | Hebrew label |
+| --- | --- |
+| `Management` | ניהול |
+| `Commercial` | מסחרי |
+| `Development` | פיתוח |
+| `Manufacturing` | ייצור |
+| `Test Engineering` | הנדסת בדיקות |
+| `Quality` | איכות |
+| `Changes` | שינויים |
+| `IT` | מערכות מידע |
+| `InfoSec` | אבטחת מידע |
 
-**`ControlMode`**: `Collaboration` ← שיתופי ללא תהליך · `Workflow Optional` ← תהליך אישור רשות · `Workflow Required` ← תהליך אישור חובה · `Read-Only Record` ← רשומה לקריאה בלבד
+#### `DocumentType`
 
-**`LifecycleStatus`**: `Working` ← בעבודה · `Submitted` ← הוגש לאישור · `Approved_ReadOnly` ← מאושר - קריאה בלבד · `Released_PLM` ← שוחרר ל-PLM · `Obsolete_ReadOnly` ← מבוטל - קריאה בלבד · `Archived` ← בארכיון
+| Stored key | Hebrew label |
+| --- | --- |
+| `Company Profile` | פרופיל חברה |
+| `Strategy` | אסטרטגיה |
+| `Policy` | מדיניות |
+| `Procedure` | נוהל |
+| `Quotation` | הצעת מחיר |
+| `Contract / NDA` | חוזה / NDA |
+| `SOW` | SOW - הגדרת עבודה |
+| `SRS` | SRS - דרישות מערכת |
+| `PDR / CDR` | PDR / CDR - סקר תכן |
+| `FAT / SAT / FDR` | FAT / SAT / FDR - בדיקות קבלה |
+| `Work Instruction` | הוראת עבודה |
+| `Test Procedure` | נוהל בדיקה |
+| `PFMEA / Control Plan` | PFMEA / תוכנית בקרה |
+| `ECO / ECN` | ECO / ECN - הודעת שינוי |
+| `IT Procedure` | נוהל מערכות מידע |
+| `Security Policy` | מדיניות אבטחת מידע |
 
-**`Classification`**: `Public` ← ציבורי · `Internal` ← פנימי · `Confidential` ← סודי · `Restricted` ← מוגבל
+#### `ControlMode`
 
-**`RetentionClass`**: `Temporary` ← זמני · `Record-7Y` ← רשומה - 7 שנים · `Legal Hold` ← הקפאה משפטית
+| Stored key | Hebrew label |
+| --- | --- |
+| `Collaboration` | שיתופי ללא תהליך |
+| `Workflow Optional` | תהליך אישור רשות |
+| `Workflow Required` | תהליך אישור חובה |
+| `Read-Only Record` | רשומה לקריאה בלבד |
 
-**`DocumentLanguage`**: `English` ← אנגלית · `Hebrew` ← עברית · `Bilingual` ← דו-לשוני
+#### `LifecycleStatus`
 
-**`WorkflowStatus`**: `Pending` ← ממתין · `InReview` ← בבדיקה · `Approved` ← אושר · `Rejected` ← נדחה · `Cancelled` ← בוטל · `Restarted` ← הופעל מחדש
+| Stored key | Hebrew label |
+| --- | --- |
+| `Working` | בעבודה |
+| `Submitted` | הוגש לאישור |
+| `Approved_ReadOnly` | מאושר - קריאה בלבד |
+| `Released_PLM` | שוחרר ל-PLM |
+| `Obsolete_ReadOnly` | מבוטל - קריאה בלבד |
+| `Archived` | בארכיון |
 
-**`RoutingMode`**: `Hybrid` ← מקבילי ואז מאשר סופי · `Sequential` ← סדרתי · `Parallel` ← מקבילי
+#### `Classification`
 
-**`ChangeImpact`**: `Financial or pricing` ← כספי / תמחור · `Contractual/customer commitment` ← חוזי / התחייבות ללקוח · `Product design` ← תכן מוצר · `Manufacturing process` ← תהליך ייצור · `Test/acceptance` ← בדיקות / קבלה · `Cybersecurity/data` ← סייבר / מידע · `Employee/organization` ← עובדים / ארגון · `Supplier/BOM` ← ספקים / BOM · `PLM/MAE/Priority integration` ← ממשק PLM/MAE/Priority
+| Stored key | Hebrew label |
+| --- | --- |
+| `Public` | ציבורי |
+| `Internal` | פנימי |
+| `Confidential` | סודי |
+| `Restricted` | מוגבל |
 
-**`ApproverRole`**: `Mandatory` ← חובה · `Conditional` ← מותנה · `Reviewer` ← סוקר · `Final` ← מאשר סופי
+#### `RetentionClass`
 
-**`Decision`**: `Pending` ← ממתין · `Approved` ← אושר · `Rejected` ← נדחה · `Delegated` ← הואצל · `Cancelled` ← בוטל · `Expired` ← פג תוקף
+| Stored key | Hebrew label |
+| --- | --- |
+| `Temporary` | זמני |
+| `Record-7Y` | רשומה - 7 שנים |
+| `Legal Hold` | הקפאה משפטית |
 
-**`DelegationStatus`**: `Active` ← פעיל · `Expired` ← פג תוקף · `Revoked` ← בוטל
+#### `DocumentLanguage`
 
-**`ActionType`**: `VerifyWorkingFile` ← אימות קובץ עבודה · `CreateDraftCopy` ← יצירת טיוטת גרסה · `MoveToSubmitted` ← העברה להגשה · `ReturnToWorking` ← החזרה לעבודה · `PromoteToCurrent` ← קידום לגרסה נוכחית · `MakeObsolete` ← העברה לבוטל · `ReleaseToPLMQueue` ← שחרור לתור PLM · `ArchiveRevision` ← העברה לארכיון
+| Stored key | Hebrew label |
+| --- | --- |
+| `English` | אנגלית |
+| `Hebrew` | עברית |
+| `Bilingual` | דו-לשוני |
 
-**`ActionStatus`**: `Queued` ← בתור · `Processing` ← בעיבוד · `Completed` ← הושלם · `Failed` ← נכשל · `Cancelled` ← בוטל
+#### `WorkflowStatus`
 
-**`ExchangeStatus`**: `Draft` ← טיוטה · `AwaitingUpload` ← ממתין להעלאה · `Uploaded` ← הועלה · `ReadyForTransfer` ← מוכן להעברה · `Transferring` ← בהעברה · `Transferred` ← הועבר · `Accepted` ← התקבל · `Rejected` ← נדחה · `TransferFailed` ← העברה נכשלה · `Cancelled` ← בוטל · `Expired` ← פג תוקף
+| Stored key | Hebrew label |
+| --- | --- |
+| `Pending` | ממתין |
+| `InReview` | בבדיקה |
+| `Approved` | אושר |
+| `Rejected` | נדחה |
+| `Cancelled` | בוטל |
+| `Restarted` | הופעל מחדש |
 
-**`Direction`**: `Inbound` ← נכנס · `Outbound` ← יוצא
+#### `RoutingMode`
 
-**`EventType`**: `Created` ← נוצר · `StatusChanged` ← שינוי סטטוס · `Submitted` ← הוגש · `Approved` ← אושר · `Rejected` ← נדחה · `Delegated` ← הואצל · `FileActionQueued` ← פעולת קובץ בתור · `FileActionCompleted` ← פעולת קובץ הושלמה · `FileActionFailed` ← פעולת קובץ נכשלה · `TransferCompleted` ← העברה הושלמה · `TransferFailed` ← העברה נכשלה · `CloudCopyDeleted` ← העותק בענן נמחק · `PermissionChanged` ← שינוי הרשאות · `Cancelled` ← בוטל · `Expired` ← פג תוקף
+| Stored key | Hebrew label |
+| --- | --- |
+| `Hybrid` | מקבילי ואז מאשר סופי |
+| `Sequential` | סדרתי |
+| `Parallel` | מקבילי |
 
-**`EventSource`**: `PowerApps` ← Power Apps · `PowerAutomate` ← Power Automate · `TransferWorker` ← Transfer Worker · `WorkflowService` ← שירות תהליכים · `Manual` ← ידני
+#### `ChangeImpact`
 
-**`LabelArea`**: `App` ← אפליקציה · `Field` ← שדה · `Choice` ← ערך בחירה · `List` ← רשימה · `Message` ← הודעה
+| Stored key | Hebrew label |
+| --- | --- |
+| `Financial or pricing` | כספי / תמחור |
+| `Contractual/customer commitment` | חוזי / התחייבות ללקוח |
+| `Product design` | תכן מוצר |
+| `Manufacturing process` | תהליך ייצור |
+| `Test/acceptance` | בדיקות / קבלה |
+| `Cybersecurity/data` | סייבר / מידע |
+| `Employee/organization` | עובדים / ארגון |
+| `Supplier/BOM` | ספקים / BOM |
+| `PLM/MAE/Priority integration` | ממשק PLM/MAE/Priority |
+
+#### `ApproverRole`
+
+| Stored key | Hebrew label |
+| --- | --- |
+| `Mandatory` | חובה |
+| `Conditional` | מותנה |
+| `Reviewer` | סוקר |
+| `Final` | מאשר סופי |
+
+#### `Decision`
+
+| Stored key | Hebrew label |
+| --- | --- |
+| `Pending` | ממתין |
+| `Approved` | אושר |
+| `Rejected` | נדחה |
+| `Delegated` | הואצל |
+| `Cancelled` | בוטל |
+| `Expired` | פג תוקף |
+
+#### `DelegationStatus`
+
+| Stored key | Hebrew label |
+| --- | --- |
+| `Active` | פעיל |
+| `Expired` | פג תוקף |
+| `Revoked` | בוטל |
+
+#### `ActionType`
+
+| Stored key | Hebrew label |
+| --- | --- |
+| `VerifyWorkingFile` | אימות קובץ עבודה |
+| `CreateDraftCopy` | יצירת טיוטת גרסה |
+| `MoveToSubmitted` | העברה להגשה |
+| `ReturnToWorking` | החזרה לעבודה |
+| `PromoteToCurrent` | קידום לגרסה נוכחית |
+| `MakeObsolete` | העברה לבוטל |
+| `ReleaseToPLMQueue` | שחרור לתור PLM |
+| `ArchiveRevision` | העברה לארכיון |
+
+#### `ActionStatus`
+
+| Stored key | Hebrew label |
+| --- | --- |
+| `Queued` | בתור |
+| `Processing` | בעיבוד |
+| `Completed` | הושלם |
+| `Failed` | נכשל |
+| `Cancelled` | בוטל |
+
+#### `ExchangeStatus`
+
+| Stored key | Hebrew label |
+| --- | --- |
+| `Draft` | טיוטה |
+| `AwaitingUpload` | ממתין להעלאה |
+| `Uploaded` | הועלה |
+| `ReadyForTransfer` | מוכן להעברה |
+| `Transferring` | בהעברה |
+| `Transferred` | הועבר |
+| `Accepted` | התקבל |
+| `Rejected` | נדחה |
+| `TransferFailed` | העברה נכשלה |
+| `Cancelled` | בוטל |
+| `Expired` | פג תוקף |
+
+#### `Direction`
+
+| Stored key | Hebrew label |
+| --- | --- |
+| `Inbound` | נכנס |
+| `Outbound` | יוצא |
+
+#### `EventType`
+
+| Stored key | Hebrew label |
+| --- | --- |
+| `Created` | נוצר |
+| `StatusChanged` | שינוי סטטוס |
+| `Submitted` | הוגש |
+| `Approved` | אושר |
+| `Rejected` | נדחה |
+| `Delegated` | הואצל |
+| `FileActionQueued` | פעולת קובץ בתור |
+| `FileActionCompleted` | פעולת קובץ הושלמה |
+| `FileActionFailed` | פעולת קובץ נכשלה |
+| `TransferCompleted` | העברה הושלמה |
+| `TransferFailed` | העברה נכשלה |
+| `CloudCopyDeleted` | העותק בענן נמחק |
+| `PermissionChanged` | שינוי הרשאות |
+| `Cancelled` | בוטל |
+| `Expired` | פג תוקף |
+
+#### `EventSource`
+
+| Stored key | Hebrew label |
+| --- | --- |
+| `PowerApps` | Power Apps |
+| `PowerAutomate` | Power Automate |
+| `TransferWorker` | Transfer Worker |
+| `WorkflowService` | שירות תהליכים |
+| `Manual` | ידני |
+
+#### `LabelArea`
+
+| Stored key | Hebrew label |
+| --- | --- |
+| `App` | אפליקציה |
+| `Field` | שדה |
+| `Choice` | ערך בחירה |
+| `List` | רשימה |
+| `Message` | הודעה |
 
 <!-- END GENERATED DATA MODEL -->
 
