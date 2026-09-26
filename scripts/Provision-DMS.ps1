@@ -401,7 +401,7 @@ $ContentTypes = [ordered]@{
 # Perm entries: group key -> role key. Role keys resolved later (built-in roles are localized on Hebrew sites).
 $Q_OrderById   = "<OrderBy><FieldRef Name='DocumentId' /></OrderBy>"
 $Q_Me          = { param($f) "<Eq><FieldRef Name='$f' /><Value Type='Integer'><UserID Type='Integer' /></Value></Eq>" }
-function Q-In([string]$Field, [string[]]$Values) {
+function Get-CamlIn([string]$Field, [string[]]$Values) {
     "<In><FieldRef Name='$Field' /><Values>" + (($Values | ForEach-Object { "<Value Type='Text'>$_</Value>" }) -join '') + "</Values></In>"
 }
 
@@ -422,10 +422,10 @@ $Lists = @(
            Query="<Where><Eq><FieldRef Name='LifecycleStatus' /><Value Type='Text'>Submitted</Value></Eq></Where>$Q_OrderById"}
          @{En='Due for Review (30 days)'; He='לסקירה ב-30 הימים הקרובים'
            Fields=@('DocumentId','LinkTitle','DocumentType','CurrentRevision','DocumentOwner','NextReviewDate')
-           Query="<Where><And><Leq><FieldRef Name='NextReviewDate' /><Value Type='DateTime'><Today OffsetDays='30' /></Value></Leq>$(Q-In 'LifecycleStatus' @('Approved_ReadOnly','Released_PLM'))</And></Where><OrderBy><FieldRef Name='NextReviewDate' /></OrderBy>"}
+           Query="<Where><And><Leq><FieldRef Name='NextReviewDate' /><Value Type='DateTime'><Today OffsetDays='30' /></Value></Leq>$(Get-CamlIn 'LifecycleStatus' @('Approved_ReadOnly','Released_PLM'))</And></Where><OrderBy><FieldRef Name='NextReviewDate' /></OrderBy>"}
          @{En='Obsolete and Archived'; He='מבוטלים ובארכיון'
            Fields=@('DocumentId','LinkTitle','DocumentType','CurrentRevision','LifecycleStatus','RetentionClass','Modified')
-           Query="<Where>$(Q-In 'LifecycleStatus' @('Obsolete_ReadOnly','Archived'))</Where>$Q_OrderById"}
+           Query="<Where>$(Get-CamlIn 'LifecycleStatus' @('Obsolete_ReadOnly','Archived'))</Where>$Q_OrderById"}
        ) }
     @{ Site='DC'; Key='WorkflowHistory'; Url='Lists/WorkflowHistory'; Tpl='GenericList'; Ct='WorkflowCycle'
        En='Workflow History'; He='היסטוריית תהליכים'; TitleEn='Workflow Title'; TitleHe='כותרת התהליך'
@@ -434,7 +434,7 @@ $Lists = @(
        Views=@(
          @{En='Active Workflows'; He='תהליכים פעילים'; Default=$true
            Fields=@('WorkflowId','DocumentId','Revision','LinkTitle','WorkflowStatus','SubmittedBy','SubmittedUtc','DecisionDueDate')
-           Query="<Where>$(Q-In 'WorkflowStatus' @('Pending','InReview'))</Where><OrderBy><FieldRef Name='SubmittedUtc' Ascending='FALSE' /></OrderBy>"}
+           Query="<Where>$(Get-CamlIn 'WorkflowStatus' @('Pending','InReview'))</Where><OrderBy><FieldRef Name='SubmittedUtc' Ascending='FALSE' /></OrderBy>"}
          @{En='All Workflows'; He='כל התהליכים'
            Fields=@('WorkflowId','DocumentId','Revision','CycleNumber','WorkflowStatus','SubmittedBy','SubmittedUtc','CompletedUtc')
            Query="<OrderBy><FieldRef Name='SubmittedUtc' Ascending='FALSE' /></OrderBy>"}
@@ -479,7 +479,7 @@ $Lists = @(
        Views=@(
          @{En='Open Actions'; He='פעולות פתוחות'; Default=$true
            Fields=@('ID','ActionType','ActionStatus','DocumentId','Revision','WorkflowId','RequestedUtc','Attempts')
-           Query="<Where>$(Q-In 'ActionStatus' @('Queued','Processing'))</Where><OrderBy><FieldRef Name='RequestedUtc' /></OrderBy>"}
+           Query="<Where>$(Get-CamlIn 'ActionStatus' @('Queued','Processing'))</Where><OrderBy><FieldRef Name='RequestedUtc' /></OrderBy>"}
          @{En='Failed Actions'; He='פעולות שנכשלו'
            Fields=@('ID','ActionType','DocumentId','Revision','FailureDetail','Attempts','ProcessedUtc')
            Query="<Where><Eq><FieldRef Name='ActionStatus' /><Value Type='Text'>Failed</Value></Eq></Where><OrderBy><FieldRef Name='ProcessedUtc' Ascending='FALSE' /></OrderBy>"}
@@ -513,7 +513,7 @@ $Lists = @(
        Views=@(
          @{En='Active Requests'; He='בקשות פעילות'; Default=$true
            Fields=@('RequestId','LinkTitle','CustomerCode','ProjectCode','TransferDirection','ExchangeStatus','ExchangeFileName','ExpectedSizeBytes','ExpiryDate','Modified')
-           Query="<Where>$(Q-In 'ExchangeStatus' @('Draft','AwaitingUpload','Uploaded','ReadyForTransfer','Transferring','Transferred','TransferFailed'))</Where><OrderBy><FieldRef Name='Modified' Ascending='FALSE' /></OrderBy>"}
+           Query="<Where>$(Get-CamlIn 'ExchangeStatus' @('Draft','AwaitingUpload','Uploaded','ReadyForTransfer','Transferring','Transferred','TransferFailed'))</Where><OrderBy><FieldRef Name='Modified' Ascending='FALSE' /></OrderBy>"}
          @{En='My Requests'; He='הבקשות שלי'
            Fields=@('RequestId','LinkTitle','CustomerCode','ProjectCode','ExchangeStatus','ExchangeFileName','Modified')
            Query="<Where>$(& $Q_Me 'RequestedBy')</Where><OrderBy><FieldRef Name='Modified' Ascending='FALSE' /></OrderBy>"}
@@ -522,7 +522,7 @@ $Lists = @(
            Query="<Where><Eq><FieldRef Name='ExchangeStatus' /><Value Type='Text'>TransferFailed</Value></Eq></Where><OrderBy><FieldRef Name='Modified' Ascending='FALSE' /></OrderBy>"}
          @{En='Awaiting Cloud Deletion'; He='ממתינים למחיקה מהענן'
            Fields=@('RequestId','ExchangeFileName','ExchangeStatus','TransferCompletedUtc','CloudCopyDeleted','RetentionClass')
-           Query="<Where><And><Eq><FieldRef Name='CloudCopyDeleted' /><Value Type='Boolean'>0</Value></Eq>$(Q-In 'ExchangeStatus' @('Transferred','Accepted','Rejected'))</And></Where>"}
+           Query="<Where><And><Eq><FieldRef Name='CloudCopyDeleted' /><Value Type='Boolean'>0</Value></Eq>$(Get-CamlIn 'ExchangeStatus' @('Transferred','Accepted','Rejected'))</And></Where>"}
        ) }
     @{ Site='EX'; Key='ExchangeAudit'; Url='Lists/ExchangeAudit'; Tpl='GenericList'; Ct='AuditEvent'
        En='Exchange Audit'; He='יומן ביקורת - העברת קבצים'; TitleEn='Event'; TitleHe='אירוע'
@@ -706,7 +706,7 @@ function Get-RoleNameMap {
     $map
 }
 
-function Ensure-RoleDefinitions {
+function Deploy-DmsRoleDefinition {
     Write-Step 'Permission levels'
     $existing = @(Get-PnPRoleDefinition | ForEach-Object Name)
     $builtIn  = Get-RoleNameMap
@@ -721,7 +721,7 @@ function Ensure-RoleDefinitions {
     }
 }
 
-function Ensure-Groups([string]$SiteKey, [hashtable]$Roles) {
+function Deploy-DmsGroup([string]$SiteKey, [hashtable]$Roles) {
     Write-Step "SharePoint groups ($SiteKey)"
     $existing = @(Get-PnPGroup | ForEach-Object Title)
     foreach ($g in $Groups | Where-Object Site -eq $SiteKey) {
@@ -740,7 +740,7 @@ function Ensure-Groups([string]$SiteKey, [hashtable]$Roles) {
     }
 }
 
-function Ensure-SiteColumns([string[]]$Needed) {
+function Deploy-DmsSiteColumn([string[]]$Needed) {
     Write-Step "Site columns ($($Needed.Count))"
     foreach ($n in $Needed) {
         if (Get-PnPField -Identity $n -ErrorAction SilentlyContinue) { Write-Skip $n; continue }
@@ -749,7 +749,7 @@ function Ensure-SiteColumns([string[]]$Needed) {
     }
 }
 
-function Ensure-ContentType([string]$Key) {
+function Deploy-DmsContentType([string]$Key) {
     $def  = $ContentTypes[$Key]
     $id   = New-CtId $Key $def.Parent
     $name = T $def.En $def.He
@@ -768,7 +768,7 @@ function Ensure-ContentType([string]$Key) {
     $id
 }
 
-function Ensure-List([hashtable]$L, [hashtable]$Roles) {
+function Deploy-DmsList([hashtable]$L, [hashtable]$Roles) {
     $title = T $L.En $L.He
     Write-Step "List: $title"
     $list = Get-PnPList -Identity $L.Url -ErrorAction SilentlyContinue
@@ -787,7 +787,7 @@ function Ensure-List([hashtable]$L, [hashtable]$Roles) {
     } catch { Write-Warn2 "versioning: $($_.Exception.Message) (set the library version limit manually)" }
 
     # --- content type
-    $ctId = Ensure-ContentType $L.Ct
+    $ctId = Deploy-DmsContentType $L.Ct
     $listCts = Get-PnPContentType -List $L.Url
     if (-not ($listCts | Where-Object { $_.Id.StringValue.StartsWith($ctId) })) {
         Add-PnPContentTypeToList -List $L.Url -ContentType $ctId -DefaultContentType
@@ -852,7 +852,7 @@ function Add-Seed([string]$ListUrl, [object[]]$Rows) {
     Write-Ok "$ListUrl seeded ($($Rows.Count) rows)"
 }
 
-function Get-NeededFields([string]$SiteKey) {
+function Get-NeededField([string]$SiteKey) {
     $cts = $Lists | Where-Object Site -eq $SiteKey | ForEach-Object { $_.Ct } | Select-Object -Unique
     $cts | ForEach-Object { $ContentTypes[$_].Fields } | Select-Object -Unique
 }
@@ -907,11 +907,11 @@ try {
         try { Set-PnPSite -DisableSharingForNonOwners | Out-Null }
         catch { Write-Warn2 "DisableSharingForNonOwners: $($_.Exception.Message)" }
 
-        Ensure-RoleDefinitions
+        Deploy-DmsRoleDefinition
         $roles = Get-RoleNameMap
-        Ensure-Groups $site.Key $roles
-        Ensure-SiteColumns (Get-NeededFields $site.Key)
-        foreach ($L in $Lists | Where-Object Site -eq $site.Key) { Ensure-List $L $roles }
+        Deploy-DmsGroup $site.Key $roles
+        Deploy-DmsSiteColumn (Get-NeededField $site.Key)
+        foreach ($L in $Lists | Where-Object Site -eq $site.Key) { Deploy-DmsList $L $roles }
 
         if (-not $SkipSeedData -and $site.Key -eq 'DC') {
             Write-Step 'Seed data'
