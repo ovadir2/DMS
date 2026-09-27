@@ -127,7 +127,9 @@ function Add-EntraMember([string]$GroupId, [string]$GroupName, [string]$Upn) {
 
 function Add-SpMember([string]$SpKey, [string]$LoginName, [string]$Label) {
     $existing = @(Get-PnPGroup | ForEach-Object Title)
-    $title = $SpGroups[$SpKey] | Where-Object { $existing -contains $_ } | Select-Object -First 1
+    # Prefer the name in the site language (old groups from an earlier run in the other language may still exist).
+    $names = if ($script:SiteLcid -eq 1037) { $SpGroups[$SpKey][1], $SpGroups[$SpKey][0] } else { $SpGroups[$SpKey] }
+    $title = $names | Where-Object { $existing -contains $_ } | Select-Object -First 1
     if (-not $title) { Write-Warn2 "SharePoint group for $SpKey not found (run Provision-DMS.ps1 first)"; return }
     try { Add-PnPGroupMember -Group $title -LoginName $LoginName; Write-Ok "$Label -> $title" }
     catch {
@@ -156,6 +158,7 @@ try {
 foreach ($siteKey in 'DC', 'EX') {
     Write-Step "SharePoint groups on $($Sites[$siteKey])"
     Connect-PnPOnline -Url $Sites[$siteKey] -Interactive -ClientId $ClientId
+    $script:SiteLcid = (Get-PnPWeb -Includes Language).Language
     foreach ($g in $EntraGroups) {
         foreach ($sp in $g.SharePoint | Where-Object { $_.StartsWith($(if ($siteKey -eq 'DC') { 'Dc' } else { 'Ex' })) }) {
             Add-SpMember -SpKey $sp -LoginName "c:0t.c|tenant|$($ids[$g.Name])" -Label $g.Name
