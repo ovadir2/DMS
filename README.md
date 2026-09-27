@@ -59,6 +59,10 @@ Re-running the script on an existing site brings list, column, content-type, vie
 
 The site locale is fixed when the site is created and can't be changed later. Pick it before the first run.
 
+## Groups and access
+
+After `Provision-DMS.ps1`, run `scripts/Connect-DmsGroups.ps1`. It creates the Entra groups (`GG_DMS_ITAdmins`, `GG_DMS_DocumentControl`, `GG_DMS_Approvers`, `GG_DMS_Auditors`, `GG_DMS_PilotUsers`, and a dynamic `GG_DMS_Employees`) and adds them to the SharePoint groups of both sites. `-PilotMode` gives only the pilot users access. People are then managed in Entra only.
+
 ## Deployment sequence (maps to blueprint section 10)
 
 | # | Step | Blueprint phase | Reference |
