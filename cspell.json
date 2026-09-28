@@ -60,6 +60,7 @@
     "unticked",
     "uploadurl",
     "Veeam",
-    "workflowid"
+    "workflowid",
+    "nometadata"
   ]
 }
