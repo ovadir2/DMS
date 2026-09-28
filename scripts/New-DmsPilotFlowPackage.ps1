@@ -247,7 +247,7 @@ New-Item -ItemType Directory -Path $flowDir -Force | Out-Null
 $manifest | ConvertTo-Json -Depth 60 | Set-Content (Join-Path $stage 'manifest.json') -Encoding utf8NoBOM
 $flow | ConvertTo-Json -Depth 60 | Set-Content (Join-Path $flowDir 'definition.json') -Encoding utf8NoBOM
 @{ shared_sharepointonline = $res.SpApi; shared_approvals = $res.ApApi } | ConvertTo-Json | Set-Content (Join-Path $flowDir 'apisMap.json') -Encoding utf8NoBOM
-@{ $connNames.Sp = $res.SpConn; $connNames.Ap = $res.ApConn } | ConvertTo-Json | Set-Content (Join-Path $flowDir 'connectionsMap.json') -Encoding utf8NoBOM
+@{ shared_sharepointonline = $res.SpConn; shared_approvals = $res.ApConn } | ConvertTo-Json | Set-Content (Join-Path $flowDir 'connectionsMap.json') -Encoding utf8NoBOM
 [ordered]@{ packageSchemaVersion = '1.0'; flowAssets = @{ assetPaths = @($flowId) } } | ConvertTo-Json -Depth 5 |
     Set-Content (Join-Path $stage 'Microsoft.Flow/flows/manifest.json') -Encoding utf8NoBOM
 
