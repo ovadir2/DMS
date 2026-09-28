@@ -248,11 +248,21 @@ $manifest | ConvertTo-Json -Depth 60 | Set-Content (Join-Path $stage 'manifest.j
 $flow | ConvertTo-Json -Depth 60 | Set-Content (Join-Path $flowDir 'definition.json') -Encoding utf8NoBOM
 @{ shared_sharepointonline = $res.SpApi; shared_approvals = $res.ApApi } | ConvertTo-Json | Set-Content (Join-Path $flowDir 'apisMap.json') -Encoding utf8NoBOM
 @{ $connNames.Sp = $res.SpConn; $connNames.Ap = $res.ApConn } | ConvertTo-Json | Set-Content (Join-Path $flowDir 'connectionsMap.json') -Encoding utf8NoBOM
+[ordered]@{ packageSchemaVersion = '1.0'; flowAssets = @{ assetPaths = @($flowId) } } | ConvertTo-Json -Depth 5 |
+    Set-Content (Join-Path $stage 'Microsoft.Flow/flows/manifest.json') -Encoding utf8NoBOM
 
 New-Item -ItemType Directory -Path $OutFolder -Force | Out-Null
 $zip = Join-Path $OutFolder 'DC-P1-PilotApproval.zip'
 Remove-Item $zip -ErrorAction SilentlyContinue
-Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
+# Build the zip entry by entry so every path uses '/' (the import service rejects '\').
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+$archive = [IO.Compression.ZipFile]::Open($zip, 'Create')
+try {
+    foreach ($file in Get-ChildItem $stage -Recurse -File) {
+        $entry = [IO.Path]::GetRelativePath($stage, $file.FullName).Replace('\', '/')
+        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $file.FullName, $entry) | Out-Null
+    }
+} finally { $archive.Dispose() }
 Remove-Item $stage -Recurse -Force
 
 Write-Host "`nPackage written: $zip" -ForegroundColor Green
