@@ -65,7 +65,7 @@ The site locale is fixed when the site is created and can't be changed later. Pi
 
 After `Provision-DMS.ps1`, run `scripts/Connect-DmsGroups.ps1`. It creates the Entra groups (`GG_DMS_ITAdmins`, `GG_DMS_DocumentControl`, `GG_DMS_Approvers`, `GG_DMS_Auditors`, `GG_DMS_PilotUsers`, and a dynamic `GG_DMS_Employees`) and adds them to the SharePoint groups of both sites. `-PilotMode` gives only the pilot users access. People are then managed in Entra only.
 
-The on-premises repository tree (docs/01 §4) is built by `scripts/New-DmsFileServerTree.ps1`: the root folders, area and customer folders, and per document the `Working / Submitted / Current_ReadOnly / Obsolete_ReadOnly` folders. `-CreateAdGroups` creates the `DL_FS_*` groups and `-ApplyAcl` sets the NTFS permissions from docs/02 §3.2. It supports `-WhatIf`.
+The on-premises repository tree (docs/01 §4) is built by `scripts/New-DmsFileServerTree.ps1`: the root folders, the 20 management areas and the full customer/project tree from blueprint Appendix A, and per document the `Working / Submitted / Current_ReadOnly / Obsolete_ReadOnly` folders. `-CreateAdGroups` creates the `DL_FS_*` groups and `-ApplyAcl` sets the NTFS permissions from docs/02 §3.2. `-DocumentParent` places a controlled document inside a project folder (e.g. `Development\02_SOW`). It supports `-WhatIf`.
 
 `scripts/Install-DmsExplorerMenu.ps1` adds **שלח לתהליך אישור DMS** to the Explorer right-click menu. It opens the Power App with the selected file's path, so the user registers and submits the document in one form (docs/03 §2.5).
 

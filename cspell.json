@@ -65,6 +65,8 @@
     "RSAT",
     "HKCU",
     "Intune",
-    "powerfx"
+    "powerfx",
+    "Netlist",
+    "PPAP"
   ]
 }
