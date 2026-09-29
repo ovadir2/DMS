@@ -15,6 +15,7 @@ Implementation of **IT-DOC-BP-001 "Enterprise Document Control and Large-File Ex
 | [`docs/04-Power-Automate.md`](docs/04-Power-Automate.md) | 4 utility + 13 document-control + 7 exchange flows: triggers, step logic, expressions, Copilot prompts, and on-prem worker contracts |
 | [`docs/05-Localization-Hebrew.md`](docs/05-Localization-Hebrew.md) | Language rules, EN/HE notification templates, app labels, Hebrew executive summary |
 | [`docs/06-Copilot-Prompts.md`](docs/06-Copilot-Prompts.md) | Copy-paste Copilot prompts, follow-ups and check lists that build every flow in Power Automate, with the Hebrew choice values |
+| [`docs/07-Approval-Flow.md`](docs/07-Approval-Flow.md) | Pilot approval flow as a diagram, plus the editable Hebrew deck [`docs/presentations/DMS-Approval-Flow.pptx`](docs/presentations/DMS-Approval-Flow.pptx) |
 
 ## Quick start
 
