@@ -10,17 +10,19 @@
     approval. Run it every few minutes (Task Scheduler) on a server that can write to the repository.
     Each run reads the Document Register and, per record:
 
-      Status                    File found in    Action
-      Submitted (הוגש לאישור)   Working          Move to Submitted, set read-only
-      Approved  (מאושר - ...)   Submitted/Working Move the previous current file to Obsolete_ReadOnly,
-                                                 move the file to Current_ReadOnly without "_DRAFT",
-                                                 set read-only, write CurrentUncPath, CurrentSHA256,
-                                                 CurrentRevision and clear WorkingUncPath
-      Working   (בעבודה)        Submitted        Move back to Working (rejected), clear read-only
+      Status                    File found in     Action
+      Submitted (הוגש לאישור)   its own place     Move to Submitted, set read-only
+      Approved  (מאושר - ...)   Submitted / place Move the previous current file to Obsolete_ReadOnly,
+                                                  move the file to Current_ReadOnly without "_DRAFT",
+                                                  set read-only, write CurrentUncPath, CurrentSHA256,
+                                                  CurrentRevision and clear WorkingUncPath
+      Working   (בעבודה)        Submitted         Move back to its own place (rejected), clear read-only
 
-    The folders are the siblings of the record's WorkingUncPath folder, as created by
-    New-DmsFileServerTree.ps1 -DocumentId. Every move writes a Control Audit row (EventSource
-    Workflow Service). Records in Submitted are never updated, so the approval flow is not re-triggered.
+    "Its own place" is the record's WorkingUncPath: wherever the user saved the file, e.g.
+    ...\Commercial\Quotations\Quote.xlsx. Submitted, Current_ReadOnly and Obsolete_ReadOnly are created
+    next to it (Quotations\Current_ReadOnly\Quote.xlsx), so users never handle the workflow folders.
+    For a file in a Working folder (New-DmsFileServerTree.ps1 -DocumentId) they are the siblings of
+    Working. Every move writes a Control Audit row (EventSource Workflow Service). Records in Submitted are never updated, so the approval flow is not re-triggered.
     Safe to re-run: a record whose file is already in the right folder is skipped.
 
     Pilot scope: it reads the register directly. The full design (docs/04 §5.1) reads commands from the
@@ -128,8 +130,11 @@ foreach ($item in $items) {
     }
 
     $name = Split-Path $working -Leaf
-    $docFolder = Split-Path (Split-Path $working)
-    $inWorking = Join-Path $docFolder "Working\$name"
+    # The file stays where the user saved it (or in a Working folder). The workflow folders are
+    # created next to it, or next to Working for a document created with New-DmsFileServerTree.ps1.
+    $parent = Split-Path $working
+    $docFolder = if ((Split-Path $parent -Leaf) -in 'Working', 'Submitted', 'Current_ReadOnly', 'Obsolete_ReadOnly') { Split-Path $parent } else { $parent }
+    $inWorking = $working
     $inSubmitted = Join-Path $docFolder "Submitted\$name"
     $action = $null; $details = $null
 
