@@ -64,6 +64,8 @@ The site locale is fixed when the site is created and can't be changed later. Pi
 
 After `Provision-DMS.ps1`, run `scripts/Connect-DmsGroups.ps1`. It creates the Entra groups (`GG_DMS_ITAdmins`, `GG_DMS_DocumentControl`, `GG_DMS_Approvers`, `GG_DMS_Auditors`, `GG_DMS_PilotUsers`, and a dynamic `GG_DMS_Employees`) and adds them to the SharePoint groups of both sites. `-PilotMode` gives only the pilot users access. People are then managed in Entra only.
 
+The on-premises repository tree (docs/01 §4) is built by `scripts/New-DmsFileServerTree.ps1`: the root folders, area and customer folders, and per document the `Working / Submitted / Current_ReadOnly / Obsolete_ReadOnly` folders. `-CreateAdGroups` creates the `DL_FS_*` groups and `-ApplyAcl` sets the NTFS permissions from docs/02 §3.2. It supports `-WhatIf`.
+
 For the pilot, `scripts/New-DmsPilotFlowPackage.ps1` builds `scripts/out/DC-P1-PilotApproval.zip`, a ready-made approval flow (Document Register status "Submitted" → mandatory approvers → final approver → status + Control Audit row). Import it in Power Automate with **My flows > Import > Import Package (Legacy)**.
 
 ## Deployment sequence (maps to blueprint section 10)
