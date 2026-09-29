@@ -71,6 +71,8 @@ The on-premises repository tree (docs/01 §4) is built by `scripts/New-DmsFileSe
 
 For the pilot, `scripts/New-DmsPilotFlowPackage.ps1` builds `scripts/out/DC-P1-PilotApproval.zip`, a ready-made approval flow (Document Register status "Submitted" → mandatory approvers → final approver → status + Control Audit row). Import it in Power Automate with **My flows > Import > Import Package (Legacy)**.
 
+`scripts/Invoke-DmsWorkflowService.ps1` is the pilot Workflow Service, the on-prem side of the approval. Run it every few minutes on a server that can write to the repository. It moves each document's file to match its status: Submitted → `Submitted` (read-only), Approved → `Current_ReadOnly` (the previous revision → `Obsolete_ReadOnly`, the path and SHA-256 written back to the register), rejected → back to `Working`. Every move writes a Control Audit row. It supports `-WhatIf`.
+
 ## Deployment sequence (maps to blueprint section 10)
 
 | # | Step | Blueprint phase | Reference |
