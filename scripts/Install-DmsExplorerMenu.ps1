@@ -86,6 +86,7 @@ if ($PSCmdlet.ShouldProcess($keyPath, 'Register Explorer menu')) {
     New-Item -Path "$keyPath\command" -Force | Out-Null
     Set-ItemProperty -Path $keyPath -Name 'MUIVerb' -Value $MenuText
     Set-ItemProperty -Path $keyPath -Name 'Icon' -Value 'shell32.dll,-16761'
+    Set-ItemProperty -Path $keyPath -Name 'Position' -Value 'Top'   # first in the classic menu
     Set-ItemProperty -Path "$keyPath\command" -Name '(default)' -Value $command
 }
 
