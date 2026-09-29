@@ -361,6 +361,18 @@ Defaults on the form cards: `WorkingUncPath` = `Coalesce(varFromFile.Path, Paren
 
 For the pilot app generated from the Document Register list (`BrowseScreen1` / `EditScreen1` / `EditForm1`), use `If(!IsBlank(Param("path")), EditScreen1, BrowseScreen1)` as `App.StartScreen`, `If(!IsBlank(Param("path")), NewForm(EditForm1))` as `EditScreen1.OnVisible`, and the same two card defaults.
 
+The pilot app **DMS - Document Register** was generated with the newer single-screen template (`MainScreen1` / `RecordsGallery1` / `Form1`, mode driven by the `newMode` and `editMode` context variables). The formulas that work there:
+
+| Property | Formula |
+| --- | --- |
+| `Form1.DefaultMode` | `If(newMode \|\| (!IsBlank(Param("path")) && IsBlank(CurrentItem)), FormMode.New, editMode, FormMode.Edit, FormMode.View)` |
+| `MainScreen1.OnVisible` | `If(!IsBlank(Param("path")), UpdateContext({newMode: true, editMode: false}))` |
+| `'נתיב UNC - עבודה_DataCard1'.Default` | `Coalesce(Param("path"), ThisItem.'נתיב UNC - עבודה')` |
+| `'כותרת המסמך_DataCard1'.Default` | `Coalesce(Param("name"), ThisItem.'כותרת המסמך')` |
+| `RecordsGallery1.Items` (delegable) | `SortByColumns(Filter([@'Document Register'], StartsWith(Title, SearchInput1.Text)), "Modified", SortOrder.Descending)` |
+
+`NewForm(Form1)` alone does not work in this template, because `DefaultMode` overrides it. Without `path` in the URL the app opens the selected record read-only, which is expected. Install the menu with `.\Install-DmsExplorerMenu.ps1 -AppUrl $App -RepositoryRoot $Root -MenuText 'Start workflow'`.
+
 The file must already be in a `Working` folder of the controlled repository. The flows validate the path again (DC-01), so the menu is a convenience, not a security control.
 
 ## 3. App 2 - Large File Exchange Control (blueprint 9.3)
