@@ -447,6 +447,13 @@ These are PowerShell 7 scheduled tasks running under gMSAs on the CrowdStrike-pr
 6. `PATCH` `Completed` with ResultSHA256, ResultSizeBytes, TargetUncPath and ProcessedUtc. On error, retry up to 3 attempts, then `Failed` with a safe FailureDetail (no stack traces or credentials).
 7. Log to `04_Workflow_System\Processing\logs` and to the Windows event log. The Veeam backup includes it.
 
+**Pilot:** `scripts/Invoke-DmsWorkflowService.ps1` does steps 3-7 without the File Action Queue. It reads the Document Register and moves each file to match `LifecycleStatus` (Submitted → `Submitted`, Approved → `Current_ReadOnly` with the previous revision to `Obsolete_ReadOnly`, Working with the file in `Submitted` → back to `Working`). It never updates a record in Submitted, so DC-P1 is not re-triggered. Schedule it (every 5 minutes, certificate sign-in):
+
+```powershell
+$a = New-ScheduledTaskAction -Execute pwsh.exe -Argument "-NoProfile -File C:\DMS\scripts\Invoke-DmsWorkflowService.ps1 -TenantName rhisrael -DocControlSiteAlias DocumentControl-TEST -ClientId <app id> -Thumbprint <cert> -RepositoryRoot \\FILE-SERVER\Corporate_Data_TEST"
+Register-ScheduledTask -TaskName 'DMS Workflow Service' -Action $a -Trigger (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)) -User 'DOMAIN\gMSA_DMS_WF$' -LogonType Password
+```
+
 ### 5.2 Transfer Worker (`RH-Exchange-Transfer-Worker`, blueprint 9.5)
 
 Its configuration is unchanged from blueprint 9.5 (`solution.parameters.json`). The verified-deletion gate follows blueprint 8.3 exactly. On acceptance it also routes the file as described in EX-06.
