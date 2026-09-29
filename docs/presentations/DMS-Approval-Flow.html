@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>תהליך אישור מסמך DMS</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@500;700;800&family=Assistant:wght@400;600&display=swap">
+<style>
+/* Layout: one swimlane diagram (right-to-left) above a short key and three facts */
+:root{
+  --bg:#f5f7f8; --panel:#ffffff; --ink:#1b2a33; --muted:#5d6f7a; --line:#c9d3d9;
+  --lane-a:#eef3f5; --lane-b:#f8fafb;
+  --accent:#0e6f73; --accent-soft:#d9eeee;
+  --ok:#2f7d32; --no:#b3261e; --no-soft:#fbe4e2;
+  --display:"Heebo","Segoe UI",Arial,sans-serif; --body:"Assistant","Segoe UI",Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11181c; --panel:#172126; --ink:#e4ecef; --muted:#9db0ba; --line:#33444d;
+  --lane-a:#18252b; --lane-b:#141e23; --accent:#4fb7b9; --accent-soft:#1d3a3c;
+  --ok:#7cc47f; --no:#f08a82; --no-soft:#3a1f1d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11181c; --panel:#172126; --ink:#e4ecef; --muted:#9db0ba; --line:#33444d;
+  --lane-a:#18252b; --lane-b:#141e23; --accent:#4fb7b9; --accent-soft:#1d3a3c;
+  --ok:#7cc47f; --no:#f08a82; --no-soft:#3a1f1d; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:28px 40px;display:grid;gap:22px}
+header{display:grid;gap:6px}
+.eyebrow{font-family:var(--display);font-weight:700;font-size:13px;letter-spacing:.06em;color:var(--accent)}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(26px,3.4vw,38px);line-height:1.15;margin:0;text-wrap:balance}
+.lead{margin:0;color:var(--muted);max-width:68ch}
+.diagram{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+.diagram svg{display:block;min-width:980px;width:100%;height:auto}
+svg text{font-family:var(--body);fill:var(--ink)}
+.lane-title{font-family:var(--display);font-weight:700;font-size:14px}
+.lane-sub{font-size:11.5px;fill:var(--muted)}
+.box{fill:var(--panel);stroke:var(--accent);stroke-width:1.6}
+.box.store{fill:var(--accent-soft);stroke:var(--accent);stroke-dasharray:0}
+.box.no{fill:var(--no-soft);stroke:var(--no)}
+.box.start{fill:var(--accent);stroke:var(--accent)}
+.box.start + text, .t-start{fill:#ffffff}
+.bt{font-size:13px;font-weight:600}
+.bs{font-size:11.5px;fill:var(--muted)}
+.flow{fill:none;stroke:var(--ink);stroke-width:1.6}
+.flow.ok{stroke:var(--ok)}
+.flow.no{stroke:var(--no);stroke-dasharray:6 4}
+.flow.data{stroke:var(--muted);stroke-dasharray:3 4;stroke-width:1.3}
+.tag{font-size:12px;font-weight:600}
+.tag.ok{fill:var(--ok)} .tag.no{fill:var(--no)} .tag.data{fill:var(--muted)}
+.num{font-family:var(--display);font-weight:800;font-size:11px;fill:var(--accent)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.fact{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.fact h2{font-family:var(--display);font-size:16px;margin:0 0 4px}
+.fact p{margin:0;color:var(--muted)}
+.key{display:flex;flex-wrap:wrap;gap:18px;color:var(--muted);font-size:14px}
+.key span{display:inline-flex;align-items:center;gap:8px}
+.sw{width:26px;height:0;border-top:2px solid var(--ink)}
+.sw.ok{border-color:var(--ok)} .sw.no{border-top:2px dashed var(--no)} .sw.data{border-top:2px dotted var(--muted)}
+body{margin:0}
+</style>
+</head>
+<body>
+
+<div class="wrap" dir="rtl">
+  <header>
+    <div class="eyebrow">DMS · פיילוט · DC-P1</div>
+    <h1>תהליך אישור מסמך במערכת לניהול ושיתוף קבצים</h1>
+    <p class="lead">מרגע שבעל המסמך מגיש לאישור ועד שהמסמך מאושר וננעל לקריאה בלבד. מי מאשר נקבע במטריצת המאשרים לפי סוג המסמך, ולא בתוך התהליך עצמו.</p>
+  </header>
+
+  <div class="diagram" role="img" aria-label="תרשים זרימה של תהליך אישור מסמך">
+    <svg viewBox="0 0 1200 560" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--ink)"/></marker>
+        <marker id="aok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--ok)"/></marker>
+        <marker id="ano" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--no)"/></marker>
+      </defs>
+
+      <!-- lanes -->
+      <rect x="0" y="0" width="1200" height="110" style="fill:var(--lane-a)"/>
+      <rect x="0" y="110" width="1200" height="110" style="fill:var(--lane-b)"/>
+      <rect x="0" y="220" width="1200" height="110" style="fill:var(--lane-a)"/>
+      <rect x="0" y="330" width="1200" height="110" style="fill:var(--lane-b)"/>
+      <rect x="0" y="440" width="1200" height="120" style="fill:var(--lane-a)"/>
+      <line x1="1070" y1="0" x2="1070" y2="560" style="stroke:var(--line)"/>
+      <g text-anchor="middle">
+        <text class="lane-title" x="1135" y="50">בעל המסמך</text><text class="lane-sub" x="1135" y="70">מגיש ומקבל תוצאה</text>
+        <text class="lane-title" x="1135" y="160">SharePoint</text><text class="lane-sub" x="1135" y="180">רשימות האתר</text>
+        <text class="lane-title" x="1135" y="270">Power Automate</text><text class="lane-sub" x="1135" y="290">DC-P1 Pilot Approval</text>
+        <text class="lane-title" x="1135" y="380">מאשרי חובה</text><text class="lane-sub" x="1135" y="400">Teams ומייל</text>
+        <text class="lane-title" x="1135" y="495">מאשר סופי</text><text class="lane-sub" x="1135" y="515">Teams ומייל</text>
+      </g>
+
+      <!-- flows (drawn first, boxes on top) -->
+      <path class="flow" d="M928,55 H912" marker-end="url(#a)"/>
+      <path class="flow" d="M860,85 V275 H792" marker-end="url(#a)"/>
+      <path class="flow" d="M688,275 H672" marker-end="url(#a)"/>
+      <path class="flow" d="M620,305 V385 H552" marker-end="url(#a)"/>
+      <path class="flow ok" d="M500,415 V495 H432" marker-end="url(#aok)"/>
+      <path class="flow ok" d="M328,495 H260 V305" marker-end="url(#aok)"/>
+      <path class="flow" d="M260,245 V165 H192" marker-end="url(#a)"/>
+      <path class="flow no" d="M500,355 V305" marker-end="url(#ano)"/>
+      <path class="flow no" d="M380,465 V275 H448" marker-end="url(#ano)"/>
+      <path class="flow no" d="M500,245 V122 H140 V135" marker-end="url(#ano)"/>
+      <path class="flow data" d="M620,195 V245"/>
+      <path class="flow data" d="M980,85 V135"/>
+
+      <!-- flow labels -->
+      <g text-anchor="middle">
+        <text class="tag ok" x="468" y="487">אושר</text>
+        <text class="tag ok" x="292" y="487">אושר</text>
+        <text class="tag no" x="530" y="336">נדחה</text>
+        <text class="tag no" x="352" y="400">נדחה</text>
+        <text class="tag data" x="652" y="226">קריאה</text>
+        <text class="tag data" x="1012" y="116">רשומה</text>
+      </g>
+
+      <!-- boxes -->
+      <g text-anchor="middle">
+        <rect class="box start" x="928" y="25" width="104" height="60" rx="8"/>
+        <text class="bt t-start" x="980" y="50">רישום המסמך</text><text class="bs t-start" x="980" y="68">סטטוס: בעבודה</text>
+        <text class="num" x="1040" y="20">1</text>
+
+        <rect class="box" x="808" y="25" width="104" height="60" rx="8"/>
+        <text class="bt" x="860" y="50">הגשה לאישור</text><text class="bs" x="860" y="68">הוגש לאישור</text>
+        <text class="num" x="920" y="20">2</text>
+
+        <rect class="box store" x="928" y="135" width="104" height="60" rx="8"/>
+        <text class="bt" x="980" y="160">מרשם מסמכים</text><text class="bs" x="980" y="178">רשומת המסמך</text>
+
+        <rect class="box store" x="568" y="135" width="104" height="60" rx="8"/>
+        <text class="bt" x="620" y="160">מטריצת מאשרים</text><text class="bs" x="620" y="178">לפי סוג מסמך</text>
+
+        <rect class="box store" x="88" y="135" width="104" height="60" rx="8"/>
+        <text class="bt" x="140" y="160">יומן ביקורת</text><text class="bs" x="140" y="178">אושר / נדחה</text>
+        <text class="num" x="200" y="130">8</text>
+
+        <rect class="box" x="688" y="245" width="104" height="60" rx="8"/>
+        <text class="bt" x="740" y="270">זיהוי ההגשה</text><text class="bs" x="740" y="288">בדיקה כל דקה</text>
+        <text class="num" x="800" y="240">3</text>
+
+        <rect class="box" x="568" y="245" width="104" height="60" rx="8"/>
+        <text class="bt" x="620" y="270">איתור הכלל</text><text class="bs" x="620" y="288">מי מאשר</text>
+        <text class="num" x="680" y="240">4</text>
+
+        <rect class="box no" x="448" y="245" width="104" height="60" rx="8"/>
+        <text class="bt" x="500" y="270">חזרה לעבודה</text><text class="bs" x="500" y="288">סטטוס: בעבודה</text>
+
+        <rect class="box" x="208" y="245" width="104" height="60" rx="8"/>
+        <text class="bt" x="260" y="270">נעילת המסמך</text><text class="bs" x="260" y="288">מאושר - קריאה בלבד</text>
+        <text class="num" x="320" y="240">7</text>
+
+        <rect class="box" x="448" y="355" width="104" height="60" rx="8"/>
+        <text class="bt" x="500" y="380">אישור שלב 1</text><text class="bs" x="500" y="398">כולם חייבים לאשר</text>
+        <text class="num" x="560" y="350">5</text>
+
+        <rect class="box" x="328" y="465" width="104" height="60" rx="8"/>
+        <text class="bt" x="380" y="490">אישור סופי</text><text class="bs" x="380" y="508">הראשון שמגיב</text>
+        <text class="num" x="440" y="460">6</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="key">
+    <span><i class="sw"></i>שלב בתהליך</span>
+    <span><i class="sw ok"></i>אושר</span>
+    <span><i class="sw no"></i>נדחה</span>
+    <span><i class="sw data"></i>קריאה או כתיבה לרשימה</span>
+  </div>
+
+  <div class="facts">
+    <div class="fact"><h2>מי מאשר</h2><p>מטריצת המאשרים קובעת לכל סוג מסמך את מאשרי החובה ואת המאשר הסופי. שינוי שם במטריצה חל מההגשה הבאה, בלי לגעת בתהליך.</p></div>
+    <div class="fact"><h2>איך מאשרים</h2><p>המאשרים מקבלים בקשה ב-Teams (אפליקציית Approvals) ובמייל, עם קישור לרשומת המסמך. דחייה אחת מחזירה את המסמך לבעלים.</p></div>
+    <div class="fact"><h2>מה נשמר</h2><p>כל החלטה נרשמת ביומן הביקורת עם זמן, מבצע ופרטי התגובות. הקובץ עצמו לא עובר דרך Power Automate.</p></div>
+  </div>
+</div>
+</body>
+</html>
