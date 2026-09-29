@@ -2,7 +2,7 @@
 
 How a document moves from submission to an approved, read-only record in the pilot flow **DC-P1 Pilot Approval** (`scripts/New-DmsPilotFlowPackage.ps1`).
 
-Presentation: [`presentations/DMS-Approval-Flow.pptx`](presentations/DMS-Approval-Flow.pptx) (Hebrew, 3 editable slides: title, swimlane flow, principles).
+Presentation: [`presentations/DMS-Approval-Flow.pptx`](presentations/DMS-Approval-Flow.pptx) (Hebrew, 3 editable slides: title, swimlane flow, principles). The same diagram as a web page: [`presentations/DMS-Approval-Flow.html`](presentations/DMS-Approval-Flow.html) (open it in a browser).
 
 ## Flow
 
