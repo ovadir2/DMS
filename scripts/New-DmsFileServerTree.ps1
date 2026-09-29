@@ -8,8 +8,8 @@
     Two modes.
 
     Tree mode (default) - creates the repository root:
-        01_Management\<area folders>
-        02_Customers\<Customer>\{Customer_Profile, Commercial, Projects, Shared, Archive}
+        01_Management\<20 management areas from blueprint Appendix A>
+        02_Customers\<Customer>\{Customer_Profile, Commercial\{RFQ,Quotations,Contracts,NDA}, Projects\<Project>\<full Appendix A tree>, Shared, Archive}
         03_Operations_Staging\{PLM_Release_Queue, MAE_Release_Queue, Priority_Import_Queue, Integration_Logs}
         04_Workflow_System\{Submitted_Queue, Rejected_Queue, Processing, Error_Queue}
         05_Exchange_Quarantine\{Inbound, Accepted, Rejected, Logs}
@@ -52,17 +52,18 @@
 param(
     [Parameter(Mandatory)] [string] $Root,
 
-    # Area code -> folder under the root. Change to your blueprint Appendix A tree before the first run.
+    # Area code -> folder where that area's controlled documents live (blueprint Appendix A).
+    # Documents that belong to a customer project use -DocumentParent instead.
     [hashtable] $AreaFolders = [ordered]@{
-        MGT = '01_Management\Management'
-        COM = '01_Management\Commercial'
-        DEV = '01_Management\Development'
-        MFG = '01_Management\Manufacturing'
-        TST = '01_Management\Test_Engineering'
-        QA  = '01_Management\Quality'
-        CHG = '01_Management\Changes'
+        MGT = '01_Management\Company_Profile'
+        COM = '01_Management\Sales_Marketing'
+        DEV = '01_Management\Development_Standards'
+        MFG = '01_Management\Manufacturing_Standards'
+        TST = '01_Management\Engineering_Standards'
+        QA  = '01_Management\Quality_System'
+        CHG = '01_Management\Engineering_Standards'
         IT  = '01_Management\IT'
-        SEC = '01_Management\InfoSec'
+        SEC = '01_Management\IT'
     },
 
     [string[]] $Customers = @(),
@@ -71,6 +72,9 @@ param(
     # Document mode
     [ValidatePattern('^[A-Z]{2,3}-[A-Z]{2,3}-\d{5}$')] [string] $DocumentId,
     [ValidatePattern('^[\w\-]{1,60}$')] [string] $ShortTitle,
+    # Optional folder (relative to -Root) for the document instead of its area folder,
+    # e.g. '02_Customers\Customer_A\Projects\Project_1\Development\02_SOW'
+    [string] $DocumentParent,
 
     [switch] $ApplyAcl,
     [switch] $CreateAdGroups,
@@ -171,7 +175,8 @@ if ($DocumentId) {
     if (-not $ShortTitle) { throw 'Give -ShortTitle together with -DocumentId (letters, digits, _ and -).' }
     $code = $DocumentId.Split('-')[0]
     if (-not $AreaFolders.Contains($code)) { throw "Unknown area code '$code'. Known: $($AreaFolders.Keys -join ', ')" }
-    $docRoot = Join-Path (Join-Path $Root $AreaFolders[$code]) "$($DocumentId)_$ShortTitle"
+    $parent = if ($DocumentParent) { $DocumentParent } else { $AreaFolders[$code] }
+    $docRoot = Join-Path (Join-Path $Root $parent) "$($DocumentId)_$ShortTitle"
     Write-Step "Controlled-document folder $docRoot"
     Add-DmsFolder $docRoot
     $sub = [ordered]@{
@@ -205,15 +210,47 @@ foreach ($t in $top.Keys) {
     foreach ($s in $top[$t]) { Add-DmsFolder (Join-Path (Join-Path $Root $t) $s) }
 }
 
-Write-Step 'Area folders'
-foreach ($code in $AreaFolders.Keys) { Add-DmsFolder (Join-Path $Root $AreaFolders[$code]) }
+# Blueprint Appendix A - management areas
+$ManagementFolders = @('Company_Profile', 'Strategy', 'Sales_Marketing', 'HR', 'Finance', 'IT', 'Quality_System',
+    'Engineering_Standards', 'Manufacturing_Standards', 'Development_Standards', 'Project_Management', 'Templates',
+    'Training', 'Suppliers', 'Certifications', 'Legal', 'Assets', 'AI_Automation', 'Knowledge_Base', 'Archive')
+
+# Blueprint Appendix A - one customer project (relative paths)
+$DevStages = @('01_Quotation', '02_SOW', '03_SRS', '04_PDR', '05_CDR', '06_Implementation', '07_FAT', '08_SAT', '09_FDR',
+    '10_Project_Deliverables', 'Archive')
+$ProjectTree = @('Project_Info') +
+    (@('Drawings', 'Specifications', 'BOM', 'CAD', 'PDFs', 'Emails', 'Change_Requests', 'Other') | ForEach-Object { "Customer_Source\$_" }) +
+    (@('Mechanical', 'Electrical', 'PCB', 'CAD', 'Schematics', 'Gerber', 'ODB++', 'Netlist', 'BOM', 'AVL', 'DFM', 'DFT',
+       'Simulations', 'Calculations') | ForEach-Object { "Engineering\$_" }) +
+    ($DevStages | ForEach-Object { "Development\$_" }) +
+    (@('Project_Plan', 'Schedule', 'Risk_Register', 'Gate_Reviews', 'Validation', 'Transfer') | ForEach-Object { "NPI\$_" }) +
+    (@('Assembly_Drawings', 'Work_Instructions', 'Process_Flow', 'Machine_Programs', 'Stencil', 'Pick_and_Place', 'Fixtures',
+       'Photos', 'Videos') | ForEach-Object { "Manufacturing\$_" }) +
+    (@('Logging', 'Source', 'T1', 'T4', 'T5', 'T9', 'T10') | ForEach-Object { "Test_Engineering\ATEFiles\ICT\$_" }) +
+    ($DevStages | ForEach-Object { "Test_Engineering\ATEFiles\FCT\$_" }) +
+    @('Test_Engineering\ATEFiles\FTP') +
+    (@('CopyToCurrent', 'Logging', 'T1', 'T2') | ForEach-Object { "Test_Engineering\ATEFiles\JTAG\$_" }) +
+    (@('Test_Plans', 'Test_Procedures', 'Test_Reports', 'Test_Coverage', 'Yield_Analysis', 'Debug', 'Calibration', 'Released',
+       'Archive') | ForEach-Object { "Test_Engineering\$_" }) +
+    (@('PPAP', 'PFMEA', 'Control_Plan', 'NCR', 'CAR', '8D', 'Certificates', 'Audits') | ForEach-Object { "Quality\$_" }) +
+    (@('Builds', 'Travelers', 'Reports', 'KPIs', 'OEE') | ForEach-Object { "Production\$_" }) +
+    (@('ECO', 'ECN', 'Deviations', 'Waivers') | ForEach-Object { "Changes\$_" }) +
+    (@('Rev_A', 'Rev_B', 'Rev_C', 'Current') | ForEach-Object { "Released\$_" }) +
+    @('Archive')
+
+Write-Step 'Management areas (blueprint Appendix A)'
+foreach ($m in $ManagementFolders) { Add-DmsFolder (Join-Path (Join-Path $Root '01_Management') $m) }
 
 if ($Customers) {
-    Write-Step 'Customer folders'
+    Write-Step 'Customer folders (blueprint Appendix A)'
     foreach ($c in $Customers) {
         $cRoot = Join-Path (Join-Path $Root '02_Customers') $c
-        foreach ($s in 'Customer_Profile', 'Commercial', 'Projects', 'Shared', 'Archive') { Add-DmsFolder (Join-Path $cRoot $s) }
-        foreach ($p in $Projects) { Add-DmsFolder (Join-Path (Join-Path $cRoot 'Projects') $p) }
+        foreach ($s in 'Customer_Profile', 'Projects', 'Shared', 'Archive') { Add-DmsFolder (Join-Path $cRoot $s) }
+        foreach ($s in 'RFQ', 'Quotations', 'Contracts', 'NDA') { Add-DmsFolder (Join-Path (Join-Path $cRoot 'Commercial') $s) }
+        foreach ($p in $Projects) {
+            $pRoot = Join-Path (Join-Path $cRoot 'Projects') $p
+            foreach ($rel in $ProjectTree) { Add-DmsFolder (Join-Path $pRoot $rel) }
+        }
     }
 }
 
@@ -221,6 +258,7 @@ if ($ApplyAcl) {
     Write-Step 'NTFS permissions'
     Grant-DmsAcl $Root @(@{ Who = 'DL_FS_Auditors_R'; Rights = $R_Read })
     foreach ($code in $AreaFolders.Keys) {
+        if (-not (Test-Path -LiteralPath (Join-Path $Root $AreaFolders[$code]))) { continue }
         Grant-DmsAcl (Join-Path $Root $AreaFolders[$code]) @(
             @{ Who = "DL_FS_$($code)_Current_R"; Rights = $R_Read }
             @{ Who = "DL_FS_$($code)_Working_M"; Rights = $R_Read }
