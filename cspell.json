@@ -67,6 +67,9 @@
     "Intune",
     "powerfx",
     "Netlist",
-    "PPAP"
+    "PPAP",
+    "gMSA",
+    "yyyyMMdd",
+    "yyyyMMddHHmmss"
   ]
 }
