@@ -333,6 +333,36 @@ Do not add any attachment or file upload control. All text must come from variab
 translated; support right-to-left layout for Hebrew.
 ```
 
+### 2.5 Opening the app from the file server
+
+`scripts/Install-DmsExplorerMenu.ps1` adds **שלח לתהליך אישור DMS** to the Explorer right-click menu (and to **Send to**). For a file under `dms_RepositoryRoot` it opens the app web link with two parameters: `path` (the UNC path) and `name` (the file name). Install it per user, or deploy it with a GPO logon script or Intune.
+
+In the app, read the parameters and open the new-document form prefilled.
+
+`App.StartScreen` (or at the end of `App.OnStart`):
+
+```powerfx
+If(!IsBlank(Param("path")), scrNewDocument, scrHome)
+```
+
+`scrNewDocument.OnVisible`:
+
+```powerfx
+If(!IsBlank(Param("path")),
+    NewForm(frmNewDoc);
+    Set(varFromFile, {
+        Path: Param("path"),
+        Title: With({n: Param("name")}, Left(n, Len(n) - Len(Last(Split(n, ".")).Value) - 1))
+    })
+)
+```
+
+Defaults on the form cards: `WorkingUncPath` = `Coalesce(varFromFile.Path, Parent.Default)`, `Title` = `Coalesce(varFromFile.Title, Parent.Default)`.
+
+For the pilot app generated from the Document Register list (`BrowseScreen1` / `EditScreen1` / `EditForm1`), use `If(!IsBlank(Param("path")), EditScreen1, BrowseScreen1)` as `App.StartScreen`, `If(!IsBlank(Param("path")), NewForm(EditForm1))` as `EditScreen1.OnVisible`, and the same two card defaults.
+
+The file must already be in a `Working` folder of the controlled repository. The flows validate the path again (DC-01), so the menu is a convenience, not a security control.
+
 ## 3. App 2 - Large File Exchange Control (blueprint 9.3)
 
 ### 3.1 Screens

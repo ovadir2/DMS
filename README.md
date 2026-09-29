@@ -66,6 +66,8 @@ After `Provision-DMS.ps1`, run `scripts/Connect-DmsGroups.ps1`. It creates the E
 
 The on-premises repository tree (docs/01 §4) is built by `scripts/New-DmsFileServerTree.ps1`: the root folders, area and customer folders, and per document the `Working / Submitted / Current_ReadOnly / Obsolete_ReadOnly` folders. `-CreateAdGroups` creates the `DL_FS_*` groups and `-ApplyAcl` sets the NTFS permissions from docs/02 §3.2. It supports `-WhatIf`.
 
+`scripts/Install-DmsExplorerMenu.ps1` adds **שלח לתהליך אישור DMS** to the Explorer right-click menu. It opens the Power App with the selected file's path, so the user registers and submits the document in one form (docs/03 §2.5).
+
 For the pilot, `scripts/New-DmsPilotFlowPackage.ps1` builds `scripts/out/DC-P1-PilotApproval.zip`, a ready-made approval flow (Document Register status "Submitted" → mandatory approvers → final approver → status + Control Audit row). Import it in Power Automate with **My flows > Import > Import Package (Legacy)**.
 
 ## Deployment sequence (maps to blueprint section 10)
