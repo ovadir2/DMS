@@ -76,3 +76,15 @@ def test_plan_and_rank_parse_wrapped_json():
     cands = [{"relative": "a.xlsx", "modified": "2026-01-01"}, {"relative": "b.xlsx", "modified": "2026-09-01", "documentId": "DMS-1", "status": "x"}]
     assert ai.rank("q", cands, "HE") == [{"i": 1, "reason": "newest quote"}]
     assert "Hebrew" in sess.calls[1][2]["messages"][0]["content"]
+
+
+def test_model_defaults_to_the_first_offered():
+    class Models(Session):
+        def get(self, url, headers=None, timeout=None):
+            self.calls.append(("GET", url, None, None))
+            return Resp({"data": [{"id": "rh-rag"}, {"id": "other"}]})
+    http = Models()
+    ai = OpenWebUI(Settings(ai_url="https://chat.ai.rh-global.com", ai_token="t"), http)
+    assert ai.enabled
+    ai.ask("hello")
+    assert http.calls[0][1].endswith("/api/models") and http.calls[1][2]["model"] == "rh-rag"

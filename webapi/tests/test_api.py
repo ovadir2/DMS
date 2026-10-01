@@ -896,3 +896,12 @@ def test_skeleton_is_protected_content_is_not(env):
     assert c.post("/api/items/rename", json={"path": str(q), "newName": "Quotes"}).status_code == 403
     assert c.post("/api/items/rename", json={"path": str(content), "newName": "Archive B"}).status_code == 200
     assert c.post("/api/items/delete", json={"path": str(q / "Old quotes 2019")}).status_code == 200
+
+
+def test_ai_questions_are_kept_in_control_audit(env):
+    c, sp, q = env
+    assert c.post("/api/ai/chat-log", json={"question": "What is the FCT lead time?"}).status_code == 204
+    c.post("/api/ai/find", json={"question": "FCT quote Customer_A"})
+    rows = [a for a in sp.audits if a["document_id"] == "AI"]
+    assert [r["details"].split(":")[0] for r in rows] == ["ai-chat", "ai-find"]
+    assert "FCT lead time" in rows[0]["details"]

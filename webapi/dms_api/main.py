@@ -430,17 +430,18 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return None
 
     FILE_OPS = {"upload", "new-folder", "rename", "delete"}
+    AI_OPS = {"ai-ask", "ai-find", "ai-chat"}      # AI Insights questions, CorrelationId AI
 
     def log(user: User, action: str, detail: str) -> None:
         """Service log; repository changes (upload, new folder, rename, delete) also go to Control Audit
         in SharePoint (CorrelationId FS), so every change is kept there with who and when."""
         logger.info("%s %s %s", user.email, action, detail)
-        if action in FILE_OPS:
+        if action in FILE_OPS or action in AI_OPS:
             root = s.repository_root.rstrip("\\/")
             short = detail.replace(root + os.sep, "").replace(root + "/", "").replace(root + "\\", "")
             try:
-                sp().audit(document_id="FS", event=s.choices["FileDone"], from_status="", to_status="",
-                           actor=user.email, details=f"{action}: {short}")
+                sp().audit(document_id="AI" if action in AI_OPS else "FS", event=s.choices["FileDone"], from_status="",
+                           to_status="", actor=user.email, details=f"{action}: {short}")
             except Exception as e:  # noqa: BLE001 - the change itself is done; do not fail the request
                 logger.warning("audit row not written for %s: %s", action, e)
 
@@ -685,7 +686,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/ai/status")
     def ai_status(_: User = Depends(current_user)):
-        return {"enabled": app.state.ai.enabled, "model": s.ai_model, "knowledge": bool(s.ai_knowledge_ids)}
+        return {"enabled": app.state.ai.enabled, "model": s.ai_model, "knowledge": bool(s.ai_knowledge_ids), "url": s.ai_url.rstrip("/")}
 
     @app.post("/api/ai/find")
     def ai_find(req: FindRequest, user: User = Depends(current_user)):
@@ -751,7 +752,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     suggestions = [{**cands[p["i"]], "reason": p["reason"]} for p in picks]
             except (AiError, requests.RequestException, ValueError):
                 pass
-        log(user, "ai-find", f"{req.question[:120]!r} -> {len(suggestions)}")
+        log(user, "ai-find", f"{req.question[:1000]!r} -> {len(suggestions)} suggestions" + (": " + ", ".join(x["name"] for x in suggestions[:10]) if suggestions else ""))
         for x in suggestions:
             x.pop("documentId", None)
             x.pop("status", None)
@@ -764,7 +765,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """AI Insights: ask about one file (after the AD read check) or the company knowledge bases."""
         ai: OpenWebUI = app.state.ai
         if not ai.enabled:
-            raise HTTPException(503, "AI Insights is not configured (DMS_AI_URL, DMS_AI_TOKEN, DMS_AI_MODEL)")
+            raise HTTPException(503, "AI Insights is not connected to the RH AI (DMS_AI_TOKEN)")
         path, context = None, ""
         if req.path:
             path = files.resolve(s.repository_root, req.path)
@@ -782,8 +783,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(502, str(e)) from None
         except requests.RequestException as e:
             raise HTTPException(502, f"The AI service did not answer: {type(e).__name__}") from None
-        log(user, "ai-ask", f"{path or 'knowledge'}: {req.question[:120]!r}")
+        log(user, "ai-ask", f"{path or 'knowledge'}: {req.question[:1000]!r} (model {result.get('model')}) -> {result['answer'][:2000]!r}")
         return result
+
+    @app.post("/api/ai/chat-log", status_code=204)
+    def ai_chat_log(req: AskRequest, user: User = Depends(current_user)):
+        """A question the page opened in the RH AI chat (when the page is not connected to its API)."""
+        log(user, "ai-chat", f"{req.path or 'knowledge'}: {req.question[:1000]!r} (opened in {s.ai_url})")
 
     @app.get("/api/documents")
     def documents(mine: bool = False, status: str | None = Query(None, description="Working | Submitted | Approved_ReadOnly"),

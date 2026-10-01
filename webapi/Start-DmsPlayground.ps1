@@ -77,7 +77,9 @@ if ($Live) {
 } else {
     $env:DMS_SHAREPOINT = 'memory'
 }
-if ($AiUrl) { $env:DMS_AI_URL = $AiUrl; $env:DMS_AI_TOKEN = $AiToken; $env:DMS_AI_MODEL = $AiModel }
+if ($AiUrl) { $env:DMS_AI_URL = $AiUrl }
+if ($AiToken) { $env:DMS_AI_TOKEN = $AiToken }
+if ($AiModel) { $env:DMS_AI_MODEL = $AiModel }
 
 $url = "http://localhost:$Port/dms/dms-page?lang=$Lang"
 $env:DMS_PAGE_URL = $url   # notification links (DC-P2) open the page here
