@@ -689,6 +689,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             by_doc.setdefault(e["documentId"] or "", []).append(e)
         items = []
         for d in sp().documents():
+            if d.get("lifecycleStatus") == c["Archived"]:               # deleted in Working (kept for the audit)
+                continue
             events = by_doc.get(d.get("documentId") or "", [])          # newest first
             asked = any(e["actor"] == user.email and e["event"] in (c["Created"], c["SubmittedEvent"]) for e in events)
             if not (everyone and is_admin(user)) and (d.get("ownerEmail") or "").lower() != user.email and not asked:
@@ -1049,6 +1051,39 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                    to_status=c["Working"], actor=user.email, details="Withdrawn from the DMS page")
         file_back(doc, c["Working"])
         log(user, "withdraw", doc.get("documentId") or str(item_id))
+        return with_key(sp().document(item_id))
+
+    @app.post("/api/documents/{item_id}/delete")
+    def delete_document(item_id: int, user: User = Depends(current_user)):
+        """Delete a document in Working (owner or super user). The file goes to the recycle folder and the
+        record stays for the audit trail: Archived, or for a new revision draft, back to its approved revision."""
+        from .file_service import to_root
+        c = s.choices
+        d = sp().document(item_id)
+        if (d.get("ownerEmail") or "").lower() != user.email and not is_admin(user):
+            raise HTTPException(403, "Only the document owner (or a DMS super user) can delete it")
+        if d.get("lifecycleStatus") != c["Working"]:
+            raise HTTPException(409, "Only a document in Working can be deleted (withdraw it first)")
+        file_back(d, c["Working"])                              # a copy left in Submitted comes back first
+        working = to_root(s.repository_root, d.get("workingUncPath"))
+        recycled = None
+        if working and os.path.isfile(working):
+            if not user.can(working, "write"):
+                raise HTTPException(403, "You do not have permission to delete this file")
+            try:
+                recycled = files.delete_item(s.repository_root, working, 0, user.email)
+            except PermissionError as e:
+                raise HTTPException(409, str(e)) from None
+        doc_id = d.get("documentId") or f"ID {item_id}"
+        where = f"; file -> {os.path.relpath(recycled, s.repository_root)}" if recycled else "; the file was not found"
+        if d.get("currentUncPath"):                             # a new revision draft: the approved one stays
+            sp().update(item_id, {"LifecycleStatus": c["Approved_ReadOnly"], "WorkingUncPath": "", "DraftRevision": ""})
+            to, details = c["Approved_ReadOnly"], f"Draft revision {d.get('draftRevision') or ''} deleted{where}. The approved revision stays current"
+        else:
+            sp().update(item_id, {"LifecycleStatus": c["Archived"], "WorkingUncPath": ""})
+            to, details = c["Archived"], f"Working document deleted{where}"
+        sp().audit(document_id=doc_id, event=c["Cancelled"], from_status=c["Working"], to_status=to, actor=user.email, details=details)
+        log(user, "delete-document", f"{doc_id}: {details}")
         return with_key(sp().document(item_id))
 
     submit_doc = submit                                         # used where a parameter is called "submit"

@@ -1026,3 +1026,22 @@ def test_withdraw_finds_a_file_renamed_with_a_timestamp(tmp_path):
     c.post(f"/api/documents/{d['id']}/withdraw")
     assert (q / "Quote.xlsx").is_file() and list((q / "Submitted").iterdir()) == []
     assert c.post(f"/api/documents/{d['id']}/submit").status_code == 200
+
+
+def test_delete_a_working_document(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "submit": True}).json()
+    assert c.post(f"/api/documents/{d['id']}/delete").status_code == 409            # submitted: withdraw first
+    c.post(f"/api/documents/{d['id']}/withdraw")
+    r = c.post(f"/api/documents/{d['id']}/delete").json()
+    assert r["lifecycleStatus"] == "בארכיון" and not (q / "Quote.xlsx").exists()
+    assert list((root / "04_Workflow_System" / "Recycle").rglob("Quote.xlsx"))
+    assert sp.audit_events()[0]["event"] == "בוטל" and "Working document deleted" in sp.audit_events()[0]["details"]
+    assert c.get("/api/my-workflows").json()["items"] == []

@@ -23,12 +23,12 @@ CHOICES = {
            "Created": "נוצר", "SubmittedEvent": "הוגש", "Manual": "ידני",
            "ApprovedEvent": "אושר", "RejectedEvent": "נדחה", "FileDone": "פעולת קובץ הושלמה",
            "FileFailed": "פעולת קובץ נכשלה", "WorkflowService": "שירות תהליכים", "Cancelled": "בוטל",
-           "StatusChanged": "שינוי סטטוס", "PermissionChanged": "שינוי הרשאות"},
+           "StatusChanged": "שינוי סטטוס", "PermissionChanged": "שינוי הרשאות", "Archived": "בארכיון"},
     "en": {"Working": "Working", "Submitted": "Submitted", "Approved_ReadOnly": "Approved_ReadOnly",
            "Created": "Created", "SubmittedEvent": "Submitted", "Manual": "Manual",
            "ApprovedEvent": "Approved", "RejectedEvent": "Rejected", "FileDone": "FileActionCompleted",
            "FileFailed": "FileActionFailed", "WorkflowService": "WorkflowService", "Cancelled": "Cancelled",
-           "StatusChanged": "StatusChanged", "PermissionChanged": "PermissionChanged"},
+           "StatusChanged": "StatusChanged", "PermissionChanged": "PermissionChanged", "Archived": "Archived"},
 }
 
 # Folders the Workflow Service manages next to each controlled file.
