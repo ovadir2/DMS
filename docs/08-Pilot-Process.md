@@ -194,7 +194,8 @@ All the metadata is in SharePoint (`DocumentControl` site), which Microsoft 365 
 - **Document Register**: one record per document: ID, title, type, area, control mode, owner, status, current and draft revision, working and current paths, SHA-256 of the current version, last approval time.
 - **Control Audit**: every event, with who and when: registered, submitted, each approval or rejection (stage and comment), withdrawn, new revision, every file move by the Workflow Service, and every change made on the page in the repository (upload, new folder, rename, delete; CorrelationId `FS`), and each DMS First loading run: Created + Approved (+ File Linker) per loaded file, one row per failed file, and one summary row per run (also dry runs; CorrelationId `FIRST-LOAD-<stamp>`) with the full trace `.log` and the `.csv` report attached.
   - The details text is in the **Event Details** column. On a site provisioned before this change, add it (and the attachments) to the view once: `Set-PnPView -List "Lists/ControlAudit" -Identity "All Events" -Fields "EventUtc","CorrelationId","AuditEventType","FromStatus","ToStatus","ActorEmail","EventSource","EventDetails","Attachments"`
-  - Not in SharePoint: AI questions and searches, and the file service run summaries (service log only).
+  - AI Insights: every question and file search (CorrelationId `AI`): who, the file asked about, the question, and the answer or the suggested files.
+  - Not in SharePoint: the file service run summaries (service log only).
 - **Approver Matrix**: who approves each document type.
 - **DMS Notifications**: every email/Teams notification of the pilot (recipients, subject, message, link).
 

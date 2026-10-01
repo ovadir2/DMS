@@ -74,7 +74,7 @@ class Settings:
     sharepoint: str = "online"              # online | memory (try the page on a PC without SharePoint)
     ai_url: str = ""                        # AI Insights: Open WebUI, e.g. https://chat.ai.rh-global.com
     ai_token: str = ""                      # service account token / API key of Open WebUI
-    ai_model: str = ""                      # model id as listed in Open WebUI
+    ai_model: str = ""                      # model id as listed in Open WebUI (empty: the first model offered)
     ai_knowledge_ids: list[str] = field(default_factory=list)   # knowledge bases for general questions
     ai_max_file_mb: int = 25
     protected_depth: int = 2                # 02_Customers\Customer_A and above cannot be renamed or deleted
@@ -131,7 +131,7 @@ class Settings:
             page_url=e("DMS_PAGE_URL", ""),
             admins=[a.strip().lower() for a in e("DMS_ADMINS", "").split(",") if a.strip()],
             file_service_seconds=int(e("DMS_FILE_SERVICE_SECONDS", "0")),
-            ai_url=e("DMS_AI_URL", ""),
+            ai_url=e("DMS_AI_URL", "https://chat.ai.rh-global.com"),
             ai_token=e("DMS_AI_TOKEN", ""),
             ai_model=e("DMS_AI_MODEL", ""),
             ai_knowledge_ids=[k.strip() for k in e("DMS_AI_KNOWLEDGE_IDS", "").split(",") if k.strip()],

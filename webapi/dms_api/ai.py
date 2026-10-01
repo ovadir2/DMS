@@ -38,7 +38,18 @@ class OpenWebUI:
 
     @property
     def enabled(self) -> bool:
-        return bool(self.base and self.s.ai_token and self.s.ai_model)
+        return bool(self.base and self.s.ai_token)
+
+    @property
+    def model(self) -> str:
+        """DMS_AI_MODEL, or else the first model the RH AI offers to the service account."""
+        if not self.s.ai_model:
+            r = self.http.get(f"{self.base}/api/models", headers=self._h(), timeout=30)
+            models = self._check(r, "AI models").get("data") or []
+            if not models:
+                raise AiError("The RH AI offers no model to this account")
+            self.s.ai_model = models[0]["id"]
+        return self.s.ai_model
 
     def _h(self) -> dict:
         return {"Authorization": f"Bearer {self.s.ai_token}", "Accept": "application/json"}
@@ -88,7 +99,7 @@ class OpenWebUI:
             files += [{"type": "collection", "id": k} for k in self.s.ai_knowledge_ids]
         messages = [{"role": "system", "content": SYSTEM.get(lang, SYSTEM["EN"]) + (f"\n\n{context}" if context else "")},
                     {"role": "user", "content": question}]
-        body = {"model": self.s.ai_model, "messages": messages, "stream": False}
+        body = {"model": self.model, "messages": messages, "stream": False}
         if files:
             body["files"] = files
         r = self.http.post(f"{self.base}/api/chat/completions", headers={**self._h(), "Content-Type": "application/json"},
@@ -107,7 +118,7 @@ class OpenWebUI:
 
     # ------------------------------------------------------------------ AI-assisted file finding
     def _complete(self, system: str, user: str, timeout: int = 60) -> str:
-        body = {"model": self.s.ai_model, "stream": False,
+        body = {"model": self.model, "stream": False,
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
         r = self.http.post(f"{self.base}/api/chat/completions", headers={**self._h(), "Content-Type": "application/json"},
                            json=body, timeout=timeout)
