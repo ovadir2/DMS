@@ -17,8 +17,8 @@ class ChatSession:
     def __init__(self, answers):
         self.answers, self.calls = list(answers), []
 
-    def post(self, url, headers=None, json=None, timeout=None):
-        self.calls.append((url, headers, json))
+    def post(self, url, headers=None, json=None, files=None, timeout=None):
+        self.calls.append((url, headers, json if files is None else {"upload": files["file"][0]}))
         a = self.answers.pop(0)
         return a if isinstance(a, Resp) else Resp(a)
 
@@ -48,9 +48,10 @@ def test_question_about_a_file_sends_its_text(tmp_path):
     with zipfile.ZipFile(f, "w") as z:
         z.writestr("word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
                    '<w:body><w:p><w:r><w:t>הודעות ללקוחות</w:t></w:r></w:p><w:p><w:r><w:t>מוצרים רפואיים</w:t></w:r></w:p></w:body></w:document>')
-    sess = ChatSession(["סיכום"])
+    sess = ChatSession([Resp("not found", 404), "סיכום"])                          # upload fails: the text goes instead
     r = OpenWebUI(Settings(**S), sess).ask("סכם", lang="HE", file_path=str(f), context="Document: QP-2.1.docx")
-    system = sess.calls[0][2]["messages"][0]["content"]
+    assert r["file"] == "text"
+    system = sess.calls[1][2]["messages"][0]["content"]
     assert "הודעות ללקוחות\nמוצרים רפואיים" in system and "Document: QP-2.1.docx" in system and r["answer"] == "סיכום"
 
 
@@ -64,10 +65,10 @@ def test_refusal_and_unreadable_file(tmp_path):
     scan = tmp_path / "scan.png"
     scan.write_bytes(b"\x89PNG")
     try:
-        OpenWebUI(Settings(**S), ChatSession([])).ask("hi", file_path=str(scan))
+        OpenWebUI(Settings(**S), ChatSession([Resp("x", 500)])).ask("hi", file_path=str(scan))
         raise AssertionError("expected AiError")
     except AiError as e:
-        assert "no text" in str(e)
+        assert "no text could be read" in str(e)
 
 
 def test_plan_and_rank_parse_wrapped_json():
@@ -100,3 +101,17 @@ def test_answer_in_the_language_of_the_question():
     assert answer_lang("נהלי שינוע", "EN") == "HE"
     assert answer_lang("calibration procedure", "HE") == "EN"
     assert answer_lang("123?", "HE") == "HE" and answer_lang("123?", "EN") == "EN"
+
+
+def test_file_is_uploaded_once_and_attached_like_the_page(tmp_path):
+    f = tmp_path / "trade_execution_log.csv"
+    f.write_text("a,b")
+    sess = ChatSession([{"id": "c0131812"}, "first line: a,b", "again"])
+    ai = OpenWebUI(Settings(**S), sess)
+    r = ai.ask("show the first line", file_path=str(f))
+    assert sess.calls[0][0] == "https://chat.ai.rh-global.com/upload" and sess.calls[0][2] == {"upload": "trade_execution_log.csv"}
+    body = sess.calls[1][2]
+    assert body["files"] == [{"type": "file", "id": "c0131812"}] and r["file"] == "uploaded"
+    assert body["messages"][-1]["content"].startswith("קבצים מצורפים (שמות הקבצים כפי שהמשתמש העלה): trade_execution_log.csv.")
+    ai.ask("again", file_path=str(f))
+    assert len(sess.calls) == 3                                                    # no second upload
