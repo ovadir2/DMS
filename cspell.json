@@ -107,6 +107,8 @@
     "tileacts",
     "tilewrap",
     "cands",
-    "sugg"
+    "sugg",
+    "LOCALAPPDATA",
+    "pscustomobject"
   ]
 }
