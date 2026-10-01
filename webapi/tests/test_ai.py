@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from dms_api.ai import OpenWebUI
+from dms_api.ai import AiError, OpenWebUI
 from dms_api.config import Settings
 
 
@@ -88,3 +88,19 @@ def test_model_defaults_to_the_first_offered():
     assert ai.enabled
     ai.ask("hello")
     assert http.calls[0][1].endswith("/api/models") and http.calls[1][2]["model"] == "rh-rag"
+
+
+def test_no_token_sends_no_authorization_and_explains_a_refusal():
+    class Refuse(Session):
+        def post(self, url, headers=None, json=None, files=None, timeout=None):
+            self.calls.append(("POST", url, headers, None))
+            return Resp({"detail": "Not authenticated"}, 401)
+    http = Refuse()
+    ai = OpenWebUI(Settings(ai_url="https://chat.ai.rh-global.com", ai_model="m"), http)
+    assert ai.enabled
+    try:
+        ai.ask("hi")
+        raise AssertionError("expected AiError")
+    except AiError as e:
+        assert "DMS_AI_TOKEN" in str(e)
+    assert "Authorization" not in http.calls[0][2]

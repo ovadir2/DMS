@@ -1,8 +1,9 @@
 """AI Insights - RH RAG tools on the AI portal (n8n webhook), e.g. the QMS knowledge:
 https://aiportal.ai.rh-global.com/webhook/tools?tool=qms
 
-The DMS service POSTs the question to <DMS_RAG_URL>?tool=<tool> with a JSON body built from
-DMS_RAG_BODY ({tool}, {question}, {session}, {lang}, {user} are filled in) and reads the answer
+The DMS service sends the question to <DMS_RAG_URL>?tool=<tool> as
+GET (default) query parameters tool, question, chatInput, query, sessionId, lang and user, or with
+DMS_RAG_METHOD=POST a JSON body from DMS_RAG_BODY, and reads the answer
 from the first of: output, answer, text, response, message (also inside a list), or plain text.
 """
 from __future__ import annotations
@@ -39,12 +40,26 @@ class RagTools:
         template = json.loads(self.s.rag_body)
         body = {k: (v.format(**fill) if isinstance(v, str) else v) for k, v in template.items()}
         headers = {"Accept": "application/json"}
-        if self.s.rag_token:
+        if self.s.rag_token:                          # on-prem tools need none
             headers["Authorization"] = f"Bearer {self.s.rag_token}"
-        r = self.http.post(self.s.rag_url, params={"tool": tool}, json=body, headers=headers, timeout=180)
+        params = {"tool": tool, "question": question, "chatInput": question, "query": question,
+                  "sessionId": fill["session"], "lang": lang, "user": user}
+        if self.s.rag_method == "POST":
+            r = self.http.post(self.s.rag_url, params={"tool": tool}, json=body, headers=headers, timeout=180)
+            if r.status_code in (404, 405):              # "not registered for POST": a GET webhook
+                r = self.http.get(self.s.rag_url, params=params, headers=headers, timeout=180)
+        else:
+            r = self.http.get(self.s.rag_url, params=params, headers=headers, timeout=180)
         if r.status_code >= 400:
             raise RagError(f"The RAG tool answered {r.status_code}: {r.text[:200]}")
+        if self._is_page(r):
+            raise RagError("The RAG tool returned its web page, not an answer: the webhook needs another parameter name for the question")
         return {"answer": self._answer(r), "tool": tool}
+
+    @staticmethod
+    def _is_page(r) -> bool:
+        ctype = (getattr(r, "headers", None) or {}).get("content-type", "")
+        return "text/html" in ctype.lower() or (r.text or "").lstrip()[:15].lower().startswith(("<!doctype", "<html"))
 
     @staticmethod
     def _answer(r) -> str:

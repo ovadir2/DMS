@@ -599,7 +599,10 @@ async function askAI(question) {
   try {
     const r = await api('/api/ai/ask', { method:'POST', body:JSON.stringify({ question, path: aiFile, lang }) });
     pending.innerHTML = esc(r.answer).replace(/\n/g, '<br>') + (r.sources?.length ? `<div class="src">${T.aiSources}: ${r.sources.map(esc).join(', ')}</div>` : '');
-  } catch (e) { pending.innerHTML = `<span style="color:var(--err)">${T.err}: ${esc(e.message)}</span>`; }
+  } catch (e) {
+    pending.innerHTML = `<span style="color:var(--err)">${T.err}: ${esc(e.message)}</span>`
+      + `<div class="small"><a class="link" href="${esc(aiUrl)}/?q=${encodeURIComponent(question)}" target="_blank" rel="noopener">${T.aiChat} ↗</a></div>`;
+  }
   pending.classList.remove('pending'); log.scrollTop = log.scrollHeight;
 }
 $('#ai-t').textContent = T.aiInsights; $('#ai-title').textContent = '✦ ' + T.aiInsights; $('#ai-send').textContent = T.aiAsk;

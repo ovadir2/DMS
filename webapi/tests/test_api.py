@@ -911,10 +911,10 @@ def test_rag_tool_answers_and_is_audited(env):
     c, sp, q = env
 
     class Http:
-        def post(self, url, params=None, json=None, headers=None, timeout=None):
-            self.sent = (url, params, json)
+        def get(self, url, params=None, headers=None, timeout=None):
+            self.sent = (url, params)
             class R:
-                status_code, text = 200, ""
+                status_code, text, headers = 200, "", {"content-type": "application/json"}
                 def json(self):
                     return [{"output": "Calibration is yearly (QP-07)."}]
             return R()
@@ -925,5 +925,5 @@ def test_rag_tool_answers_and_is_audited(env):
     assert c.get("/api/ai/status").json()["rag"] == [{"tool": "qms", "page": "https://aiportal.ai.rh-global.com/webhook/tools?tool=qms"}]
     r = c.post("/api/ai/rag", json={"question": "How often is calibration?", "tool": "qms"}).json()
     assert r["answer"] == "Calibration is yearly (QP-07)."
-    assert http.sent[1] == {"tool": "qms"} and http.sent[2]["chatInput"] == "How often is calibration?"
+    assert http.sent[1]["tool"] == "qms" and http.sent[1]["question"] == "How often is calibration?"
     assert [a["details"].split(":")[0] for a in sp.audits if a["document_id"] == "AI"] == ["ai-rag"]

@@ -80,6 +80,7 @@ class Settings:
     rag_url: str = ""                       # AI Insights RAG tools (n8n webhook), e.g. https://aiportal.ai.rh-global.com/webhook/tools
     rag_tools: list[str] = field(default_factory=list)          # tools offered on the page, e.g. qms
     rag_token: str = ""                     # optional bearer token of the webhook
+    rag_method: str = "GET"                 # GET (question as query parameters) | POST (JSON body DMS_RAG_BODY)
     rag_body: str = '{"tool": "{tool}", "chatInput": "{question}", "question": "{question}", "sessionId": "{session}", "lang": "{lang}", "user": "{user}"}'
     protected_depth: int = 2                # 02_Customers\Customer_A and above cannot be renamed or deleted
 
@@ -143,5 +144,6 @@ class Settings:
             rag_url=e("DMS_RAG_URL", "https://aiportal.ai.rh-global.com/webhook/tools"),
             rag_tools=[k.strip() for k in e("DMS_RAG_TOOLS", "qms").split(",") if k.strip()],
             rag_token=e("DMS_RAG_TOKEN", ""),
+            rag_method=e("DMS_RAG_METHOD", "GET").upper(),
             rag_body=e("DMS_RAG_BODY", Settings.rag_body),
         )
