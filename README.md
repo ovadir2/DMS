@@ -73,7 +73,7 @@ For the pilot, `scripts/New-DmsPilotFlowPackage.ps1` builds `scripts/out/DC-P1-P
 
 `scripts/Invoke-DmsWorkflowService.ps1` is the pilot Workflow Service, the on-prem side of the approval. Run it every few minutes on a server that can write to the repository. It moves each document's file to match its status: Submitted → `Submitted` (read-only), Approved → `Current_ReadOnly` (the previous revision → `Obsolete_ReadOnly`, the path and SHA-256 written back to the register), rejected → back to `Working`. Every move writes a Control Audit row. It supports `-WhatIf`.
 
-`webapi/` is the DMS Web API, a small service inside the company network that wraps the file server repository: users browse the repository, register a file and submit it for approval from the browser (`/dms/dms-page?lang=EN`). RH Navigator links to it and the Explorer right-click can open it. See [webapi/README.md](webapi/README.md).
+`webapi/` is **RH - Documents Management System**, a web page and API inside the company network that wraps the file server repository: users sign in with their Windows login, see the customers and folders AD allows them, upload, create, rename and delete files and folders, and start the approval workflow with the status shown on each file (`/dms/dms-page?lang=EN`). RH Navigator links to it and the Explorer right-click can open it. See [webapi/README.md](webapi/README.md).
 
 ## Deployment sequence (maps to blueprint section 10)
 

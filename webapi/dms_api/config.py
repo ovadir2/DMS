@@ -38,7 +38,7 @@ class Settings:
     cert_path: str = ""                     # PEM with the private key
     cert_thumbprint: str = ""
     choice_language: str = "he"
-    auth_mode: str = "entra"                # entra | header | dev
+    auth_mode: str = "windows"              # windows | entra | header | dev (see auth.py)
     api_audience: str = ""                  # entra: the app (client) id of the DMS app registration
     spa_client_id: str = ""                 # entra: app id the built-in page signs in with
     user_header: str = "X-MS-CLIENT-PRINCIPAL-NAME"   # header: set by the trusted reverse proxy
@@ -46,6 +46,10 @@ class Settings:
     allowed_origins: list[str] = field(default_factory=list)
     document_id_prefix: str = "DMS"
     register_cache_seconds: int = 30
+    customers_folder: str = "02_Customers"  # under the root: one folder per customer
+    max_upload_mb: int = 500
+    search_limit: int = 200
+    protected_depth: int = 2                # 02_Customers\Customer_A and above cannot be renamed or deleted
 
     @property
     def api_scope(self) -> str:
@@ -70,7 +74,7 @@ class Settings:
             cert_path=e("DMS_CERT_PATH", ""),
             cert_thumbprint=e("DMS_CERT_THUMBPRINT", ""),
             choice_language=e("DMS_CHOICE_LANGUAGE", "he"),
-            auth_mode=e("DMS_AUTH_MODE", "entra"),
+            auth_mode=e("DMS_AUTH_MODE", "windows"),
             api_audience=e("DMS_API_AUDIENCE", ""),
             spa_client_id=e("DMS_SPA_CLIENT_ID", ""),
             user_header=e("DMS_USER_HEADER", "X-MS-CLIENT-PRINCIPAL-NAME"),
@@ -78,4 +82,8 @@ class Settings:
             allowed_origins=[o.strip() for o in e("DMS_ALLOWED_ORIGINS", "").split(",") if o.strip()],
             document_id_prefix=e("DMS_DOCUMENT_ID_PREFIX", "DMS"),
             register_cache_seconds=int(e("DMS_REGISTER_CACHE_SECONDS", "30")),
+            customers_folder=e("DMS_CUSTOMERS_FOLDER", "02_Customers"),
+            max_upload_mb=int(e("DMS_MAX_UPLOAD_MB", "500")),
+            search_limit=int(e("DMS_SEARCH_LIMIT", "200")),
+            protected_depth=int(e("DMS_PROTECTED_DEPTH", "2")),
         )

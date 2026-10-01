@@ -1,56 +1,63 @@
-# DMS Web API
+# RH - Documents Management System (Web API and page)
 
-A small web service inside the company network that "wraps" the file server repository. It can see `$Root` directly, so users browse the repository, register a file and submit it for approval from the browser. RH Navigator links to it, and the Explorer right-click can open it too.
+A small web service inside the company network that "wraps" the file server repository, in the style of File Linker. Users sign in with their Windows login (no login screen). They pick a customer and see only what AD allows them, work with files and folders like in Explorer, save files from their PC into the right folder of `$Root`, start the approval workflow and see each file's status.
 
-Everything else stays as it is: SharePoint keeps the records, the approval flow (DC-P1) sends the approvals in Teams, and the Workflow Service (`scripts/Invoke-DmsWorkflowService.ps1`) moves the files.
+Everything else stays as it is: SharePoint keeps the records, the approval flow (DC-P1) sends the approvals in Teams, the Workflow Service (`scripts/Invoke-DmsWorkflowService.ps1`) moves the files, and the Explorer right-click still works.
 
-## What it offers
+## How it knows the AD permissions
 
-| Endpoint | What it does |
-| --- | --- |
-| `GET /dms/dms-page?lang=EN` (or `HE`) | The built-in page: Repository, My documents, Start workflow. With `&path=<UNC>&name=<file>` it opens the Start workflow form prefilled (the right-click link) |
-| `GET /api/browse?path=` | Folders and files of one folder, each file with its DMS status, an **Open** link (opens it in Excel/Word from the server) and download |
-| `POST /api/documents` | Registers a file (`path`, `documentType`, `documentArea`, `controlMode`, `submit`). `submit: true` also submits it for approval |
-| `POST /api/documents/{id}/submit` | Submits a registered document (owner only, status Working) |
-| `GET /api/documents?mine=true&status=` | The register, optionally only mine or one status |
-| `GET /api/options` | Document types, areas and control modes from the list |
-| `GET /api/files/download?path=` | Downloads a file |
-| `GET /api/health`, `GET /api/me` | Health check and the signed-in user |
-| `GET /docs` | The full OpenAPI description, for RH Navigator developers |
+1. IIS signs the user in with **Windows Authentication**, using the login of the person at the PC. Browsers on domain PCs do this silently.
+2. IIS passes the user's Windows token to the service (`forwardWindowsAuthToken` in `web.config`). The token holds the user and all of their AD groups.
+3. Before showing or changing anything, the service asks Windows: "may this token read (or write) this folder or file?" (Win32 `AccessCheck` against the item's NTFS permissions). Items the user may not read are not shown, and actions they may not do are refused.
 
-Every path is checked to be inside `DMS_REPOSITORY_ROOT`. A file is registered once only, and files already in `Submitted`, `Current_ReadOnly` or `Obsolete_ReadOnly` cannot be registered again. Registration and submission write Control Audit rows.
+So the NTFS permissions on the file server (the `DL_FS_*` groups, docs/02 §3.2) are the only place access is managed. The service account (gMSA) does the actual reading and writing, and needs Modify on `$Root`. No Kerberos delegation is needed.
+
+## What users can do
+
+| On the page | API | Rules |
+| --- | --- | --- |
+| Pick a customer | `GET /api/customers` | Only customers whose folder the user may open |
+| Open folders | `GET /api/browse?path=` | Only items the user may read, each file with its DMS status |
+| Search: All, Customer, Project, Document ID, File | `GET /api/search?q=&scope=` | Same filter |
+| Upload file into the open folder | `POST /api/files/upload` | Needs write permission there. Saved to a temporary name, then renamed. Replacing needs the "replace" option |
+| New folder | `POST /api/folders` | Needs write permission |
+| Rename | `POST /api/items/rename` | Needs write permission. Not for controlled documents |
+| Delete | `POST /api/items/delete` | Needs write permission. Moves the item to `04_Workflow_System\Recycle\<date>\<user>\...` so IT can restore it. Not for controlled documents |
+| Open (Excel/Word from the server), Download | `GET /api/files/download` | Read permission |
+| Start workflow (register and submit) | `POST /api/documents` | As before |
+| My documents (menu), Submit | `GET /api/documents?mine=true`, `POST /api/documents/{id}/submit` | Owner only |
+
+Protected:
+- The company structure (`$Root`, `02_Customers`, each customer folder) cannot be renamed or deleted. The depth is set with `DMS_PROTECTED_DEPTH`.
+- The workflow folders (`Submitted`, `Current_ReadOnly`, `Obsolete_ReadOnly`) are managed by the DMS only.
+- A registered file, or a folder that holds one, cannot be renamed or deleted.
+
+Every action is written to the service log, and registration and submission also to Control Audit. The full API is at `/docs`.
 
 ## Install on a Windows server (IIS)
 
-The server needs read and write access to `$Root` and outbound HTTPS to Microsoft 365.
+The server must be joined to the domain, reach `$Root`, and have outbound HTTPS to Microsoft 365.
 
-1. Install Python 3.11+ and the IIS **HttpPlatformHandler** module.
+1. Install Python 3.11+, the IIS **Windows Authentication** feature, and the **HttpPlatformHandler** module.
 2. Copy this `webapi` folder to `C:\DMS\webapi`, then in PowerShell:
    ```powershell
    cd C:\DMS\webapi; py -m venv .venv; .\.venv\Scripts\pip install -r requirements.txt; Copy-Item .env.example .env; notepad .env
    ```
-3. **Entra app registration "RH DMS Web"** (one app for the page and the API):
-   - Expose an API: Application ID URI `api://<app id>`, scope `access_as_user`.
-   - Authentication: add a **Single-page application** redirect URI `https://<server>/dms/dms-page`.
-   - Put its app id in `DMS_API_AUDIENCE` and `DMS_SPA_CLIENT_ID`.
-4. **SharePoint access** for the service (app-only, no user passwords): an app with `Sites.Selected` and write on the DocumentControl site, and a certificate. The `RH-DMS-Workflow-Service` app from `Provision-DMS.ps1` can be reused. Export the certificate with its private key as PEM to `DMS_CERT_PATH`.
-5. IIS: create a site (or application) on `C:\DMS\webapi` with an HTTPS binding. The app pool identity (a gMSA) needs Modify on `$Root`. `web.config` starts uvicorn.
-6. Open `https://<server>/api/health`. `rootReachable` must be `true`. Then open `https://<server>/dms/dms-page?lang=EN`.
+3. **SharePoint access** for the service (app-only, no user passwords): an app with `Sites.Selected` and write on the DocumentControl site, and a certificate. The `RH-DMS-Workflow-Service` app can be reused. Export the certificate with its private key as PEM to `DMS_CERT_PATH`.
+4. IIS: create a site on `C:\DMS\webapi` with an HTTPS binding. Run its app pool as a gMSA with Modify on `$Root`. If IIS reports a locked `authentication` section, set **Windows Authentication = Enabled** and **Anonymous = Disabled** in IIS Manager instead of in `web.config`.
+5. Put the company logo at `dms_api\static\logo.png` (optional, a drawn "rh" is used without it).
+6. Open `https://<server>/api/health` (`rootReachable` must be `true`), then `https://<server>/dms/dms-page?lang=EN` (or `HE`).
 
-To run it without IIS (testing): `.\.venv\Scripts\python -m uvicorn dms_api.main:app --port 8080`.
+To run it without IIS (testing): set `DMS_AUTH_MODE=dev` and `DMS_DEV_USER`, then `.\.venv\Scripts\python -m uvicorn dms_api.main:app --port 8080`. In dev mode there are no AD checks.
 
 ## Link it
 
-- **RH Navigator:** add a menu link to `https://<server>/dms/dms-page?lang=EN`. To call the API from Navigator's own pages instead, add the Navigator address to `DMS_ALLOWED_ORIGINS` and request a token for `api://<app id>/access_as_user`.
+- **RH Navigator:** a menu link to `https://<server>/dms/dms-page?lang=EN`.
 - **Explorer right-click:**
   ```powershell
   .\scripts\Install-DmsExplorerMenu.ps1 -AppUrl 'https://<server>/dms/dms-page?lang=EN' -RepositoryRoot $Root -MenuText 'Start workflow'
   ```
-
-## Notes
-
-- The service reads the files with its own identity, so the page shows the whole repository to every signed-in user. Restrict the browse view later with the `DL_FS_*` groups if needed.
-- `DMS_AUTH_MODE=header` is for a reverse proxy that already signs users in and passes the email in `DMS_USER_HEADER`. `dev` uses a fixed user and is for testing only.
+- From outside the network: `DMS_AUTH_MODE=entra` behind Entra Application Proxy (an Entra app registration with an `access_as_user` scope and a SPA redirect URI). In that mode the AD file checks do not apply.
 
 ## Tests
 
@@ -58,4 +65,4 @@ To run it without IIS (testing): `.\.venv\Scripts\python -m uvicorn dms_api.main
 cd C:\DMS\webapi; .\.venv\Scripts\pip install -r requirements-dev.txt; .\.venv\Scripts\python -m pytest -q tests
 ```
 
-The tests use an in-memory SharePoint and a temporary folder, so they need no network.
+The tests use an in-memory SharePoint and a temporary folder. The Windows token and `AccessCheck` code (`dms_api/security.py`) runs only on Windows, so verify it on the server: a user without access to a customer folder must not see that customer.
