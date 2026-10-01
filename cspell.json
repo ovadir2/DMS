@@ -105,6 +105,8 @@
     "gtitle",
     "lsep",
     "tileacts",
-    "tilewrap"
+    "tilewrap",
+    "cands",
+    "sugg"
   ]
 }
