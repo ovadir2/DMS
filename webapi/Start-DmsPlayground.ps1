@@ -34,6 +34,7 @@ param(
     [string] $ClientId,
     [string] $TenantName = 'rhisrael',
     [string] $Site = 'DocumentControl-TEST',
+    [string] $ExchangeSite = 'LargeFileExchange-TEST',
     [string[]] $Admins = @('roneno@rh.co.il'),
     [ValidateSet('page', 'flow')] [string] $Approvals = 'page',
     [int] $FileServiceSeconds = 60,
@@ -67,6 +68,7 @@ if ($Live) {
     $env:DMS_SHAREPOINT = 'online'
     $env:DMS_SP_AUTH = 'interactive'
     $env:DMS_SITE_URL = "https://$TenantName.sharepoint.com/sites/$Site"
+    $env:DMS_EX_SITE_URL = "https://$TenantName.sharepoint.com/sites/$ExchangeSite"
     $env:DMS_TENANT_ID = "$TenantName.onmicrosoft.com"
     $env:DMS_CLIENT_ID = $ClientId
     $env:DMS_FILE_SERVICE_SECONDS = "$FileServiceSeconds"

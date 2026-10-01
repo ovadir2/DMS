@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import time
+from json import dumps as json_dumps
 from datetime import datetime, timezone
 from urllib.parse import quote, urlparse
 
@@ -94,11 +95,12 @@ class SharePoint:
         self._token = (r["access_token"], time.time() + int(r.get("expires_in", 3600)))
         return self._token[0]
 
-    def _call(self, method: str, url: str, json: dict | None = None, headers: dict | None = None) -> dict:
+    def _call(self, method: str, url: str, json: dict | None = None, headers: dict | None = None,
+              data: bytes | None = None) -> dict:
         h = {"Authorization": f"Bearer {self._access_token()}", "Accept": "application/json;odata=nometadata",
-             "Content-Type": "application/json;odata=nometadata"}
+             "Content-Type": "application/octet-stream" if data is not None else "application/json;odata=nometadata"}
         h.update(headers or {})
-        r = self.http.request(method, url, json=json, headers=h, timeout=30)
+        r = self.http.request(method, url, json=json, data=data, headers=h, timeout=300 if data is not None else 30)
         if r.status_code >= 400:
             raise SharePointError(f"{method} {url.split('?')[0]} -> {r.status_code}: {r.text[:300]}")
         return r.json() if r.content else {}
@@ -179,6 +181,39 @@ class SharePoint:
         """A row in DMS Notifications; the DC-P2 flow sends it by email and Teams."""
         self._call("POST", f"{self._list(NOTIFY)}/items", json={
             "Title": subject[:255], "NotifyTo": "; ".join(to), "MessageBody": body, "LinkUrl": link[:255], "RefId": ref})
+
+    # ------------------------------------------------------------------ share with a customer (Large File Exchange site)
+    def share_with_guest(self, *, local_path: str, folder: str, email: str, subject: str, message: str) -> dict:
+        """Copy the file to the Exchange site library (<library>/<folder>/) and share it with one external
+        person: view only, a specific-people invitation sent by SharePoint (B2B guest, no anonymous link)."""
+        ex = self.s.ex_site_url.rstrip("/")
+        ex_path = urlparse(ex).path.rstrip("/")
+        q = lambda p: quote(p.replace("'", "''"), safe="/")  # noqa: E731
+        current = f"{ex_path}/{self.s.ex_library}"
+        for part in [p for p in folder.split("/") if p]:
+            current = f"{current}/{part}"
+            try:
+                self._call("POST", f"{ex}/_api/web/folders/AddUsingPath(DecodedUrl='{q(current)}')")
+            except SharePointError as e:
+                if "exist" not in str(e).lower():
+                    raise
+        name = os.path.basename(local_path)
+        with open(local_path, "rb") as f:
+            up = self._call("POST", f"{ex}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(current)}')"
+                                    f"/Files/AddUsingPath(DecodedUrl='{q(name)}',Overwrite=true)", data=f.read())
+        url = self.host + (up.get("ServerRelativeUrl") or f"{current}/{name}")
+        person = {"Key": email, "DisplayText": email, "IsResolved": True, "Description": email, "EntityType": "",
+                  "EntityData": {"SPUserID": email, "Email": email, "IsBlocked": "False", "PrincipalType": "UNVALIDATED_EMAIL_ADDRESS",
+                                 "AccountName": email, "SIPAddress": email},
+                  "MultipleMatches": [], "ProviderName": "", "ProviderDisplayName": ""}
+        r = self._call("POST", f"{ex}/_api/SP.Web.ShareObject", json={
+            "url": url, "peoplePickerInput": json_dumps([person]), "roleValue": "role:1073741826", "groupId": 0,
+            "propagateAcl": False, "sendEmail": True, "includeAnonymousLinkInEmail": False,
+            "emailSubject": subject, "emailBody": message, "useSimplifiedRoles": True})
+        if r.get("StatusCode") not in (None, 0) or r.get("ErrorMessage"):
+            raise SharePointError(f"Sharing refused: {r.get('ErrorMessage') or r.get('StatusCode')} "
+                                  "(check external sharing on the Exchange site and its allowed guest domains)")
+        return {"url": url}
 
     # ------------------------------------------------------------------ audit
     def audit_events(self, refresh: bool = False) -> list[dict]:

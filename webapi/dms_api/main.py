@@ -63,6 +63,11 @@ class DecisionRequest(BaseModel):
     comment: str = Field("", max_length=1000)
 
 
+class ShareRequest(BaseModel):
+    email: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    message: str = Field("", max_length=2000)
+
+
 class FindRequest(BaseModel):
     question: str = Field(min_length=2, max_length=1000)
     lang: str = "EN"
@@ -871,6 +876,38 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if submit:
             return {**submit_doc(item_id, user), "draft": target, "officeUri": files.office_uri(target)}
         return {**with_key(sp().document(item_id)), "draft": target, "officeUri": files.office_uri(target)}
+
+    @app.post("/api/documents/{item_id}/share")
+    def share(item_id: int, req: ShareRequest, user: User = Depends(current_user)):
+        """Share the approved revision with a customer: a copy goes to the Large File Exchange site
+        (<library>/Outbound/<DocumentId>_RevNN/) and SharePoint invites the person (view only, B2B guest).
+        Only approved documents, by the owner or a DMS super user; written to Control Audit."""
+        from .file_service import to_root
+        c = s.choices
+        if s.sharepoint != "memory" and not s.ex_site_url:
+            raise HTTPException(409, "Sharing with customers is not configured (DMS_EX_SITE_URL)")
+        d = sp().document(item_id)
+        if d.get("lifecycleStatus") != c["Approved_ReadOnly"]:
+            raise HTTPException(409, "Only an approved document can be shared with a customer")
+        if (d.get("ownerEmail") or "").lower() != user.email and not is_admin(user):
+            raise HTTPException(403, "Only the document owner (or a DMS super user) can share it")
+        current = to_root(s.repository_root, d.get("currentUncPath"))
+        if not current or not os.path.isfile(current):
+            raise HTTPException(409, "The approved file was not found on the file server")
+        if not user.can(current):
+            raise HTTPException(403, "You do not have access to this document")
+        rev = str(d.get("currentRevision") or files.parse_revision(os.path.basename(current))[1] or 1).zfill(2)
+        doc_id = d.get("documentId") or f"ID {item_id}"
+        email = req.email.strip().lower()
+        message = req.message.strip() or (f"RH shares with you {d.get('title')} (revision {rev}). "
+                                          f"The link is personal and opens the file for viewing.")
+        r = sp().share_with_guest(local_path=current, folder=f"{s.ex_folder}/{doc_id}_Rev{rev}", email=email,
+                                  subject=f"RH - {d.get('title')} (Rev {rev})", message=message)
+        sp().audit(document_id=doc_id, event=c["PermissionChanged"], from_status=c["Approved_ReadOnly"],
+                   to_status=c["Approved_ReadOnly"], actor=user.email,
+                   details=f"Shared revision {rev} with {email} (view only, Large File Exchange): {r['url']}")
+        log(user, "share", f"{doc_id} Rev{rev} -> {email}")
+        return {"url": r["url"], "email": email, "revision": rev, "documentId": doc_id}
 
     @app.post("/api/documents/{item_id}/withdraw")
     def withdraw(item_id: int, user: User = Depends(current_user)):
