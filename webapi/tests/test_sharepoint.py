@@ -21,7 +21,7 @@ class Session:
     def __init__(self):
         self.calls = []
 
-    def request(self, method, url, json=None, headers=None, timeout=None):
+    def request(self, method, url, json=None, headers=None, timeout=None, data=None):
         self.calls.append((method, url, json, headers))
         if url.endswith("/ensureuser"):
             return Resp({"Id": 7})

@@ -751,3 +751,48 @@ def test_notifications_follow_the_approval(tmp_path):
     s.dev_user = "dana@rh.co.il"
     c.post(f"/api/approvals/{e['id']}", json={"approve": False, "comment": "fix p.2"})
     assert n[-1]["to"] == [USER] and "fix p.2" in n[-1]["body"]
+
+
+def test_share_with_customer(tmp_path):
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    r = c.post(f"/api/documents/{d['id']}/share", json={"email": "Edssrom@gmail.com"})
+    assert r.status_code == 200, r.text
+    assert r.json()["revision"] == "01" and sp.shares[0]["email"] == "edssrom@gmail.com"
+    assert "Outbound/DMS-00001_Rev01/CRU 4 FCT Quote_Rev1.xlsx" in sp.shares[0]["url"]
+    ev = sp.audit_events()[0]
+    assert ev["event"] == "שינוי הרשאות" and "edssrom@gmail.com" in ev["details"]
+    assert c.post(f"/api/documents/{d['id']}/share", json={"email": "not-an-email"}).status_code == 422
+    c.post(f"/api/documents/{d['id']}/revise")                                     # in work again: not shareable
+    assert c.post(f"/api/documents/{d['id']}/share", json={"email": "edssrom@gmail.com"}).status_code == 409
+
+
+def test_share_payloads():
+    import json as j
+    from tests.test_sharepoint import Resp
+    from dms_api.sharepoint import SharePoint
+
+    class Sess:
+        def __init__(self):
+            self.calls = []
+
+        def request(self, method, url, json=None, data=None, headers=None, timeout=None):
+            self.calls.append((method, url, json, data))
+            if "Files/AddUsingPath" in url:
+                return Resp({"ServerRelativeUrl": "/sites/LargeFileExchange-TEST/TemporaryUploads/Outbound/DMS-1_Rev01/Q.xlsx"})
+            if url.endswith("SP.Web.ShareObject"):
+                return Resp({"StatusCode": 0, "ErrorMessage": None})
+            return Resp({})
+    import tempfile, os
+    f = os.path.join(tempfile.mkdtemp(), "Q.xlsx")
+    open(f, "wb").write(b"x")
+    s = Settings(site_url="https://rhisrael.sharepoint.com/sites/DocumentControl-TEST",
+                 ex_site_url="https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST")
+    sess = Sess()
+    sp = SharePoint(s, sess)
+    sp._access_token = lambda: "t"
+    r = sp.share_with_guest(local_path=f, folder="Outbound/DMS-1_Rev01", email="edssrom@gmail.com", subject="S", message="M")
+    assert r["url"] == "https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST/TemporaryUploads/Outbound/DMS-1_Rev01/Q.xlsx"
+    share = sess.calls[-1][2]
+    assert share["roleValue"] == "role:1073741826" and share["sendEmail"] is True and share["includeAnonymousLinkInEmail"] is False
+    assert j.loads(share["peoplePickerInput"])[0]["Key"] == "edssrom@gmail.com"
+    assert sess.calls[2][3] == b"x"                                                # the file bytes were uploaded
