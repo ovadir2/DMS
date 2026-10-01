@@ -1,10 +1,13 @@
-"""Document Register and Control Audit through the SharePoint REST API, app-only (certificate).
+"""Document Register and Control Audit through the SharePoint REST API.
 
-The Entra app needs Sites.Selected with write on the DocumentControl site (the same grant as
-RH-DMS-Workflow-Service, docs/02). No user credentials are stored.
+DMS_SP_AUTH=certificate (server): app-only, the Entra app needs Sites.Selected with write on the
+DocumentControl site (the same grant as RH-DMS-Workflow-Service, docs/02). No user credentials.
+DMS_SP_AUTH=interactive (pilot on a PC): you sign in once in the browser with the Entra app you use
+for PnP ($C); the token is cached in %LOCALAPPDATA%\\DMS and refreshed silently.
 """
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime, timezone
 from urllib.parse import quote, urlparse
@@ -17,7 +20,7 @@ REGISTER = "Lists/DocumentRegister"
 AUDIT = "Lists/ControlAudit"
 REGISTER_FIELDS = ("Id", "Title", "DocumentId", "DocumentType", "DocumentArea", "ControlMode", "LifecycleStatus",
                    "WorkingUncPath", "CurrentUncPath", "CurrentSHA256", "CurrentRevision", "LastApprovedUtc",
-                   "Modified", "Created")
+                   "DraftRevision", "Modified", "Created")
 
 
 class SharePointError(Exception):
@@ -33,11 +36,49 @@ class SharePoint:
         self.http = session or requests.Session()
         self._token: tuple[str, float] | None = None
         self._cache: tuple[list[dict], float] | None = None
+        self.account_email: str | None = None
+        self._public = None
 
     # ------------------------------------------------------------------ plumbing
+    def _interactive_token(self) -> str:
+        import msal  # imported here so the tests run without network access
+
+        if self._public is None:
+            folder = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "DMS")
+            os.makedirs(folder, exist_ok=True)
+            self._cache_file = os.path.join(folder, "sharepoint-token.bin")
+            self._msal_cache = msal.SerializableTokenCache()
+            if os.path.exists(self._cache_file):
+                with open(self._cache_file, encoding="utf-8") as f:
+                    self._msal_cache.deserialize(f.read())
+            self._public = msal.PublicClientApplication(
+                self.s.client_id, authority=f"https://login.microsoftonline.com/{self.s.tenant_id}", token_cache=self._msal_cache)
+        scopes = [f"{self.host}/.default"]
+        accounts = self._public.get_accounts()
+        r = self._public.acquire_token_silent(scopes, account=accounts[0]) if accounts else None
+        if not r or "access_token" not in r:
+            r = self._public.acquire_token_interactive(scopes, prompt="select_account")
+        if "access_token" not in r:
+            raise SharePointError(f"Sign-in failed: {r.get('error_description') or r.get('error')}")
+        if self._msal_cache.has_state_changed:
+            with open(self._cache_file, "w", encoding="utf-8") as f:
+                f.write(self._msal_cache.serialize())
+        claims = r.get("id_token_claims") or {}
+        acc = self._public.get_accounts()
+        self.account_email = (claims.get("preferred_username") or (acc[0]["username"] if acc else "") or "").lower() or None
+        self._token = (r["access_token"], time.time() + int(r.get("expires_in", 3600)))
+        return self._token[0]
+
+    def sign_in(self) -> str | None:
+        """Interactive mode: sign in now (opens the browser the first time) and return the account."""
+        self._access_token()
+        return self.account_email
+
     def _access_token(self) -> str:
         if self._token and self._token[1] > time.time() + 60:
             return self._token[0]
+        if self.s.sp_auth == "interactive":
+            return self._interactive_token()
         import msal  # imported here so the tests run without network access
 
         with open(self.s.cert_path, encoding="utf-8") as f:
@@ -133,10 +174,11 @@ class SharePoint:
         self._audit_cache = (events, time.time() + self.s.register_cache_seconds)
         return events
 
-    def audit(self, *, document_id: str, event: str, from_status: str, to_status: str, actor: str, details: str) -> None:
+    def audit(self, *, document_id: str, event: str, from_status: str, to_status: str, actor: str, details: str,
+              source: str | None = None) -> None:
         self._call("POST", f"{self._list(AUDIT)}/items", json={
             "Title": f"{event} {document_id}", "CorrelationId": document_id, "AuditEventType": event,
             "FromStatus": from_status, "ToStatus": to_status, "ActorEmail": actor,
-            "EventUtc": datetime.now(timezone.utc).isoformat(), "EventSource": self.s.choices["Manual"],
+            "EventUtc": datetime.now(timezone.utc).isoformat(), "EventSource": source or self.s.choices["Manual"],
             "EventDetails": details})
         self._audit_cache = None

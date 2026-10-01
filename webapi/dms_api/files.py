@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ntpath
 import os
+import stat
 import uuid
 from collections.abc import Callable, Iterator
 from datetime import datetime, timezone
@@ -13,6 +14,11 @@ from .config import WORKFLOW_FOLDERS
 
 class PathNotAllowed(Exception):
     pass
+
+
+def is_read_only(path: str) -> bool:
+    """The read-only attribute (Windows) / no write bit, whoever runs the service."""
+    return not os.stat(path).st_mode & stat.S_IWRITE
 
 
 def _norm(path: str) -> str:
@@ -80,7 +86,7 @@ def list_folder(root: str, path: str | None, can: Can = _allow_all) -> dict:
                 item["workflowFolder"] = entry.name in WORKFLOW_FOLDERS
                 folders.append(item)
             else:
-                item.update(size=st.st_size, readOnly=not os.access(entry.path, os.W_OK),
+                item.update(size=st.st_size, readOnly=is_read_only(entry.path),
                             officeUri=office_uri(entry.path))
                 files.append(item)
     parent = None if _norm(folder) == _norm(root) else os.path.dirname(folder)
@@ -112,7 +118,7 @@ def save_upload(root: str, folder: str, filename: str, stream: BinaryIO, max_byt
                 if size > max_bytes:
                     raise ValueError(f"the file is larger than {max_bytes // (1024 * 1024)} MB")
                 out.write(chunk)
-        if os.path.exists(target) and not os.access(target, os.W_OK):
+        if os.path.exists(target) and is_read_only(target):
             raise PermissionError("the existing file is read-only (controlled)")
         os.replace(tmp, target)
     finally:
@@ -187,7 +193,7 @@ def rename_item(root: str, path: str, new_name: str, protected_depth: int) -> st
     target = os.path.join(os.path.dirname(full), valid_name(new_name))
     if os.path.exists(target) and os.path.normcase(target) != os.path.normcase(full):
         raise FileExistsError(target)
-    if os.path.isfile(full) and not os.access(full, os.W_OK):
+    if os.path.isfile(full) and is_read_only(full):
         raise PermissionError("the file is read-only (controlled)")
     os.rename(full, target)
     return target
@@ -198,7 +204,7 @@ def delete_item(root: str, path: str, protected_depth: int, user: str) -> str:
     full = check_editable(root, path, protected_depth)
     for dirpath, _dirs, names in os.walk(full) if os.path.isdir(full) else [(os.path.dirname(full), [], [os.path.basename(full)])]:
         for n in names:
-            if not os.access(os.path.join(dirpath, n), os.W_OK):
+            if is_read_only(os.path.join(dirpath, n)):
                 raise PermissionError(f"{n} is read-only (controlled) and cannot be deleted")
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
     target = os.path.join(root, RECYCLE, stamp, user.split("@")[0], os.path.relpath(full, root))

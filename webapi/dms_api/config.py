@@ -21,10 +21,12 @@ def _load_dotenv() -> None:
 CHOICES = {
     "he": {"Working": "בעבודה", "Submitted": "הוגש לאישור", "Approved_ReadOnly": "מאושר - קריאה בלבד",
            "Created": "נוצר", "SubmittedEvent": "הוגש", "Manual": "ידני",
-           "ApprovedEvent": "אושר", "RejectedEvent": "נדחה", "FileDone": "פעולת קובץ הושלמה"},
+           "ApprovedEvent": "אושר", "RejectedEvent": "נדחה", "FileDone": "פעולת קובץ הושלמה",
+           "FileFailed": "פעולת קובץ נכשלה", "WorkflowService": "שירות תהליכים"},
     "en": {"Working": "Working", "Submitted": "Submitted", "Approved_ReadOnly": "Approved_ReadOnly",
            "Created": "Created", "SubmittedEvent": "Submitted", "Manual": "Manual",
-           "ApprovedEvent": "Approved", "RejectedEvent": "Rejected", "FileDone": "FileActionCompleted"},
+           "ApprovedEvent": "Approved", "RejectedEvent": "Rejected", "FileDone": "FileActionCompleted",
+           "FileFailed": "FileActionFailed", "WorkflowService": "WorkflowService"},
 }
 
 # Folders the Workflow Service manages next to each controlled file.
@@ -51,6 +53,9 @@ class Settings:
     customers_folder: str = "02_Customers"  # under the root: one folder per customer
     max_upload_mb: int = 500
     search_limit: int = 200
+    admins: list[str] = field(default_factory=list)   # DMS super users: submit any document, see all workflows
+    sp_auth: str = "certificate"            # certificate (server) | interactive (pilot on a PC, your own sign-in)
+    file_service_seconds: int = 0           # >0: run the Workflow Service file moves inside the web service
     sharepoint: str = "online"              # online | memory (try the page on a PC without SharePoint)
     ai_url: str = ""                        # AI Insights: Open WebUI, e.g. https://chat.ai.rh-global.com
     ai_token: str = ""                      # service account token / API key of Open WebUI
@@ -95,6 +100,9 @@ class Settings:
             search_limit=int(e("DMS_SEARCH_LIMIT", "200")),
             protected_depth=int(e("DMS_PROTECTED_DEPTH", "2")),
             sharepoint=e("DMS_SHAREPOINT", "online"),
+            sp_auth=e("DMS_SP_AUTH", "certificate"),
+            admins=[a.strip().lower() for a in e("DMS_ADMINS", "").split(",") if a.strip()],
+            file_service_seconds=int(e("DMS_FILE_SERVICE_SECONDS", "0")),
             ai_url=e("DMS_AI_URL", ""),
             ai_token=e("DMS_AI_TOKEN", ""),
             ai_model=e("DMS_AI_MODEL", ""),

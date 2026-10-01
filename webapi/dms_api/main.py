@@ -72,7 +72,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     if sharepoint is None and s.sharepoint == "memory":
         from .memory import MemorySharePoint
         sharepoint = MemorySharePoint(s)
+    if sharepoint is None and s.sharepoint != "memory" and s.sp_auth == "interactive":
+        sharepoint = SharePoint(s)
+        account = sharepoint.sign_in()                          # pilot on a PC: opens the browser the first time
+        logger.info("SharePoint: signed in as %s", account)
+        if s.auth_mode == "dev" and not s.dev_user and account:
+            s.dev_user = account                                # you are the DMS user too
     app.state.sp = sharepoint or SharePoint(s)
+    if s.file_service_seconds > 0:
+        from . import file_service
+        file_service.start(app.state.sp, s)
     app.state.ai = ai or OpenWebUI(s)
     if s.allowed_origins:
         app.add_middleware(CORSMiddleware, allow_origins=s.allowed_origins, allow_credentials=True,
@@ -116,7 +125,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/client-config")
     def client_config():
-        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
+        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "fileService": s.file_service_seconds > 0,
+                "site": s.site_url if s.sharepoint != "memory" else "", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,
                 "repositoryRoot": s.repository_root}
 
@@ -150,9 +160,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         except files.PathNotAllowed:
             return False
 
+    def is_admin(user: User) -> bool:
+        return user.email in s.admins
+
     @app.get("/api/me")
     def me(user: User = Depends(current_user)):
-        return {"email": user.email, "name": user.name}
+        return {"email": user.email, "name": user.name, "admin": is_admin(user)}
 
     @app.get("/api/options")
     def options(_: User = Depends(current_user)):
@@ -394,7 +407,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return {"deleted": full, "recycledTo": moved}
 
     @app.get("/api/my-workflows")
-    def my_workflows(user: User = Depends(current_user)):
+    def my_workflows(everyone: bool = Query(False, description="Super users: everyone's workflows"),
+                     user: User = Depends(current_user)):
         """Every document the user owns or registered/submitted, with its workflow status, the last
         decision and the full history from Control Audit."""
         c = s.choices
@@ -405,7 +419,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         for d in sp().documents():
             events = by_doc.get(d.get("documentId") or "", [])          # newest first
             asked = any(e["actor"] == user.email and e["event"] in (c["Created"], c["SubmittedEvent"]) for e in events)
-            if (d.get("ownerEmail") or "").lower() != user.email and not asked:
+            if not (everyone and is_admin(user)) and (d.get("ownerEmail") or "").lower() != user.email and not asked:
                 continue
             doc = with_key(d)
             decision = next((e for e in events if e["event"] in (c["ApprovedEvent"], c["RejectedEvent"])), None)
@@ -418,6 +432,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         items.sort(key=lambda x: (x["lastEvent"] or {}).get("utc") or x.get("modified") or "", reverse=True)
         summary = {k: sum(1 for i in items if i["statusKey"] == k) for k in ("Working", "Submitted", "Approved_ReadOnly", "Rejected")}
         return {"summary": summary, "items": items}
+
+    @app.post("/api/file-service/run")
+    def file_service_run(user: User = Depends(current_user)):
+        """Run the file moves now (pilot, when the file service runs inside the web service)."""
+        if s.file_service_seconds <= 0:
+            raise HTTPException(404, "The file service does not run inside this web service")
+        from . import file_service
+        r = file_service.run_once(sp(), s)
+        log(user, "file-service-run", str(r))
+        return r
 
     @app.post("/api/playground/decide/{item_id}", include_in_schema=False)
     def playground_decide(item_id: int, approve: bool = True, comment: str = "", user: User = Depends(current_user)):
@@ -576,8 +600,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.post("/api/documents/{item_id}/submit")
     def submit(item_id: int, user: User = Depends(current_user)):
         doc = sp().document(item_id)
-        if (doc.get("ownerEmail") or "").lower() != user.email:
-            raise HTTPException(403, "Only the document owner can submit it")
+        if (doc.get("ownerEmail") or "").lower() != user.email and not is_admin(user):
+            raise HTTPException(403, "Only the document owner (or a DMS super user) can submit it")
         if doc.get("lifecycleStatus") != s.choices["Working"]:
             raise HTTPException(409, f"Only a document in {s.choices['Working']} can be submitted")
         if not doc.get("workingUncPath") or not os.path.isfile(files.resolve(s.repository_root, doc["workingUncPath"])):

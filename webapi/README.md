@@ -12,6 +12,18 @@ cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root
 
 It opens `http://localhost:8080/dms/dms-page?lang=EN` on your real folders, with a temporary in-memory register instead of SharePoint and no AD checks (you are the only user). Approve or reject in **My workflows** (the yellow test buttons) instead of Teams. Uploads, renames and deletes are real changes in `-Root`, so use the test share. Add `-Lang HE` for Hebrew, and `-AiUrl https://chat.ai.rh-global.com -AiToken <token> -AiModel <model>` to try AI Insights against the on-prem LLM. Without them, Find a file works by keywords.
 
+## Live pilot on your PC (real SharePoint, real approvals)
+
+```powershell
+cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C
+```
+
+- Your real folders, the real Document Register and Control Audit on `DocumentControl-TEST`, and the real approval flow: submitting from the page sets the status, and DC-P1 sends the approvals to Teams.
+- A browser window opens once to sign in to SharePoint, with the Entra app you use for PnP (`$C`). The token is cached in `%LOCALAPPDATA%\DMS`. You are the DMS user (no AD checks on the PC).
+- The Workflow Service file moves run inside the page service every 60 seconds (Submitted -> `Submitted`, Approved -> `Current_ReadOnly`, Rejected -> back). **My workflows > Move files now** runs them at once. Do not run `Invoke-DmsWorkflowService.ps1` at the same time.
+- `-Admins` (default `roneno@rh.co.il`) are DMS super users: they may submit any document and see **All workflows**.
+- For one person to approve everything during the pilot: `..\scripts\Set-DmsTestApprover.ps1 -TenantName rhisrael -DocControlSiteAlias DocumentControl-TEST -ClientId $C -Approver roneno@rh.co.il` (it saves a backup and prints the command to restore the real approvers).
+
 ## How it knows the AD permissions
 
 1. IIS signs the user in with **Windows Authentication**, using the login of the person at the PC. Browsers on domain PCs do this silently.

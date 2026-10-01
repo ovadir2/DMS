@@ -442,3 +442,49 @@ def test_playground_memory_mode(tmp_path):
     assert c.post(f"/api/playground/decide/{d['id']}").json()["statusKey"] == "Approved_ReadOnly"
     s2 = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER)
     assert TestClient(create_app(s2, FakeSharePoint(s2))).post("/api/playground/decide/1").status_code == 404
+
+
+def test_file_service_moves_by_status(tmp_path):
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote_DRAFT.xlsx").write_text("v1")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", file_service_seconds=1)
+    sp = MemorySharePoint(s)
+    d = sp.create_document(title="Q", path=str(q / "Quote_DRAFT.xlsx"), document_type="x", document_area="y",
+                           owner_email=USER, control_mode=None, document_id=None)
+    sp.update(d["id"], {"LifecycleStatus": "הוגש לאישור"})
+    assert file_service.run_once(sp, s) == {"moved": 1, "failed": 0}
+    sub = q / "Submitted" / "Quote_DRAFT.xlsx"
+    assert sub.exists() and file_service.is_read_only(str(sub))
+    assert sp.document(d["id"])["workingUncPath"] == str(q / "Quote_DRAFT.xlsx")      # Submitted record not touched
+    sp.update(d["id"], {"LifecycleStatus": "בעבודה"})                                  # rejected
+    file_service.run_once(sp, s)
+    assert (q / "Quote_DRAFT.xlsx").exists() and not file_service.is_read_only(str(q / "Quote_DRAFT.xlsx"))
+    sp.update(d["id"], {"LifecycleStatus": "מאושר - קריאה בלבד"})                      # approved without passing Submitted
+    file_service.run_once(sp, s)
+    cur = q / "Current_ReadOnly" / "Quote.xlsx"
+    doc = sp.document(d["id"])
+    assert cur.exists() and file_service.is_read_only(str(cur))
+    assert doc["currentUncPath"] == str(cur) and len(doc["currentSHA256"]) == 64 and doc["workingUncPath"] == ""
+    assert file_service.run_once(sp, s) == {"moved": 0, "failed": 0}                  # idempotent
+    events = [e["event"] for e in sp.audit_events()]
+    assert events.count("פעולת קובץ הושלמה") == 3 and sp.audit_events()[0]["source"] == "שירות תהליכים"
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory"), sp))
+    assert c.get("/api/browse", params={"path": str(q / "Current_ReadOnly")}).json()["files"][0]["document"]["statusKey"] == "Approved_ReadOnly"
+
+
+def test_super_user(env):
+    c, sp, q = env
+    d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()
+    sp.items[d["id"]]["ownerEmail"] = "someone@rh.co.il"
+    assert c.post(f"/api/documents/{d['id']}/submit").status_code == 403
+    assert c.get("/api/my-workflows", params={"everyone": True}).json()["items"][0]["documentId"] == "DMS-00001"  # registered by me
+    c.app.state.settings.admins = [USER]
+    assert c.get("/api/me").json()["admin"] is True
+    assert c.post(f"/api/documents/{d['id']}/submit").status_code == 200
+    sp.items[d["id"]]["documentId"] = "DMS-00077"           # not mine at all any more
+    assert c.get("/api/my-workflows").json()["items"] == []
+    assert [i["documentId"] for i in c.get("/api/my-workflows", params={"everyone": True}).json()["items"]] == ["DMS-00077"]
