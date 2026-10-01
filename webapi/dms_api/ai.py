@@ -1,20 +1,19 @@
-"""AI Insights: questions to RH's on-prem RAG LLM (Open WebUI, https://chat.ai.rh-global.com).
+"""AI Insights: questions to RH's on-prem AI chat (https://chat.ai.rh-global.com).
 
-The DMS service calls the Open WebUI API with its own service token:
-- a question about one repository file: the file is uploaded to Open WebUI (cached by path and
-  modification time) and attached to the chat, so the answer is grounded in that file;
-- a question to the company knowledge bases (DMS_AI_KNOWLEDGE_IDS), with RAG sources.
-Files are sent only after the user's AD read check, and only to the on-prem LLM.
+The DMS service posts to <DMS_AI_URL><DMS_AI_PATH> (default /stream) the same request the chat page sends:
+{"model": "org-chat", "messages": [...], "max_tokens": 4096}. The answer may come as one JSON, as a stream of
+"data: {...}" lines (OpenAI-style chunks) or as plain text; all are read. The chat has no file upload, so a
+question about a repository file sends the file's text (Word, Excel, PowerPoint, PDF, text) with the question,
+only after the user's AD read check, and only to the on-prem AI.
 """
 from __future__ import annotations
 
 import json
-import os
 import re
-import time
 
 import requests
 
+from . import doc_text
 from .config import Settings
 
 SYSTEM = {
@@ -23,6 +22,7 @@ SYSTEM = {
     "HE": "אתה AI Insights במערכת ניהול המסמכים של RH. ענה בעברית, בקצרה ובדיוק, "
           "רק על סמך המסמך או הידע המצורפים. אם התשובה לא נמצאת שם, אמור זאת.",
 }
+CHUNK_FIELDS = ("content", "text", "token", "response", "answer", "output", "message")
 
 
 class AiError(Exception):
@@ -30,107 +30,87 @@ class AiError(Exception):
 
 
 class OpenWebUI:
+    """The RH AI chat client (the name is kept for the rest of the service)."""
+
     def __init__(self, settings: Settings, session: requests.Session | None = None):
         self.s = settings
         self.base = settings.ai_url.rstrip("/")
         self.http = session or requests.Session()
-        self._files: dict[tuple[str, float], str] = {}       # (path, mtime) -> Open WebUI file id
 
     @property
     def enabled(self) -> bool:
         return bool(self.base)
 
-    @property
-    def model(self) -> str:
-        """DMS_AI_MODEL, or else the first model the RH AI offers to the service account."""
-        if not self.s.ai_model:
-            r = self.http.get(f"{self.base}/api/models", headers=self._h(), timeout=30)
-            models = self._check(r, "AI models").get("data") or []
-            if not models:
-                raise AiError("The RH AI offers no model to this account")
-            self.s.ai_model = models[0]["id"]
-        return self.s.ai_model
-
     def _h(self) -> dict:
-        h = {"Accept": "application/json"}
-        if self.s.ai_token:
+        h = {"Accept": "*/*", "Content-Type": "application/json"}
+        if self.s.ai_token:                                   # on-prem: normally none
             h["Authorization"] = f"Bearer {self.s.ai_token}"
         return h
 
-    def _check(self, r: requests.Response, what: str) -> dict:
+    def chat(self, messages: list[dict], timeout: int = 180) -> str:
+        url = self.base + "/" + (self.s.ai_path or "/stream").lstrip("/")
+        body = {"model": self.s.ai_model or "org-chat", "messages": messages, "max_tokens": self.s.ai_max_tokens}
+        r = self.http.post(url, headers=self._h(), json=body, timeout=timeout)
         if r.status_code in (401, 403):
-            raise AiError(f"{what}: the RH AI asks for a service token (DMS_AI_TOKEN in the service .env)")
+            raise AiError("AI: the RH AI asks for a sign-in token (DMS_AI_TOKEN in the service .env)")
         if r.status_code >= 400:
-            raise AiError(f"{what}: {r.status_code} {r.text[:200]}")
-        return r.json()
+            raise AiError(f"AI: {r.status_code} {r.text[:200]}")
+        answer = self.parse(r.text)
+        if not answer.strip():
+            raise AiError("AI: the RH AI sent an empty answer")
+        return answer.strip()
 
-    def upload(self, path: str) -> str:
-        key = (os.path.normcase(path), os.path.getmtime(path))
-        if key in self._files:
-            return self._files[key]
-        if os.path.getsize(path) > self.s.ai_max_file_mb * 1024 * 1024:
-            raise AiError(f"The file is larger than {self.s.ai_max_file_mb} MB")
-        with open(path, "rb") as f:
-            r = self.http.post(f"{self.base}/api/v1/files/", headers=self._h(),
-                               files={"file": (os.path.basename(path), f)}, timeout=120)
-        file_id = self._check(r, "Upload to AI")["id"]
-        self._wait_processed(file_id)
-        self._files[key] = file_id
-        return file_id
+    @staticmethod
+    def parse(text: str) -> str:
+        """One JSON answer, a stream of 'data: {...}' / JSON lines, or plain text."""
+        def piece(obj) -> str:
+            if isinstance(obj, str):
+                return obj
+            if not isinstance(obj, dict):
+                return ""
+            ch = (obj.get("choices") or [None])[0]
+            if isinstance(ch, dict):
+                part = (ch.get("delta") or {}).get("content") or (ch.get("message") or {}).get("content") or ch.get("text")
+                return part or ""
+            if isinstance(obj.get("message"), dict):
+                return obj["message"].get("content") or ""
+            return next((obj[k] for k in CHUNK_FIELDS if isinstance(obj.get(k), str)), "")
+        body = (text or "").strip()
+        try:
+            whole = json.loads(body)
+            return piece(whole) or body if isinstance(whole, dict) else body   # a JSON answer that is not a chunk
+        except ValueError:
+            pass
+        lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
+        if lines and all(ln.startswith(("data:", "{", "event:", "id:", ":")) for ln in lines):
+            out = []
+            for ln in lines:
+                if ln.startswith("data:"):
+                    ln = ln[5:].strip()
+                if not ln or ln == "[DONE]" or ln.startswith(("event:", "id:", ":")):
+                    continue
+                try:
+                    out.append(piece(json.loads(ln)))
+                except ValueError:
+                    out.append(ln)
+            return "".join(out)
+        return body
 
-    def _wait_processed(self, file_id: str, seconds: int = 90) -> None:
-        """Newer Open WebUI versions extract the text in the background; older ones return when done."""
-        end = time.time() + seconds
-        while time.time() < end:
-            r = self.http.get(f"{self.base}/api/v1/files/{file_id}/process/status", headers=self._h(), timeout=30)
-            if r.status_code == 404:
-                return                                          # no status endpoint: processed on upload
-            status = (r.json() or {}).get("status") if r.content else None
-            if status in (None, "completed"):
-                return
-            if status == "failed":
-                raise AiError("The AI could not read this file")
-            time.sleep(2)
-        raise AiError("The AI is still reading the file, try again in a minute")
-
-    def ask(self, question: str, *, lang: str = "EN", file_path: str | None = None, context: str = "",
-            use_knowledge: bool = True) -> dict:
+    def ask(self, question: str, *, lang: str = "EN", file_path: str | None = None, context: str = "") -> dict:
         if not self.enabled:
             raise AiError("AI Insights is not configured")
-        files = []
+        system = SYSTEM.get(lang, SYSTEM["EN"]) + (f"\n\n{context}" if context else "")
         if file_path:
-            files.append({"type": "file", "id": self.upload(file_path)})
-        elif use_knowledge:
-            files += [{"type": "collection", "id": k} for k in self.s.ai_knowledge_ids]
-        messages = [{"role": "system", "content": SYSTEM.get(lang, SYSTEM["EN"]) + (f"\n\n{context}" if context else "")},
-                    {"role": "user", "content": question}]
-        body = {"model": self.model, "messages": messages, "stream": False}
-        if files:
-            body["files"] = files
-        r = self.http.post(f"{self.base}/api/chat/completions", headers={**self._h(), "Content-Type": "application/json"},
-                           json=body, timeout=180)
-        data = self._check(r, "AI")
-        try:
-            answer = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as e:
-            raise AiError("Unexpected answer from the AI") from e
-        sources = []
-        for src in data.get("sources") or []:
-            name = (src.get("source") or {}).get("name") or ((src.get("metadata") or [{}])[0] or {}).get("name")
-            if name and name not in sources:
-                sources.append(name)
-        return {"answer": answer, "sources": sources, "model": self.s.ai_model}
+            text = doc_text.extract(file_path, self.s.ai_max_chars)
+            if not text.strip():
+                raise AiError("AI: no text could be read from this file (a scan or an unsupported type)")
+            system += f"\n\nThe document's text:\n<<<\n{text}\n>>>"
+        answer = self.chat([{"role": "system", "content": system}, {"role": "user", "content": question}])
+        return {"answer": answer, "sources": [], "model": self.s.ai_model or "org-chat"}
 
     # ------------------------------------------------------------------ AI-assisted file finding
-    def _complete(self, system: str, user: str, timeout: int = 60) -> str:
-        body = {"model": self.model, "stream": False,
-                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
-        r = self.http.post(f"{self.base}/api/chat/completions", headers={**self._h(), "Content-Type": "application/json"},
-                           json=body, timeout=timeout)
-        try:
-            return self._check(r, "AI")["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as e:
-            raise AiError("Unexpected answer from the AI") from e
+    def _complete(self, system: str, user: str, timeout: int = 25) -> str:
+        return self.chat([{"role": "system", "content": system}, {"role": "user", "content": user}], timeout=timeout)
 
     @staticmethod
     def _json(text: str):
