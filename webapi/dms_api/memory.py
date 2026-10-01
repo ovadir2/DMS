@@ -44,9 +44,9 @@ class MemorySharePoint:
     def choices(self, field: str) -> list[str]:
         return CHOICES[self.s.choice_language][field]
 
-    def audit(self, *, document_id, event, from_status, to_status, actor, details) -> None:
+    def audit(self, *, document_id, event, from_status, to_status, actor, details, source=None) -> None:
         self.audits.append({"documentId": document_id, "event": event, "fromStatus": from_status, "toStatus": to_status,
-                            "actor": actor, "utc": datetime.now(timezone.utc).isoformat(), "source": self.s.choices["Manual"],
+                            "actor": actor, "utc": datetime.now(timezone.utc).isoformat(), "source": source or self.s.choices["Manual"],
                             "details": details})
 
     def audit_events(self, refresh: bool = False) -> list[dict]:
