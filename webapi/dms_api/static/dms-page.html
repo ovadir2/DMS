@@ -188,7 +188,7 @@
 
 <aside id="ai-panel" class="drawer" aria-hidden="true">
   <div class="dr-h"><span id="ai-title"></span><a class="link small" id="ai-chat" href="https://chat.ai.rh-global.com" target="_blank" rel="noopener" style="margin-inline-start:auto;margin-inline-end:8px"></a><button type="button" class="hbtn" id="ai-x" aria-label="close">✕</button></div>
-  <div class="dr-tabs"><button type="button" data-mode="find" id="m-find"></button><button type="button" data-mode="ask" id="m-ask"></button></div>
+  <div class="dr-tabs"><button type="button" data-mode="ask" id="m-ask"></button></div>
   <div class="dr-ctx"><span id="ai-ctx"></span><button type="button" class="link small" id="ai-clear"></button></div>
   <div class="dr-q" id="ai-quick"></div>
   <div class="dr-log" id="ai-log"></div>
@@ -602,24 +602,11 @@ function setMode(m) {
   aiMode = m;
   document.querySelectorAll('.dr-tabs [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
   const rag = ragTools.find(r => 'rag:' + r.tool === m);
-  $('#ai-q').placeholder = m === 'find' ? T.findPh : rag ? T.ragPh.replace('{tool}', rag.tool.toUpperCase()) : T.aiPlaceholder;
-  $('#ai-send').textContent = m === 'find' ? T.go : T.aiAsk;
+  $('#ai-q').placeholder = rag ? T.ragPh.replace('{tool}', rag.tool.toUpperCase()) : T.aiPlaceholder;
+  $('#ai-send').textContent = T.aiAsk;
   $('#ai-quick').hidden = m !== 'ask';
   if (rag) { $('#ai-ctx').innerHTML = `${T.aiAbout} <b>${T.ragAbout.replace('{tool}', esc(rag.tool.toUpperCase()))}</b> <a class="link small" href="${esc(rag.page)}" target="_blank" rel="noopener">${esc(rag.tool.toUpperCase())} ↗</a>`; $('#ai-clear').hidden = true; }
-  else if (m === 'find') { $('#ai-ctx').innerHTML = esc(T.findCtx); $('#ai-clear').hidden = true; }
   else { $('#ai-ctx').innerHTML = `${T.aiAbout} <b>${esc(aiFile ? aiFile.split(/[\\/]/).pop() : T.aiKnowledge)}</b>`; $('#ai-clear').hidden = !aiFile; }
-}
-async function findInPanel(question) {
-  const log = $('#ai-log');
-  log.insertAdjacentHTML('beforeend', `<div class="bubble me">🔎 ${esc(question)}</div><div class="bubble bot pending wide">${T.aiThinking}</div>`);
-  const pending = log.querySelector('.pending');
-  try {
-    const r = await findFiles(question);
-    pending.innerHTML = (planText(r.plan) ? `<div class="muted small">${T.searchedIn} ${esc(planText(r.plan))}</div>` : '')
-      + (r.suggestions.length ? r.suggestions.map(suggestionHtml).join('') : esc(T.noneFound));
-    wire(pending);
-  } catch (e) { pending.innerHTML = `<span style="color:var(--err)">${T.err}: ${esc(e.message)}</span>`; }
-  pending.classList.remove('pending'); log.scrollTop = log.scrollHeight;
 }
 function openAI(path) {
   aiFile = path || null;
@@ -657,7 +644,7 @@ $('#ai-q').placeholder = T.aiPlaceholder; $('#ai-clear').textContent = T.aiClear
 $('#ai-b').onclick = () => openAI(null);
 $('#ai-x').onclick = () => { $('#ai-panel').classList.remove('open'); $('#ai-panel').setAttribute('aria-hidden', 'true'); };
 $('#ai-clear').onclick = () => openAI(null);
-$('#ai-form').onsubmit = e => { e.preventDefault(); const q = $('#ai-q').value.trim(); if (q.length > 1) { $('#ai-q').value = ''; aiMode === 'find' ? findInPanel(q) : aiMode.startsWith('rag:') ? askRag(aiMode.slice(4), q) : askAI(q); } };
+$('#ai-form').onsubmit = e => { e.preventDefault(); const q = $('#ai-q').value.trim(); if (q.length > 1) { $('#ai-q').value = ''; aiMode.startsWith('rag:') ? askRag(aiMode.slice(4), q) : askAI(q); } };
 // RH RAG tools on the AI portal (e.g. QMS): the answer comes into the panel; if the tool does not answer, its page opens.
 async function askRag(tool, question) {
   const log = $('#ai-log'), rag = ragTools.find(r => r.tool === tool);
@@ -694,8 +681,8 @@ function addRagTabs() {
     $('.dr-tabs').lastElementChild.onclick = () => setMode('rag:' + r.tool);
   });
 }
-$('#m-find').textContent = T.findTab; $('#m-ask').textContent = T.askTab;
-$('#m-find').onclick = () => setMode('find'); $('#m-ask').onclick = () => { setMode('ask'); };
+$('#m-ask').textContent = T.askTab;
+$('#m-ask').onclick = () => { setMode('ask'); };
 $('#ai-q').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#ai-form').requestSubmit(); } };
 
 // ---------------------------------------------------------------- dialogs
