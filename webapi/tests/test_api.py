@@ -936,3 +936,11 @@ def test_rag_tool_answers_and_is_audited(env):
     assert body["question"] == "And for ESD?" and [m["role"] for m in body["history"]] == ["user", "assistant"]
     rows = [a for a in sp.audits if a["document_id"] == "AI"]
     assert rows[0]["details"].startswith("ai-rag") and "Sources: QP-11.0 | 3.1 Shipping" in rows[0]["details"]
+
+
+def test_type_without_matrix_rule_goes_to_the_super_user(tmp_path):
+    c, sp, s, d = _approvals_env(tmp_path, None, admins=[USER])
+    a = c.get("/api/approvals").json()
+    assert [x["documentId"] for x in a] == ["DMS-00001"] and a[0]["pending"] == [USER]
+    r = c.post(f"/api/approvals/{d['id']}", json={"approve": True, "comment": "pilot"}).json()
+    assert r["statusKey"] == "Approved_ReadOnly"
