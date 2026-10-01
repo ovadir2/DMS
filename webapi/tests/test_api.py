@@ -1,0 +1,562 @@
+"""API tests with an in-memory SharePoint and a temporary repository folder."""
+from __future__ import annotations
+
+import os
+
+import pytest
+from fastapi.testclient import TestClient
+
+from dms_api import files
+from dms_api.config import Settings
+from dms_api.main import create_app
+from dms_api.security import User
+
+USER = "michaelr@rh.co.il"
+
+
+class FakeSharePoint:
+    def __init__(self, s: Settings):
+        self.s, self.items, self.audits = s, {}, []
+
+    def documents(self, refresh=False):
+        return list(self.items.values())
+
+    def document(self, item_id):
+        return dict(self.items[item_id])
+
+    def create_document(self, *, title, path, document_type, document_area, owner_email, control_mode, document_id):
+        i = len(self.items) + 1
+        self.items[i] = {"id": i, "title": title, "documentId": document_id or f"DMS-{i:05d}", "documentType": document_type,
+                         "documentArea": document_area, "lifecycleStatus": self.s.choices["Working"],
+                         "workingUncPath": path, "currentUncPath": None, "ownerEmail": owner_email, "modified": str(i)}
+        return self.document(i)
+
+    def update(self, item_id, values):
+        key = {"LifecycleStatus": "lifecycleStatus"}
+        for k, v in values.items():
+            self.items[item_id][key.get(k, k)] = v
+
+    def choices(self, field):
+        return {"DocumentType": ["הצעת מחיר", "נוהל"], "DocumentArea": ["מסחרי"],
+                "ControlMode": ["תהליך אישור רשות", "תהליך אישור חובה"]}[field]
+
+    def audit(self, **kw):
+        self.audits.append({**kw, "utc": f"2026-10-01T10:{len(self.audits):02d}:00Z"})
+
+    def audit_events(self, refresh=False):
+        return [{"documentId": a["document_id"], "event": a["event"], "fromStatus": a["from_status"], "toStatus": a["to_status"],
+                 "actor": a["actor"], "utc": a["utc"], "source": "ידני", "details": a["details"]} for a in reversed(self.audits)]
+
+
+@pytest.fixture
+def env(tmp_path):
+    root = tmp_path / "Corporate_Data_TEST"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (root / "02_Customers" / "Customer_B" / "Projects" / "PRJ-77_Radar").mkdir(parents=True)
+    (q / "CRU 4 FCT Quote_Rev1.xlsx").write_text("x")
+    (root / "outside.txt").write_text("x")
+    (tmp_path / "secret.txt").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER)
+    sp = FakeSharePoint(s)
+    return TestClient(create_app(s, sp)), sp, q
+
+
+def test_browse_marks_registration(env):
+    c, sp, q = env
+    r = c.get("/api/browse", params={"path": str(q)})
+    assert r.status_code == 200
+    f = r.json()["files"][0]
+    assert f["name"] == "CRU 4 FCT Quote_Rev1.xlsx" and f["document"] is None
+    assert f["officeUri"].startswith("ms-excel:ofv|u|file:")
+
+
+def test_paths_outside_root_are_refused(env):
+    c, _, q = env
+    assert c.get("/api/browse", params={"path": str(q.parents[4])}).status_code == 403
+    assert c.get("/api/browse", params={"path": "../"}).status_code == 403
+    assert c.get("/api/files/download", params={"path": str(q.parents[4] / "secret.txt")}).status_code == 403
+
+
+def test_register_and_submit(env):
+    c, sp, q = env
+    path = str(q / "CRU 4 FCT Quote_Rev1.xlsx")
+    r = c.post("/api/documents", json={"path": path, "documentType": "הצעת מחיר", "documentArea": "מסחרי", "submit": True})
+    assert r.status_code == 201, r.text
+    d = r.json()
+    assert d["documentId"] == "DMS-00001" and d["statusKey"] == "Submitted" and d["title"] == "CRU 4 FCT Quote_Rev1"
+    assert [a["event"] for a in sp.audits] == ["נוצר", "הוגש"]
+    # registered once only
+    assert c.post("/api/documents", json={"path": path, "documentType": "הצעת מחיר", "documentArea": "מסחרי"}).status_code == 409
+    # the browse view shows the status
+    assert c.get("/api/browse", params={"path": str(q)}).json()["files"][0]["document"]["statusKey"] == "Submitted"
+    assert [x["documentId"] for x in c.get("/api/documents", params={"mine": True}).json()] == ["DMS-00001"]
+
+
+def test_file_moved_to_submitted_still_matches(env):
+    c, sp, q = env
+    path = str(q / "CRU 4 FCT Quote_Rev1.xlsx")
+    c.post("/api/documents", json={"path": path, "documentType": "הצעת מחיר", "documentArea": "מסחרי", "submit": True})
+    (q / "Submitted").mkdir()
+    os.replace(path, q / "Submitted" / "CRU 4 FCT Quote_Rev1.xlsx")
+    sub = c.get("/api/browse", params={"path": str(q / "Submitted")}).json()["files"][0]
+    assert sub["document"]["documentId"] == "DMS-00001"
+
+
+def test_submit_rules(env):
+    c, sp, q = env
+    path = str(q / "CRU 4 FCT Quote_Rev1.xlsx")
+    d = c.post("/api/documents", json={"path": path, "documentType": "נוהל", "documentArea": "מסחרי"}).json()
+    assert d["statusKey"] == "Working"
+    sp.items[d["id"]]["ownerEmail"] = "other@rh.co.il"
+    assert c.post(f"/api/documents/{d['id']}/submit").status_code == 403
+    sp.items[d["id"]]["ownerEmail"] = USER
+    assert c.post(f"/api/documents/{d['id']}/submit").status_code == 200
+    assert c.post(f"/api/documents/{d['id']}/submit").status_code == 409
+
+
+def test_page_and_health(env):
+    c, _, _ = env
+    assert c.get("/api/health").json()["rootReachable"] is True
+    assert "Documents Management System" in c.get("/dms/dms-page", params={"lang": "HE"}).text
+
+
+def test_auth_required_outside_dev(tmp_path):
+    s = Settings(repository_root=str(tmp_path), auth_mode="header")
+    c = TestClient(create_app(s, FakeSharePoint(s)))
+    assert c.get("/api/me").status_code == 401
+    assert c.get("/api/me", headers={s.user_header: "Michaelr@rh.co.il"}).json()["email"] == USER
+
+
+def test_candidate_paths_windows_style():
+    p = r"\\FS\Data\Quotations\Submitted\Q.xlsx"
+    assert files.candidate_register_paths(p)[1] == r"\\FS\Data\Quotations\Q.xlsx"
+
+
+def test_entra_token(tmp_path, monkeypatch):
+    import time
+
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    from dms_api import auth
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    s = Settings(repository_root=str(tmp_path), auth_mode="entra", tenant_id="tid", api_audience="app-guid")
+    monkeypatch.setattr(auth, "_jwks", lambda _t: type("J", (), {"get_signing_key_from_jwt": lambda self, _x: type("K", (), {"key": key.public_key()})()})())
+    c = TestClient(create_app(s, FakeSharePoint(s)))
+    claims = {"aud": "app-guid", "iss": "https://login.microsoftonline.com/tid/v2.0", "exp": int(time.time()) + 60,
+              "preferred_username": "Michaelr@rh.co.il"}
+    good = jwt.encode(claims, key, algorithm="RS256")
+    bad = jwt.encode({**claims, "aud": "other"}, key, algorithm="RS256")
+    assert c.get("/api/me", headers={"Authorization": f"Bearer {good}"}).json()["email"] == USER
+    assert c.get("/api/me", headers={"Authorization": f"Bearer {bad}"}).status_code == 401
+    assert c.get("/api/me").status_code == 401
+    assert c.get("/api/client-config").json()["scope"] == "api://app-guid/access_as_user"
+
+
+class LimitedUser(User):
+    """A user AD does not let into Customer_B."""
+
+    def can(self, path, access="read"):
+        return "Customer_B" not in path and (access == "read" or "Quotations" in path)
+
+
+@pytest.fixture
+def limited(env, monkeypatch):
+    from dms_api import auth
+    c, sp, q = env
+    monkeypatch.setattr(auth, "_resolve", lambda _r: LimitedUser(email=USER))
+    return c, sp, q
+
+
+def test_customers_follow_ad(env, limited):
+    c, _, q = limited
+    assert [x["name"] for x in c.get("/api/customers").json()] == ["Customer_A"]
+    b = q.parents[2] / "Customer_B"
+    assert c.get("/api/browse", params={"path": str(b)}).status_code == 403
+    root = c.get("/api/browse", params={"path": str(q.parents[2])}).json()
+    assert [f["name"] for f in root["folders"]] == ["Customer_A"]
+
+
+def test_customers_all_for_full_access(env):
+    c, _, _ = env
+    assert [x["name"] for x in c.get("/api/customers").json()] == ["Customer_A", "Customer_B"]
+    assert [x["name"] for x in c.get("/api/customers", params={"q": "_b"}).json()] == ["Customer_B"]
+
+
+def test_upload_saves_into_the_folder(env, limited):
+    c, _, q = limited
+    r = c.post("/api/files/upload", data={"folder": str(q)}, files={"file": ("New Quote.xlsx", b"data")})
+    assert r.status_code == 201, r.text
+    assert (q / "New Quote.xlsx").read_bytes() == b"data" and r.json()["document"] is None
+    # same name again is refused unless overwrite
+    assert c.post("/api/files/upload", data={"folder": str(q)}, files={"file": ("New Quote.xlsx", b"x")}).status_code == 409
+    assert c.post("/api/files/upload", data={"folder": str(q), "overwrite": "true"},
+                  files={"file": ("New Quote.xlsx", b"v2")}).status_code == 201
+    assert (q / "New Quote.xlsx").read_bytes() == b"v2"
+    # no write permission on Commercial (only Quotations), no saving outside root, no partial files left
+    assert c.post("/api/files/upload", data={"folder": str(q.parent)}, files={"file": ("a.txt", b"x")}).status_code == 403
+    assert c.post("/api/files/upload", data={"folder": str(q.parents[5])}, files={"file": ("a.txt", b"x")}).status_code == 403
+    assert not [p for p in os.listdir(q) if p.endswith(".partial")]
+
+
+def test_upload_refuses_workflow_folders_and_bad_names(env):
+    c, _, q = env
+    (q / "Current_ReadOnly").mkdir()
+    assert c.post("/api/files/upload", data={"folder": str(q / "Current_ReadOnly")}, files={"file": ("a.txt", b"x")}).status_code == 403
+    assert c.post("/api/files/upload", data={"folder": str(q)}, files={"file": ("a|b.txt", b"x")}).status_code == 403
+
+
+def test_search(env, limited):
+    c, sp, q = env
+    r = c.get("/api/search", params={"q": "quot"}).json()
+    assert any(x["kind"] == "file" and x["name"] == "CRU 4 FCT Quote_Rev1.xlsx" for x in r)
+    assert any(x["kind"] == "folder" and x["name"] == "Quotations" for x in r)
+    assert [x["name"] for x in c.get("/api/search", params={"q": "radar", "scope": "project"}).json()] == []
+    c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"})
+    docs = c.get("/api/search", params={"q": "DMS-000", "scope": "document"}).json()
+    assert docs[0]["document"]["documentId"] == "DMS-00001"
+
+
+def test_search_project_with_full_access(env):
+    c, _, _ = env
+    assert [x["name"] for x in c.get("/api/search", params={"q": "radar", "scope": "project"}).json()] == ["PRJ-77_Radar"]
+
+
+def test_new_folder_rename_delete(env):
+    c, sp, q = env
+    r = c.post("/api/folders", json={"parent": str(q), "name": "2026"})
+    assert r.status_code == 201 and (q / "2026").is_dir()
+    assert c.post("/api/folders", json={"parent": str(q), "name": "2026"}).status_code == 409
+    assert c.post("/api/folders", json={"parent": str(q), "name": "a/b"}).status_code == 403
+    assert c.post("/api/folders", json={"parent": str(q), "name": "Current_ReadOnly"}).status_code == 403
+    (q / "2026" / "draft.docx").write_text("x")
+    r = c.post("/api/items/rename", json={"path": str(q / "2026" / "draft.docx"), "newName": "offer.docx"})
+    assert r.status_code == 200 and (q / "2026" / "offer.docx").exists()
+    r = c.post("/api/items/rename", json={"path": str(q / "2026"), "newName": "2026_Offers"})
+    assert r.status_code == 200 and (q / "2026_Offers" / "offer.docx").exists()
+    r = c.post("/api/items/delete", json={"path": str(q / "2026_Offers")})
+    assert r.status_code == 200 and not (q / "2026_Offers").exists()
+    root = q.parents[3]
+    assert os.path.exists(r.json()["recycledTo"]) and "Recycle" in r.json()["recycledTo"]
+    # the structure folders are protected
+    assert c.post("/api/items/delete", json={"path": str(root / "02_Customers" / "Customer_A")}).status_code == 403
+    assert c.post("/api/items/rename", json={"path": str(root / "02_Customers"), "newName": "x"}).status_code == 403
+
+
+def test_controlled_files_are_protected(env):
+    c, sp, q = env
+    f = q / "CRU 4 FCT Quote_Rev1.xlsx"
+    c.post("/api/documents", json={"path": str(f), "documentType": "נוהל", "documentArea": "מסחרי"})
+    assert c.post("/api/items/delete", json={"path": str(f)}).status_code == 409
+    assert c.post("/api/items/rename", json={"path": str(f), "newName": "x.xlsx"}).status_code == 409
+    assert c.post("/api/items/delete", json={"path": str(q)}).status_code == 409   # folder holding it
+    (q / "Current_ReadOnly").mkdir()
+    (q / "Current_ReadOnly" / "a.xlsx").write_text("x")
+    assert c.post("/api/items/delete", json={"path": str(q / "Current_ReadOnly" / "a.xlsx")}).status_code == 403
+    assert f.exists()
+
+
+def test_actions_need_ad_write(env, limited):
+    c, _, q = limited
+    other = q.parent / "Contracts"
+    other.mkdir()
+    assert c.post("/api/folders", json={"parent": str(other), "name": "x"}).status_code == 403
+    assert c.post("/api/items/delete", json={"path": str(other)}).status_code == 403
+
+
+def test_blueprint_labels_order_and_context(env):
+    c, _, q = env
+    cust = q.parents[1]                                  # Customer_A
+    for d in ("Projects/PRJ-1/Development/02_SOW", "Projects/PRJ-1/Engineering", "Customer_Profile", "Zeta_Extra"):
+        (cust / d).mkdir(parents=True, exist_ok=True)
+    r = c.get("/api/browse", params={"path": str(cust)}).json()
+    assert [f["name"] for f in r["folders"]] == ["Customer_Profile", "Commercial", "Projects", "Zeta_Extra"]
+    assert r["folders"][1]["label"]["he"] == "מסחרי" and r["folders"][3]["label"] is None
+    assert r["node"]["kind"] == "customer" and r["context"]["customer"]["name"] == "Customer_A"
+    prj = c.get("/api/browse", params={"path": str(cust / "Projects" / "PRJ-1")}).json()
+    assert prj["node"]["kind"] == "project" and prj["context"]["project"]["name"] == "PRJ-1"
+    assert [f["name"] for f in prj["folders"]] == ["Engineering", "Development"]
+    dev = c.get("/api/browse", params={"path": str(cust / "Projects" / "PRJ-1" / "Development")}).json()
+    assert dev["folders"][0]["label"]["en"] == "02 Statement of work"
+    assert [t["name"] for t in dev["trail"]] == ["02_Customers", "Customer_A", "Projects", "PRJ-1", "Development"]
+
+
+def test_root_hides_system_folders_and_areas(env):
+    c, _, q = env
+    root = q.parents[3]
+    (root / "04_Workflow_System").mkdir()
+    (root / "01_Management").mkdir()
+    assert "04_Workflow_System" not in [f["name"] for f in c.get("/api/browse").json()["folders"]]
+    assert [a["name"] for a in c.get("/api/areas").json()] == ["01_Management", "02_Customers"]
+
+
+def test_save_guide(env):
+    c, _, q = env
+    cust = q.parents[1]
+    kinds = {g["key"]: g for g in c.get("/api/guide").json()}
+    assert kinds["quotation"]["needsProject"] is False and kinds["eco"]["needsProject"] is True
+    t = c.get("/api/guide/target", params={"key": "quotation", "customer": str(cust)}).json()
+    assert t["path"] == str(q) and t["exists"] and t["canWrite"]
+    assert c.get("/api/guide/target", params={"key": "eco", "customer": str(cust)}).status_code == 400
+    (cust / "Projects" / "PRJ-1").mkdir(parents=True)
+    assert [p["name"] for p in c.get("/api/projects", params={"customer": str(cust)}).json()] == ["PRJ-1"]
+    t = c.get("/api/guide/target", params={"key": "eco", "customer": str(cust), "project": str(cust / "Projects" / "PRJ-1")}).json()
+    assert t["path"].endswith(os.path.join("PRJ-1", "Changes", "ECO")) and not t["exists"]
+    made = c.post("/api/guide/create", params={"key": "eco", "customer": str(cust), "project": str(cust / "Projects" / "PRJ-1")})
+    assert made.status_code == 201 and os.path.isdir(made.json()["path"])
+
+
+def test_levels_cascade(env, limited):
+    c, _, q = env
+    root = q.parents[3]
+    (root / "04_Workflow_System").mkdir()
+    (q / "Current_ReadOnly").mkdir()
+    lv = c.get("/api/levels", params={"path": str(q)}).json()
+    assert [l["selected"] for l in lv] == ["02_Customers", "Customer_A", "Commercial", "Quotations"]
+    assert [o["name"] for o in lv[0]["options"]] == ["02_Customers"]          # system folder hidden
+    assert [o["name"] for o in lv[1]["options"]] == ["Customer_A"]            # AD: no Customer_B
+    assert lv[2]["options"][0]["label"]["he"] == "מסחרי"
+    assert len(lv) == 4                                                       # Current_ReadOnly is not offered
+    nxt = c.get("/api/levels", params={"path": str(q.parent)}).json()
+    assert nxt[-1]["selected"] is None and [o["name"] for o in nxt[-1]["options"]] == ["Quotations"]
+
+
+def test_my_workflows(env):
+    c, sp, q = env
+    a = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    (q / "B.docx").write_text("x")
+    b = c.post("/api/documents", json={"path": str(q / "B.docx"), "documentType": "נוהל", "documentArea": "מסחרי", "submit": True}).json()
+    (q / "C.docx").write_text("x")
+    c.post("/api/documents", json={"path": str(q / "C.docx"), "documentType": "נוהל", "documentArea": "מסחרי"})
+    # the flow: A approved, B rejected (back to Working)
+    sp.items[a["id"]]["lifecycleStatus"] = "מאושר - קריאה בלבד"
+    sp.audit(document_id=a["documentId"], event="אושר", from_status="הוגש לאישור", to_status="מאושר - קריאה בלבד", actor="boss@rh.co.il", details="ok")
+    sp.items[b["id"]]["lifecycleStatus"] = "בעבודה"
+    sp.audit(document_id=b["documentId"], event="נדחה", from_status="הוגש לאישור", to_status="בעבודה", actor="boss@rh.co.il", details="fix p.3")
+    # someone else's document is not listed
+    sp.items[99] = {**sp.items[a["id"]], "id": 99, "documentId": "DMS-00099", "ownerEmail": "other@rh.co.il"}
+    r = c.get("/api/my-workflows").json()
+    assert r["summary"] == {"Working": 1, "Submitted": 0, "Approved_ReadOnly": 1, "Rejected": 1}
+    by = {i["documentId"]: i for i in r["items"]}
+    assert set(by) == {"DMS-00001", "DMS-00002", "DMS-00003"}
+    assert by["DMS-00002"]["statusKey"] == "Rejected" and by["DMS-00002"]["decision"]["details"] == "fix p.3"
+    assert by["DMS-00001"]["decision"]["actor"] == "boss@rh.co.il" and by["DMS-00001"]["submittedUtc"]
+    assert [e["event"] for e in by["DMS-00001"]["history"]] == ["נוצר", "הוגש", "אושר"]
+
+
+class FakeAI:
+    enabled = True
+
+    def __init__(self):
+        self.calls = []
+
+    def ask(self, question, **kw):
+        self.calls.append((question, kw))
+        return {"answer": "summary", "sources": ["x.pdf"], "model": "m"}
+
+
+def test_ai_insights(env, limited):
+    c, sp, q = env
+    ai = FakeAI()
+    c.app.state.ai = ai
+    r = c.post("/api/ai/ask", json={"question": "Summarize", "path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "lang": "HE"})
+    assert r.status_code == 200 and r.json()["answer"] == "summary"
+    q_, kw = ai.calls[-1]
+    assert kw["file_path"].endswith("CRU 4 FCT Quote_Rev1.xlsx") and kw["lang"] == "HE" and "Not registered" in kw["context"]
+    assert c.post("/api/ai/ask", json={"question": "What is our NDA policy?"}).json()["sources"] == ["x.pdf"]
+    assert ai.calls[-1][1]["file_path"] is None
+    b = q.parents[2] / "Customer_B" / "secret.pdf"
+    b.write_text("x")
+    assert c.post("/api/ai/ask", json={"question": "Summarize", "path": str(b)}).status_code == 403
+    c.app.state.ai = type("Off", (), {"enabled": False})()
+    assert c.post("/api/ai/ask", json={"question": "hi"}).status_code == 503
+
+
+def _tree_for_find(q):
+    cust = q.parents[1]
+    prj = cust / "Projects" / "PRJ-101_CRU4"
+    for d in ("Changes/ECO", "Test_Engineering/Test_Reports", "Development/Obsolete_ReadOnly"):
+        (prj / d).mkdir(parents=True)
+    (prj / "Changes" / "ECO" / "ECO-17 connector change.docx").write_text("x")
+    (prj / "Test_Engineering" / "Test_Reports" / "FCT report lot 3.pdf").write_text("x")
+    (prj / "Development" / "Obsolete_ReadOnly" / "FCT report lot 1.pdf").write_text("x")
+    secret = q.parents[2] / "Customer_B" / "Commercial"
+    secret.mkdir(parents=True)
+    (secret / "FCT quote Customer_B.xlsx").write_text("x")
+    return prj
+
+
+def test_find_without_ai_uses_keywords_and_ad(env, limited):
+    c, _, q = env
+    _tree_for_find(q)
+    r = c.post("/api/ai/find", json={"question": "FCT quote"}).json()
+    names = [x["name"] for x in r["suggestions"]]
+    assert r["usedAi"] is False and names[0] == "CRU 4 FCT Quote_Rev1.xlsx"
+    assert "FCT quote Customer_B.xlsx" not in names            # AD: Customer_B is not visible
+    assert "FCT report lot 1.pdf" not in names                  # superseded revisions are not offered
+    assert "FCT report lot 3.pdf" in names
+
+
+class PlanningAI(FakeAI):
+    def plan_search(self, question, customers, kinds):
+        self.seen_customers = customers
+        return {"terms": ["connector"], "customer": "Customer_A", "project": "PRJ-101", "kind": "eco", "extensions": [], "latest": True}
+
+    def rank(self, question, candidates, lang="EN"):
+        self.ranked = [c["relative"] for c in candidates]
+        return [{"i": 0, "reason": "ECO about the connector"}]
+
+
+def test_find_with_ai_plan_and_rank(env, limited):
+    c, _, q = env
+    _tree_for_find(q)
+    ai = PlanningAI()
+    c.app.state.ai = ai
+    r = c.post("/api/ai/find", json={"question": "the ECO about the connector in the CRU4 project", "lang": "EN"}).json()
+    assert r["usedAi"] and r["plan"] == {"terms": ["connector"], "customer": "Customer_A", "project": "PRJ-101_CRU4", "kind": "eco"}
+    assert ai.seen_customers == ["Customer_A"]                  # the AI only hears about allowed customers
+    assert all("Customer_B" not in p for p in ai.ranked)
+    assert [x["name"] for x in r["suggestions"]] == ["ECO-17 connector change.docx"]
+    assert r["suggestions"][0]["reason"] == "ECO about the connector"
+
+
+def test_playground_memory_mode(tmp_path):
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory")
+    c = TestClient(create_app(s))
+    assert c.get("/api/client-config").json()["playground"] is True
+    assert "הצעת מחיר" in c.get("/api/options").json()["DocumentType"]
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "documentType": "הצעת מחיר", "documentArea": "מסחרי", "submit": True}).json()
+    assert d["statusKey"] == "Submitted"
+    r = c.post(f"/api/playground/decide/{d['id']}", params={"approve": False, "comment": "fix p.2"}).json()
+    assert r["statusKey"] == "Working"
+    wf = c.get("/api/my-workflows").json()
+    assert wf["items"][0]["statusKey"] == "Rejected" and wf["items"][0]["decision"]["details"] == "fix p.2"
+    c.post(f"/api/documents/{d['id']}/submit")
+    assert c.post(f"/api/playground/decide/{d['id']}").json()["statusKey"] == "Approved_ReadOnly"
+    s2 = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER)
+    assert TestClient(create_app(s2, FakeSharePoint(s2))).post("/api/playground/decide/1").status_code == 404
+
+
+def test_file_service_moves_by_status(tmp_path):
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote_DRAFT.xlsx").write_text("v1")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", file_service_seconds=1)
+    sp = MemorySharePoint(s)
+    d = sp.create_document(title="Q", path=str(q / "Quote_DRAFT.xlsx"), document_type="x", document_area="y",
+                           owner_email=USER, control_mode=None, document_id=None)
+    sp.update(d["id"], {"LifecycleStatus": "הוגש לאישור"})
+    assert file_service.run_once(sp, s) == {"moved": 1, "failed": 0}
+    sub = q / "Submitted" / "Quote_DRAFT.xlsx"
+    assert sub.exists() and file_service.is_read_only(str(sub))
+    assert sp.document(d["id"])["workingUncPath"] == str(q / "Quote_DRAFT.xlsx")      # Submitted record not touched
+    sp.update(d["id"], {"LifecycleStatus": "בעבודה"})                                  # rejected
+    file_service.run_once(sp, s)
+    assert (q / "Quote_DRAFT.xlsx").exists() and not file_service.is_read_only(str(q / "Quote_DRAFT.xlsx"))
+    sp.update(d["id"], {"LifecycleStatus": "מאושר - קריאה בלבד"})                      # approved without passing Submitted
+    file_service.run_once(sp, s)
+    cur = q / "Current_ReadOnly" / "Quote.xlsx"
+    doc = sp.document(d["id"])
+    assert cur.exists() and file_service.is_read_only(str(cur))
+    assert doc["currentUncPath"] == str(cur) and len(doc["currentSHA256"]) == 64 and doc["workingUncPath"] == ""
+    assert file_service.run_once(sp, s) == {"moved": 0, "failed": 0}                  # idempotent
+    events = [e["event"] for e in sp.audit_events()]
+    assert events.count("פעולת קובץ הושלמה") == 3 and sp.audit_events()[0]["source"] == "שירות תהליכים"
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory"), sp))
+    assert c.get("/api/browse", params={"path": str(q / "Current_ReadOnly")}).json()["files"][0]["document"]["statusKey"] == "Approved_ReadOnly"
+
+
+def test_super_user(env):
+    c, sp, q = env
+    d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()
+    sp.items[d["id"]]["ownerEmail"] = "someone@rh.co.il"
+    assert c.post(f"/api/documents/{d['id']}/submit").status_code == 403
+    assert c.get("/api/my-workflows", params={"everyone": True}).json()["items"][0]["documentId"] == "DMS-00001"  # registered by me
+    c.app.state.settings.admins = [USER]
+    assert c.get("/api/me").json()["admin"] is True
+    assert c.post(f"/api/documents/{d['id']}/submit").status_code == 200
+    sp.items[d["id"]]["documentId"] = "DMS-00077"           # not mine at all any more
+    assert c.get("/api/my-workflows").json()["items"] == []
+    assert [i["documentId"] for i in c.get("/api/my-workflows", params={"everyone": True}).json()["items"]] == ["DMS-00077"]
+
+
+class RuleSP(FakeSharePoint):
+    def __init__(self, s, rule):
+        super().__init__(s)
+        self.rule = rule
+
+    def approver_rule(self, document_type):
+        return self.rule
+
+
+def _approvals_env(tmp_path, rule, me=USER, admins=()):
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=me, approvals="page", admins=list(admins))
+    sp = RuleSP(s, rule)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "documentType": "הצעת מחיר", "documentArea": "מסחרי", "submit": True}).json()
+    return c, sp, s, d
+
+
+def test_page_approvals_two_stages(tmp_path):
+    rule = {"mandatory": [USER, "dana@rh.co.il"], "final": "boss@rh.co.il"}
+    c, sp, s, d = _approvals_env(tmp_path, rule)
+    a = c.get("/api/approvals").json()
+    assert [x["documentId"] for x in a] == ["DMS-00001"] and a[0]["stage"] == 1 and a[0]["pending"] == [USER, "dana@rh.co.il"]
+    r = c.post(f"/api/approvals/{d['id']}", json={"approve": True, "comment": "ok"}).json()
+    assert r["statusKey"] == "Submitted" and r["pending"] == ["dana@rh.co.il"]
+    assert c.get("/api/approvals").json() == []                                         # not mine any more
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).status_code == 403
+    s.dev_user = "dana@rh.co.il"
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["stage"] == 2
+    s.dev_user = "boss@rh.co.il"
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": False}).status_code == 400   # a comment is required
+    r = c.post(f"/api/approvals/{d['id']}", json={"approve": True, "comment": "final"}).json()
+    assert r["statusKey"] == "Approved_ReadOnly" and sp.items[d["id"]]["LastApprovedUtc"]
+    events = [(e["event"], e["details"]) for e in sp.audit_events()][:3]
+    assert events == [("אושר", "Stage 2: final"), ("אושר", "Stage 1"), ("אושר", "Stage 1: ok")]
+
+
+def test_page_approvals_reject_and_waiting_for(tmp_path):
+    rule = {"mandatory": ["dana@rh.co.il"], "final": "boss@rh.co.il"}
+    c, sp, s, d = _approvals_env(tmp_path, rule)
+    wf = c.get("/api/my-workflows").json()["items"][0]
+    assert wf["stage"] == 1 and wf["pending"] == ["dana@rh.co.il"]                      # who it waits for
+    s.dev_user = "dana@rh.co.il"
+    r = c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "fix p.2"}).json()
+    assert r["statusKey"] == "Working"
+    s.dev_user = USER
+    item = c.get("/api/my-workflows").json()["items"][0]
+    assert item["statusKey"] == "Rejected" and item["decision"]["details"] == "Stage 1: fix p.2"
+    c.post(f"/api/documents/{d['id']}/submit")                                          # new cycle: the old rejection no longer counts
+    s.dev_user = "dana@rh.co.il"
+    assert c.get("/api/approvals").json()[0]["pending"] == ["dana@rh.co.il"]
+
+
+def test_super_user_can_decide_any_stage(tmp_path):
+    rule = {"mandatory": ["dana@rh.co.il"], "final": "boss@rh.co.il"}
+    c, sp, s, d = _approvals_env(tmp_path, rule, me="roneno@rh.co.il", admins=["roneno@rh.co.il"])
+    assert c.get("/api/approvals").json() == []
+    assert c.get("/api/approvals", params={"everyone": True}).json()[0]["mine"] is False
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["stage"] == 2
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["statusKey"] == "Approved_ReadOnly"
+    assert sp.audit_events()[0]["details"] == "Stage 2 (super user)"
+
+
+def test_flow_mode_keeps_teams(env):
+    c, _, _ = env
+    assert c.get("/api/approvals").json() == []
+    assert c.post("/api/approvals/1", json={"approve": True}).status_code == 409

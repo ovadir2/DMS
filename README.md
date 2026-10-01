@@ -16,6 +16,7 @@ Implementation of **IT-DOC-BP-001 "Enterprise Document Control and Large-File Ex
 | [`docs/05-Localization-Hebrew.md`](docs/05-Localization-Hebrew.md) | Language rules, EN/HE notification templates, app labels, Hebrew executive summary |
 | [`docs/06-Copilot-Prompts.md`](docs/06-Copilot-Prompts.md) | Copy-paste Copilot prompts, follow-ups and check lists that build every flow in Power Automate, with the Hebrew choice values |
 | [`docs/07-Approval-Flow.md`](docs/07-Approval-Flow.md) | Pilot approval flow as a diagram, plus the editable Hebrew deck [`docs/presentations/DMS-Approval-Flow.pptx`](docs/presentations/DMS-Approval-Flow.pptx) |
+| [`docs/08-Pilot-Process.md`](docs/08-Pilot-Process.md) | The pilot process end to end: DMS page, approval, file moves, roles, and the step-by-step pilot test with one super user |
 
 ## Quick start
 
@@ -72,6 +73,10 @@ The on-premises repository tree (docs/01 §4) is built by `scripts/New-DmsFileSe
 For the pilot, `scripts/New-DmsPilotFlowPackage.ps1` builds `scripts/out/DC-P1-PilotApproval.zip`, a ready-made approval flow (Document Register status "Submitted" → mandatory approvers → final approver → status + Control Audit row). Import it in Power Automate with **My flows > Import > Import Package (Legacy)**.
 
 `scripts/Invoke-DmsWorkflowService.ps1` is the pilot Workflow Service, the on-prem side of the approval. Run it every few minutes on a server that can write to the repository. It moves each document's file to match its status: Submitted → `Submitted` (read-only), Approved → `Current_ReadOnly` (the previous revision → `Obsolete_ReadOnly`, the path and SHA-256 written back to the register), rejected → back to `Working`. Every move writes a Control Audit row. It supports `-WhatIf`.
+
+For the pilot, `scripts/Set-DmsTestApprover.ps1` makes one person (e.g. the DMS super user) the mandatory and final approver of every document type, with a backup to restore the real approvers.
+
+`webapi/` is **RH - Documents Management System**, a web page and API inside the company network that wraps the file server repository: users sign in with their Windows login, see the customers and folders AD allows them, upload, create, rename and delete files and folders, start the approval workflow with the status shown on each file, follow **My workflows**, and ask **AI Insights** (the RH on-prem RAG LLM) about documents (`/dms/dms-page?lang=EN`). RH Navigator links to it and the Explorer right-click can open it. See [webapi/README.md](webapi/README.md).
 
 ## Deployment sequence (maps to blueprint section 10)
 

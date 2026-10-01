@@ -15,8 +15,10 @@
     (docs/03 §2.5).
 
 .PARAMETER AppUrl
-    The app's web link: Power Apps > Apps > the app > ... > Details > Web link
-    (https://apps.powerapps.com/play/e/<env>/a/<app>?tenantId=<tenant>).
+    The page that registers the file. Either the Power App web link
+    (https://apps.powerapps.com/play/e/<env>/a/<app>?tenantId=<tenant>) or the DMS page of the
+    company portal (https://<server>/RH_Navigator/dms/dms-page?lang=EN). The page must read the
+    path and name URL parameters.
 
 .PARAMETER RepositoryRoot
     Only files under this root can be sent, e.g. \\FILE-SERVER\Corporate_Data. Mapped drives are
@@ -26,13 +28,16 @@
     .\Install-DmsExplorerMenu.ps1 -AppUrl 'https://apps.powerapps.com/play/e/xxx/a/yyy?tenantId=zzz' -RepositoryRoot '\\FILE-SERVER\Corporate_Data_TEST'
 
 .EXAMPLE
+    .\Install-DmsExplorerMenu.ps1 -AppUrl 'https://portal/RH_Navigator/dms/dms-page?lang=EN' -RepositoryRoot '\\FILE-SERVER\Corporate_Data_TEST' -MenuText 'Start workflow'
+
+.EXAMPLE
     .\Install-DmsExplorerMenu.ps1 -Uninstall
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '',
     Justification = 'Interactive installer: coloured output is intended.')]
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Install')]
 param(
-    [Parameter(Mandatory, ParameterSetName = 'Install')] [ValidatePattern('^https://apps\.powerapps\.com/')] [string] $AppUrl,
+    [Parameter(Mandatory, ParameterSetName = 'Install')] [ValidatePattern('^https?://')] [string] $AppUrl,
     [Parameter(Mandatory, ParameterSetName = 'Install')] [string] $RepositoryRoot,
     [Parameter(ParameterSetName = 'Install')] [string] $MenuText = 'שלח לתהליך אישור DMS',
     [Parameter(Mandatory, ParameterSetName = 'Uninstall')] [switch] $Uninstall
@@ -86,6 +91,7 @@ if ($PSCmdlet.ShouldProcess($keyPath, 'Register Explorer menu')) {
     New-Item -Path "$keyPath\command" -Force | Out-Null
     Set-ItemProperty -Path $keyPath -Name 'MUIVerb' -Value $MenuText
     Set-ItemProperty -Path $keyPath -Name 'Icon' -Value 'shell32.dll,-16761'
+    Set-ItemProperty -Path $keyPath -Name 'Position' -Value 'Top'   # first in the classic menu
     Set-ItemProperty -Path "$keyPath\command" -Name '(default)' -Value $command
 }
 

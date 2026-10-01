@@ -1,0 +1,569 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RH - Documents Management System</title>
+<style>
+  :root { --navy:#1f4a72; --btn:#2a5279; --teal:#3db7b3; --ink:#1d2733; --muted:#6b7684; --line:#d7dde4; --bg:#ffffff; --band:#eef4fa;
+          --ok:#1f7a3d; --okbg:#e3f4e8; --warn:#8a5a00; --warnbg:#fff3d6; --info:#1f5fa8; --infobg:#e4eefb; --err:#b42318; --errbg:#fde8e6; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 Roboto, "Segoe UI", Arial, sans-serif; color:var(--ink); background:var(--bg); }
+  header { height:76px; display:flex; align-items:center; gap:20px; padding:0 28px; background:#fff; box-shadow:0 2px 10px rgba(31,74,114,.12); position:relative; z-index:2; }
+  .brand { display:flex; align-items:center; gap:22px; }
+  .sep { width:1px; height:26px; background:#9fb0c2; }
+  .welcome { font-weight:700; font-size:19px; color:var(--navy); letter-spacing:.2px; }
+  .spacer { flex:1; }
+  .hbtn { display:flex; align-items:center; gap:6px; color:var(--navy); background:none; border:none; font:inherit; cursor:pointer; padding:6px; }
+  .hbtn.muted { color:var(--muted); cursor:default; }
+  .menu { position:relative; }
+  .menu-list { position:absolute; inset-inline-end:0; top:36px; background:#fff; border:1px solid var(--line); border-radius:6px; box-shadow:0 6px 20px rgba(0,0,0,.12); min-width:190px; display:none; }
+  .menu-list.open { display:block; }
+  .menu-list button { display:block; width:100%; text-align:start; padding:10px 14px; background:none; border:none; font:inherit; cursor:pointer; color:var(--ink); }
+  .menu-list button:hover { background:var(--band); }
+  .band { background:linear-gradient(var(--band), #fff 90px); padding:40px 16px 40px; min-height:calc(100vh - 76px); }
+  .card { max-width:1570px; margin:0 auto 22px; background:#fff; border-radius:8px; box-shadow:0 2px 12px rgba(31,74,114,.10); padding:22px 24px; }
+  .card h2 { margin:0 0 8px; font-size:18px; color:var(--navy); }
+  .radios { display:flex; gap:22px; flex-wrap:wrap; margin-bottom:8px; }
+  .radios label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .radios input { accent-color:var(--navy); width:17px; height:17px; margin:0; }
+  .searchrow { display:flex; gap:16px; align-items:center; }
+  .searchbox { flex:1; position:relative; }
+  .searchbox input { width:100%; height:47px; border:1px solid var(--line); border-radius:6px; padding:0 44px 0 12px; font:inherit; color:var(--ink); }
+  [dir=rtl] .searchbox input { padding:0 12px 0 44px; }
+  .searchbox svg { position:absolute; inset-inline-end:12px; top:13px; }
+  .pillbtn { height:47px; min-width:150px; border-radius:24px; background:var(--btn); color:#fff; border:none; font:inherit; font-weight:500; cursor:pointer; padding:0 26px; }
+  .pillbtn:disabled { opacity:.5; cursor:default; }
+  .pillbtn.small { height:38px; min-width:0; padding:0 20px; }
+  .pillbtn.light { background:#e8eef5; color:var(--navy); }
+  .refresh { display:inline-flex; gap:5px; align-items:center; color:var(--info); font-size:13px; margin-top:6px; background:none; border:none; cursor:pointer; padding:0; }
+  .crumbs { display:flex; flex-wrap:wrap; gap:6px; align-items:center; color:var(--muted); margin-bottom:12px; }
+  .crumbs a { color:var(--info); cursor:pointer; }
+  .toolbar { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px; }
+  .tile { border:1px solid var(--line); border-radius:8px; padding:14px; cursor:pointer; display:flex; gap:10px; align-items:center; color:var(--navy); font-weight:500; background:#fff; text-align:start; font:inherit; }
+  .tile:hover { border-color:var(--btn); box-shadow:0 2px 8px rgba(31,74,114,.12); }
+  .tile.folder { align-items:flex-start; width:100%; }
+  .tl { display:grid; gap:2px; } .hint { font-size:12.5px; color:var(--muted); font-weight:400; } .fname { font-size:11.5px; color:#98a2ae; font-weight:400; }
+  .tilewrap { display:grid; gap:4px; } .tileacts { font-size:13px; padding:0 4px; } .tileacts button { margin-inline-end:10px; }
+  .levels { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px; }
+  .levels .gtitle { font-weight:600; color:var(--navy); margin-inline-end:4px; }
+  .levels select { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink); max-width:260px; }
+  .levels select:last-child:has(option[value=""]:checked) { border-color:var(--btn); box-shadow:0 0 0 2px rgba(42,82,121,.15); }
+  .lsep { color:var(--muted); }
+  .hbtn.ai { color:#6d3fc0; font-weight:500; } button.link.ai { color:#6d3fc0; }
+  .drawer { position:fixed; top:0; inset-inline-end:0; height:100vh; width:min(460px, 100vw); background:#fff; box-shadow:-8px 0 30px rgba(20,35,55,.18);
+            transform:translateX(110%); transition:transform .2s; z-index:20; display:flex; flex-direction:column; }
+  [dir=rtl] .drawer { transform:translateX(-110%); }
+  .drawer.open { transform:none !important; }
+  .dr-h { display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--line); font-weight:700; color:#6d3fc0; font-size:17px; }
+  .dr-ctx { padding:10px 18px; background:#f5f1fc; display:flex; gap:10px; justify-content:space-between; align-items:center; font-size:14px; }
+  .dr-q { padding:10px 18px 0; display:flex; flex-wrap:wrap; gap:6px; }
+  .dr-log { flex:1; overflow:auto; padding:14px 18px; display:flex; flex-direction:column; gap:10px; }
+  .bubble { padding:10px 12px; border-radius:10px; max-width:90%; white-space:normal; line-height:1.5; }
+  .bubble.me { align-self:flex-end; background:var(--infobg); }
+  .bubble.bot { align-self:flex-start; background:#f4f5f7; }
+  .bubble .src { margin-top:6px; font-size:12px; color:var(--muted); }
+  .dr-in { display:flex; gap:8px; padding:12px 18px 16px; border-top:1px solid var(--line); align-items:flex-end; }
+  .dr-in textarea { flex:1; font:inherit; border:1px solid var(--line); border-radius:8px; padding:8px 10px; resize:vertical; }
+  .dr-tabs { display:flex; gap:4px; padding:10px 18px 0; }
+  .dr-tabs button { flex:1; border:1px solid var(--line); background:#fff; border-radius:8px; padding:7px; font:inherit; cursor:pointer; color:var(--ink); }
+  .dr-tabs button.on { border-color:#6d3fc0; color:#6d3fc0; font-weight:600; background:#f5f1fc; }
+  .bubble.wide { max-width:100%; width:100%; }
+  .sugg { border:1px solid var(--line); border-radius:8px; padding:9px 11px; background:#fff; margin-top:8px; display:grid; gap:3px; }
+  .sg-n { font-weight:500; } .sg-r { color:#5b3aa0; } .sg-a button, .sg-a a { margin-inline-end:12px; }
+  .sugg-list { display:grid; gap:4px; }
+  .pg-banner { background:#fff3d6; color:#7a5200; padding:8px 28px; font-size:13.5px; border-bottom:1px solid #f0dca6; }
+  .badge { background:var(--err); color:#fff; border-radius:9px; font-size:11px; padding:0 6px; min-width:18px; text-align:center; }
+  .pg-banner.live { background:#e3f4e8; color:#1f5f33; border-bottom-color:#bfe3c9; }
+  .pg button { margin-inline-end:10px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+  .chip { border:1px solid var(--line); background:#fff; border-radius:16px; padding:5px 12px; font:inherit; font-size:13px; cursor:pointer; color:var(--ink); }
+  .chip.on { border-color:var(--btn); box-shadow:0 0 0 2px rgba(42,82,121,.15); }
+  .Rejected { background:var(--errbg); color:var(--err); }
+  .timeline { margin:4px 0; padding-inline-start:20px; display:grid; gap:6px; }
+  .guide { display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--band); border-radius:8px; padding:10px 14px; margin-bottom:12px; }
+  .guide .gtitle { font-weight:600; color:var(--navy); }
+  .guide select { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:6px; min-width:220px; background:#fff; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:start; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  th { color:var(--muted); font-weight:500; font-size:13px; }
+  td.actions { white-space:nowrap; }
+  td.actions a, td.actions button.link { margin-inline-end:12px; }
+  a.link, button.link { color:var(--info); cursor:pointer; text-decoration:none; background:none; border:none; font:inherit; padding:0; }
+  .status { display:inline-block; padding:2px 10px; border-radius:12px; font-size:12.5px; font-weight:500; }
+  .Working { background:var(--warnbg); color:var(--warn); } .Submitted { background:var(--infobg); color:var(--info); }
+  .Approved_ReadOnly { background:var(--okbg); color:var(--ok); } .None, .Other { background:#f0f2f5; color:var(--muted); }
+  .muted { color:var(--muted); } .small { font-size:13px; }
+  .msg { padding:10px 12px; border-radius:6px; margin-bottom:12px; } .msg.ok { background:var(--okbg); color:var(--ok); } .msg.err { background:var(--errbg); color:var(--err); }
+  dialog { border:none; border-radius:10px; padding:0; width:min(560px, 94vw); box-shadow:0 12px 40px rgba(0,0,0,.25); }
+  dialog::backdrop { background:rgba(20,35,55,.35); }
+  .dlg-h { padding:16px 20px; border-bottom:1px solid var(--line); font-weight:700; color:var(--navy); }
+  .dlg-b { padding:16px 20px; display:grid; gap:12px; }
+  .dlg-f { padding:12px 20px 18px; display:flex; gap:10px; justify-content:flex-end; }
+  .dlg-b label { display:grid; gap:4px; color:var(--muted); font-size:13px; }
+  .dlg-b input[type=text], .dlg-b select { font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:6px; color:var(--ink); }
+  .ltr { direction:ltr; unicode-bidi:plaintext; }
+  .icon { flex:none; }
+  @media (max-width:700px) { header { padding:0 14px; gap:10px } .welcome { font-size:15px } .searchrow { flex-direction:column; align-items:stretch } .pillbtn { width:100% } td.hide-s, th.hide-s { display:none } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <img src="/dms/logo.png" alt="rh" height="30" onerror="this.nextElementSibling.style.display='';this.remove()"><svg style="display:none" direction="ltr" width="52" height="28" viewBox="0 0 52 28" aria-label="rh"><text x="0" y="23" font-family="Arial Black, Arial" font-weight="900" font-style="italic" font-size="26" fill="#1f4a72">rh</text><path d="M37 2h13l-4 10z" fill="#3db7b3"/></svg>
+    <span class="sep"></span>
+    <span class="welcome" id="t-welcome"></span>
+  </div>
+  <span class="spacer"></span>
+  <button class="hbtn" id="ap-b" style="display:none"><svg class="icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6 9 17l-5-5"/></svg><span id="ap-t"></span><span class="badge" id="ap-n" hidden></span></button>
+  <button class="hbtn" id="wf-b"><svg class="icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h10M4 12h7M4 18h10"/><path d="m15 15 2.5 2.5L22 13"/></svg><span id="wf-t"></span></button>
+  <button class="hbtn ai" id="ai-b" style="display:none"><svg class="icon" width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8zM19 14l.9 2.6 2.6.9-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9z"/></svg><span id="ai-t"></span></button>
+  <button class="hbtn" id="lang"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg><span id="lang-t"></span></button>
+  <span class="hbtn muted"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span id="who"></span></span>
+  <div class="menu"><button class="hbtn" id="menu-b" aria-label="menu"><svg width="6" height="22" viewBox="0 0 6 22" fill="#1f4a72"><circle cx="3" cy="3" r="2.4"/><circle cx="3" cy="11" r="2.4"/><circle cx="3" cy="19" r="2.4"/></svg></button>
+    <div class="menu-list" id="menu"></div></div>
+</header>
+
+<div class="pg-banner" id="pg" hidden></div>
+<div class="band">
+  <section class="card">
+    <h2 id="t-search"></h2>
+    <div class="radios" id="scopes"></div>
+    <div class="searchrow">
+      <div class="searchbox"><input id="q" autocomplete="off"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5d6675" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg></div>
+      <button class="pillbtn" id="go"></button>
+    </div>
+    <button class="refresh" id="refresh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg><span id="t-refresh"></span></button>
+  </section>
+  <section class="card" id="view"></section>
+</div>
+
+<aside id="ai-panel" class="drawer" aria-hidden="true">
+  <div class="dr-h"><span id="ai-title"></span><button type="button" class="hbtn" id="ai-x" aria-label="close">✕</button></div>
+  <div class="dr-tabs"><button type="button" data-mode="find" id="m-find"></button><button type="button" data-mode="ask" id="m-ask"></button></div>
+  <div class="dr-ctx"><span id="ai-ctx"></span><button type="button" class="link small" id="ai-clear"></button></div>
+  <div class="dr-q" id="ai-quick"></div>
+  <div class="dr-log" id="ai-log"></div>
+  <form class="dr-in" id="ai-form"><textarea id="ai-q" rows="2"></textarea><button class="pillbtn small" id="ai-send"></button></form>
+</aside>
+<dialog id="dlg"><form method="dialog" id="dlg-form"><div class="dlg-h" id="dlg-h"></div><div class="dlg-b" id="dlg-b"></div><div class="dlg-f" id="dlg-f"></div></form></dialog>
+
+<script>
+const q = new URLSearchParams(location.search);
+const lang = (q.get('lang') || 'EN').toUpperCase() === 'HE' ? 'HE' : 'EN';
+document.documentElement.lang = lang.toLowerCase();
+document.documentElement.dir = lang === 'HE' ? 'rtl' : 'ltr';
+const T = {
+  EN: { welcome:'RH - Documents Management System', search:'Search', all:'All', customer:'Customer', project:'Project', document:'Document ID', file:'File', description:'Description',
+        go:'Search', refresh:'Refresh', lang:'English', customers:'Customers', myDocs:'My documents', home:'Customers', noAccess:'No customers are available to you.',
+        name:'Name', status:'Status', modified:'Modified', actions:'', open:'Open', download:'Download', start:'Start workflow', submit:'Submit for approval',
+        upload:'Upload file', uploadTitle:'Save a file in this folder', chooseFile:'File from your computer', folder:'Folder', overwrite:'Replace a file with the same name',
+        ok:'OK', cancel:'Cancel', saved:'Saved to', notReg:'Not registered', none:'Nothing here.', results:'Results', type:'Document type', area:'Area', mode:'Control mode',
+        titleF:'Title', registerSubmit:'Register and submit', registerOnly:'Register only', registered:'Registered as', err:'Error', docId:'Document ID', path:'Location', copy:'Copy path', copied:'Copied',
+        newFolder:'New folder', company:'Company', allWf:'All workflows', approvals:'Approvals', apTitle:'Waiting for my approval', apAll:'All pending approvals', stage:'Stage', stage1:'1 - mandatory approvers', stage2:'2 - final approver', approve:'Approve', reject:'Reject', apComment:'Comment (optional)', rejComment:'Why is it rejected? (required)', waitingFor:'Waiting for', approvedBy:'Approved by', owner:'Owner', apNone:'Nothing is waiting for your approval.', asSuper:'as super user', fsRun:'Move files now', fsDone:'Files moved', liveBanner:'Pilot - live: SharePoint {site}. Approvals {where}. Files are moved by the DMS service.', apPage:'on this page (Approvals)', apTeams:'in Teams', pgBanner:'Playground: a temporary register in memory, no SharePoint and no AD checks. Approve or reject on this page (Approvals).', pgApprove:'Approve (test)', pgReject:'Reject (test)', pgComment:'Rejection comment', aiInsights:'AI Insights', findTab:'🔎 Find a file', askTab:'Ask', findPh:'Describe the file, e.g. the latest FCT quote for Customer_A', findCtx:'Searching only what you are allowed to see', goFolder:'Go to folder', askAbout:'Ask about it', found:'Suggestions', noneFound:'No matching files were found. Try other words.', smart:'✦ Smart', searchedIn:'Searched in', aiAbout:'About:', aiKnowledge:'RH company knowledge', aiAsk:'Ask', aiPlaceholder:'Ask about the document or the company knowledge…', aiClear:'Ask the company knowledge instead', aiThinking:'Thinking…', aiSources:'Sources', aiOnPrem:'Answers come from RH on-prem AI. Check important facts in the document.', qSummary:'Summarize this document', qReq:'List the key requirements', qRisk:'What are the risks and open issues?', qDates:'List dates, deadlines and validity', myWf:'My workflows', submitted:'Submitted', lastAction:'Last action', history:'History', by:'by', Rejected:'Rejected - back to you', waiting:'waiting', days:'days', location:'Location', choose:'Choose…', whatSaving:'What are you saving?', chooseKind:'Choose a document kind', chooseProject:'Choose a project', takeMe:'Take me there', noProjects:'This customer has no projects yet.', createMissing:'This folder does not exist yet. Create it?', rename:'Rename', del:'Delete', newName:'New name', folderName:'Folder name', confirmDel:'Move to the recycle folder?', recycled:'Moved to the recycle folder. IT can restore it.',
+        Working:'Working', Submitted:'Submitted', Approved_ReadOnly:'Approved (read-only)', Other:'Other', None:'Not registered', other:'עברית' },
+  HE: { welcome:'RH - מערכת ניהול מסמכים', search:'חיפוש', all:'הכל', customer:'לקוח', project:'פרויקט', document:'מזהה מסמך', file:'קובץ', description:'תיאור',
+        go:'חיפוש', refresh:'רענון', lang:'עברית', customers:'לקוחות', myDocs:'המסמכים שלי', home:'לקוחות', noAccess:'אין לקוחות זמינים עבורך.',
+        name:'שם', status:'סטטוס', modified:'עודכן', actions:'', open:'פתיחה', download:'הורדה', start:'שליחה לאישור', submit:'הגשה לאישור',
+        upload:'העלאת קובץ', uploadTitle:'שמירת קובץ בתיקייה זו', chooseFile:'קובץ מהמחשב', folder:'תיקייה', overwrite:'החלפת קובץ קיים באותו שם',
+        ok:'אישור', cancel:'ביטול', saved:'נשמר ב-', notReg:'לא רשום', none:'אין פריטים.', results:'תוצאות', type:'סוג מסמך', area:'תחום', mode:'מצב בקרה',
+        titleF:'כותרת', registerSubmit:'רישום והגשה לאישור', registerOnly:'רישום בלבד', registered:'נרשם כ-', err:'שגיאה', docId:'מזהה מסמך', path:'מיקום', copy:'העתקת נתיב', copied:'הועתק',
+        newFolder:'תיקייה חדשה', company:'חברה', allWf:'כל תהליכי האישור', approvals:'אישורים', apTitle:'ממתינים לאישורי', apAll:'כל האישורים הממתינים', stage:'שלב', stage1:'1 - מאשרי חובה', stage2:'2 - מאשר סופי', approve:'אישור', reject:'דחייה', apComment:'הערה (רשות)', rejComment:'מדוע נדחה? (חובה)', waitingFor:'ממתין ל', approvedBy:'אושר על ידי', owner:'בעלים', apNone:'אין מסמכים שממתינים לאישורך.', asSuper:'כמשתמש-על', fsRun:'העברת קבצים עכשיו', fsDone:'קבצים שהועברו', liveBanner:'פיילוט - חי: SharePoint {site}. אישורים {where}. הקבצים מועברים על ידי שירות ה-DMS.', apPage:'בדף זה (אישורים)', apTeams:'ב-Teams', pgBanner:'סביבת ניסוי: רישום זמני בזיכרון, ללא SharePoint וללא בדיקות AD. אשרו או דחו בדף זה (אישורים).', pgApprove:'אישור (ניסוי)', pgReject:'דחייה (ניסוי)', pgComment:'סיבת הדחייה', aiInsights:'AI Insights', findTab:'🔎 חיפוש קובץ', askTab:'שאלה', findPh:'תארו את הקובץ, למשל הצעת המחיר האחרונה ל-FCT של Customer_A', findCtx:'החיפוש רק במה שמותר לך לראות', goFolder:'לתיקייה', askAbout:'שאל עליו', found:'הצעות', noneFound:'לא נמצאו קבצים מתאימים. נסו מילים אחרות.', smart:'✦ חכם', searchedIn:'חיפוש ב-', aiAbout:'על:', aiKnowledge:'הידע הארגוני של RH', aiAsk:'שאל', aiPlaceholder:'שאלו על המסמך או על הידע הארגוני…', aiClear:'לשאול את הידע הארגוני במקום', aiThinking:'חושב…', aiSources:'מקורות', aiOnPrem:'התשובות מגיעות מה-AI הפנימי של RH. בדקו עובדות חשובות במסמך.', qSummary:'סכם את המסמך', qReq:'מהן הדרישות העיקריות?', qRisk:'מהם הסיכונים והנושאים הפתוחים?', qDates:'מהם התאריכים, המועדים והתוקף?', myWf:'תהליכי האישור שלי', submitted:'הוגש', lastAction:'פעולה אחרונה', history:'היסטוריה', by:'על ידי', Rejected:'נדחה - חזר אליך', waiting:'ממתין', days:'ימים', location:'מיקום', choose:'בחרו…', whatSaving:'מה שומרים?', chooseKind:'בחרו סוג מסמך', chooseProject:'בחרו פרויקט', takeMe:'קחו אותי לשם', noProjects:'ללקוח זה אין עדיין פרויקטים.', createMissing:'התיקייה עדיין לא קיימת. ליצור אותה?', rename:'שינוי שם', del:'מחיקה', newName:'שם חדש', folderName:'שם התיקייה', confirmDel:'להעביר לתיקיית המחזור?', recycled:'הועבר לתיקיית המחזור. מחלקת IT יכולה לשחזר.',
+        Working:'בעבודה', Submitted:'הוגש לאישור', Approved_ReadOnly:'מאושר - קריאה בלבד', Other:'אחר', None:'לא רשום', other:'English' } }[lang];
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const when = s => s ? new Date(s).toLocaleString(lang === 'HE' ? 'he-IL' : 'en-GB', { dateStyle:'short', timeStyle:'short' }) : '';
+const ICON_FOLDER = '<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="#e9b949"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const ICON_FILE = '<svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7684" stroke-width="1.6"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>';
+const ICON_CUST = '<svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1f4a72" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h3M13 7h3M8 11h3M13 11h3M10 21v-4h4v4"/></svg>';
+
+let cfg, msal, account, me = {}, state = { view:'customers', folder:null, root:null, scope:'all' };
+
+// ---------------------------------------------------------------- api (Windows sign-in by default: the browser sends the login)
+async function token() {
+  if (cfg.authMode !== 'entra') return null;
+  try { return (await msal.acquireTokenSilent({ scopes:[cfg.scope], account })).accessToken; }
+  catch { await msal.acquireTokenRedirect({ scopes:[cfg.scope], account }); }
+}
+async function api(path, opts = {}) {
+  const t = await token();
+  const headers = { ...(opts.body && !(opts.body instanceof FormData) ? { 'Content-Type':'application/json' } : {}), ...(t ? { Authorization:'Bearer ' + t } : {}) };
+  const r = await fetch(path, { credentials:'include', ...opts, headers });
+  const body = r.headers.get('content-type')?.includes('json') ? await r.json() : null;
+  if (!r.ok) throw new Error(typeof body?.detail === 'string' ? body.detail : (body?.detail?.message || r.statusText));
+  return body;
+}
+
+// ---------------------------------------------------------------- chrome
+$('#t-welcome').textContent = T.welcome; $('#t-search').textContent = T.search; $('#t-refresh').textContent = T.refresh;
+$('#go').textContent = T.go; $('#q').placeholder = T.description; $('#lang-t').textContent = T.lang;
+$('#lang').onclick = () => { q.set('lang', lang === 'HE' ? 'EN' : 'HE'); location.search = q.toString(); };
+$('#scopes').innerHTML = ['all','customer','project','document','file','smart'].map(k =>
+  `<label><input type="radio" name="scope" value="${k}" ${k === 'all' ? 'checked' : ''}>${T[k]}</label>`).join('');
+$('#scopes').onchange = e => state.scope = e.target.value;
+$('#menu').innerHTML = `<button data-m="customers">${T.customers}</button><button data-m="mine">${T.myWf}</button><button data-m="ai">${T.aiInsights}</button><button data-m="lang">${T.other}</button>`;
+$('#menu-b').onclick = e => { e.stopPropagation(); $('#menu').classList.toggle('open'); };
+document.onclick = () => $('#menu').classList.remove('open');
+$('#menu').onclick = e => { const m = e.target.dataset.m; if (m === 'lang') return $('#lang').click(); if (m === 'ai') return openAI(null); if (m) { state.view = m; render(); } };
+$('#ap-t').textContent = T.approvals; $('#ap-b').onclick = () => { state.view = 'approvalsView'; render(); };
+$('#wf-t').textContent = T.myWf; $('#wf-b').onclick = () => { state.view = 'mine'; render(); };
+$('#go').onclick = () => { if ($('#q').value.trim().length >= 2) { state.view = 'search'; render(); } };
+$('#q').onkeydown = e => { if (e.key === 'Enter') $('#go').click(); };
+$('#refresh').onclick = () => render();
+
+const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${esc(d ? (T[d.statusKey] || d.lifecycleStatus) : T.None)}</span>${d ? ` <span class="muted small">${esc(d.documentId)}</span>` : ''}`;
+function fileActions(f) {
+  return (aiOn ? `<button type="button" class="link ai" data-ai="${esc(f.path)}">✦ AI</button>` : '') + `${f.officeUri ? `<a class="link" href="${esc(f.officeUri)}">${T.open}</a>` : ''}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button>`
+    + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button>` : '')
+                  : `<button type="button" class="link" data-st="${esc(f.path)}">${T.start}</button>`);
+}
+function wire(v) {
+  v.querySelectorAll('[data-f]').forEach(a => a.onclick = () => { state.view = 'browse'; state.folder = a.dataset.f; render(); });
+  v.querySelectorAll('[data-dl]').forEach(a => a.onclick = () => download(a.dataset.dl));
+  v.querySelectorAll('[data-ai]').forEach(a => a.onclick = () => openAI(a.dataset.ai));
+  v.querySelectorAll('[data-hist]').forEach(a => a.onclick = () => { const r = v.querySelector('#h-' + a.dataset.hist); r.hidden = !r.hidden; });
+  const all = v.querySelector('#wf-all'); if (all) all.onclick = () => { state.everyone = !state.everyone; render(); };
+  const fs = v.querySelector('#fs-run'); if (fs) fs.onclick = async () => {
+    fs.disabled = true;
+    try { const r = await api('/api/file-service/run', { method:'POST' }); alert(`${T.fsDone}: ${r.moved}` + (r.failed ? ` · ${T.err}: ${r.failed}` : '')); render(); }
+    catch (e) { fs.disabled = false; alert(e.message); }
+  };
+  v.querySelectorAll('[data-sf]').forEach(a => a.onclick = () => { state.wfFilter = a.dataset.sf || null; render(); });
+  v.querySelectorAll('[data-st]').forEach(a => a.onclick = () => startWorkflow(a.dataset.st));
+  v.querySelectorAll('[data-sub]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try { await api(`/api/documents/${b.dataset.sub}/submit`, { method:'POST' }); refreshApprovals(); render(); } catch (e) { b.disabled = false; alert(e.message); }
+  });
+  v.querySelectorAll('[data-cp]').forEach(a => a.onclick = async () => { await navigator.clipboard.writeText(a.dataset.cp); a.textContent = T.copied; });
+}
+
+// ---------------------------------------------------------------- views
+async function render() {
+  const v = $('#view');
+  v.innerHTML = '<span class="muted">…</span>';
+  try { await ({ customers, browse, search, mine, approvalsView })[state.view](v); wire(v); }
+  catch (e) { v.innerHTML = `<div class="msg err">${T.err}: ${esc(e.message)}</div>`; }
+}
+async function customers(v) {
+  const [areas, list] = await Promise.all([api('/api/areas'), api('/api/customers')]);
+  const other = areas.filter(a => a.name !== '02_Customers');
+  v.innerHTML = (await levelBar(null)) + `<h2>${T.customers}</h2>` + (list.length
+    ? `<div class="grid">${list.map(c => `<button type="button" class="tile" data-f="${esc(c.path)}">${ICON_CUST}${esc(c.name)}</button>`).join('')}</div>`
+    : `<p class="muted">${T.noAccess}</p>`)
+    + (other.length ? `<h2 style="margin-top:22px">${T.company}</h2><div class="grid">${other.map(a => folderTile(a)).join('')}</div>` : '');
+  wireLevels(v);
+}
+const lbl = l => l ? (lang === 'HE' ? l.he : l.en) : null;
+// Cascading selectors along the blueprint tree: choosing a folder fills the next list with its subfolders
+async function levelBar(path) {
+  const lv = await api('/api/levels' + (path ? '?path=' + encodeURIComponent(path) : ''));
+  return `<div class="levels"><span class="gtitle">${T.location}</span>${lv.map((l, i) => `${i ? `<span class="lsep">${lang === 'HE' ? '‹' : '›'}</span>` : ''}<select data-level="${i}">
+      ${l.selected ? '' : `<option value="">${T.choose}</option>`}
+      ${l.options.map(o => `<option value="${esc(o.path)}" ${o.name === l.selected ? 'selected' : ''}>${esc(lbl(o.label) || o.name)}</option>`).join('')}</select>`).join('')}</div>`;
+}
+function wireLevels(v) {
+  v.querySelectorAll('[data-level]').forEach(sel => sel.onchange = () => {
+    if (!sel.value) return;
+    state.view = 'browse'; state.folder = sel.value; render();
+  });
+}
+const hint = l => l ? (lang === 'HE' ? l.hintHe : l.hintEn) : '';
+function folderTile(f) {
+  const l = f.label, title = lbl(l) || f.name;
+  return `<button type="button" class="tile folder" data-f="${esc(f.path)}">${l && l.kind === 'customer' ? ICON_CUST : ICON_FOLDER}
+    <span class="tl"><span>${esc(title)}</span>${hint(l) ? `<span class="hint">${esc(hint(l))}</span>` : ''}${title !== f.name ? `<span class="fname ltr">${esc(f.name)}</span>` : ''}</span></button>`;
+}
+async function browse(v) {
+  const r = await api('/api/browse?path=' + encodeURIComponent(state.folder));
+  state.folder = r.path; state.ctx = r.context;
+  const folders = r.folders.filter(f => !['Submitted','Obsolete_ReadOnly','Working'].includes(f.name));
+  const bar = await levelBar(r.path);
+  v.innerHTML = `<div class="crumbs"><a data-home>⌂ ${T.home}</a></div>${bar}
+    ${r.node && hint(r.node) ? `<p class="muted" style="margin:-4px 0 12px">${esc(hint(r.node))}</p>` : ''}
+    ${r.context.customer ? guideBar(r.context) : ''}
+    <div class="toolbar"><span class="spacer"></span>${r.canWrite ? `<button type="button" class="pillbtn small light" id="mk">${T.newFolder}</button><button type="button" class="pillbtn small" id="up">${T.upload}</button>` : ''}</div>
+    ${folders.length ? `<div class="grid" style="margin-bottom:16px">${folders.map(f => `<div class="tilewrap">${folderTile(f)}${r.canWrite && !f.label ? `<div class="tileacts">${editActions(f)}</div>` : ''}</div>`).join('')}</div>` : ''}
+    ${r.files.length ? `<table><tr><th>${T.name}</th><th>${T.status}</th><th class="hide-s">${T.modified}</th><th></th></tr>
+    ${r.files.map(f => `<tr><td><span style="display:inline-flex;gap:8px;align-items:center">${ICON_FILE}${esc(f.name)}</span></td><td>${statusTag(f.document)}</td><td class="hide-s muted">${when(f.modified)}</td><td class="actions">${fileActions(f)}${r.canWrite && !f.document && !f.readOnly ? editActions(f) : ''}</td></tr>`).join('')}
+    </table>` : ''}${folders.length + r.files.length ? '' : `<p class="muted">${T.none}</p>`}`;
+  v.querySelector('[data-home]').onclick = () => { state.view = 'customers'; render(); };
+  if (r.canWrite) { v.querySelector('#up').onclick = () => uploadDialog(r.path); v.querySelector('#mk').onclick = () => newFolderDialog(r.path); }
+  v.querySelectorAll('[data-rn]').forEach(b => b.onclick = () => renameDialog(b.dataset.rn));
+  v.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteItem(b.dataset.del));
+  wireLevels(v);
+  if (r.context.customer) wireGuide(v, r.context);
+}
+
+// "What are you saving?" - takes the user to the blueprint folder for that kind of document
+let guideKinds = null;
+function guideBar(ctx) {
+  return `<div class="guide"><span class="gtitle">${T.whatSaving}</span>
+    <select id="g-kind"><option value="">${T.chooseKind}</option></select>
+    <select id="g-proj" style="display:none"></select>
+    <button type="button" class="pillbtn small" id="g-go" disabled>${T.takeMe}</button><span id="g-msg" class="muted small"></span></div>`;
+}
+async function wireGuide(v, ctx) {
+  guideKinds = guideKinds || await api('/api/guide');
+  const kind = v.querySelector('#g-kind'), proj = v.querySelector('#g-proj'), go = v.querySelector('#g-go'), msg = v.querySelector('#g-msg');
+  kind.innerHTML += guideKinds.map(g => `<option value="${g.key}">${esc(lang === 'HE' ? g.he : g.en)}${g.needsProject ? ' ▸' : ''}</option>`).join('');
+  kind.onchange = async () => {
+    const g = guideKinds.find(x => x.key === kind.value);
+    go.disabled = !g; msg.textContent = '';
+    proj.style.display = 'none';
+    if (g && g.needsProject && !ctx.project) {
+      const list = await api('/api/projects?customer=' + encodeURIComponent(ctx.customer.path));
+      proj.innerHTML = `<option value="">${T.chooseProject}</option>` + list.map(p => `<option value="${esc(p.path)}">${esc(p.name)}</option>`).join('');
+      proj.style.display = ''; go.disabled = true;
+      if (!list.length) msg.textContent = T.noProjects;
+    }
+  };
+  proj.onchange = () => go.disabled = !proj.value;
+  go.onclick = async () => {
+    const g = guideKinds.find(x => x.key === kind.value);
+    const qs = `key=${g.key}&customer=${encodeURIComponent(ctx.customer.path)}` + (g.needsProject ? `&project=${encodeURIComponent(ctx.project ? ctx.project.path : proj.value)}` : '');
+    try {
+      let t = await api('/api/guide/target?' + qs);
+      if (!t.exists) {
+        if (!confirm(T.createMissing)) return;
+        t = await api('/api/guide/create?' + qs, { method:'POST' });
+      }
+      state.folder = t.path; await render();
+      if (t.canWrite) uploadDialog(t.path);
+    } catch (e) { msg.textContent = `${T.err}: ${e.message}`; }
+  };
+}
+async function search(v) {
+  const text = $('#q').value.trim();
+  if (state.scope === 'smart') return smartResults(v, text);
+  const r = await api(`/api/search?q=${encodeURIComponent(text)}&scope=${state.scope}`);
+  v.innerHTML = `<h2>${T.results} (${r.length})</h2><table><tr><th>${T.name}</th><th>${T.status}</th><th class="hide-s">${T.path}</th><th></th></tr>
+    ${r.map(x => x.kind === 'customer' || x.kind === 'folder'
+      ? `<tr><td><a class="link" data-f="${esc(x.path)}" style="display:inline-flex;gap:8px;align-items:center">${x.kind === 'customer' ? ICON_CUST : ICON_FOLDER}${esc(x.name)}</a></td><td class="muted small">${x.kind === 'customer' ? T.customer : ''}</td><td class="hide-s muted small ltr">${esc(x.path)}</td><td></td></tr>`
+      : `<tr><td><span style="display:inline-flex;gap:8px;align-items:center">${ICON_FILE}${esc(x.name)}</span></td><td>${statusTag(x.document)}</td><td class="hide-s muted small ltr">${esc(x.path)}</td><td class="actions">${x.path ? fileActions({ ...x, officeUri: x.officeUri }) : ''}</td></tr>`).join('')}
+    </table>${r.length ? '' : `<p class="muted">${T.none}</p>`}`;
+}
+async function mine(v) {
+  const r = await api('/api/my-workflows' + (state.everyone ? '?everyone=true' : ''));
+  const keys = ['Working', 'Submitted', 'Approved_ReadOnly', 'Rejected'];
+  const items = r.items.filter(i => !state.wfFilter || i.statusKey === state.wfFilter);
+  const who = e => e ? `${esc(evName(e.event))} · ${esc((e.actor || '').split('@')[0])} · ${when(e.utc)}` : '';
+  const days = u => u ? Math.max(0, Math.floor((Date.now() - new Date(u)) / 864e5)) : null;
+  v.innerHTML = `<div class="toolbar"><h2 style="margin:0">${state.everyone ? T.allWf : T.myWf}</h2><span class="spacer"></span>
+      ${me.admin ? `<button type="button" class="pillbtn small light" id="wf-all">${state.everyone ? T.myWf : T.allWf}</button>` : ''}
+      ${cfg.fileService ? `<button type="button" class="pillbtn small light" id="fs-run">${T.fsRun}</button>` : ''}</div>
+    <div class="chips"><button type="button" class="chip ${state.wfFilter ? '' : 'on'}" data-sf="">${T.all} <b>${r.items.length}</b></button>
+      ${keys.map(k => `<button type="button" class="chip ${k} ${state.wfFilter === k ? 'on' : ''}" data-sf="${k}">${T[k]} <b>${r.summary[k]}</b></button>`).join('')}</div>
+    <table><tr><th>${T.docId}</th><th>${T.titleF}</th><th>${T.status}</th><th class="hide-s">${T.submitted}</th><th class="hide-s">${T.lastAction}</th><th></th></tr>
+    ${items.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}</td>
+      <td><span class="status ${esc(d.statusKey)}">${esc(T[d.statusKey] || d.lifecycleStatus)}</span>
+        ${d.statusKey === 'Submitted' && days(d.submittedUtc) !== null ? `<div class="muted small">${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}
+        ${d.statusKey === 'Submitted' && d.pending && d.pending.length ? `<div class="small">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')} (${T.stage} ${d.stage})</div>` : ''}</td>
+      <td class="hide-s muted small">${when(d.submittedUtc)}</td>
+      <td class="hide-s small">${who(d.decision || d.lastEvent)}${d.decision && d.decision.details ? `<div class="muted">${esc(d.decision.details)}</div>` : ''}</td>
+      <td class="actions">${state.everyone ? `<div class="muted small">${esc(d.ownerName || d.ownerEmail || '')}</div>` : ''}${['Working', 'Rejected'].includes(d.statusKey) ? `<button type="button" class="link" data-sub="${d.id}">${T.submit}</button>` : ''}
+        ${aiOn && (d.currentUncPath || d.workingUncPath) ? `<button type="button" class="link ai" data-ai="${esc(d.currentUncPath || d.workingUncPath)}">✦ AI</button>` : ''}
+        <button type="button" class="link" data-cp="${esc(d.currentUncPath || d.workingUncPath)}">${T.copy}</button>
+        <button type="button" class="link" data-hist="${d.id}">${T.history}</button>
+</td></tr>
+      <tr id="h-${d.id}" hidden><td colspan="6"><ol class="timeline">${d.history.map(e => `<li><b>${esc(evName(e.event))}</b> <span class="muted">${when(e.utc)} · ${esc(e.actor)}${e.source ? ' · ' + esc(e.source) : ''}</span>${e.details ? `<div class="small">${esc(e.details)}</div>` : ''}</li>`).join('')}</ol></td></tr>`).join('')}
+    </table>${items.length ? '' : `<p class="muted">${T.none}</p>`}`;
+}
+
+async function approvalsView(v) {
+  const list = await api('/api/approvals' + (state.apAll ? '?everyone=true' : ''));
+  const days = u => u ? Math.max(0, Math.floor((Date.now() - new Date(u)) / 864e5)) : null;
+  v.innerHTML = `<div class="toolbar"><h2 style="margin:0">${state.apAll ? T.apAll : T.apTitle}</h2><span class="spacer"></span>
+      ${me.admin ? `<button type="button" class="pillbtn small light" id="ap-all">${state.apAll ? T.apTitle : T.apAll}</button>` : ''}</div>
+    ${list.length ? `<table><tr><th>${T.docId}</th><th>${T.titleF}</th><th class="hide-s">${T.owner}</th><th>${T.stage}</th><th class="hide-s">${T.submitted}</th><th></th></tr>
+    ${list.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}<div class="muted small">${esc(d.documentType || '')}</div></td>
+      <td class="hide-s small">${esc((d.ownerName || d.ownerEmail || '').split('@')[0])}</td>
+      <td class="small">${d.stage === 1 ? T.stage1 : T.stage2}${d.approved.length ? `<div class="muted">${T.approvedBy}: ${d.approved.map(a => esc(a.split('@')[0])).join(', ')}</div>` : ''}
+        ${!d.mine ? `<div class="muted">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')}</div>` : ''}</td>
+      <td class="hide-s small muted">${when(d.submittedUtc)}${days(d.submittedUtc) !== null ? `<div>${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}</td>
+      <td class="actions">${d.officeUri ? `<a class="link" href="${esc(d.officeUri)}">${T.open}</a>` : ''}
+        ${d.file ? `<button type="button" class="link" data-dl="${esc(d.file)}">${T.download}</button>` : ''}
+        ${aiOn && d.file ? `<button type="button" class="link ai" data-ai="${esc(d.file)}">✦ AI</button>` : ''}
+        <div style="margin-top:6px"><button type="button" class="pillbtn small" data-ok="${d.id}">✔ ${T.approve}${d.mine ? '' : ' (' + T.asSuper + ')'}</button>
+        <button type="button" class="pillbtn small light" data-no="${d.id}" style="color:var(--err)">✖ ${T.reject}</button></div></td></tr>`).join('')}
+    </table>` : `<p class="muted">${T.apNone}</p>`}`;
+  const all = v.querySelector('#ap-all'); if (all) all.onclick = () => { state.apAll = !state.apAll; render(); };
+  v.querySelectorAll('[data-ok],[data-no]').forEach(b => b.onclick = async () => {
+    const approve = !!b.dataset.ok, id = b.dataset.ok || b.dataset.no;
+    const comment = prompt(approve ? T.apComment : T.rejComment, '');
+    if (comment === null || (!approve && !comment.trim())) return;
+    b.disabled = true;
+    try { await api(`/api/approvals/${id}`, { method:'POST', body:JSON.stringify({ approve, comment }) }); refreshApprovals(); render(); }
+    catch (e) { b.disabled = false; alert(e.message); }
+  });
+}
+async function refreshApprovals() {
+  if (cfg.approvals !== 'page') return;
+  try { const n = (await api('/api/approvals')).length; $('#ap-n').textContent = n; $('#ap-n').hidden = !n; } catch {}
+}
+
+// Control Audit event names are stored in the site language (Hebrew); show them in the page language
+const EV = { 'נוצר':'Created', 'הוגש':'Submitted', 'אושר':'Approved', 'נדחה':'Rejected', 'שינוי סטטוס':'Status changed', 'בוטל':'Cancelled',
+             'פעולת קובץ הושלמה':'File moved', 'פעולת קובץ נכשלה':'File action failed', 'הואצל':'Delegated', 'פג תוקף':'Expired' };
+const evName = e => lang === 'HE' ? e : (EV[e] || e);
+
+// ---------------------------------------------------------------- AI Insights (RH on-prem RAG LLM)
+let aiOn = false, aiFile = null, aiMode = 'find';
+async function findFiles(question) { return api('/api/ai/find', { method:'POST', body:JSON.stringify({ question, lang }) }); }
+function suggestionHtml(x) {
+  const loc = x.relative.split(/[\\/]/).slice(0, -1).join(' › ');
+  return `<div class="sugg"><div class="sg-n">${esc(x.name)} ${x.document ? statusTag(x.document) : ''}</div>
+    <div class="muted small ltr">${esc(loc)}</div>${x.reason ? `<div class="small sg-r">${esc(x.reason)}</div>` : ''}
+    <div class="small sg-a">${x.officeUri ? `<a class="link" href="${esc(x.officeUri)}">${T.open}</a>` : ''}
+      <button type="button" class="link" data-f="${esc(x.folder)}">${T.goFolder}</button>
+      <button type="button" class="link" data-dl="${esc(x.path)}">${T.download}</button>
+      ${aiOn ? `<button type="button" class="link ai" data-ai="${esc(x.path)}">✦ ${T.askAbout}</button>` : ''}</div></div>`;
+}
+const planText = p => [p.customer, p.project].filter(Boolean).join(lang === 'HE' ? ' ‹ ' : ' › ');
+async function smartResults(v, text) {
+  const r = await findFiles(text);
+  v.innerHTML = `<h2>${T.found} (${r.suggestions.length})</h2>${planText(r.plan) ? `<p class="muted small">${T.searchedIn} ${esc(planText(r.plan))}</p>` : ''}
+    ${r.suggestions.length ? `<div class="sugg-list">${r.suggestions.map(suggestionHtml).join('')}</div>` : `<p class="muted">${T.noneFound}</p>`}`;
+}
+function setMode(m) {
+  aiMode = m;
+  $('#m-find').classList.toggle('on', m === 'find'); $('#m-ask').classList.toggle('on', m === 'ask');
+  $('#ai-q').placeholder = m === 'find' ? T.findPh : T.aiPlaceholder;
+  $('#ai-send').textContent = m === 'find' ? T.go : T.aiAsk;
+  $('#ai-quick').hidden = m === 'find';
+  if (m === 'find') { $('#ai-ctx').innerHTML = esc(T.findCtx); $('#ai-clear').hidden = true; }
+  else { $('#ai-ctx').innerHTML = `${T.aiAbout} <b>${esc(aiFile ? aiFile.split(/[\\/]/).pop() : T.aiKnowledge)}</b>`; $('#ai-clear').hidden = !aiFile; }
+}
+async function findInPanel(question) {
+  const log = $('#ai-log');
+  log.insertAdjacentHTML('beforeend', `<div class="bubble me">🔎 ${esc(question)}</div><div class="bubble bot pending wide">${T.aiThinking}</div>`);
+  const pending = log.querySelector('.pending');
+  try {
+    const r = await findFiles(question);
+    pending.innerHTML = (planText(r.plan) ? `<div class="muted small">${T.searchedIn} ${esc(planText(r.plan))}</div>` : '')
+      + (r.suggestions.length ? r.suggestions.map(suggestionHtml).join('') : esc(T.noneFound));
+    wire(pending);
+  } catch (e) { pending.innerHTML = `<span style="color:var(--err)">${T.err}: ${esc(e.message)}</span>`; }
+  pending.classList.remove('pending'); log.scrollTop = log.scrollHeight;
+}
+function openAI(path) {
+  aiFile = path || null;
+  $('#ai-ctx').innerHTML = `${T.aiAbout} <b>${esc(aiFile ? aiFile.split(/[\\/]/).pop() : T.aiKnowledge)}</b>`;
+  $('#ai-clear').hidden = !aiFile;
+  $('#ai-quick').innerHTML = (aiFile ? ['qSummary', 'qReq', 'qRisk', 'qDates'] : []).map(k => `<button type="button" class="chip" data-q="${k}">${T[k]}</button>`).join('');
+  $('#ai-quick').querySelectorAll('[data-q]').forEach(b => b.onclick = () => askAI(T[b.dataset.q]));
+  setMode(aiFile ? 'ask' : (aiOn ? aiMode : 'find'));
+  $('#m-ask').hidden = !aiOn;
+  $('#ai-panel').classList.add('open'); $('#ai-panel').setAttribute('aria-hidden', 'false'); $('#ai-q').focus();
+}
+async function askAI(question) {
+  const log = $('#ai-log');
+  log.insertAdjacentHTML('beforeend', `<div class="bubble me">${esc(question)}</div><div class="bubble bot pending">${T.aiThinking}</div>`);
+  log.scrollTop = log.scrollHeight;
+  const pending = log.querySelector('.pending');
+  try {
+    const r = await api('/api/ai/ask', { method:'POST', body:JSON.stringify({ question, path: aiFile, lang }) });
+    pending.innerHTML = esc(r.answer).replace(/\n/g, '<br>') + (r.sources?.length ? `<div class="src">${T.aiSources}: ${r.sources.map(esc).join(', ')}</div>` : '');
+  } catch (e) { pending.innerHTML = `<span style="color:var(--err)">${T.err}: ${esc(e.message)}</span>`; }
+  pending.classList.remove('pending'); log.scrollTop = log.scrollHeight;
+}
+$('#ai-t').textContent = T.aiInsights; $('#ai-title').textContent = '✦ ' + T.aiInsights; $('#ai-send').textContent = T.aiAsk;
+$('#ai-q').placeholder = T.aiPlaceholder; $('#ai-clear').textContent = T.aiClear;
+$('#ai-b').onclick = () => openAI(null);
+$('#ai-x').onclick = () => { $('#ai-panel').classList.remove('open'); $('#ai-panel').setAttribute('aria-hidden', 'true'); };
+$('#ai-clear').onclick = () => openAI(null);
+$('#ai-form').onsubmit = e => { e.preventDefault(); const q = $('#ai-q').value.trim(); if (q.length > 1) { $('#ai-q').value = ''; aiMode === 'find' ? findInPanel(q) : askAI(q); } };
+$('#m-find').textContent = T.findTab; $('#m-ask').textContent = T.askTab;
+$('#m-find').onclick = () => setMode('find'); $('#m-ask').onclick = () => { setMode('ask'); };
+$('#ai-q').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#ai-form').requestSubmit(); } };
+
+// ---------------------------------------------------------------- dialogs
+function dialog(title, body, buttons) {
+  $('#dlg-h').textContent = title; $('#dlg-b').innerHTML = body;
+  $('#dlg-f').innerHTML = buttons.map(([v, label, cls]) => `<button class="pillbtn small ${cls || ''}" value="${v}">${label}</button>`).join('');
+  $('#dlg').showModal();
+  return new Promise(res => $('#dlg-form').onsubmit = e => { e.preventDefault(); res({ action: e.submitter?.value, form: e.target }); });
+}
+function note(html, cls) { const m = document.createElement('div'); m.className = 'msg ' + cls; m.innerHTML = html; $('#dlg-b').prepend(m); }
+async function uploadDialog(folder) {
+  const shown = cfg.repositoryRoot && folder.toLowerCase().startsWith(cfg.repositoryRoot.toLowerCase()) ? folder.slice(cfg.repositoryRoot.length).replace(/^[\\/]/, '') : folder;
+  let r = await dialog(T.uploadTitle, `<label>${T.folder}<input type="text" class="ltr" value="${esc(shown)}" title="${esc(folder)}" readonly></label>
+      <label>${T.chooseFile}<input type="file" name="file" required></label>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="overwrite">${T.overwrite}</label>`,
+    [['cancel', T.cancel, 'light'], ['ok', T.ok]]);
+  while (r.action === 'ok') {
+    const fd = new FormData(r.form); fd.set('folder', folder); fd.set('overwrite', r.form.overwrite.checked ? 'true' : 'false');
+    try { const x = await api('/api/files/upload', { method:'POST', body:fd }); $('#dlg').close(); render(); return x; }
+    catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); r = await new Promise(res => $('#dlg-form').onsubmit = ev => { ev.preventDefault(); res({ action: ev.submitter?.value, form: ev.target }); }); }
+  }
+  $('#dlg').close();
+}
+async function startWorkflow(path, name) {
+  const o = await api('/api/options');
+  const opt = a => a.map(x => `<option>${esc(x)}</option>`).join('');
+  const file = name || path.split(/[\\/]/).pop();
+  let r = await dialog(T.start, `<label>${T.file}<input type="text" class="ltr" value="${esc(path)}" readonly></label>
+      <label>${T.titleF}<input type="text" name="title" value="${esc(file.replace(/\.[^.]+$/, ''))}" required></label>
+      <label>${T.type}<select name="documentType">${opt(o.DocumentType)}</select></label>
+      <label>${T.area}<select name="documentArea">${opt(o.DocumentArea)}</select></label>
+      <label>${T.mode}<select name="controlMode">${opt(o.ControlMode)}</select></label>`,
+    [['cancel', T.cancel, 'light'], ['save', T.registerOnly, 'light'], ['submit', T.registerSubmit]]);
+  while (r.action === 'save' || r.action === 'submit') {
+    const f = Object.fromEntries(new FormData(r.form)); f.path = path; f.submit = r.action === 'submit';
+    try {
+      const d = await api('/api/documents', { method:'POST', body:JSON.stringify(f) });
+      $('#dlg').close(); refreshApprovals(); render();
+      return d;
+    } catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); r = await new Promise(res => $('#dlg-form').onsubmit = ev => { ev.preventDefault(); res({ action: ev.submitter?.value, form: ev.target }); }); }
+  }
+  $('#dlg').close();
+}
+const editActions = f => `<button type="button" class="link" data-rn="${esc(f.path)}">${T.rename}</button><button type="button" class="link" data-del="${esc(f.path)}" style="color:var(--err)">${T.del}</button>`;
+async function simpleDialog(title, label, value, url, body) {
+  let r = await dialog(title, `<label>${label}<input type="text" name="v" value="${esc(value)}" required></label>`, [['cancel', T.cancel, 'light'], ['ok', T.ok]]);
+  while (r.action === 'ok') {
+    try { await api(url, { method:'POST', body:JSON.stringify(body(r.form.v.value.trim())) }); $('#dlg').close(); render(); return; }
+    catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); r = await new Promise(res => $('#dlg-form').onsubmit = ev => { ev.preventDefault(); res({ action: ev.submitter?.value, form: ev.target }); }); }
+  }
+  $('#dlg').close();
+}
+const newFolderDialog = parent => simpleDialog(T.newFolder, T.folderName, '', '/api/folders', name => ({ parent, name }));
+const renameDialog = path => simpleDialog(T.rename, T.newName, path.split(/[\\/]/).pop(), '/api/items/rename', newName => ({ path, newName }));
+async function deleteItem(path) {
+  if (!confirm(`${path.split(/[\\/]/).pop()}\n${T.confirmDel}`)) return;
+  try { await api('/api/items/delete', { method:'POST', body:JSON.stringify({ path }) }); render(); }
+  catch (e) { alert(`${T.err}: ${e.message}`); }
+}
+async function download(path) {
+  const t = await token();
+  const r = await fetch('/api/files/download?path=' + encodeURIComponent(path), { credentials:'include', headers: t ? { Authorization:'Bearer ' + t } : {} });
+  if (!r.ok) return alert(T.err);
+  Object.assign(document.createElement('a'), { href: URL.createObjectURL(await r.blob()), download: path.split(/[\\/]/).pop() }).click();
+}
+
+// ---------------------------------------------------------------- start
+(async () => {
+  cfg = await (await fetch('/api/client-config')).json();
+  if (cfg.authMode === 'entra') {   // only for access from outside the network
+    await new Promise((ok, fail) => document.head.appendChild(Object.assign(document.createElement('script'), { src:'https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js', onload:ok, onerror:fail })));
+    msal = new msalBrowser.PublicClientApplication({ auth: { clientId: cfg.clientId, authority:'https://login.microsoftonline.com/' + cfg.tenantId, redirectUri: location.origin + location.pathname } });
+    await msal.initialize();
+    const r = await msal.handleRedirectPromise();
+    account = r?.account || msal.getAllAccounts()[0];
+    if (!account) return msal.loginRedirect({ scopes:[cfg.scope], state: location.search });
+    if (r?.state && !location.search) return location.replace(location.pathname + r.state);
+  }
+  if (cfg.playground) { $('#pg').hidden = false; $('#pg').textContent = T.pgBanner; }
+  else if (cfg.site && cfg.authMode === 'dev') { $('#pg').hidden = false; $('#pg').classList.add('live'); $('#pg').textContent = T.liveBanner.replace('{site}', cfg.site.split('/').pop()).replace('{where}', cfg.approvals === 'page' ? T.apPage : T.apTeams); }
+  try { me = await api('/api/me'); $('#who').textContent = (me.name || me.email) + (me.admin ? ' ★' : ''); } catch (e) { $('#who').textContent = ''; }
+  try { aiOn = (await api('/api/ai/status')).enabled; } catch { aiOn = false; }
+  if (cfg.approvals === 'page') { $('#ap-b').style.display = ''; refreshApprovals(); setInterval(refreshApprovals, 60000); }
+  $('#ai-b').style.display = '';
+  if (!aiOn) $('#ai-t').textContent = T.findTab.replace('🔎 ', '');
+  $('#ai-log').innerHTML = `<div class="muted small">${T.aiOnPrem}</div>`;
+  await render();
+  if (q.get('path')) startWorkflow(q.get('path'), q.get('name'));   // opened from the Explorer right-click
+})();
+</script>
+</body>
+</html>
