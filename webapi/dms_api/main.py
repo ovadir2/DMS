@@ -63,6 +63,7 @@ class RagRequest(BaseModel):
     question: str = Field(min_length=2, max_length=4000)
     tool: str = "qms"
     lang: str = "EN"
+    new: bool = False                    # start a new conversation
 
 
 class DecisionRequest(BaseModel):
@@ -802,12 +803,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if not rag.enabled:
             raise HTTPException(503, "The RAG tools are not configured (DMS_RAG_URL, DMS_RAG_TOOLS)")
         try:
-            result = rag.ask(req.tool, req.question, lang="HE" if req.lang.upper() == "HE" else "EN", user=user.email)
+            result = rag.ask(req.tool, req.question, user=user.email, new=req.new)
         except RagError as e:
             raise HTTPException(502, str(e)) from None
         except requests.RequestException as e:
             raise HTTPException(502, f"The RAG tool did not answer: {type(e).__name__}") from None
-        log(user, "ai-rag", f"{req.tool}: {req.question[:1000]!r} -> {result['answer'][:2000]!r}")
+        log(user, "ai-rag", f"{req.tool}: {req.question[:1000]!r} -> {result['answer'][:2000]!r}"
+            + (". Sources: " + ", ".join(x["name"] + (f" | {x['section']}" if x["section"] else "") for x in result["sources"][:10]) if result["sources"] else ""))
         return result
 
     @app.post("/api/ai/chat-log", status_code=204)

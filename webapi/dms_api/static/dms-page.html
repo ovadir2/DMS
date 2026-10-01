@@ -620,7 +620,8 @@ async function askRag(tool, question) {
   const pending = log.querySelector('.pending');
   try {
     const r = await api('/api/ai/rag', { method:'POST', body:JSON.stringify({ question, tool, lang }) });
-    pending.innerHTML = esc(r.answer).replace(/\n/g, '<br>') + `<div class="src">${esc(tool.toUpperCase())} · RAG</div>`;
+    pending.setAttribute('dir', 'auto');
+    pending.innerHTML = mdLite(r.answer) + (r.sources?.length ? `<div class="src">${T.aiSources}: ${r.sources.map(s => `<span title="${esc(s.snippet || '')}">${esc(s.name)}${s.section ? ' | ' + esc(s.section) : ''}${s.file ? ' (' + esc(s.file) + ')' : ''}</span>`).join(' · ')}</div>` : `<div class="src">${esc(tool.toUpperCase())} · RAG</div>`);
   } catch (e) {
     if (rag && /web page/.test(e.message)) {   // the tool is a chat page: show it here, inside AI Insights
       pending.classList.add('wide');
@@ -632,6 +633,14 @@ async function askRag(tool, question) {
     }
   }
   pending.classList.remove('pending'); log.scrollTop = log.scrollHeight;
+}
+// Light markdown of the RAG answers: **bold**, bullets and line breaks (the text is escaped first)
+function mdLite(s) {
+  return esc(s).split('\n').map(l => {
+    const b = l.match(/^(\s*)[*-]\s+(.*)$/);
+    l = (b ? b[2] : l).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    return b ? `<div style="padding-inline-start:${b[1].length ? 28 : 12}px">• ${l}</div>` : (l ? `<div>${l}</div>` : '<div style="height:6px"></div>');
+  }).join('');
 }
 function addRagTabs() {
   ragTools.forEach(r => {

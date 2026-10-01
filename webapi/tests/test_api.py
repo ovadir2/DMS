@@ -911,12 +911,17 @@ def test_rag_tool_answers_and_is_audited(env):
     c, sp, q = env
 
     class Http:
-        def get(self, url, params=None, headers=None, timeout=None):
-            self.sent = (url, params)
+        def __init__(self):
+            self.sent = []
+
+        def post(self, url, json=None, headers=None, timeout=None):
+            self.sent.append((url, json, headers))
             class R:
-                status_code, text, headers = 200, "", {"content-type": "application/json"}
+                status_code, text = 200, ""
                 def json(self):
-                    return [{"output": "Calibration is yearly (QP-07)."}]
+                    return {"answer": "**Calibration** is yearly.", "sources": [
+                        {"display_id": "QP-11.0", "display_section": "3.1 Shipping", "snippet": "x",
+                         "filename": "QP-11.0-V12.docx", "available": True, "rerank_score": 0.8}]}
             return R()
     http = Http()
     rag = c.app.state.rag
@@ -924,6 +929,10 @@ def test_rag_tool_answers_and_is_audited(env):
     rag.http, rag.s.rag_url, rag.s.rag_tools = http, "https://aiportal.ai.rh-global.com/webhook/tools", ["qms"]
     assert c.get("/api/ai/status").json()["rag"] == [{"tool": "qms", "page": "https://aiportal.ai.rh-global.com/webhook/tools?tool=qms"}]
     r = c.post("/api/ai/rag", json={"question": "How often is calibration?", "tool": "qms"}).json()
-    assert r["answer"] == "Calibration is yearly (QP-07)."
-    assert http.sent[1]["tool"] == "qms" and http.sent[1]["question"] == "How often is calibration?"
-    assert [a["details"].split(":")[0] for a in sp.audits if a["document_id"] == "AI"] == ["ai-rag"]
+    assert r["answer"] == "**Calibration** is yearly." and r["sources"][0]["name"] == "QP-11.0"
+    c.post("/api/ai/rag", json={"question": "And for ESD?", "tool": "qms"})
+    url, body, headers = http.sent[1]
+    assert url == "https://aiportal.ai.rh-global.com/webhook/qms-chat" and "Authorization" not in headers
+    assert body["question"] == "And for ESD?" and [m["role"] for m in body["history"]] == ["user", "assistant"]
+    rows = [a for a in sp.audits if a["document_id"] == "AI"]
+    assert rows[0]["details"].startswith("ai-rag") and "Sources: QP-11.0 | 3.1 Shipping" in rows[0]["details"]
