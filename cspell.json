@@ -116,6 +116,8 @@
     "filelinker",
     "flform",
     "rels",
-    "sspi"
+    "sspi",
+    "logf",
+    "timespec"
   ]
 }
