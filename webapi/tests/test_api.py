@@ -609,3 +609,31 @@ def test_file_service_report_and_old_layout(tmp_path):
     assert r["moved"] == 1 and (old / "Current_ReadOnly" / "COM-QUO-00001_Rev01.xlsx").exists()
     assert by["COM-QUO-00001"].startswith("PromoteToCurrent") and "outside the repository root" in by["DMS-00002"]
     assert file_service.run_once(sp, s)["report"][0]["result"].startswith("current:")
+
+
+def test_path_finder(env):
+    c, _, q = env
+    cust = q.parents[1]
+    (cust / "Projects" / "PRJ-1").mkdir(parents=True)
+    top = c.get("/api/pathfinder").json()
+    assert [o["name"] for o in top["options"]] == ["01_Management", "02_Customers"] and top["options"][0]["exists"] is False
+    lv = c.get("/api/pathfinder", params={"path": str(cust)}).json()
+    assert [(o["name"], o["exists"]) for o in lv["options"]] == [("Customer_Profile", False), ("Commercial", True), ("Projects", True),
+                                                                  ("Shared", False), ("Archive", False)]
+    prj = c.get("/api/pathfinder", params={"path": str(cust / "Projects" / "PRJ-1")}).json()
+    assert prj["node"]["kind"] == "project" and len(prj["options"]) == 12 and not any(o["exists"] for o in prj["options"])
+    target = cust / "Projects" / "PRJ-1" / "Test_Engineering" / "ATEFiles" / "FCT" / "07_FAT"
+    r = c.post("/api/pathfinder/create", params={"path": str(target)})
+    assert r.status_code == 201 and target.is_dir()
+    bad = cust / "Projects" / "PRJ-1" / "Random" / "x"
+    assert c.post("/api/pathfinder/create", params={"path": str(bad)}).status_code == 400 and not bad.exists()
+    assert c.post("/api/pathfinder/create", params={"path": str(cust.parent / "New_Customer" / "Commercial")}).status_code == 400
+
+
+def test_path_finder_through_missing_folders(env):
+    c, _, q = env
+    prj = q.parents[1] / "Projects" / "PRJ-2"
+    prj.mkdir(parents=True)
+    r = c.get("/api/pathfinder", params={"path": str(prj / "Test_Engineering" / "ATEFiles")}).json()
+    assert r["exists"] is False and [o["name"] for o in r["options"]] == ["ICT", "FCT", "FTP", "JTAG"]
+    assert c.get("/api/pathfinder", params={"path": str(prj / "Nope" / "Deeper")}).status_code == 404
