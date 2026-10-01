@@ -43,6 +43,17 @@
   .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px; }
   .tile { border:1px solid var(--line); border-radius:8px; padding:14px; cursor:pointer; display:flex; gap:10px; align-items:center; color:var(--navy); font-weight:500; background:#fff; text-align:start; font:inherit; }
   .tile:hover { border-color:var(--btn); box-shadow:0 2px 8px rgba(31,74,114,.12); }
+  .tile.folder { align-items:flex-start; width:100%; }
+  .tl { display:grid; gap:2px; } .hint { font-size:12.5px; color:var(--muted); font-weight:400; } .fname { font-size:11.5px; color:#98a2ae; font-weight:400; }
+  .tilewrap { display:grid; gap:4px; } .tileacts { font-size:13px; padding:0 4px; } .tileacts button { margin-inline-end:10px; }
+  .levels { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px; }
+  .levels .gtitle { font-weight:600; color:var(--navy); margin-inline-end:4px; }
+  .levels select { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink); max-width:260px; }
+  .levels select:last-child:has(option[value=""]:checked) { border-color:var(--btn); box-shadow:0 0 0 2px rgba(42,82,121,.15); }
+  .lsep { color:var(--muted); }
+  .guide { display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--band); border-radius:8px; padding:10px 14px; margin-bottom:12px; }
+  .guide .gtitle { font-weight:600; color:var(--navy); }
+  .guide select { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:6px; min-width:220px; background:#fff; }
   table { width:100%; border-collapse:collapse; }
   th, td { text-align:start; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
   th { color:var(--muted); font-weight:500; font-size:13px; }
@@ -107,7 +118,7 @@ const T = {
         upload:'Upload file', uploadTitle:'Save a file in this folder', chooseFile:'File from your computer', folder:'Folder', overwrite:'Replace a file with the same name',
         ok:'OK', cancel:'Cancel', saved:'Saved to', notReg:'Not registered', none:'Nothing here.', results:'Results', type:'Document type', area:'Area', mode:'Control mode',
         titleF:'Title', registerSubmit:'Register and submit', registerOnly:'Register only', registered:'Registered as', err:'Error', docId:'Document ID', path:'Location', copy:'Copy path', copied:'Copied',
-        newFolder:'New folder', rename:'Rename', del:'Delete', newName:'New name', folderName:'Folder name', confirmDel:'Move to the recycle folder?', recycled:'Moved to the recycle folder. IT can restore it.',
+        newFolder:'New folder', company:'Company', location:'Location', choose:'Choose…', whatSaving:'What are you saving?', chooseKind:'Choose a document kind', chooseProject:'Choose a project', takeMe:'Take me there', noProjects:'This customer has no projects yet.', createMissing:'This folder does not exist yet. Create it?', rename:'Rename', del:'Delete', newName:'New name', folderName:'Folder name', confirmDel:'Move to the recycle folder?', recycled:'Moved to the recycle folder. IT can restore it.',
         Working:'Working', Submitted:'Submitted', Approved_ReadOnly:'Approved (read-only)', Other:'Other', None:'Not registered', other:'עברית' },
   HE: { welcome:'RH - מערכת ניהול מסמכים', search:'חיפוש', all:'הכל', customer:'לקוח', project:'פרויקט', document:'מזהה מסמך', file:'קובץ', description:'תיאור',
         go:'חיפוש', refresh:'רענון', lang:'עברית', customers:'לקוחות', myDocs:'המסמכים שלי', home:'לקוחות', noAccess:'אין לקוחות זמינים עבורך.',
@@ -115,7 +126,7 @@ const T = {
         upload:'העלאת קובץ', uploadTitle:'שמירת קובץ בתיקייה זו', chooseFile:'קובץ מהמחשב', folder:'תיקייה', overwrite:'החלפת קובץ קיים באותו שם',
         ok:'אישור', cancel:'ביטול', saved:'נשמר ב-', notReg:'לא רשום', none:'אין פריטים.', results:'תוצאות', type:'סוג מסמך', area:'תחום', mode:'מצב בקרה',
         titleF:'כותרת', registerSubmit:'רישום והגשה לאישור', registerOnly:'רישום בלבד', registered:'נרשם כ-', err:'שגיאה', docId:'מזהה מסמך', path:'מיקום', copy:'העתקת נתיב', copied:'הועתק',
-        newFolder:'תיקייה חדשה', rename:'שינוי שם', del:'מחיקה', newName:'שם חדש', folderName:'שם התיקייה', confirmDel:'להעביר לתיקיית המחזור?', recycled:'הועבר לתיקיית המחזור. מחלקת IT יכולה לשחזר.',
+        newFolder:'תיקייה חדשה', company:'חברה', location:'מיקום', choose:'בחרו…', whatSaving:'מה שומרים?', chooseKind:'בחרו סוג מסמך', chooseProject:'בחרו פרויקט', takeMe:'קחו אותי לשם', noProjects:'ללקוח זה אין עדיין פרויקטים.', createMissing:'התיקייה עדיין לא קיימת. ליצור אותה?', rename:'שינוי שם', del:'מחיקה', newName:'שם חדש', folderName:'שם התיקייה', confirmDel:'להעביר לתיקיית המחזור?', recycled:'הועבר לתיקיית המחזור. מחלקת IT יכולה לשחזר.',
         Working:'בעבודה', Submitted:'הוגש לאישור', Approved_ReadOnly:'מאושר - קריאה בלבד', Other:'אחר', None:'לא רשום', other:'English' } }[lang];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -181,28 +192,92 @@ async function render() {
   catch (e) { v.innerHTML = `<div class="msg err">${T.err}: ${esc(e.message)}</div>`; }
 }
 async function customers(v) {
-  const list = await api('/api/customers');
-  v.innerHTML = `<h2>${T.customers}</h2>` + (list.length
+  const [areas, list] = await Promise.all([api('/api/areas'), api('/api/customers')]);
+  const other = areas.filter(a => a.name !== '02_Customers');
+  v.innerHTML = (await levelBar(null)) + `<h2>${T.customers}</h2>` + (list.length
     ? `<div class="grid">${list.map(c => `<button type="button" class="tile" data-f="${esc(c.path)}">${ICON_CUST}${esc(c.name)}</button>`).join('')}</div>`
-    : `<p class="muted">${T.noAccess}</p>`);
+    : `<p class="muted">${T.noAccess}</p>`)
+    + (other.length ? `<h2 style="margin-top:22px">${T.company}</h2><div class="grid">${other.map(a => folderTile(a)).join('')}</div>` : '');
+  wireLevels(v);
+}
+const lbl = l => l ? (lang === 'HE' ? l.he : l.en) : null;
+// Cascading selectors along the blueprint tree: choosing a folder fills the next list with its subfolders
+async function levelBar(path) {
+  const lv = await api('/api/levels' + (path ? '?path=' + encodeURIComponent(path) : ''));
+  return `<div class="levels"><span class="gtitle">${T.location}</span>${lv.map((l, i) => `${i ? `<span class="lsep">${lang === 'HE' ? '‹' : '›'}</span>` : ''}<select data-level="${i}">
+      ${l.selected ? '' : `<option value="">${T.choose}</option>`}
+      ${l.options.map(o => `<option value="${esc(o.path)}" ${o.name === l.selected ? 'selected' : ''}>${esc(lbl(o.label) || o.name)}</option>`).join('')}</select>`).join('')}</div>`;
+}
+function wireLevels(v) {
+  v.querySelectorAll('[data-level]').forEach(sel => sel.onchange = () => {
+    if (!sel.value) return;
+    state.view = 'browse'; state.folder = sel.value; render();
+  });
+}
+const hint = l => l ? (lang === 'HE' ? l.hintHe : l.hintEn) : '';
+function folderTile(f) {
+  const l = f.label, title = lbl(l) || f.name;
+  return `<button type="button" class="tile folder" data-f="${esc(f.path)}">${l && l.kind === 'customer' ? ICON_CUST : ICON_FOLDER}
+    <span class="tl"><span>${esc(title)}</span>${hint(l) ? `<span class="hint">${esc(hint(l))}</span>` : ''}${title !== f.name ? `<span class="fname ltr">${esc(f.name)}</span>` : ''}</span></button>`;
 }
 async function browse(v) {
   const r = await api('/api/browse?path=' + encodeURIComponent(state.folder));
-  state.folder = r.path;
-  const parts = r.relative.split(/[\\/]/).filter(Boolean);
-  const sep = r.path.includes('\\') ? '\\' : '/';
-  const base = r.path.slice(0, r.path.length - r.relative.length).replace(/[\\/]$/, '');
-  const crumbs = parts.map((p, i) => i === 0 ? null : `<a data-f="${esc(base + sep + parts.slice(0, i + 1).join(sep))}">${esc(p)}</a>`).filter(Boolean);
-  v.innerHTML = `<div class="crumbs"><a data-home>${T.home}</a>${crumbs.map(c => ' › ' + c).join('')}</div>
+  state.folder = r.path; state.ctx = r.context;
+  const folders = r.folders.filter(f => !['Submitted','Obsolete_ReadOnly','Working'].includes(f.name));
+  const bar = await levelBar(r.path);
+  v.innerHTML = `<div class="crumbs"><a data-home>⌂ ${T.home}</a></div>${bar}
+    ${r.node && hint(r.node) ? `<p class="muted" style="margin:-4px 0 12px">${esc(hint(r.node))}</p>` : ''}
+    ${r.context.customer ? guideBar(r.context) : ''}
     <div class="toolbar"><span class="spacer"></span>${r.canWrite ? `<button type="button" class="pillbtn small light" id="mk">${T.newFolder}</button><button type="button" class="pillbtn small" id="up">${T.upload}</button>` : ''}</div>
-    <table><tr><th>${T.name}</th><th>${T.status}</th><th class="hide-s">${T.modified}</th><th></th></tr>
-    ${r.folders.filter(f => !['Submitted','Obsolete_ReadOnly','Working'].includes(f.name)).map(f => `<tr><td><a class="link" data-f="${esc(f.path)}" style="display:inline-flex;gap:8px;align-items:center">${ICON_FOLDER}${esc(f.name)}</a></td><td></td><td class="hide-s muted">${when(f.modified)}</td><td class="actions">${r.canWrite ? editActions(f) : ''}</td></tr>`).join('')}
+    ${folders.length ? `<div class="grid" style="margin-bottom:16px">${folders.map(f => `<div class="tilewrap">${folderTile(f)}${r.canWrite && !f.label ? `<div class="tileacts">${editActions(f)}</div>` : ''}</div>`).join('')}</div>` : ''}
+    ${r.files.length ? `<table><tr><th>${T.name}</th><th>${T.status}</th><th class="hide-s">${T.modified}</th><th></th></tr>
     ${r.files.map(f => `<tr><td><span style="display:inline-flex;gap:8px;align-items:center">${ICON_FILE}${esc(f.name)}</span></td><td>${statusTag(f.document)}</td><td class="hide-s muted">${when(f.modified)}</td><td class="actions">${fileActions(f)}${r.canWrite && !f.document && !f.readOnly ? editActions(f) : ''}</td></tr>`).join('')}
-    </table>${r.folders.length + r.files.length ? '' : `<p class="muted">${T.none}</p>`}`;
+    </table>` : ''}${folders.length + r.files.length ? '' : `<p class="muted">${T.none}</p>`}`;
   v.querySelector('[data-home]').onclick = () => { state.view = 'customers'; render(); };
   if (r.canWrite) { v.querySelector('#up').onclick = () => uploadDialog(r.path); v.querySelector('#mk').onclick = () => newFolderDialog(r.path); }
   v.querySelectorAll('[data-rn]').forEach(b => b.onclick = () => renameDialog(b.dataset.rn));
   v.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteItem(b.dataset.del));
+  wireLevels(v);
+  if (r.context.customer) wireGuide(v, r.context);
+}
+
+// "What are you saving?" - takes the user to the blueprint folder for that kind of document
+let guideKinds = null;
+function guideBar(ctx) {
+  return `<div class="guide"><span class="gtitle">${T.whatSaving}</span>
+    <select id="g-kind"><option value="">${T.chooseKind}</option></select>
+    <select id="g-proj" style="display:none"></select>
+    <button type="button" class="pillbtn small" id="g-go" disabled>${T.takeMe}</button><span id="g-msg" class="muted small"></span></div>`;
+}
+async function wireGuide(v, ctx) {
+  guideKinds = guideKinds || await api('/api/guide');
+  const kind = v.querySelector('#g-kind'), proj = v.querySelector('#g-proj'), go = v.querySelector('#g-go'), msg = v.querySelector('#g-msg');
+  kind.innerHTML += guideKinds.map(g => `<option value="${g.key}">${esc(lang === 'HE' ? g.he : g.en)}${g.needsProject ? ' ▸' : ''}</option>`).join('');
+  kind.onchange = async () => {
+    const g = guideKinds.find(x => x.key === kind.value);
+    go.disabled = !g; msg.textContent = '';
+    proj.style.display = 'none';
+    if (g && g.needsProject && !ctx.project) {
+      const list = await api('/api/projects?customer=' + encodeURIComponent(ctx.customer.path));
+      proj.innerHTML = `<option value="">${T.chooseProject}</option>` + list.map(p => `<option value="${esc(p.path)}">${esc(p.name)}</option>`).join('');
+      proj.style.display = ''; go.disabled = true;
+      if (!list.length) msg.textContent = T.noProjects;
+    }
+  };
+  proj.onchange = () => go.disabled = !proj.value;
+  go.onclick = async () => {
+    const g = guideKinds.find(x => x.key === kind.value);
+    const qs = `key=${g.key}&customer=${encodeURIComponent(ctx.customer.path)}` + (g.needsProject ? `&project=${encodeURIComponent(ctx.project ? ctx.project.path : proj.value)}` : '');
+    try {
+      let t = await api('/api/guide/target?' + qs);
+      if (!t.exists) {
+        if (!confirm(T.createMissing)) return;
+        t = await api('/api/guide/create?' + qs, { method:'POST' });
+      }
+      state.folder = t.path; await render();
+      if (t.canWrite) uploadDialog(t.path);
+    } catch (e) { msg.textContent = `${T.err}: ${e.message}`; }
+  };
 }
 async function search(v) {
   const text = $('#q').value.trim();
@@ -232,7 +307,8 @@ function dialog(title, body, buttons) {
 }
 function note(html, cls) { const m = document.createElement('div'); m.className = 'msg ' + cls; m.innerHTML = html; $('#dlg-b').prepend(m); }
 async function uploadDialog(folder) {
-  let r = await dialog(T.uploadTitle, `<label>${T.folder}<input type="text" class="ltr" value="${esc(folder)}" readonly></label>
+  const shown = cfg.repositoryRoot && folder.toLowerCase().startsWith(cfg.repositoryRoot.toLowerCase()) ? folder.slice(cfg.repositoryRoot.length).replace(/^[\\/]/, '') : folder;
+  let r = await dialog(T.uploadTitle, `<label>${T.folder}<input type="text" class="ltr" value="${esc(shown)}" title="${esc(folder)}" readonly></label>
       <label>${T.chooseFile}<input type="file" name="file" required></label>
       <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="overwrite">${T.overwrite}</label>`,
     [['cancel', T.cancel, 'light'], ['ok', T.ok]]);
