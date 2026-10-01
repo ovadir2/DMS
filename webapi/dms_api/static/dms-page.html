@@ -10,7 +10,7 @@
   * { box-sizing:border-box; }
   body { margin:0; font:15px/1.45 Roboto, "Segoe UI", Arial, sans-serif; color:var(--ink); background:var(--bg); }
   header { height:76px; display:flex; align-items:center; gap:20px; padding:0 28px; background:#fff; box-shadow:0 2px 10px rgba(31,74,114,.12); position:relative; z-index:2; }
-  .brand { display:flex; align-items:center; gap:22px; }
+  .brand { display:flex; align-items:center; gap:22px; cursor:pointer; }
   .sep { width:1px; height:26px; background:#9fb0c2; }
   .welcome { font-weight:700; font-size:19px; color:var(--navy); letter-spacing:.2px; }
   .spacer { flex:1; }
@@ -306,6 +306,15 @@ $('#q').onkeydown = e => {
 };
 $('#q').onblur = () => setTimeout(taClose, 150);
 $('#refresh').onclick = () => render();
+// The RH logo / system name: back to the home screen, fresh (like reloading the page)
+document.querySelector('.brand').title = T.welcome;
+document.querySelector('.brand').onclick = () => {
+  $('#q').value = ''; if (typeof taClose === 'function') taClose();
+  $('#ai-panel').classList.remove('open');
+  Object.assign(state, { view: 'customers', folder: null, wfFilter: null });
+  history.replaceState(null, '', location.pathname + '?lang=' + lang);
+  refreshApprovals(); render(); window.scrollTo(0, 0);
+};
 
 const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${esc(d ? (T[d.statusKey] || d.lifecycleStatus) : T.None)}</span>${d ? ` <span class="muted small">${esc(d.documentId)}</span>` : ''}`;
 function fileActions(f) {
