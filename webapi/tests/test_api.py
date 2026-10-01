@@ -1045,3 +1045,23 @@ def test_delete_a_working_document(tmp_path):
     assert list((root / "04_Workflow_System" / "Recycle").rglob("Quote.xlsx"))
     assert sp.audit_events()[0]["event"] == "בוטל" and "Working document deleted" in sp.audit_events()[0]["details"]
     assert c.get("/api/my-workflows").json()["items"] == []
+
+
+def test_rename_a_working_document(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("x")
+    (q / "Other.xlsx").write_text("y")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx")}).json()
+    r = c.post(f"/api/documents/{d['id']}/rename", json={"newName": "Quote CRU4_Rev2"}).json()
+    assert r["workingUncPath"] == str(q / "Quote CRU4_Rev2.xlsx") and r["title"] == "Quote CRU4_Rev2" and r["draftRevision"] == "02"
+    assert (q / "Quote CRU4_Rev2.xlsx").is_file() and not (q / "Quote.xlsx").exists()
+    assert sp.audit_events()[0]["details"] == "Renamed: Quote.xlsx -> Quote CRU4_Rev2.xlsx"
+    assert c.post(f"/api/documents/{d['id']}/rename", json={"newName": "Other.xlsx"}).status_code == 409   # name taken
+    c.post(f"/api/documents/{d['id']}/submit")
+    assert c.post(f"/api/documents/{d['id']}/rename", json={"newName": "X"}).status_code == 409             # submitted
