@@ -409,7 +409,8 @@ async function wireGuide(v, ctx) {
 async function search(v) {
   const text = $('#q').value.trim();
   const [smart, quick] = await Promise.all([findFiles(text), api(`/api/search?q=${encodeURIComponent(text)}&scope=quick`)]);
-  const others = quick.filter(x => x.kind !== 'file');
+  const shown = new Set(smart.suggestions.map(x => (x.path || '').toLowerCase()));
+  const others = quick.filter(x => !shown.has((x.path || '').toLowerCase()));   // folders, documents and file names
   v.innerHTML = `<h2>${T.found} (${smart.suggestions.length})</h2>${planText(smart.plan) ? `<p class="muted small">${T.searchedIn} ${esc(planText(smart.plan))}</p>` : ''}
     ${smart.suggestions.length ? `<div class="sugg-list">${smart.suggestions.map(suggestionHtml).join('')}</div>` : `<p class="muted">${T.noneFound}</p>`}
     ${others.length ? `<h2 style="margin-top:22px">${T.alsoFound}</h2><table><tr><th>${T.name}</th><th>${T.status}</th><th class="hide-s">${T.path}</th><th></th></tr>
