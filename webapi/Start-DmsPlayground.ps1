@@ -18,7 +18,7 @@
     DC-P1 (Approver Matrix: all mandatory approvers, then the final approver). Turn DC-P1 Off in Power
     Automate for the pilot, or the approvals are also sent to Teams. -Approvals flow: DC-P1 in Teams.
     -Admins are DMS super users (submit any document, decide any approval stage, see all workflows).
-    The first run creates .venv and installs the packages (needs Python 3.11+, "py" launcher).
+    The first run creates .venv and installs the packages (needs Python 3.11+: "py" or "python").
     Uploads, renames and deletes are real changes in -Root. Stop with Ctrl+C.
 
 .EXAMPLE
@@ -50,7 +50,11 @@ if ($Live -and -not $ClientId) { throw '-Live needs -ClientId (the Entra app you
 $py = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path $py)) {
     Write-Host 'First run: creating .venv and installing packages...' -ForegroundColor Cyan
-    py -m venv .venv
+    $base = if (Get-Command py -ErrorAction SilentlyContinue) { @('py', '-3') }
+            elseif (Get-Command python -ErrorAction SilentlyContinue) { @('python') }
+            else { throw 'Python 3.11+ is not installed. Install it: winget install -e --id Python.Python.3.12  (then open a new PowerShell window)' }
+    & $base[0] @($base | Select-Object -Skip 1) -m venv .venv
+    if (-not (Test-Path $py)) { throw 'Could not create .venv. Check that Python 3.11+ is installed (python --version).' }
     & $py -m pip install --quiet --upgrade pip
 }
 & $py -m pip install --quiet -r requirements.txt
