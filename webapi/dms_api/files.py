@@ -16,6 +16,19 @@ class PathNotAllowed(Exception):
     pass
 
 
+SYSTEM_FILES = {"thumbs.db", "desktop.ini", ".ds_store", "ehthumbs.db"}
+
+
+def is_hidden(entry: os.DirEntry) -> bool:
+    """Office lock files, Windows/Mac system files (Thumbs.db, desktop.ini) and hidden or system items."""
+    if entry.name.startswith(("~$", ".")) or entry.name.lower() in SYSTEM_FILES:
+        return True
+    try:
+        return bool(getattr(entry.stat(), "st_file_attributes", 0) & 0x6)   # FILE_ATTRIBUTE_HIDDEN | SYSTEM
+    except OSError:
+        return True
+
+
 def is_read_only(path: str) -> bool:
     """The read-only attribute (Windows) / no write bit, whoever runs the service."""
     return not os.stat(path).st_mode & stat.S_IWRITE
@@ -77,7 +90,7 @@ def list_folder(root: str, path: str | None, can: Can = _allow_all) -> dict:
     folders, files = [], []
     with os.scandir(folder) as it:
         for entry in sorted(it, key=lambda x: x.name.lower()):
-            if entry.name.startswith(("~$", ".")) or not can(entry.path, "read"):
+            if is_hidden(entry) or not can(entry.path, "read"):
                 continue
             st = entry.stat()
             item = {"name": entry.name, "path": entry.path,
@@ -139,7 +152,7 @@ def walk_search(start: str, text: str, can: Can = _allow_all, limit: int = 200,
         except OSError:
             continue
         for entry in entries:
-            if entry.name.startswith(("~$", ".")) or not can(entry.path, "read"):
+            if is_hidden(entry) or not can(entry.path, "read"):
                 continue
             is_dir = entry.is_dir()
             if is_dir:

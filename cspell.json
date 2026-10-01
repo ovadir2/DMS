@@ -109,6 +109,8 @@
     "cands",
     "sugg",
     "LOCALAPPDATA",
-    "pscustomobject"
+    "pscustomobject",
+    "winget",
+    "ehthumbs"
   ]
 }

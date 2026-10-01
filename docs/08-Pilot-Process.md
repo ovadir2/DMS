@@ -41,7 +41,7 @@ flowchart TB
 
 ### Step by step (the user)
 
-1. **Find the place.** On the DMS page choose the customer. The **Location** lists follow the blueprint tree: choosing a folder fills the next list with its subfolders, only the ones AD allows (for example Customer_A › Projects › PRJ-101 › Test engineering › Test reports). Or use **What are you saving?**: pick the kind (Quotation, RFQ, SOW, ECO, test report...) and, when needed, the project, and the page goes to the right folder.
+1. **Find the place.** On the DMS page choose the customer. The **Location** lists follow the blueprint tree: choosing a folder fills the next list with its subfolders, only the ones AD allows (for example Customer_A › Projects › PRJ-101 › Test engineering › Test reports). Or use **What are you saving?**: pick the kind (Quotation, RFQ, SOW, ECO, test report...) and, when needed, the project, and the page goes to the right folder. Or open **🧭 Path finder** (folder toolbar or menu): build the path level by level from the blueprint tree, including blueprint folders that do not exist yet (marked *new*), then **Go there**, **Create and go**, **Upload here** or **Copy path**.
 2. **Save the file.** **Upload file** saves it from the PC into the open folder. The user can also create folders, rename and delete (to the recycle folder) where they have write permission.
 3. **Start workflow.** On the file: **Start workflow** → document type, area, control mode → **Register and submit**. From Explorer: right-click → **Start workflow** opens the same form.
 4. **Follow it.** **My workflows** shows every document the user registered or submitted: counts per status, days waiting, the last decision with the approver's comment, and the full history.
@@ -122,6 +122,7 @@ Sign in as roneno@rh.co.il when the browser asks. His name shows with ★ (super
 | 13 | Search **✦ Smart** "FCT quote", and AI Insights → Find a file | The quote is suggested with its status; Go to folder opens its folder |
 | 14 | Right-click the file in Explorer → **Start workflow** (`Install-DmsExplorerMenu.ps1 -AppUrl 'http://localhost:8080/dms/dms-page?lang=EN'`) | The page opens with the Start workflow form for that file |
 | 15 | My workflows → **All workflows** | Every workflow in the register, with the owner |
+| 16 | My workflows → **Withdraw** on a submitted document | Status back to Working, a Withdrawn row in Control Audit, the file returns to its place; submit it again to rerun the process from step 4 |
 
 **After the pilot**: restore the real approvers with the command `Set-DmsTestApprover.ps1` printed (`-Restore <backup file>`), and stop the page with Ctrl+C.
 
