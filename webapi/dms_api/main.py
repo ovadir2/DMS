@@ -212,6 +212,56 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                if e.name not in WORKFLOW_FOLDERS and not (not parts and e.name in blueprint.HIDDEN_AT_ROOT) and user.can(e.path)]
         return sorted(out, key=lambda f: (rank.get(f["name"].lower(), len(rank)), f["name"].lower()))
 
+    # ------------------------------------------------------------------ path finder (blueprint, including missing folders)
+    def _node_missing(parts: list[str]) -> bool:
+        """True when a path that does not exist is not a blueprint path either."""
+        return blueprint.describe(parts) is None and not all(
+            p.lower() in [n.lower() for n in blueprint.order(parts[:i])] for i, p in enumerate(parts) if i)
+    @app.get("/api/pathfinder")
+    def pathfinder(path: str | None = None, user: User = Depends(current_user)):
+        """The options for the next level under `path`: the folders that exist (AD-filtered) plus the
+        blueprint folders that do not exist yet ("exists": false). Customers and projects (the "*"
+        levels of the blueprint) are offered only when they exist."""
+        parts = rel_parts(files.resolve(s.repository_root, path)) if path else []
+        folder = os.path.join(s.repository_root, *parts)
+        exists = not parts or os.path.isdir(folder)
+        if not exists and _node_missing(parts):
+            raise HTTPException(404, "Not a blueprint folder")
+        existing = {f["name"].lower(): f for f in child_folders(parts, user)} if exists else {}
+        out = list(existing.values())
+        for name in blueprint.order(parts):
+            if name.lower() not in existing and not (not parts and name in blueprint.HIDDEN_AT_ROOT):
+                out.append({"name": name, "path": os.path.join(folder, name), "label": blueprint.describe(parts + [name]), "exists": False})
+        for f in out:
+            f.setdefault("exists", True)
+        rank = {n.lower(): i for i, n in enumerate(blueprint.order(parts))}
+        out.sort(key=lambda f: (rank.get(f["name"].lower(), len(rank)), f["name"].lower()))
+        node = blueprint.describe(parts) if parts else None
+        return {"path": folder, "relative": os.path.relpath(folder, s.repository_root) if parts else "", "node": node,
+                "exists": exists, "canWrite": exists and user.can(folder, "write"), "options": out}
+
+    @app.post("/api/pathfinder/create", status_code=201)
+    def pathfinder_create(path: str, user: User = Depends(current_user)):
+        """Create the missing folders of a blueprint path. Every new folder must be one the blueprint
+        expects at its level, and the user needs write permission on the deepest folder that exists."""
+        full = files.resolve(s.repository_root, path)
+        parts = rel_parts(full)
+        existing = s.repository_root
+        for i, p in enumerate(parts):
+            nxt = os.path.join(existing, p)
+            if os.path.isdir(nxt):
+                existing = nxt
+                continue
+            for j in range(i, len(parts)):
+                if parts[j].lower() not in [n.lower() for n in blueprint.order(parts[:j])]:
+                    raise HTTPException(400, f"'{parts[j]}' is not a blueprint folder at this level")
+            break
+        if not user.can(existing, "write"):
+            raise HTTPException(403, "You do not have permission to create folders here")
+        os.makedirs(full, exist_ok=True)
+        log(user, "new-folder", full)
+        return {"path": full, "canWrite": user.can(full, "write")}
+
     @app.get("/api/levels")
     def levels(path: str | None = None, user: User = Depends(current_user)):
         """One selector per level of the tree, from the root down to `path`, plus the next level:

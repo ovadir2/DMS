@@ -42,6 +42,7 @@ So the NTFS permissions on the file server (the `DL_FS_*` groups, docs/02 §3.2)
 | On the page | API | Rules |
 | --- | --- | --- |
 | **Location** lists along the blueprint tree (Customers › Customer › Commercial / Projects › Project › Engineering, Development 01-10, Test engineering ...). Choosing a folder in one list fills the next list with its subfolders | `GET /api/levels?path=` | Only folders the user may open, in blueprint order, with English/Hebrew names. System and workflow folders are not offered |
+| **🧭 Path finder** (folder toolbar or menu): build a path level by level from the blueprint tree, with the blueprint folders that do not exist yet marked *new*; then Go there, Create and go, Upload here or Copy path | `GET /api/pathfinder?path=`, `POST /api/pathfinder/create?path=` | Existing folders only where AD allows; new folders only where the blueprint expects them and the user may write. Customers and projects are offered only when they exist |
 | **What are you saving?** Pick a document kind (quotation, RFQ, SOW, ECO, test report ...) and, when needed, a project. The page goes to the blueprint folder and opens the upload window | `GET /api/guide`, `GET /api/guide/target`, `POST /api/guide/create` | A missing blueprint folder is created only with the user's consent and write permission |
 | Pick a customer | `GET /api/customers` | Only customers whose folder the user may open |
 | Open folders | `GET /api/browse?path=` | Only items the user may read, each file with its DMS status |
