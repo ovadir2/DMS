@@ -401,10 +401,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.get("/api/search")
     def search(q: str = Query(..., min_length=2), scope: str = Query("all", description="all | customer | project | document | file | quick (customers, folders, documents)"),
                customer: str | None = Query(None, description="Customer folder path, to search inside one customer"),
+               limit: int | None = Query(None, ge=1, le=500, description="At most this many results (suggestions while typing)"),
                user: User = Depends(current_user)):
         """Customers, folders, registered documents (Document ID, title, type, file name) and file names the
         user may see, in the whole repository. Several words match in any order. An exact Document ID comes first."""
         out: list[dict] = []
+        cap = min(limit or s.search_limit, s.search_limit)
         words = q.lower().split()
         seen: set[str] = set()
         if scope in ("all", "customer", "quick"):
@@ -425,7 +427,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         starts = [files.resolve(s.repository_root, customer)] if customer else search_roots()
         if scope in ("all", "project", "file", "quick"):
             idx = register_index()
-            left = s.search_limit
+            left = cap - len(out)
             for start in [p for p in starts if os.path.isdir(p)]:
                 for hit in files.walk_search(start, q, user.can, left, folders_only=scope == "project"):
                     left -= 1
@@ -436,7 +438,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                         out.append({"kind": "file", **hit, "document": with_key(d) if d else None})
                 if left <= 0:
                     break
-        return out[: s.search_limit]
+        return out[:cap]
 
     @app.post("/api/guide/create", status_code=201)
     def guide_create(key: str, customer: str, project: str | None = None, user: User = Depends(current_user)):

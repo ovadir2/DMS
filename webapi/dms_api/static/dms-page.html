@@ -31,7 +31,17 @@
   .searchbox { flex:1; position:relative; }
   .searchbox input { width:100%; height:47px; border:1px solid var(--line); border-radius:6px; padding:0 44px 0 12px; font:inherit; color:var(--ink); }
   [dir=rtl] .searchbox input { padding:0 12px 0 44px; }
-  .searchbox svg { position:absolute; inset-inline-end:12px; top:13px; }
+  .searchbox > svg { position:absolute; inset-inline-end:12px; top:13px; }
+  .typeahead { position:absolute; top:50px; inset-inline:0; background:#fff; border:1px solid var(--line); border-radius:8px;
+               box-shadow:0 8px 24px rgba(20,35,55,.15); z-index:15; max-height:60vh; overflow:auto; padding:4px 0; }
+  .typeahead button { display:flex; gap:10px; align-items:center; width:100%; text-align:start; padding:7px 12px; background:none; border:none;
+                      font:inherit; cursor:pointer; color:var(--ink); }
+  .typeahead button.on, .typeahead button:hover { background:var(--band); }
+  .typeahead .ta-n { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .typeahead .ta-p { font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; direction:ltr; unicode-bidi:plaintext; }
+  .typeahead .ta-t { display:grid; min-width:0; flex:1; }
+  [dir=rtl] .typeahead .ta-p { text-align:right; }
+  .typeahead .ta-all { color:var(--info); font-size:13px; border-top:1px solid var(--line); margin-top:4px; }
   .pillbtn { height:47px; min-width:150px; border-radius:24px; background:var(--btn); color:#fff; border:none; font:inherit; font-weight:500; cursor:pointer; padding:0 26px; }
   .pillbtn:disabled { opacity:.5; cursor:default; }
   .pillbtn.small { height:38px; min-width:0; padding:0 20px; }
@@ -252,8 +262,49 @@ document.onclick = () => $('#menu').classList.remove('open');
 $('#menu').onclick = e => { const m = e.target.dataset.m; if (m === 'lang') return $('#lang').click(); if (m === 'ai') return openAI(null); if (m === 'pf') return pathFinder(state.view === 'browse' ? state.folder : null); if (m === 'fl') { state.flTarget = state.view === 'browse' ? state.folder : state.flTarget; state.view = 'firstLoad'; return render(); } if (m) { state.view = m; render(); } };
 $('#ap-t').textContent = T.approvals; $('#ap-b').title = T.approvals; $('#ap-b').onclick = () => { state.view = 'approvalsView'; render(); };
 $('#wf-t').textContent = T.myWf; $('#wf-b').title = T.myWf; $('#wf-b').onclick = () => { state.view = 'mine'; render(); };
-$('#go').onclick = () => { if ($('#q').value.trim().length >= 2) { state.view = 'search'; render(); } };
-$('#q').onkeydown = e => { if (e.key === 'Enter') $('#go').click(); };
+$('#go').onclick = () => { ++ta.seq; taClose(); if ($('#q').value.trim().length >= 2) { state.view = 'search'; render(); } };
+// Suggestions while typing: customers, folders, documents (by ID) and file names the user may see
+const ta = { seq: 0, items: [], pos: -1, timer: null };
+const taBox = () => $('#ta') || (() => { const d = document.createElement('div'); d.id = 'ta'; d.className = 'typeahead'; d.hidden = true; $('#q').parentElement.appendChild(d); return d; })();
+const taClose = () => { taBox().hidden = true; ta.pos = -1; };
+function taPick(x) {
+  taClose();
+  if (!x) return $('#go').click();
+  const folder = x.kind === 'customer' || x.kind === 'folder' ? x.path : (x.path || '').replace(/[\\/][^\\/]*$/, '');
+  state.view = 'browse'; state.folder = folder; render();
+}
+function taShow() {
+  const box = taBox(), rel = p => (p || '').replace(cfg.repositoryRoot || '', '').replace(/^[\\/]/, '');
+  const icon = k => k === 'customer' ? ICON_CUST : (k === 'folder' ? ICON_FOLDER : ICON_FILE);
+  box.innerHTML = ta.items.map((x, i) => `<button type="button" data-i="${i}" class="${i === ta.pos ? 'on' : ''}">${icon(x.kind)}<span class="ta-t">
+      <span class="ta-n">${esc(x.document ? x.document.documentId + ' · ' : '')}${esc(x.name || '')}</span><span class="ta-p">${esc(rel(x.path))}</span></span>
+      ${x.document ? statusTag({ ...x.document, documentId: '' }) : ''}</button>`).join('')
+    + `<button type="button" data-i="-1" class="ta-all">🔎 ${T.search}: "${esc($('#q').value.trim())}"</button>`;
+  box.querySelectorAll('button').forEach(b => b.onmousedown = e => { e.preventDefault(); taPick(ta.items[+b.dataset.i]); });
+  box.hidden = false;
+}
+$('#q').oninput = () => {
+  clearTimeout(ta.timer);
+  const text = $('#q').value.trim();
+  if (text.length < 2) return taClose();
+  ta.timer = setTimeout(async () => {
+    const seq = ++ta.seq;
+    try {
+      const r = await api(`/api/search?q=${encodeURIComponent(text)}&scope=quick&limit=10`);
+      if (seq !== ta.seq || $('#q').value.trim() !== text) return;
+      ta.items = r; ta.pos = -1; taShow();
+    } catch { taClose(); }
+  }, 250);
+};
+$('#q').onkeydown = e => {
+  const open = !taBox().hidden;
+  if (open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    e.preventDefault();
+    ta.pos = Math.max(-1, Math.min(ta.items.length - 1, ta.pos + (e.key === 'ArrowDown' ? 1 : -1))); taShow();
+  } else if (e.key === 'Enter') { e.preventDefault(); ++ta.seq; open && ta.pos >= 0 ? taPick(ta.items[ta.pos]) : (taClose(), $('#go').click()); }
+  else if (e.key === 'Escape') taClose();
+};
+$('#q').onblur = () => setTimeout(taClose, 150);
 $('#refresh').onclick = () => render();
 
 const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${esc(d ? (T[d.statusKey] || d.lifecycleStatus) : T.None)}</span>${d ? ` <span class="muted small">${esc(d.documentId)}</span>` : ''}`;
