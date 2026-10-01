@@ -5,3 +5,4 @@ msal>=1.30
 PyJWT[crypto]>=2.9
 python-multipart>=0.0.9
 pywin32>=306; sys_platform == 'win32'
+requests-negotiate-sspi>=0.5; sys_platform == 'win32'

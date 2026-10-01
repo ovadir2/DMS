@@ -59,6 +59,13 @@ class Settings:
     ex_site_url: str = ""                   # Large File Exchange site, for sharing approved files with customers
     ex_library: str = "TemporaryUploads"
     ex_folder: str = "Outbound"
+    fl_check_url: str = ""                  # File Linker WebAPI#1 (is a path registered?), {path} in the URL
+    fl_update_url: str = ""                 # File Linker WebAPI#2 (replace a registered path)
+    fl_update_method: str = "POST"
+    fl_update_body: str = ""                # JSON template with {old} and {new}
+    fl_registered_field: str = ""
+    fl_auth: str = "windows"                # windows | bearer | none
+    fl_token: str = ""
     notify: bool = True                     # page approvals: write DMS Notifications (email + Teams by DC-P2)
     page_url: str = ""                      # the DMS page address used in notification links
     admins: list[str] = field(default_factory=list)   # DMS super users: submit any document, see all workflows
@@ -113,6 +120,13 @@ class Settings:
             ex_site_url=e("DMS_EX_SITE_URL", "").rstrip("/"),
             ex_library=e("DMS_EX_LIBRARY", "TemporaryUploads"),
             ex_folder=e("DMS_EX_FOLDER", "Outbound"),
+            fl_check_url=e("DMS_FL_CHECK_URL", ""),
+            fl_update_url=e("DMS_FL_UPDATE_URL", ""),
+            fl_update_method=e("DMS_FL_UPDATE_METHOD", "POST"),
+            fl_update_body=e("DMS_FL_UPDATE_BODY", ""),
+            fl_registered_field=e("DMS_FL_REGISTERED_FIELD", ""),
+            fl_auth=e("DMS_FL_AUTH", "windows"),
+            fl_token=e("DMS_FL_TOKEN", ""),
             notify=e("DMS_NOTIFY", "1") not in ("0", "false", "no"),
             page_url=e("DMS_PAGE_URL", ""),
             admins=[a.strip().lower() for a in e("DMS_ADMINS", "").split(",") if a.strip()],

@@ -251,7 +251,7 @@ def test_controlled_files_are_protected(env):
     c.post("/api/documents", json={"path": str(f), "documentType": "נוהל", "documentArea": "מסחרי"})
     assert c.post("/api/items/delete", json={"path": str(f)}).status_code == 409
     assert c.post("/api/items/rename", json={"path": str(f), "newName": "x.xlsx"}).status_code == 409
-    assert c.post("/api/items/delete", json={"path": str(q)}).status_code == 409   # folder holding it
+    assert c.post("/api/items/delete", json={"path": str(q)}).status_code in (403, 409)   # skeleton folder holding it
     (q / "Current_ReadOnly").mkdir()
     (q / "Current_ReadOnly" / "a.xlsx").write_text("x")
     assert c.post("/api/items/delete", json={"path": str(q / "Current_ReadOnly" / "a.xlsx")}).status_code == 403
@@ -796,3 +796,103 @@ def test_share_payloads():
     assert share["roleValue"] == "role:1073741826" and share["sendEmail"] is True and share["includeAnonymousLinkInEmail"] is False
     assert j.loads(share["peoplePickerInput"])[0]["Key"] == "edssrom@gmail.com"
     assert sess.calls[2][3] == b"x"                                                # the file bytes were uploaded
+
+
+class FakeLinker:
+    enabled = True
+
+    def __init__(self, registered):
+        self.registered, self.replaced = set(registered), []
+
+    def is_registered(self, path):
+        return path in self.registered
+
+    def replace(self, old, new):
+        self.replaced.append((old, new))
+
+
+def _wait(c, job_id):
+    import time
+    for _ in range(200):
+        j = c.get(f"/api/first-load/{job_id}").json()
+        if j["state"] != "running":
+            return j
+        time.sleep(0.02)
+    raise AssertionError("first load did not finish")
+
+
+def test_first_loading(tmp_path):
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    old = tmp_path / "OldRepo" / "CRU4"
+    (old / "Tests").mkdir(parents=True)
+    (old / "Spec_Rev3.pdf").write_text("spec")
+    (old / "Tests" / "FCT plan.docx").write_text("plan")
+    (old / "Thumbs.db").write_text("x")
+    root = tmp_path / "Root"
+    target = root / "02_Customers" / "Customer_A" / "Projects" / "PRJ-1" / "Customer_Source"
+    target.mkdir(parents=True)
+    (target / "Spec_Rev3.pdf").write_text("spec")            # already moved manually; FCT plan is still only in the source
+    os.remove(old / "Spec_Rev3.pdf")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    linker = FakeLinker({str(old / "Spec_Rev3.pdf")})
+    c.app.state.linker = linker
+    body = {"source": str(old), "target": str(target), "documentType": "שרטוט", "documentArea": "פיתוח"}
+    dry = _wait(c, c.post("/api/first-load", json=body).json()["id"])
+    assert dry["total"] == 2 and all(r["result"].startswith("plan") for r in dry["rows"]) and not sp.items
+    assert {r["fileLinker"] for r in dry["rows"]} == {"registered - would be updated", "not registered"}
+    j = _wait(c, c.post("/api/first-load", json={**body, "dryRun": False}).json()["id"])
+    by = {os.path.basename(r["target"]): r for r in j["rows"]}
+    assert by["Spec_Rev3.pdf"]["result"] == "loaded" and by["Spec_Rev3.pdf"]["revision"] == "03"
+    assert by["FCT plan.docx"]["result"] == "loaded" and by["FCT plan.docx"]["revision"] == "01"
+    cur = target / "Current_ReadOnly" / "Spec_Rev3.pdf"
+    assert cur.exists() and file_service.is_read_only(str(cur)) and (target / "Tests" / "Current_ReadOnly" / "FCT plan.docx").exists()
+    assert not (target / "Spec_Rev3.pdf").exists()
+    docs = {d["title"]: d for d in sp.documents()}
+    assert docs["Spec_Rev3"]["lifecycleStatus"] == "מאושר - קריאה בלבד" and docs["Spec_Rev3"]["currentUncPath"] == str(cur)
+    assert len(docs["Spec_Rev3"]["currentSHA256"]) == 64
+    assert linker.replaced == [(str(old / "Spec_Rev3.pdf"), str(cur))] and by["Spec_Rev3.pdf"]["fileLinker"] == "updated"
+    assert any("DMS First loading" in e["details"] for e in sp.audit_events())
+    assert j["report"] and os.path.isfile(j["report"])
+    again = _wait(c, c.post("/api/first-load", json={**body, "dryRun": False}).json()["id"])
+    assert all(r["result"] == "skipped - already loaded" for r in again["rows"])
+    assert file_service.run_once(sp, s)["moved"] == 0                                   # the file service leaves them alone
+    s.admins = []
+    assert c.post("/api/first-load", json=body).status_code == 403
+
+
+def test_first_loading_writes_a_full_log(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    old = tmp_path / "Old"
+    old.mkdir()
+    (old / "A_Rev2.pdf").write_text("a")
+    root = tmp_path / "Root"
+    target = root / "02_Customers" / "Customer_A" / "Commercial"
+    target.mkdir(parents=True)
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    c.app.state.linker = FakeLinker({str(old / "A_Rev2.pdf")})
+    j = _wait(c, c.post("/api/first-load", json={"source": str(old), "target": str(target), "documentType": "x",
+                                                 "documentArea": "y", "dryRun": False}).json()["id"])
+    log = open(j["log"], encoding="utf-8-sig").read()
+    for text in ("started by", "source: " + str(old), "copied from the source", "SHA-256", "registered DMS-00001",
+                 "WebAPI#1", "WebAPI#2", "Finished: 1 files - loaded: 1", "CSV report"):
+        assert text in log, text
+    assert j["log"].endswith(".log") and j["report"].replace(".csv", ".log") == j["log"]
+    summary = [a for a in sp.audits if a["documentId"].startswith("FIRST-LOAD-")]
+    assert len(summary) == 1 and "loaded: 1" in summary[0]["details"] and j["log"] in summary[0]["details"]
+    assert sorted(a["name"][-3:] for a in sp.attachments) == ["csv", "log"]
+
+
+def test_skeleton_is_protected_content_is_not(env):
+    c, _, q = env
+    content = q / "Old quotes 2019" / "Archive A"
+    content.mkdir(parents=True)
+    (q.parent / "NDA").mkdir()                                # an empty blueprint folder
+    assert c.post("/api/items/delete", json={"path": str(q.parent / "NDA")}).status_code == 403
+    assert c.post("/api/items/rename", json={"path": str(q), "newName": "Quotes"}).status_code == 403
+    assert c.post("/api/items/rename", json={"path": str(content), "newName": "Archive B"}).status_code == 200
+    assert c.post("/api/items/delete", json={"path": str(q / "Old quotes 2019")}).status_code == 200

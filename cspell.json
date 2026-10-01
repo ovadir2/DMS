@@ -112,6 +112,12 @@
     "pscustomobject",
     "winget",
     "ehthumbs",
-    "roneno"
+    "roneno",
+    "filelinker",
+    "flform",
+    "rels",
+    "sspi",
+    "logf",
+    "timespec"
   ]
 }
