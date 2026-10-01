@@ -637,3 +637,82 @@ def test_path_finder_through_missing_folders(env):
     r = c.get("/api/pathfinder", params={"path": str(prj / "Test_Engineering" / "ATEFiles")}).json()
     assert r["exists"] is False and [o["name"] for o in r["options"]] == ["ICT", "FCT", "FTP", "JTAG"]
     assert c.get("/api/pathfinder", params={"path": str(prj / "Nope" / "Deeper")}).status_code == 404
+
+
+def _approved_env(tmp_path):
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "CRU 4 FCT Quote_Rev1.xlsx").write_text("rev1")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    assert sp.document(d["id"])["draftRevision"] == "01"
+    c.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    c.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    file_service.run_once(sp, s)
+    return c, sp, s, q, d, file_service
+
+
+def test_new_revision_from_the_approved_copy(tmp_path):
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    cur = q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx"
+    assert cur.exists() and sp.document(d["id"])["currentRevision"] == "01"
+    r = c.post(f"/api/documents/{d['id']}/revise")
+    assert r.status_code == 200, r.text
+    draft = q / "CRU 4 FCT Quote_Rev02_DRAFT.xlsx"
+    assert r.json()["draft"] == str(draft) and draft.read_text() == "rev1" and not fs.is_read_only(str(draft))
+    doc = sp.document(d["id"])
+    assert doc["lifecycleStatus"] == "בעבודה" and doc["draftRevision"] == "02" and doc["currentUncPath"] == str(cur)
+    assert c.post(f"/api/documents/{d['id']}/revise").status_code == 409            # only from Approved
+    draft.write_text("rev2")
+    c.post(f"/api/documents/{d['id']}/submit")
+    c.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    c.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    fs.run_once(sp, s)
+    new = q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev02.xlsx"
+    assert new.read_text() == "rev2" and (q / "Obsolete_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx").exists()
+    doc = sp.document(d["id"])
+    assert doc["currentRevision"] == "02" and doc["currentUncPath"] == str(new) and not cur.exists()
+
+
+def test_new_revision_from_an_uploaded_file(tmp_path):
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    r = c.post(f"/api/documents/{d['id']}/revise", data={"submit": "true"}, files={"file": ("my new quote.xlsx", b"fresh")})
+    assert r.status_code == 200 and r.json()["statusKey"] == "Submitted"
+    assert (q / "CRU 4 FCT Quote_Rev02_DRAFT.xlsx").read_bytes() == b"fresh"
+
+
+def test_workflow_folders_are_untouchable(tmp_path):
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    cur = q / "Current_ReadOnly"
+    assert c.post("/api/items/delete", json={"path": str(cur)}).status_code == 403
+    assert c.post("/api/items/rename", json={"path": str(cur), "newName": "x"}).status_code == 403
+    assert c.post("/api/folders", json={"parent": str(cur), "name": "x"}).status_code == 403
+    assert c.post("/api/files/upload", data={"folder": str(cur)}, files={"file": ("a.txt", b"x")}).status_code == 403
+    (q / "Other").mkdir()
+    (q / "Other" / "Submitted").mkdir()                       # an unregistered folder holding a workflow folder
+    assert c.post("/api/items/delete", json={"path": str(q / "Other")}).status_code == 403
+    b = c.get("/api/browse", params={"path": str(cur)}).json()
+    assert b["managed"] is True and b["canWrite"] is False
+
+
+def test_repository_changes_are_audited(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory")
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    c.post("/api/files/upload", data={"folder": str(q)}, files={"file": ("a.txt", b"x")})
+    c.post("/api/folders", json={"parent": str(q), "name": "2026"})
+    c.post("/api/items/rename", json={"path": str(q / "a.txt"), "newName": "b.txt"})
+    c.post("/api/items/delete", json={"path": str(q / "b.txt")})
+    rows = [(e["documentId"], e["details"].split(":")[0], e["actor"]) for e in reversed(sp.audit_events())]
+    assert rows == [("FS", "upload", USER), ("FS", "new-folder", USER), ("FS", "rename", USER), ("FS", "delete", USER)]
+    assert str(root) not in sp.audit_events()[0]["details"]                          # paths relative to the root
