@@ -104,3 +104,10 @@ def test_no_token_sends_no_authorization_and_explains_a_refusal():
     except AiError as e:
         assert "DMS_AI_TOKEN" in str(e)
     assert "Authorization" not in http.calls[0][2]
+
+
+def test_answer_in_the_language_of_the_question():
+    from dms_api.main import answer_lang
+    assert answer_lang("נהלי שינוע", "EN") == "HE"
+    assert answer_lang("calibration procedure", "HE") == "EN"
+    assert answer_lang("123?", "HE") == "HE" and answer_lang("123?", "EN") == "EN"

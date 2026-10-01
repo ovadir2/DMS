@@ -96,6 +96,13 @@ class FindRequest(BaseModel):
     lang: str = "EN"
 
 
+def answer_lang(question: str, page_lang: str) -> str:
+    """Answer in the language of the question (a Hebrew question gets a Hebrew answer on the English page too)."""
+    if any("\u0590" <= ch <= "\u05ff" for ch in question):
+        return "HE"
+    return "HE" if page_lang.upper() == "HE" and not any(ch.isascii() and ch.isalpha() for ch in question) else "EN"
+
+
 def create_app(settings: Settings | None = None, sharepoint: SharePoint | None = None, ai: OpenWebUI | None = None) -> FastAPI:
     s = settings or Settings.from_env()
     if not logging.getLogger().handlers:
@@ -744,7 +751,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         configured, the AI makes the search plan and ranks the matches with a reason; without it,
         the request's keywords are used."""
         ai: OpenWebUI = app.state.ai
-        lang = "HE" if req.lang.upper() == "HE" else "EN"
+        lang = answer_lang(req.question, req.lang)
         cust_list = customers("", user)
         plan, used_ai = None, False
         if ai.enabled:
@@ -828,7 +835,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 f". DMS record {d.get('documentId')}, type {d.get('documentType')}, status {d.get('lifecycleStatus')},"
                 f" revision {d.get('currentRevision') or '-'}, owner {d.get('ownerName') or d.get('ownerEmail')}" if d else ". Not registered in the DMS")
         try:
-            result = ai.ask(req.question, lang="HE" if req.lang.upper() == "HE" else "EN", file_path=path, context=context)
+            result = ai.ask(req.question, lang=answer_lang(req.question, req.lang), file_path=path, context=context)
         except AiError as e:
             raise HTTPException(502, str(e)) from None
         except requests.RequestException as e:

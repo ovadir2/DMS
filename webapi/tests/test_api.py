@@ -362,7 +362,7 @@ def test_ai_insights(env, limited):
     c, sp, q = env
     ai = FakeAI()
     c.app.state.ai = ai
-    r = c.post("/api/ai/ask", json={"question": "Summarize", "path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "lang": "HE"})
+    r = c.post("/api/ai/ask", json={"question": "סכם את המסמך", "path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "lang": "HE"})
     assert r.status_code == 200 and r.json()["answer"] == "summary"
     q_, kw = ai.calls[-1]
     assert kw["file_path"].endswith("CRU 4 FCT Quote_Rev1.xlsx") and kw["lang"] == "HE" and "Not registered" in kw["context"]
