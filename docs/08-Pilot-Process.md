@@ -13,20 +13,24 @@ Related: [07 - Approval Flow](07-Approval-Flow.md) (the flow inside Power Automa
 | Explorer right-click | Each PC (`scripts/Install-DmsExplorerMenu.ps1`) | **Start workflow** on a file opens the page with the file filled in |
 | Document Register | SharePoint `DocumentControl` site | One record per controlled document: ID, type, status, owner, paths, SHA-256 |
 | Approver Matrix | SharePoint | Who approves each document type (mandatory approvers, final approver) |
-| DC-P1 Pilot Approval | Power Automate | Sends the approvals to Teams and email, sets the result, writes the decision to Control Audit |
+| Approvals | DMS page (pilot) or DC-P1 in Power Automate (production) | Stage 1 mandatory approvers, stage 2 final approver from the Approver Matrix; sets the result and writes each decision to Control Audit |
 | Workflow Service | DMS server (inside the page service in the pilot) | Moves the file to match its status, sets read-only, writes the path and SHA-256 back |
 | Control Audit | SharePoint | Every event: registered, submitted, approved/rejected, file moved |
 | AI Insights | RH on-prem LLM (`chat.ai.rh-global.com`) | Answers about a document, finds files the user is allowed to see |
 
 ## 2. The process
 
+![DMS pilot - end to end](presentations/DMS-Pilot-E2E.svg)
+
+**Pilot: everything on the DMS page.** In the pilot the approvers approve or reject on the page itself (**Approvals**), by the same rules as DC-P1: the Approver Matrix rule of the document type, stage 1 = every mandatory approver, stage 2 = the final approver, one rejection returns the document. DC-P1 is turned **Off** for the pilot, so nothing is sent to Teams twice. In production the same steps run with DC-P1 and Teams (`DMS_APPROVALS=flow`).
+
 ```mermaid
 flowchart TB
     A["1. Save the file in its folder<br/>(DMS page: customer › blueprint folder › Upload,<br/>or Explorer)"] --> B["2. Start workflow<br/>register + submit<br/>Status: Submitted (הוגש לאישור)"]
     B --> C["3. Workflow Service<br/>file → Submitted folder, read-only, SHA-256"]
-    B --> D["4. DC-P1 reads the Approver Matrix rule"]
-    D --> E{"5. Stage 1<br/>all mandatory approvers (Teams)"}
-    E -- Approve --> F{"6. Final approver (Teams)"}
+    B --> D["4. The Approver Matrix rule of the document type"]
+    D --> E{"5. Stage 1<br/>all mandatory approvers<br/>(DMS page Approvals; Teams in production)"}
+    E -- Approve --> F{"6. Final approver<br/>(DMS page Approvals; Teams in production)"}
     E -- Reject --> R["Status: Working (בעבודה)<br/>decision + comment in Control Audit"]
     F -- Reject --> R
     F -- Approve --> G["Status: Approved - read-only<br/>(מאושר - קריאה בלבד)"]
@@ -46,7 +50,11 @@ flowchart TB
 
 ### What the approver does
 
-The approval arrives in **Teams (Approvals)** and by email, with the document title and a link to the record. Stage 1: every mandatory approver must approve. Stage 2: the final approver. One rejection ends the cycle; the comment goes back to the owner in My workflows.
+**Pilot (on the page):** the header shows **Approvals** with the number waiting. The list shows each document, its owner, type, stage, who already approved and how long it waits, with Open, Download and ✦ AI to read it, and **Approve** (optional comment) / **Reject** (comment required). Stage 1: every mandatory approver must approve. Stage 2: the final approver. One rejection ends the cycle; the comment goes back to the owner in My workflows. A DMS super user can decide any stage (recorded as "super user") and see **All pending approvals**.
+
+**Production (DC-P1):** the same decisions arrive in **Teams (Approvals)** and by email.
+
+Every decision is a Control Audit row (Approved / Rejected, stage, comment, who, when), and My workflows shows for each submitted document **who it is waiting for**.
 
 ### Where the file is at each status
 
@@ -71,15 +79,17 @@ The Workflow Service never updates a record while it is Submitted, so the approv
 | Role | Who | Can |
 | --- | --- | --- |
 | User | Every employee (Windows login, no login screen) | See and work only where AD allows; save, rename, delete in folders they may write; register and submit their documents; My workflows |
-| Approver | From the Approver Matrix, per document type | Approve or reject in Teams |
-| DMS super user | `DMS_ADMINS` (pilot: roneno@rh.co.il) | Submit any document, **All workflows**, Move files now |
+| Approver | From the Approver Matrix, per document type | Approve or reject on the page (pilot) or in Teams (production) |
+| DMS super user | `DMS_ADMINS` (pilot: roneno@rh.co.il) | Submit any document, decide any approval stage, **All workflows**, **All pending approvals**, Move files now |
 | IT / Document Control | `GG_DMS_ITAdmins`, `GG_DMS_DocumentControl` | Approver Matrix, restore from the recycle folder, the service and its logs |
 
 Always protected: the company structure (`$Root`, `02_Customers`, each customer folder), the workflow folders (managed by the DMS only), and every registered document (cannot be renamed or deleted from the page).
 
 ## 5. Pilot test (one super user runs it all)
 
-Prerequisites: the tree on `$Root` (`scripts/New-DmsFileServerTree.ps1`), the `DocumentControl-TEST` site, DC-P1 imported and On, `$Root` and `$C` set in pwsh, `git pull` in `C:\dms`.
+roneno@rh.co.il runs the whole process from the DMS page: saving, submitting, approving both stages, following and finding.
+
+Prerequisites: the tree on `$Root` (`scripts/New-DmsFileServerTree.ps1`), the `DocumentControl-TEST` site, `$Root` and `$C` set in pwsh, `git pull` in `C:\dms`. In Power Automate turn **DC-P1 Pilot Approval Off** for the pilot (approvals are on the page).
 
 **Set up** (once):
 
@@ -91,7 +101,7 @@ cd C:\dms\scripts; .\Set-DmsTestApprover.ps1 -TenantName rhisrael -DocControlSit
 cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C
 ```
 
-Sign in as roneno@rh.co.il when the browser asks. His name shows with ★ (super user). The green banner says **Pilot - live**.
+Sign in as roneno@rh.co.il when the browser asks. His name shows with ★ (super user). The green banner says **Pilot - live ... Approvals on this page**.
 
 **Test cases**
 
@@ -100,11 +110,11 @@ Sign in as roneno@rh.co.il when the browser asks. His name shows with ★ (super
 | 1 | Choose Customer_A, follow the Location lists down to Commercial › Quotations | Each list offers only the subfolders, in blueprint order, with English/Hebrew names |
 | 2 | **What are you saving?** → Quotation → **Take me there** | Commercial › Quotations opens with the upload window |
 | 3 | Upload a quote file | The file is listed, status **Not registered** |
-| 4 | **Start workflow** → type הצעת מחיר → **Register and submit** | Status **Submitted**, a new DMS-xxxxx ID; a record in the Document Register; rows Created + Submitted in Control Audit |
+| 4 | **Start workflow** → type הצעת מחיר → **Register and submit** | Status **Submitted**, a new DMS-xxxxx ID; a record in the Document Register; rows Created + Submitted in Control Audit; **Approvals** shows 1 |
 | 5 | Wait 1 minute (or My workflows → **Move files now**) | The file is in `Quotations\Submitted`, read-only |
-| 6 | Teams: approve stage 1, then the final approval | Status **Approved (read-only)**; an Approved row in Control Audit |
+| 6 | **Approvals** → Approve (stage 1), then Approve again (stage 2 - final approver) | After stage 1 the row shows stage 2; after stage 2 status **Approved (read-only)**; two Approved rows (Stage 1, Stage 2) in Control Audit |
 | 7 | **Move files now** | The file is in `Quotations\Current_ReadOnly`, read-only; CurrentUncPath and CurrentSHA256 on the record |
-| 8 | Repeat 3-4 with another file, then **reject** in Teams with a comment | My workflows: **Rejected - back to you** with the comment; after Move files now the file is back in Quotations, writable |
+| 8 | Repeat 3-4 with another file, then **Reject** in Approvals with a comment | My workflows: **Rejected - back to you** with the comment; after Move files now the file is back in Quotations, writable |
 | 9 | **Submit for approval** again, approve | Approved as in 6-7 |
 | 10 | Upload a new version of the approved quote (same name) and approve it | The old version moves to `Obsolete_ReadOnly`, the new one is in `Current_ReadOnly` |
 | 11 | Try to rename or delete an approved or submitted file, and a customer folder | Refused, with the reason |
@@ -117,6 +127,7 @@ Sign in as roneno@rh.co.il when the browser asks. His name shows with ★ (super
 
 ## 6. Known limits of the pilot
 
-- Pending approvers are not recorded until a decision is made, so My workflows shows how long a document waits, not who it waits for. A step in DC-P1 that writes the pending approvers to Control Audit would close this.
+- With approvals in Teams (DC-P1, production) the pending approvers are not recorded until a decision is made; on the page (pilot) My workflows shows who each document waits for. A step in DC-P1 that writes the pending approvers to Control Audit would close this for production.
+- Do not run DC-P1 and page approvals at the same time: with DC-P1 On, the same document would also be sent to Teams.
 - On a PC the page runs as the signed-in user, without AD checks. The AD checks (Windows sign-in through IIS) apply when it is installed on the server (`webapi/README.md`).
 - Registering a new version of an approved document from the page creates a new record; a "new revision" action on the approved record is the next step.

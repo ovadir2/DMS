@@ -74,6 +74,7 @@
   .sg-n { font-weight:500; } .sg-r { color:#5b3aa0; } .sg-a button, .sg-a a { margin-inline-end:12px; }
   .sugg-list { display:grid; gap:4px; }
   .pg-banner { background:#fff3d6; color:#7a5200; padding:8px 28px; font-size:13.5px; border-bottom:1px solid #f0dca6; }
+  .badge { background:var(--err); color:#fff; border-radius:9px; font-size:11px; padding:0 6px; min-width:18px; text-align:center; }
   .pg-banner.live { background:#e3f4e8; color:#1f5f33; border-bottom-color:#bfe3c9; }
   .pg button { margin-inline-end:10px; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
@@ -115,6 +116,7 @@
     <span class="welcome" id="t-welcome"></span>
   </div>
   <span class="spacer"></span>
+  <button class="hbtn" id="ap-b" style="display:none"><svg class="icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6 9 17l-5-5"/></svg><span id="ap-t"></span><span class="badge" id="ap-n" hidden></span></button>
   <button class="hbtn" id="wf-b"><svg class="icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h10M4 12h7M4 18h10"/><path d="m15 15 2.5 2.5L22 13"/></svg><span id="wf-t"></span></button>
   <button class="hbtn ai" id="ai-b" style="display:none"><svg class="icon" width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8zM19 14l.9 2.6 2.6.9-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9z"/></svg><span id="ai-t"></span></button>
   <button class="hbtn" id="lang"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg><span id="lang-t"></span></button>
@@ -159,7 +161,7 @@ const T = {
         upload:'Upload file', uploadTitle:'Save a file in this folder', chooseFile:'File from your computer', folder:'Folder', overwrite:'Replace a file with the same name',
         ok:'OK', cancel:'Cancel', saved:'Saved to', notReg:'Not registered', none:'Nothing here.', results:'Results', type:'Document type', area:'Area', mode:'Control mode',
         titleF:'Title', registerSubmit:'Register and submit', registerOnly:'Register only', registered:'Registered as', err:'Error', docId:'Document ID', path:'Location', copy:'Copy path', copied:'Copied',
-        newFolder:'New folder', company:'Company', allWf:'All workflows', fsRun:'Move files now', fsDone:'Files moved', liveBanner:'Pilot - live: SharePoint {site}, approvals in Teams. Files are moved by the DMS service.', pgBanner:'Playground: a temporary register in memory, no SharePoint and no AD checks. Approve or reject in My workflows instead of Teams.', pgApprove:'Approve (test)', pgReject:'Reject (test)', pgComment:'Rejection comment', aiInsights:'AI Insights', findTab:'🔎 Find a file', askTab:'Ask', findPh:'Describe the file, e.g. the latest FCT quote for Customer_A', findCtx:'Searching only what you are allowed to see', goFolder:'Go to folder', askAbout:'Ask about it', found:'Suggestions', noneFound:'No matching files were found. Try other words.', smart:'✦ Smart', searchedIn:'Searched in', aiAbout:'About:', aiKnowledge:'RH company knowledge', aiAsk:'Ask', aiPlaceholder:'Ask about the document or the company knowledge…', aiClear:'Ask the company knowledge instead', aiThinking:'Thinking…', aiSources:'Sources', aiOnPrem:'Answers come from RH on-prem AI. Check important facts in the document.', qSummary:'Summarize this document', qReq:'List the key requirements', qRisk:'What are the risks and open issues?', qDates:'List dates, deadlines and validity', myWf:'My workflows', submitted:'Submitted', lastAction:'Last action', history:'History', by:'by', Rejected:'Rejected - back to you', waiting:'waiting', days:'days', location:'Location', choose:'Choose…', whatSaving:'What are you saving?', chooseKind:'Choose a document kind', chooseProject:'Choose a project', takeMe:'Take me there', noProjects:'This customer has no projects yet.', createMissing:'This folder does not exist yet. Create it?', rename:'Rename', del:'Delete', newName:'New name', folderName:'Folder name', confirmDel:'Move to the recycle folder?', recycled:'Moved to the recycle folder. IT can restore it.',
+        newFolder:'New folder', company:'Company', allWf:'All workflows', approvals:'Approvals', apTitle:'Waiting for my approval', apAll:'All pending approvals', stage:'Stage', stage1:'1 - mandatory approvers', stage2:'2 - final approver', approve:'Approve', reject:'Reject', apComment:'Comment (optional)', rejComment:'Why is it rejected? (required)', waitingFor:'Waiting for', approvedBy:'Approved by', owner:'Owner', apNone:'Nothing is waiting for your approval.', asSuper:'as super user', fsRun:'Move files now', fsDone:'Files moved', liveBanner:'Pilot - live: SharePoint {site}. Approvals {where}. Files are moved by the DMS service.', apPage:'on this page (Approvals)', apTeams:'in Teams', pgBanner:'Playground: a temporary register in memory, no SharePoint and no AD checks. Approve or reject on this page (Approvals).', pgApprove:'Approve (test)', pgReject:'Reject (test)', pgComment:'Rejection comment', aiInsights:'AI Insights', findTab:'🔎 Find a file', askTab:'Ask', findPh:'Describe the file, e.g. the latest FCT quote for Customer_A', findCtx:'Searching only what you are allowed to see', goFolder:'Go to folder', askAbout:'Ask about it', found:'Suggestions', noneFound:'No matching files were found. Try other words.', smart:'✦ Smart', searchedIn:'Searched in', aiAbout:'About:', aiKnowledge:'RH company knowledge', aiAsk:'Ask', aiPlaceholder:'Ask about the document or the company knowledge…', aiClear:'Ask the company knowledge instead', aiThinking:'Thinking…', aiSources:'Sources', aiOnPrem:'Answers come from RH on-prem AI. Check important facts in the document.', qSummary:'Summarize this document', qReq:'List the key requirements', qRisk:'What are the risks and open issues?', qDates:'List dates, deadlines and validity', myWf:'My workflows', submitted:'Submitted', lastAction:'Last action', history:'History', by:'by', Rejected:'Rejected - back to you', waiting:'waiting', days:'days', location:'Location', choose:'Choose…', whatSaving:'What are you saving?', chooseKind:'Choose a document kind', chooseProject:'Choose a project', takeMe:'Take me there', noProjects:'This customer has no projects yet.', createMissing:'This folder does not exist yet. Create it?', rename:'Rename', del:'Delete', newName:'New name', folderName:'Folder name', confirmDel:'Move to the recycle folder?', recycled:'Moved to the recycle folder. IT can restore it.',
         Working:'Working', Submitted:'Submitted', Approved_ReadOnly:'Approved (read-only)', Other:'Other', None:'Not registered', other:'עברית' },
   HE: { welcome:'RH - מערכת ניהול מסמכים', search:'חיפוש', all:'הכל', customer:'לקוח', project:'פרויקט', document:'מזהה מסמך', file:'קובץ', description:'תיאור',
         go:'חיפוש', refresh:'רענון', lang:'עברית', customers:'לקוחות', myDocs:'המסמכים שלי', home:'לקוחות', noAccess:'אין לקוחות זמינים עבורך.',
@@ -167,7 +169,7 @@ const T = {
         upload:'העלאת קובץ', uploadTitle:'שמירת קובץ בתיקייה זו', chooseFile:'קובץ מהמחשב', folder:'תיקייה', overwrite:'החלפת קובץ קיים באותו שם',
         ok:'אישור', cancel:'ביטול', saved:'נשמר ב-', notReg:'לא רשום', none:'אין פריטים.', results:'תוצאות', type:'סוג מסמך', area:'תחום', mode:'מצב בקרה',
         titleF:'כותרת', registerSubmit:'רישום והגשה לאישור', registerOnly:'רישום בלבד', registered:'נרשם כ-', err:'שגיאה', docId:'מזהה מסמך', path:'מיקום', copy:'העתקת נתיב', copied:'הועתק',
-        newFolder:'תיקייה חדשה', company:'חברה', allWf:'כל תהליכי האישור', fsRun:'העברת קבצים עכשיו', fsDone:'קבצים שהועברו', liveBanner:'פיילוט - חי: SharePoint {site}, אישורים ב-Teams. הקבצים מועברים על ידי שירות ה-DMS.', pgBanner:'סביבת ניסוי: רישום זמני בזיכרון, ללא SharePoint וללא בדיקות AD. אשרו או דחו בתהליכי האישור שלי במקום ב-Teams.', pgApprove:'אישור (ניסוי)', pgReject:'דחייה (ניסוי)', pgComment:'סיבת הדחייה', aiInsights:'AI Insights', findTab:'🔎 חיפוש קובץ', askTab:'שאלה', findPh:'תארו את הקובץ, למשל הצעת המחיר האחרונה ל-FCT של Customer_A', findCtx:'החיפוש רק במה שמותר לך לראות', goFolder:'לתיקייה', askAbout:'שאל עליו', found:'הצעות', noneFound:'לא נמצאו קבצים מתאימים. נסו מילים אחרות.', smart:'✦ חכם', searchedIn:'חיפוש ב-', aiAbout:'על:', aiKnowledge:'הידע הארגוני של RH', aiAsk:'שאל', aiPlaceholder:'שאלו על המסמך או על הידע הארגוני…', aiClear:'לשאול את הידע הארגוני במקום', aiThinking:'חושב…', aiSources:'מקורות', aiOnPrem:'התשובות מגיעות מה-AI הפנימי של RH. בדקו עובדות חשובות במסמך.', qSummary:'סכם את המסמך', qReq:'מהן הדרישות העיקריות?', qRisk:'מהם הסיכונים והנושאים הפתוחים?', qDates:'מהם התאריכים, המועדים והתוקף?', myWf:'תהליכי האישור שלי', submitted:'הוגש', lastAction:'פעולה אחרונה', history:'היסטוריה', by:'על ידי', Rejected:'נדחה - חזר אליך', waiting:'ממתין', days:'ימים', location:'מיקום', choose:'בחרו…', whatSaving:'מה שומרים?', chooseKind:'בחרו סוג מסמך', chooseProject:'בחרו פרויקט', takeMe:'קחו אותי לשם', noProjects:'ללקוח זה אין עדיין פרויקטים.', createMissing:'התיקייה עדיין לא קיימת. ליצור אותה?', rename:'שינוי שם', del:'מחיקה', newName:'שם חדש', folderName:'שם התיקייה', confirmDel:'להעביר לתיקיית המחזור?', recycled:'הועבר לתיקיית המחזור. מחלקת IT יכולה לשחזר.',
+        newFolder:'תיקייה חדשה', company:'חברה', allWf:'כל תהליכי האישור', approvals:'אישורים', apTitle:'ממתינים לאישורי', apAll:'כל האישורים הממתינים', stage:'שלב', stage1:'1 - מאשרי חובה', stage2:'2 - מאשר סופי', approve:'אישור', reject:'דחייה', apComment:'הערה (רשות)', rejComment:'מדוע נדחה? (חובה)', waitingFor:'ממתין ל', approvedBy:'אושר על ידי', owner:'בעלים', apNone:'אין מסמכים שממתינים לאישורך.', asSuper:'כמשתמש-על', fsRun:'העברת קבצים עכשיו', fsDone:'קבצים שהועברו', liveBanner:'פיילוט - חי: SharePoint {site}. אישורים {where}. הקבצים מועברים על ידי שירות ה-DMS.', apPage:'בדף זה (אישורים)', apTeams:'ב-Teams', pgBanner:'סביבת ניסוי: רישום זמני בזיכרון, ללא SharePoint וללא בדיקות AD. אשרו או דחו בדף זה (אישורים).', pgApprove:'אישור (ניסוי)', pgReject:'דחייה (ניסוי)', pgComment:'סיבת הדחייה', aiInsights:'AI Insights', findTab:'🔎 חיפוש קובץ', askTab:'שאלה', findPh:'תארו את הקובץ, למשל הצעת המחיר האחרונה ל-FCT של Customer_A', findCtx:'החיפוש רק במה שמותר לך לראות', goFolder:'לתיקייה', askAbout:'שאל עליו', found:'הצעות', noneFound:'לא נמצאו קבצים מתאימים. נסו מילים אחרות.', smart:'✦ חכם', searchedIn:'חיפוש ב-', aiAbout:'על:', aiKnowledge:'הידע הארגוני של RH', aiAsk:'שאל', aiPlaceholder:'שאלו על המסמך או על הידע הארגוני…', aiClear:'לשאול את הידע הארגוני במקום', aiThinking:'חושב…', aiSources:'מקורות', aiOnPrem:'התשובות מגיעות מה-AI הפנימי של RH. בדקו עובדות חשובות במסמך.', qSummary:'סכם את המסמך', qReq:'מהן הדרישות העיקריות?', qRisk:'מהם הסיכונים והנושאים הפתוחים?', qDates:'מהם התאריכים, המועדים והתוקף?', myWf:'תהליכי האישור שלי', submitted:'הוגש', lastAction:'פעולה אחרונה', history:'היסטוריה', by:'על ידי', Rejected:'נדחה - חזר אליך', waiting:'ממתין', days:'ימים', location:'מיקום', choose:'בחרו…', whatSaving:'מה שומרים?', chooseKind:'בחרו סוג מסמך', chooseProject:'בחרו פרויקט', takeMe:'קחו אותי לשם', noProjects:'ללקוח זה אין עדיין פרויקטים.', createMissing:'התיקייה עדיין לא קיימת. ליצור אותה?', rename:'שינוי שם', del:'מחיקה', newName:'שם חדש', folderName:'שם התיקייה', confirmDel:'להעביר לתיקיית המחזור?', recycled:'הועבר לתיקיית המחזור. מחלקת IT יכולה לשחזר.',
         Working:'בעבודה', Submitted:'הוגש לאישור', Approved_ReadOnly:'מאושר - קריאה בלבד', Other:'אחר', None:'לא רשום', other:'English' } }[lang];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -204,6 +206,7 @@ $('#menu').innerHTML = `<button data-m="customers">${T.customers}</button><butto
 $('#menu-b').onclick = e => { e.stopPropagation(); $('#menu').classList.toggle('open'); };
 document.onclick = () => $('#menu').classList.remove('open');
 $('#menu').onclick = e => { const m = e.target.dataset.m; if (m === 'lang') return $('#lang').click(); if (m === 'ai') return openAI(null); if (m) { state.view = m; render(); } };
+$('#ap-t').textContent = T.approvals; $('#ap-b').onclick = () => { state.view = 'approvalsView'; render(); };
 $('#wf-t').textContent = T.myWf; $('#wf-b').onclick = () => { state.view = 'mine'; render(); };
 $('#go').onclick = () => { if ($('#q').value.trim().length >= 2) { state.view = 'search'; render(); } };
 $('#q').onkeydown = e => { if (e.key === 'Enter') $('#go').click(); };
@@ -226,16 +229,11 @@ function wire(v) {
     try { const r = await api('/api/file-service/run', { method:'POST' }); alert(`${T.fsDone}: ${r.moved}` + (r.failed ? ` · ${T.err}: ${r.failed}` : '')); render(); }
     catch (e) { fs.disabled = false; alert(e.message); }
   };
-  v.querySelectorAll('[data-pa],[data-pr]').forEach(b => b.onclick = async () => {
-    const approve = !!b.dataset.pa, comment = approve ? '' : (prompt(T.pgComment) || '');
-    try { await api(`/api/playground/decide/${b.dataset.pa || b.dataset.pr}?approve=${approve}&comment=${encodeURIComponent(comment)}`, { method:'POST' }); render(); }
-    catch (e) { alert(e.message); }
-  });
   v.querySelectorAll('[data-sf]').forEach(a => a.onclick = () => { state.wfFilter = a.dataset.sf || null; render(); });
   v.querySelectorAll('[data-st]').forEach(a => a.onclick = () => startWorkflow(a.dataset.st));
   v.querySelectorAll('[data-sub]').forEach(b => b.onclick = async () => {
     b.disabled = true;
-    try { await api(`/api/documents/${b.dataset.sub}/submit`, { method:'POST' }); render(); } catch (e) { b.disabled = false; alert(e.message); }
+    try { await api(`/api/documents/${b.dataset.sub}/submit`, { method:'POST' }); refreshApprovals(); render(); } catch (e) { b.disabled = false; alert(e.message); }
   });
   v.querySelectorAll('[data-cp]').forEach(a => a.onclick = async () => { await navigator.clipboard.writeText(a.dataset.cp); a.textContent = T.copied; });
 }
@@ -244,7 +242,7 @@ function wire(v) {
 async function render() {
   const v = $('#view');
   v.innerHTML = '<span class="muted">…</span>';
-  try { await ({ customers, browse, search, mine })[state.view](v); wire(v); }
+  try { await ({ customers, browse, search, mine, approvalsView })[state.view](v); wire(v); }
   catch (e) { v.innerHTML = `<div class="msg err">${T.err}: ${esc(e.message)}</div>`; }
 }
 async function customers(v) {
@@ -359,16 +357,49 @@ async function mine(v) {
     <table><tr><th>${T.docId}</th><th>${T.titleF}</th><th>${T.status}</th><th class="hide-s">${T.submitted}</th><th class="hide-s">${T.lastAction}</th><th></th></tr>
     ${items.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}</td>
       <td><span class="status ${esc(d.statusKey)}">${esc(T[d.statusKey] || d.lifecycleStatus)}</span>
-        ${d.statusKey === 'Submitted' && days(d.submittedUtc) !== null ? `<div class="muted small">${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}</td>
+        ${d.statusKey === 'Submitted' && days(d.submittedUtc) !== null ? `<div class="muted small">${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}
+        ${d.statusKey === 'Submitted' && d.pending && d.pending.length ? `<div class="small">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')} (${T.stage} ${d.stage})</div>` : ''}</td>
       <td class="hide-s muted small">${when(d.submittedUtc)}</td>
       <td class="hide-s small">${who(d.decision || d.lastEvent)}${d.decision && d.decision.details ? `<div class="muted">${esc(d.decision.details)}</div>` : ''}</td>
       <td class="actions">${state.everyone ? `<div class="muted small">${esc(d.ownerName || d.ownerEmail || '')}</div>` : ''}${['Working', 'Rejected'].includes(d.statusKey) ? `<button type="button" class="link" data-sub="${d.id}">${T.submit}</button>` : ''}
         ${aiOn && (d.currentUncPath || d.workingUncPath) ? `<button type="button" class="link ai" data-ai="${esc(d.currentUncPath || d.workingUncPath)}">✦ AI</button>` : ''}
         <button type="button" class="link" data-cp="${esc(d.currentUncPath || d.workingUncPath)}">${T.copy}</button>
         <button type="button" class="link" data-hist="${d.id}">${T.history}</button>
-        ${cfg.playground && d.statusKey === 'Submitted' ? `<span class="pg"><button type="button" class="link" data-pa="${d.id}">✔ ${T.pgApprove}</button><button type="button" class="link" data-pr="${d.id}" style="color:var(--err)">✖ ${T.pgReject}</button></span>` : ''}</td></tr>
+</td></tr>
       <tr id="h-${d.id}" hidden><td colspan="6"><ol class="timeline">${d.history.map(e => `<li><b>${esc(evName(e.event))}</b> <span class="muted">${when(e.utc)} · ${esc(e.actor)}${e.source ? ' · ' + esc(e.source) : ''}</span>${e.details ? `<div class="small">${esc(e.details)}</div>` : ''}</li>`).join('')}</ol></td></tr>`).join('')}
     </table>${items.length ? '' : `<p class="muted">${T.none}</p>`}`;
+}
+
+async function approvalsView(v) {
+  const list = await api('/api/approvals' + (state.apAll ? '?everyone=true' : ''));
+  const days = u => u ? Math.max(0, Math.floor((Date.now() - new Date(u)) / 864e5)) : null;
+  v.innerHTML = `<div class="toolbar"><h2 style="margin:0">${state.apAll ? T.apAll : T.apTitle}</h2><span class="spacer"></span>
+      ${me.admin ? `<button type="button" class="pillbtn small light" id="ap-all">${state.apAll ? T.apTitle : T.apAll}</button>` : ''}</div>
+    ${list.length ? `<table><tr><th>${T.docId}</th><th>${T.titleF}</th><th class="hide-s">${T.owner}</th><th>${T.stage}</th><th class="hide-s">${T.submitted}</th><th></th></tr>
+    ${list.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}<div class="muted small">${esc(d.documentType || '')}</div></td>
+      <td class="hide-s small">${esc((d.ownerName || d.ownerEmail || '').split('@')[0])}</td>
+      <td class="small">${d.stage === 1 ? T.stage1 : T.stage2}${d.approved.length ? `<div class="muted">${T.approvedBy}: ${d.approved.map(a => esc(a.split('@')[0])).join(', ')}</div>` : ''}
+        ${!d.mine ? `<div class="muted">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')}</div>` : ''}</td>
+      <td class="hide-s small muted">${when(d.submittedUtc)}${days(d.submittedUtc) !== null ? `<div>${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}</td>
+      <td class="actions">${d.officeUri ? `<a class="link" href="${esc(d.officeUri)}">${T.open}</a>` : ''}
+        ${d.file ? `<button type="button" class="link" data-dl="${esc(d.file)}">${T.download}</button>` : ''}
+        ${aiOn && d.file ? `<button type="button" class="link ai" data-ai="${esc(d.file)}">✦ AI</button>` : ''}
+        <div style="margin-top:6px"><button type="button" class="pillbtn small" data-ok="${d.id}">✔ ${T.approve}${d.mine ? '' : ' (' + T.asSuper + ')'}</button>
+        <button type="button" class="pillbtn small light" data-no="${d.id}" style="color:var(--err)">✖ ${T.reject}</button></div></td></tr>`).join('')}
+    </table>` : `<p class="muted">${T.apNone}</p>`}`;
+  const all = v.querySelector('#ap-all'); if (all) all.onclick = () => { state.apAll = !state.apAll; render(); };
+  v.querySelectorAll('[data-ok],[data-no]').forEach(b => b.onclick = async () => {
+    const approve = !!b.dataset.ok, id = b.dataset.ok || b.dataset.no;
+    const comment = prompt(approve ? T.apComment : T.rejComment, '');
+    if (comment === null || (!approve && !comment.trim())) return;
+    b.disabled = true;
+    try { await api(`/api/approvals/${id}`, { method:'POST', body:JSON.stringify({ approve, comment }) }); refreshApprovals(); render(); }
+    catch (e) { b.disabled = false; alert(e.message); }
+  });
+}
+async function refreshApprovals() {
+  if (cfg.approvals !== 'page') return;
+  try { const n = (await api('/api/approvals')).length; $('#ap-n').textContent = n; $('#ap-n').hidden = !n; } catch {}
 }
 
 // Control Audit event names are stored in the site language (Hebrew); show them in the page language
@@ -481,7 +512,7 @@ async function startWorkflow(path, name) {
     const f = Object.fromEntries(new FormData(r.form)); f.path = path; f.submit = r.action === 'submit';
     try {
       const d = await api('/api/documents', { method:'POST', body:JSON.stringify(f) });
-      $('#dlg').close(); render();
+      $('#dlg').close(); refreshApprovals(); render();
       return d;
     } catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); r = await new Promise(res => $('#dlg-form').onsubmit = ev => { ev.preventDefault(); res({ action: ev.submitter?.value, form: ev.target }); }); }
   }
@@ -523,9 +554,10 @@ async function download(path) {
     if (r?.state && !location.search) return location.replace(location.pathname + r.state);
   }
   if (cfg.playground) { $('#pg').hidden = false; $('#pg').textContent = T.pgBanner; }
-  else if (cfg.site && cfg.authMode === 'dev') { $('#pg').hidden = false; $('#pg').classList.add('live'); $('#pg').textContent = T.liveBanner.replace('{site}', cfg.site.split('/').pop()); }
+  else if (cfg.site && cfg.authMode === 'dev') { $('#pg').hidden = false; $('#pg').classList.add('live'); $('#pg').textContent = T.liveBanner.replace('{site}', cfg.site.split('/').pop()).replace('{where}', cfg.approvals === 'page' ? T.apPage : T.apTeams); }
   try { me = await api('/api/me'); $('#who').textContent = (me.name || me.email) + (me.admin ? ' ★' : ''); } catch (e) { $('#who').textContent = ''; }
   try { aiOn = (await api('/api/ai/status')).enabled; } catch { aiOn = false; }
+  if (cfg.approvals === 'page') { $('#ap-b').style.display = ''; refreshApprovals(); setInterval(refreshApprovals, 60000); }
   $('#ai-b').style.display = '';
   if (!aiOn) $('#ai-t').textContent = T.findTab.replace('🔎 ', '');
   $('#ai-log').innerHTML = `<div class="muted small">${T.aiOnPrem}</div>`;

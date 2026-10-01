@@ -488,3 +488,75 @@ def test_super_user(env):
     sp.items[d["id"]]["documentId"] = "DMS-00077"           # not mine at all any more
     assert c.get("/api/my-workflows").json()["items"] == []
     assert [i["documentId"] for i in c.get("/api/my-workflows", params={"everyone": True}).json()["items"]] == ["DMS-00077"]
+
+
+class RuleSP(FakeSharePoint):
+    def __init__(self, s, rule):
+        super().__init__(s)
+        self.rule = rule
+
+    def approver_rule(self, document_type):
+        return self.rule
+
+
+def _approvals_env(tmp_path, rule, me=USER, admins=()):
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=me, approvals="page", admins=list(admins))
+    sp = RuleSP(s, rule)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "documentType": "הצעת מחיר", "documentArea": "מסחרי", "submit": True}).json()
+    return c, sp, s, d
+
+
+def test_page_approvals_two_stages(tmp_path):
+    rule = {"mandatory": [USER, "dana@rh.co.il"], "final": "boss@rh.co.il"}
+    c, sp, s, d = _approvals_env(tmp_path, rule)
+    a = c.get("/api/approvals").json()
+    assert [x["documentId"] for x in a] == ["DMS-00001"] and a[0]["stage"] == 1 and a[0]["pending"] == [USER, "dana@rh.co.il"]
+    r = c.post(f"/api/approvals/{d['id']}", json={"approve": True, "comment": "ok"}).json()
+    assert r["statusKey"] == "Submitted" and r["pending"] == ["dana@rh.co.il"]
+    assert c.get("/api/approvals").json() == []                                         # not mine any more
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).status_code == 403
+    s.dev_user = "dana@rh.co.il"
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["stage"] == 2
+    s.dev_user = "boss@rh.co.il"
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": False}).status_code == 400   # a comment is required
+    r = c.post(f"/api/approvals/{d['id']}", json={"approve": True, "comment": "final"}).json()
+    assert r["statusKey"] == "Approved_ReadOnly" and sp.items[d["id"]]["LastApprovedUtc"]
+    events = [(e["event"], e["details"]) for e in sp.audit_events()][:3]
+    assert events == [("אושר", "Stage 2: final"), ("אושר", "Stage 1"), ("אושר", "Stage 1: ok")]
+
+
+def test_page_approvals_reject_and_waiting_for(tmp_path):
+    rule = {"mandatory": ["dana@rh.co.il"], "final": "boss@rh.co.il"}
+    c, sp, s, d = _approvals_env(tmp_path, rule)
+    wf = c.get("/api/my-workflows").json()["items"][0]
+    assert wf["stage"] == 1 and wf["pending"] == ["dana@rh.co.il"]                      # who it waits for
+    s.dev_user = "dana@rh.co.il"
+    r = c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "fix p.2"}).json()
+    assert r["statusKey"] == "Working"
+    s.dev_user = USER
+    item = c.get("/api/my-workflows").json()["items"][0]
+    assert item["statusKey"] == "Rejected" and item["decision"]["details"] == "Stage 1: fix p.2"
+    c.post(f"/api/documents/{d['id']}/submit")                                          # new cycle: the old rejection no longer counts
+    s.dev_user = "dana@rh.co.il"
+    assert c.get("/api/approvals").json()[0]["pending"] == ["dana@rh.co.il"]
+
+
+def test_super_user_can_decide_any_stage(tmp_path):
+    rule = {"mandatory": ["dana@rh.co.il"], "final": "boss@rh.co.il"}
+    c, sp, s, d = _approvals_env(tmp_path, rule, me="roneno@rh.co.il", admins=["roneno@rh.co.il"])
+    assert c.get("/api/approvals").json() == []
+    assert c.get("/api/approvals", params={"everyone": True}).json()[0]["mine"] is False
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["stage"] == 2
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["statusKey"] == "Approved_ReadOnly"
+    assert sp.audit_events()[0]["details"] == "Stage 2 (super user)"
+
+
+def test_flow_mode_keeps_teams(env):
+    c, _, _ = env
+    assert c.get("/api/approvals").json() == []
+    assert c.post("/api/approvals/1", json={"approve": True}).status_code == 409

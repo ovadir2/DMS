@@ -62,6 +62,7 @@ def _under_root(root: str, path: str | None) -> bool:
 
 def run_once(sp, s: Settings) -> dict:
     c = s.choices
+    rel = lambda p: os.path.relpath(p, s.repository_root) if p else p  # noqa: E731 - short paths in the audit
     done, failed = 0, 0
     for d in sp.documents(refresh=True):
         status, working = d.get("lifecycleStatus"), d.get("workingUncPath")
@@ -76,11 +77,11 @@ def run_once(sp, s: Settings) -> dict:
                 action = "MoveToSubmitted"
                 target = _move(working, in_submitted)
                 _set_read_only(target, True)
-                details = f"{action}: {working} -> {target}. SHA-256 {_sha256(target)}"
+                details = f"{action}: {rel(working)} -> {rel(target)}. SHA-256 {_sha256(target)}"
             elif status == c["Working"] and os.path.isfile(in_submitted) and not os.path.exists(working):
                 action = "ReturnToWorking"
                 _set_read_only(in_submitted, False)
-                details = f"{action}: {in_submitted} -> {_move(in_submitted, working)}"
+                details = f"{action}: {rel(in_submitted)} -> {rel(_move(in_submitted, working))}"
             elif status == c["Approved_ReadOnly"]:
                 source = next((p for p in (in_submitted, working) if os.path.isfile(p)), None)
                 if not source:
@@ -99,7 +100,7 @@ def run_once(sp, s: Settings) -> dict:
                 if d.get("draftRevision"):
                     values.update(CurrentRevision=d["draftRevision"], DraftRevision="")
                 sp.update(d["id"], values)
-                details = f"{action}: {source} -> {target}. SHA-256 {sha}" + (f". Previous revision -> {obsolete}" if obsolete else "")
+                details = f"{action}: {rel(source)} -> {rel(target)}. SHA-256 {sha}" + (f". Previous revision -> {rel(obsolete)}" if obsolete else "")
             if details:
                 sp.audit(document_id=d.get("documentId") or f"ID {d['id']}", event=c["FileDone"], from_status=status,
                          to_status=status, actor="RH-DMS-Workflow-Service", details=details, source=c["WorkflowService"])
