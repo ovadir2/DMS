@@ -187,7 +187,7 @@
 </div>
 
 <aside id="ai-panel" class="drawer" aria-hidden="true">
-  <div class="dr-h"><span id="ai-title"></span><a class="link small" id="ai-chat" href="https://chat.ai.rh-global.com" target="_blank" rel="noopener" style="margin-inline-start:auto;margin-inline-end:8px"></a><button type="button" class="hbtn" id="ai-x" aria-label="close">✕</button></div>
+  <div class="dr-h"><span id="ai-title"></span><button type="button" class="hbtn" id="ai-x" aria-label="close">✕</button></div>
   <div class="dr-tabs"><button type="button" data-mode="ask" id="m-ask"></button></div>
   <div class="dr-ctx"><span id="ai-ctx"></span><button type="button" class="link small" id="ai-clear"></button></div>
   <div class="dr-q" id="ai-quick"></div>
@@ -635,13 +635,12 @@ async function askAI(question) {
     const r = await api('/api/ai/ask', { method:'POST', body:JSON.stringify({ question, path: aiFile, lang }) });
     pending.innerHTML = esc(r.answer).replace(/\n/g, '<br>') + (r.sources?.length ? `<div class="src">${T.aiSources}: ${r.sources.map(esc).join(', ')}</div>` : '');
   } catch (e) {
-    pending.innerHTML = `<span style="color:var(--err)">${T.err}: ${esc(e.message)}</span>`
-      + `<div class="small"><a class="link" href="${esc(aiUrl)}/?q=${encodeURIComponent(question)}" target="_blank" rel="noopener">${T.aiChat} ↗</a></div>`;
+    pending.innerHTML = `<span style="color:var(--err)">${T.err}: ${esc(e.message)}</span>`;
   }
   pending.classList.remove('pending'); log.scrollTop = log.scrollHeight;
 }
 $('#ai-t').textContent = T.aiInsights; $('#ai-b').title = T.aiInsights; $('#ai-title').textContent = '✦ ' + T.aiInsights; $('#ai-send').textContent = T.aiAsk;
-$('#ai-q').placeholder = T.aiPlaceholder; $('#ai-clear').textContent = T.aiClear; $('#ai-chat').textContent = T.aiChat + ' ↗';
+$('#ai-q').placeholder = T.aiPlaceholder; $('#ai-clear').textContent = T.aiClear;
 $('#ai-b').onclick = () => openAI(null);
 $('#ai-x').onclick = () => { $('#ai-panel').classList.remove('open'); $('#ai-panel').setAttribute('aria-hidden', 'true'); };
 $('#ai-clear').onclick = () => openAI(null);
@@ -831,7 +830,6 @@ async function download(path) {
   else if (cfg.site && cfg.authMode === 'dev') { $('#pg').hidden = false; $('#pg').classList.add('live'); $('#pg').textContent = T.liveBanner.replace('{site}', cfg.site.split('/').pop()).replace('{where}', cfg.approvals === 'page' ? T.apPage : T.apTeams); }
   try { me = await api('/api/me'); $('#who').textContent = (me.name || me.email) + (me.admin ? ' ★' : ''); } catch (e) { $('#who').textContent = ''; }
   try { const st = await api('/api/ai/status'); aiApi = st.enabled; aiUrl = st.url || aiUrl; ragTools = st.rag || []; addRagTabs(); } catch { aiApi = false; }
-  $('#ai-chat').href = aiUrl;
   if (me.admin) state.apAll = true;                // super users see every pending approval
   if (me.admin) $('#menu').insertAdjacentHTML('beforeend', `<button data-m="fl">⇪ ${T.flTitle}</button>`);
   if (cfg.approvals === 'page') { $('#ap-b').style.display = ''; refreshApprovals(); setInterval(refreshApprovals, 60000); }
