@@ -467,6 +467,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "You do not have permission to rename this item")
         if os.path.exists(full):
             files.check_editable(s.repository_root, full, s.protected_depth)   # workflow folders first: clearest reason
+        if blueprint.describe(rel_parts(full)) is not None:
+            raise HTTPException(403, "This folder is part of the company skeleton (blueprint) and cannot be renamed. Its content can.")
         d = registered_inside(full)
         if d:
             raise HTTPException(409, f"It holds a controlled document ({d.get('documentId')}) and cannot be renamed")
@@ -489,6 +491,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "You do not have permission to delete this item")
         if os.path.exists(full):
             files.check_editable(s.repository_root, full, s.protected_depth)
+        if blueprint.describe(rel_parts(full)) is not None:
+            raise HTTPException(403, "This folder is part of the company skeleton (blueprint) and cannot be deleted. Its content can.")
         d = registered_inside(full)
         if d:
             raise HTTPException(409, f"It holds a controlled document ({d.get('documentId')}) and cannot be deleted")
