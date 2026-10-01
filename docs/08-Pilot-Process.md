@@ -170,6 +170,23 @@ Before you start: DC-P1 **Off**, DC-P2 **On** (notifications), roneno is the app
 
 **After the pilot**: restore the real approvers with the command `Set-DmsTestApprover.ps1` printed (`-Restore <backup file>`), and stop the page with Ctrl+C.
 
+## 5a. DMS First loading (documents approved in the old repository)
+
+For documents that were already approved in the old, unmanaged repository. A DMS super user runs it from the page: **⋮ menu → ⇪ DMS First loading**.
+
+1. **Source**: the old repository folder (e.g. `\\OLD-SERVER\Share\Customer_A\CRU4`). **Target**: the folder under `$Root` (🧭 Path finder helps), e.g. `02_Customers\Customer_A\Projects\PRJ-101_CRU4\Customer_Source\Specifications`. Choose the document type, area and control mode for the batch.
+2. **Dry run** first (checked by default): it lists every file with what will happen, and for File Linker whether the old path is registered. Nothing changes.
+3. Run it for real (uncheck Dry run). For every file, with the same subfolders under the target:
+   - the file is taken from the target (when you already moved it there manually) or copied from the source ("Copy files that are still only in the source");
+   - it is moved into `<its folder>\Current_ReadOnly\`, set read-only, and its SHA-256 is computed;
+   - it is registered as **Approved** in the Document Register, revision from the file name (`_Rev3` → 03, else 01), with Control Audit rows "DMS First loading from <source path>";
+   - **File Linker**: WebAPI#1 checks whether the **source** path is registered; if it is, WebAPI#2 replaces it with the new `Current_ReadOnly` path (and a Control Audit row records it).
+4. The result table and a CSV report in `$Root\04_Workflow_System\FirstLoading\` list each file: target, Document ID, revision, SHA-256, result, File Linker. Next to it, a **full trace log** (`FirstLoading_<date-time>.log`, written line by line so it is complete even if a run stops) records the run's parameters, every step of every file (found in the target or copied from the source, moved, read-only, SHA-256, Document ID, audit rows, File Linker WebAPI#1/#2 answers), every error with its details, and a summary. Dry runs write `..._dry-run.log` / `.csv`. Running it again skips what was already loaded.
+
+From then on these documents behave like any approved document: New revision, Share with customer, search, history.
+
+File Linker is configured in the service `.env` (`DMS_FL_CHECK_URL`, `DMS_FL_UPDATE_URL`, `DMS_FL_UPDATE_BODY`, `DMS_FL_REGISTERED_FIELD`, `DMS_FL_AUTH`); see `webapi/.env.example`.
+
 ## 6. What is kept in SharePoint
 
 All the metadata is in SharePoint (`DocumentControl` site), which Microsoft 365 backs up and versions (list item version history, recycle bin):

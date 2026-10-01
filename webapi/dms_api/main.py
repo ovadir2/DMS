@@ -68,6 +68,17 @@ class ShareRequest(BaseModel):
     message: str = Field("", max_length=2000)
 
 
+class FirstLoadRequest(BaseModel):
+    source: str = Field(description="The old repository folder (any path the service can read)")
+    target: str = Field(description="The folder under the repository root")
+    documentType: str
+    documentArea: str
+    controlMode: str | None = None
+    dryRun: bool = True
+    copyMissing: bool = True
+    updateLinks: bool = True
+
+
 class FindRequest(BaseModel):
     question: str = Field(min_length=2, max_length=1000)
     lang: str = "EN"
@@ -93,6 +104,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         from . import file_service
         file_service.start(app.state.sp, s)
     app.state.ai = ai or OpenWebUI(s)
+    from .filelinker import FileLinker
+    app.state.linker = FileLinker(s)
     if s.allowed_origins:
         app.add_middleware(CORSMiddleware, allow_origins=s.allowed_origins, allow_credentials=True,
                            allow_methods=["*"], allow_headers=["*"])
@@ -136,7 +149,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.get("/api/client-config")
     def client_config():
         return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0,
-                "approvals": s.approvals,
+                "approvals": s.approvals, "fileLinker": bool(s.fl_check_url and s.fl_update_url),
                 "site": s.site_url if s.sharepoint != "memory" else "", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,
                 "repositoryRoot": s.repository_root}
@@ -345,22 +358,22 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return {"path": target, "exists": exists, "canWrite": exists and user.can(target, "write")}
 
     @app.get("/api/search")
-    def search(q: str = Query(..., min_length=2), scope: str = Query("all", description="all | customer | project | document | file"),
+    def search(q: str = Query(..., min_length=2), scope: str = Query("all", description="all | customer | project | document | file | quick (customers, folders, documents)"),
                customer: str | None = Query(None, description="Customer folder path, to search inside one customer"),
                user: User = Depends(current_user)):
         """Customers, project folders, registered documents and file names the user may see."""
         out: list[dict] = []
         ql = q.lower()
-        if scope in ("all", "customer"):
+        if scope in ("all", "customer", "quick"):
             out += [{"kind": "customer", **c} for c in customers(q, user)]
-        if scope in ("all", "document"):
+        if scope in ("all", "document", "quick"):
             for d in sp().documents():
                 if (ql in (d.get("documentId") or "").lower() or ql in (d.get("title") or "").lower()) and visible(d, user):
                     out.append({"kind": "document", "name": d.get("title"), "path": doc_path(d), "document": with_key(d)})
         start = files.resolve(s.repository_root, customer) if customer else customers_root()
-        if os.path.isdir(start) and scope in ("all", "project", "file"):
+        if os.path.isdir(start) and scope in ("all", "project", "file", "quick"):
             idx = register_index()
-            for hit in files.walk_search(start, q, user.can, s.search_limit, folders_only=scope == "project"):
+            for hit in files.walk_search(start, q, user.can, s.search_limit, folders_only=scope in ("project", "quick")):
                 if hit["isFolder"]:
                     out.append({"kind": "folder", **hit})
                 elif scope in ("all", "file"):
@@ -908,6 +921,40 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                    details=f"Shared revision {rev} with {email} (view only, Large File Exchange): {r['url']}")
         log(user, "share", f"{doc_id} Rev{rev} -> {email}")
         return {"url": r["url"], "email": email, "revision": rev, "documentId": doc_id}
+
+    # ------------------------------------------------------------------ DMS First loading (super users)
+    @app.post("/api/first-load", status_code=202)
+    def first_load_start(req: FirstLoadRequest, user: User = Depends(current_user)):
+        """Load documents approved in the old repository: into Current_ReadOnly, registered as Approved,
+        File Linker links moved. Runs in the background; follow it with GET /api/first-load/{id}."""
+        from . import first_load
+        if not is_admin(user):
+            raise HTTPException(403, "Only a DMS super user can run the First loading")
+        target = files.resolve(s.repository_root, req.target)
+        if not os.path.isdir(target):
+            raise HTTPException(404, "The target folder was not found")
+        if files.in_workflow_folder(s.repository_root, target):
+            raise HTTPException(403, "The target cannot be a workflow folder")
+        if not req.dryRun and not user.can(target, "write"):
+            raise HTTPException(403, "You do not have permission to write in the target folder")
+        source = os.path.normpath(req.source.strip())
+        if not os.path.isdir(source) and not os.listdir(target):
+            raise HTTPException(404, "The source folder was not found and the target folder is empty")
+        if os.path.normcase(source) == os.path.normcase(target):
+            raise HTTPException(400, "The source and the target must be different folders")
+        job = first_load.start(sp(), s, app.state.linker, user.email, source=source, target=target,
+                               document_type=req.documentType, document_area=req.documentArea, control_mode=req.controlMode,
+                               dry_run=req.dryRun, copy_missing=req.copyMissing, update_links=req.updateLinks)
+        log(user, "first-load", f"{'dry run ' if req.dryRun else ''}{source} -> {target}")
+        return {k: job[k] for k in ("id", "state", "dryRun")}
+
+    @app.get("/api/first-load/{job_id}")
+    def first_load_status(job_id: str, user: User = Depends(current_user)):
+        from . import first_load
+        job = first_load.JOBS.get(job_id)
+        if not job or (job["actor"] != user.email and not is_admin(user)):
+            raise HTTPException(404, "Unknown run")
+        return job
 
     @app.post("/api/documents/{item_id}/withdraw")
     def withdraw(item_id: int, user: User = Depends(current_user)):
