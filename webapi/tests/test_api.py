@@ -560,3 +560,18 @@ def test_flow_mode_keeps_teams(env):
     c, _, _ = env
     assert c.get("/api/approvals").json() == []
     assert c.post("/api/approvals/1", json={"approve": True}).status_code == 409
+
+
+def test_withdraw_and_resubmit(tmp_path):
+    rule = {"mandatory": ["dana@rh.co.il"], "final": "boss@rh.co.il"}
+    c, sp, s, d = _approvals_env(tmp_path, rule, me="roneno@rh.co.il", admins=["roneno@rh.co.il"])
+    s.dev_user = "dana@rh.co.il"
+    c.post(f"/api/approvals/{d['id']}", json={"approve": True})                       # stage 1 done
+    assert c.post(f"/api/documents/{d['id']}/withdraw").status_code == 403             # not owner, not super user
+    s.dev_user = "roneno@rh.co.il"
+    r = c.post(f"/api/documents/{d['id']}/withdraw").json()
+    assert r["statusKey"] == "Working" and sp.audit_events()[0]["event"] == "בוטל"
+    assert c.post(f"/api/documents/{d['id']}/withdraw").status_code == 409
+    c.post(f"/api/documents/{d['id']}/submit")
+    s.dev_user = "dana@rh.co.il"
+    assert c.get("/api/approvals").json()[0]["stage"] == 1                             # a new cycle starts at stage 1

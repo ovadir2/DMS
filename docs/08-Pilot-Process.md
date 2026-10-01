@@ -122,6 +122,7 @@ Sign in as roneno@rh.co.il when the browser asks. His name shows with ★ (super
 | 13 | Search **✦ Smart** "FCT quote", and AI Insights → Find a file | The quote is suggested with its status; Go to folder opens its folder |
 | 14 | Right-click the file in Explorer → **Start workflow** (`Install-DmsExplorerMenu.ps1 -AppUrl 'http://localhost:8080/dms/dms-page?lang=EN'`) | The page opens with the Start workflow form for that file |
 | 15 | My workflows → **All workflows** | Every workflow in the register, with the owner |
+| 16 | My workflows → **Withdraw** on a submitted document | Status back to Working, a Withdrawn row in Control Audit, the file returns to its place; submit it again to rerun the process from step 4 |
 
 **After the pilot**: restore the real approvers with the command `Set-DmsTestApprover.ps1` printed (`-Restore <backup file>`), and stop the page with Ctrl+C.
 
