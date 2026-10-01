@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from . import files
+from . import blueprint, files
 from .auth import current_user
 from .config import WORKFLOW_FOLDERS, Settings
 from .security import User
@@ -149,6 +149,45 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return []
         return [{"name": f["name"], "path": f["path"]} for f in listing["folders"] if q.lower() in f["name"].lower()]
 
+    def rel_parts(path: str) -> list[str]:
+        rel = os.path.relpath(path, s.repository_root)
+        return [] if rel == "." else [x for x in rel.replace("\\", "/").split("/") if x]
+
+    def context_of(parts: list[str]) -> dict:
+        """The customer and project folders a path is in (blueprint: 02_Customers\\<c>\\Projects\\<p>)."""
+        ctx = {"customer": None, "project": None}
+        if len(parts) >= 2 and parts[0].lower() == s.customers_folder.lower():
+            ctx["customer"] = {"name": parts[1], "path": os.path.join(s.repository_root, *parts[:2])}
+            if len(parts) >= 4 and parts[2].lower() == "projects":
+                ctx["project"] = {"name": parts[3], "path": os.path.join(s.repository_root, *parts[:4])}
+        return ctx
+
+    def child_folders(parts: list[str], user: User) -> list[dict]:
+        """Subfolders of a folder for the cascading selectors: AD-filtered, in blueprint order,
+        without system and workflow folders."""
+        folder = os.path.join(s.repository_root, *parts)
+        try:
+            entries = [e for e in os.scandir(folder) if e.is_dir() and not e.name.startswith((".", "~$"))]
+        except OSError:
+            return []
+        rank = {n.lower(): i for i, n in enumerate(blueprint.order(parts))}
+        out = [{"name": e.name, "path": e.path, "label": blueprint.describe(parts + [e.name])} for e in entries
+               if e.name not in WORKFLOW_FOLDERS and not (not parts and e.name in blueprint.HIDDEN_AT_ROOT) and user.can(e.path)]
+        return sorted(out, key=lambda f: (rank.get(f["name"].lower(), len(rank)), f["name"].lower()))
+
+    @app.get("/api/levels")
+    def levels(path: str | None = None, user: User = Depends(current_user)):
+        """One selector per level of the tree, from the root down to `path`, plus the next level:
+        [{selected, options}]. Choosing an option in one level gives the options of the next."""
+        parts = rel_parts(files.resolve(s.repository_root, path)) if path else []
+        out = []
+        for i in range(len(parts) + 1):
+            options = child_folders(parts[:i], user)
+            if not options:
+                break
+            out.append({"selected": parts[i] if i < len(parts) else None, "options": options})
+        return out
+
     @app.get("/api/browse")
     def browse(path: str | None = None, user: User = Depends(current_user)):
         try:
@@ -157,11 +196,61 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(404, "Folder not found") from None
         except PermissionError:
             raise HTTPException(403, "You do not have access to this folder") from None
+        parts = rel_parts(result["path"])
+        if not parts:
+            result["folders"] = [f for f in result["folders"] if f["name"] not in blueprint.HIDDEN_AT_ROOT]
+        rank = {n.lower(): i for i, n in enumerate(blueprint.order(parts))}
+        for f in result["folders"]:
+            f["label"] = blueprint.describe(parts + [f["name"]])
+        result["folders"].sort(key=lambda f: (rank.get(f["name"].lower(), len(rank)), f["name"].lower()))
+        result["node"] = blueprint.describe(parts)
+        result["trail"] = [{"name": p, "path": os.path.join(s.repository_root, *parts[: i + 1]),
+                            "label": blueprint.describe(parts[: i + 1])} for i, p in enumerate(parts)]
+        result["context"] = context_of(parts)
         idx = register_index()
         for f in result["files"]:
             d = find_registered(f["path"], idx)
             f["document"] = with_key(d) if d else None
         return result
+
+    @app.get("/api/areas")
+    def areas(user: User = Depends(current_user)):
+        """The top of the tree the user may open: Customers and Management."""
+        out = []
+        for key in blueprint.ROOT:
+            path = os.path.join(s.repository_root, key)
+            if os.path.isdir(path) and user.can(path):
+                out.append({"name": key, "path": path, "label": blueprint.describe([key])})
+        return out
+
+    @app.get("/api/projects")
+    def projects(customer: str, user: User = Depends(current_user)):
+        """Project folders of one customer that the user may open."""
+        folder = os.path.join(files.resolve(s.repository_root, customer), "Projects")
+        try:
+            listing = files.list_folder(s.repository_root, folder, user.can)
+        except (FileNotFoundError, PermissionError):
+            return []
+        return [{"name": f["name"], "path": f["path"]} for f in listing["folders"]]
+
+    @app.get("/api/guide")
+    def guide(_: User = Depends(current_user)):
+        """"What are you saving?" - the document kinds and where each belongs in the blueprint tree."""
+        return [{"key": k, "en": en, "he": he, "needsProject": t.startswith("{p}")} for k, en, he, t in blueprint.SAVE_GUIDE]
+
+    @app.get("/api/guide/target")
+    def guide_target(key: str, customer: str, project: str | None = None, user: User = Depends(current_user)):
+        """The folder for one kind of document, for a customer (and project). It may not exist yet."""
+        entry = next((g for g in blueprint.SAVE_GUIDE if g[0] == key), None)
+        if not entry:
+            raise HTTPException(404, "Unknown document kind")
+        template = entry[3]
+        if template.startswith("{p}") and not project:
+            raise HTTPException(400, "Choose a project first")
+        base = files.resolve(s.repository_root, project if template.startswith("{p}") else customer)
+        target = files.resolve(s.repository_root, os.path.join(base, *template[4:].split("/")))
+        exists = os.path.isdir(target)
+        return {"path": target, "exists": exists, "canWrite": exists and user.can(target, "write")}
 
     @app.get("/api/search")
     def search(q: str = Query(..., min_length=2), scope: str = Query("all", description="all | customer | project | document | file"),
@@ -186,6 +275,22 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     d = find_registered(hit["path"], idx)
                     out.append({"kind": "file", **hit, "document": with_key(d) if d else None})
         return out[: s.search_limit]
+
+    @app.post("/api/guide/create", status_code=201)
+    def guide_create(key: str, customer: str, project: str | None = None, user: User = Depends(current_user)):
+        """Create the blueprint folder for a document kind when it is missing (the user needs write
+        permission on the deepest folder that exists)."""
+        t = guide_target(key, customer, project, user)
+        if t["exists"]:
+            return t
+        existing = t["path"]
+        while not os.path.isdir(existing):
+            existing = os.path.dirname(existing)
+        if not user.can(existing, "write"):
+            raise HTTPException(403, "You do not have permission to create this folder")
+        os.makedirs(t["path"], exist_ok=True)
+        log(user, "new-folder", t["path"])
+        return {"path": t["path"], "exists": True, "canWrite": user.can(t["path"], "write")}
 
     @app.post("/api/files/upload", status_code=201)
     def upload(folder: str = Form(...), file: UploadFile = File(...), overwrite: bool = Form(False),

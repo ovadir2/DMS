@@ -260,3 +260,60 @@ def test_actions_need_ad_write(env, limited):
     other.mkdir()
     assert c.post("/api/folders", json={"parent": str(other), "name": "x"}).status_code == 403
     assert c.post("/api/items/delete", json={"path": str(other)}).status_code == 403
+
+
+def test_blueprint_labels_order_and_context(env):
+    c, _, q = env
+    cust = q.parents[1]                                  # Customer_A
+    for d in ("Projects/PRJ-1/Development/02_SOW", "Projects/PRJ-1/Engineering", "Customer_Profile", "Zeta_Extra"):
+        (cust / d).mkdir(parents=True, exist_ok=True)
+    r = c.get("/api/browse", params={"path": str(cust)}).json()
+    assert [f["name"] for f in r["folders"]] == ["Customer_Profile", "Commercial", "Projects", "Zeta_Extra"]
+    assert r["folders"][1]["label"]["he"] == "מסחרי" and r["folders"][3]["label"] is None
+    assert r["node"]["kind"] == "customer" and r["context"]["customer"]["name"] == "Customer_A"
+    prj = c.get("/api/browse", params={"path": str(cust / "Projects" / "PRJ-1")}).json()
+    assert prj["node"]["kind"] == "project" and prj["context"]["project"]["name"] == "PRJ-1"
+    assert [f["name"] for f in prj["folders"]] == ["Engineering", "Development"]
+    dev = c.get("/api/browse", params={"path": str(cust / "Projects" / "PRJ-1" / "Development")}).json()
+    assert dev["folders"][0]["label"]["en"] == "02 Statement of work"
+    assert [t["name"] for t in dev["trail"]] == ["02_Customers", "Customer_A", "Projects", "PRJ-1", "Development"]
+
+
+def test_root_hides_system_folders_and_areas(env):
+    c, _, q = env
+    root = q.parents[3]
+    (root / "04_Workflow_System").mkdir()
+    (root / "01_Management").mkdir()
+    assert "04_Workflow_System" not in [f["name"] for f in c.get("/api/browse").json()["folders"]]
+    assert [a["name"] for a in c.get("/api/areas").json()] == ["01_Management", "02_Customers"]
+
+
+def test_save_guide(env):
+    c, _, q = env
+    cust = q.parents[1]
+    kinds = {g["key"]: g for g in c.get("/api/guide").json()}
+    assert kinds["quotation"]["needsProject"] is False and kinds["eco"]["needsProject"] is True
+    t = c.get("/api/guide/target", params={"key": "quotation", "customer": str(cust)}).json()
+    assert t["path"] == str(q) and t["exists"] and t["canWrite"]
+    assert c.get("/api/guide/target", params={"key": "eco", "customer": str(cust)}).status_code == 400
+    (cust / "Projects" / "PRJ-1").mkdir(parents=True)
+    assert [p["name"] for p in c.get("/api/projects", params={"customer": str(cust)}).json()] == ["PRJ-1"]
+    t = c.get("/api/guide/target", params={"key": "eco", "customer": str(cust), "project": str(cust / "Projects" / "PRJ-1")}).json()
+    assert t["path"].endswith(os.path.join("PRJ-1", "Changes", "ECO")) and not t["exists"]
+    made = c.post("/api/guide/create", params={"key": "eco", "customer": str(cust), "project": str(cust / "Projects" / "PRJ-1")})
+    assert made.status_code == 201 and os.path.isdir(made.json()["path"])
+
+
+def test_levels_cascade(env, limited):
+    c, _, q = env
+    root = q.parents[3]
+    (root / "04_Workflow_System").mkdir()
+    (q / "Current_ReadOnly").mkdir()
+    lv = c.get("/api/levels", params={"path": str(q)}).json()
+    assert [l["selected"] for l in lv] == ["02_Customers", "Customer_A", "Commercial", "Quotations"]
+    assert [o["name"] for o in lv[0]["options"]] == ["02_Customers"]          # system folder hidden
+    assert [o["name"] for o in lv[1]["options"]] == ["Customer_A"]            # AD: no Customer_B
+    assert lv[2]["options"][0]["label"]["he"] == "מסחרי"
+    assert len(lv) == 4                                                       # Current_ReadOnly is not offered
+    nxt = c.get("/api/levels", params={"path": str(q.parent)}).json()
+    assert nxt[-1]["selected"] is None and [o["name"] for o in nxt[-1]["options"]] == ["Quotations"]

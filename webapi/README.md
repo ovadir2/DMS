@@ -12,10 +12,16 @@ Everything else stays as it is: SharePoint keeps the records, the approval flow 
 
 So the NTFS permissions on the file server (the `DL_FS_*` groups, docs/02 §3.2) are the only place access is managed. The service account (gMSA) does the actual reading and writing, and needs Modify on `$Root`. No Kerberos delegation is needed.
 
+## Following the blueprint tree
+
+`dms_api/blueprint.py` holds the Appendix A tree (the same tree `scripts/New-DmsFileServerTree.ps1` creates) with English and Hebrew names and short hints. Folder tiles show those names and hints, folders are listed in blueprint order, and the page guides users to the right folder. Folders that are not in the blueprint still show with their own names.
+
 ## What users can do
 
 | On the page | API | Rules |
 | --- | --- | --- |
+| **Location** lists along the blueprint tree (Customers › Customer › Commercial / Projects › Project › Engineering, Development 01-10, Test engineering ...). Choosing a folder in one list fills the next list with its subfolders | `GET /api/levels?path=` | Only folders the user may open, in blueprint order, with English/Hebrew names. System and workflow folders are not offered |
+| **What are you saving?** Pick a document kind (quotation, RFQ, SOW, ECO, test report ...) and, when needed, a project. The page goes to the blueprint folder and opens the upload window | `GET /api/guide`, `GET /api/guide/target`, `POST /api/guide/create` | A missing blueprint folder is created only with the user's consent and write permission |
 | Pick a customer | `GET /api/customers` | Only customers whose folder the user may open |
 | Open folders | `GET /api/browse?path=` | Only items the user may read, each file with its DMS status |
 | Search: All, Customer, Project, Document ID, File | `GET /api/search?q=&scope=` | Same filter |
