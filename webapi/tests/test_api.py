@@ -251,7 +251,7 @@ def test_controlled_files_are_protected(env):
     c.post("/api/documents", json={"path": str(f), "documentType": "נוהל", "documentArea": "מסחרי"})
     assert c.post("/api/items/delete", json={"path": str(f)}).status_code == 409
     assert c.post("/api/items/rename", json={"path": str(f), "newName": "x.xlsx"}).status_code == 409
-    assert c.post("/api/items/delete", json={"path": str(q)}).status_code == 409   # folder holding it
+    assert c.post("/api/items/delete", json={"path": str(q)}).status_code in (403, 409)   # skeleton folder holding it
     (q / "Current_ReadOnly").mkdir()
     (q / "Current_ReadOnly" / "a.xlsx").write_text("x")
     assert c.post("/api/items/delete", json={"path": str(q / "Current_ReadOnly" / "a.xlsx")}).status_code == 403
@@ -881,3 +881,14 @@ def test_first_loading_writes_a_full_log(tmp_path):
                  "WebAPI#1", "WebAPI#2", "Finished: 1 files - loaded: 1", "CSV report"):
         assert text in log, text
     assert j["log"].endswith(".log") and j["report"].replace(".csv", ".log") == j["log"]
+
+
+def test_skeleton_is_protected_content_is_not(env):
+    c, _, q = env
+    content = q / "Old quotes 2019" / "Archive A"
+    content.mkdir(parents=True)
+    (q.parent / "NDA").mkdir()                                # an empty blueprint folder
+    assert c.post("/api/items/delete", json={"path": str(q.parent / "NDA")}).status_code == 403
+    assert c.post("/api/items/rename", json={"path": str(q), "newName": "Quotes"}).status_code == 403
+    assert c.post("/api/items/rename", json={"path": str(content), "newName": "Archive B"}).status_code == 200
+    assert c.post("/api/items/delete", json={"path": str(q / "Old quotes 2019")}).status_code == 200
