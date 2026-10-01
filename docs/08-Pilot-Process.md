@@ -56,11 +56,27 @@ On the approved file (in `Current_ReadOnly`, or in **My workflows**) click **⟳
 
 In any folder you may write to: **＋ New document** → choose the file → type, area, control mode → **Register and submit** (or Register only). The file is saved in the folder and registered in one step.
 
+### Sharing an approved document with a customer
+
+On the approved file (or in My workflows): **✉ Share with customer** → the customer's email → Share. The approved revision is copied to the **Large File Exchange** site (`TemporaryUploads/Outbound/<DocumentId>_RevNN/`) and SharePoint sends the customer a personal invitation, view only (B2B guest, no anonymous link). The DocumentControl site is never shared. Only approved documents can be shared, by the owner or a super user; each share is a Control Audit row (שינוי הרשאות). The Exchange site must allow external guests: SharePoint admin center › Sites › LargeFileExchange-TEST › Sharing = *New and existing guests*, and if allowed guest domains are set, add the customer's domain (for the test, gmail.com).
+
 ### What the approver does
 
 **Pilot (on the page):** the header shows **Approvals** with the number waiting. The list shows each document, its owner, type, stage, who already approved and how long it waits, with Open, Download and ✦ AI to read it, and **Approve** (optional comment) / **Reject** (comment required). Stage 1: every mandatory approver must approve. Stage 2: the final approver. One rejection ends the cycle; the comment goes back to the owner in My workflows. A DMS super user can decide any stage (recorded as "super user") and see **All pending approvals**.
 
 **Production (DC-P1):** the same decisions arrive in **Teams (Approvals)** and by email.
+
+**Notifications (pilot):** at each step the page writes a row to the **DMS Notifications** list and the flow **DC-P2 Pilot Notifications** sends it by **email and Teams** (Flow bot), with a link that opens the page on Approvals or My workflows:
+
+| When | Who is told |
+| --- | --- |
+| Submitted (or resubmitted) | The stage 1 (mandatory) approvers |
+| Stage 1 complete | The final approver |
+| Approved | The owner |
+| Rejected | The owner, with the comment |
+| Withdrawn | The approvers who were waiting |
+
+Set up once: `.\scripts\New-DmsNotifyFlowPackage.ps1 -TenantName rhisrael -ClientId $C -DocControlSiteAlias DocumentControl-TEST` (creates the list and `scripts\out\DC-P2-PilotNotifications.zip`), then **My flows > Import > Import Package (Legacy)**, pick the SharePoint, Office 365 Outlook and Teams connections, and turn DC-P2 **On**. Every notification stays in the list (who was told what and when).
 
 Every decision is a Control Audit row (Approved / Rejected, stage, comment, who, when), and My workflows shows for each submitted document **who it is waiting for**.
 
@@ -111,26 +127,46 @@ cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C
 
 Sign in as roneno@rh.co.il when the browser asks. His name shows with ★ (super user). The green banner says **Pilot - live ... Approvals on this page**.
 
-**Test cases**
+**Validation scenario** (in this order; tick each line)
 
-| # | Do | Expected |
+Before you start: DC-P1 **Off**, DC-P2 **On** (notifications), roneno is the approver of every type (`Set-DmsTestApprover.ps1`), the Exchange site allows external guests (see "Sharing" below). Keep three windows open: the DMS page, Explorer on `$Root`, and Outlook/Teams of roneno@rh.co.il. Use a new test file, e.g. `Test Quote_Rev1.xlsx`.
+
+| # | Do | Check |
 | --- | --- | --- |
-| 1 | Choose Customer_A, follow the Location lists down to Commercial › Quotations | Each list offers only the subfolders, in blueprint order, with English/Hebrew names |
-| 2 | **What are you saving?** → Quotation → **Take me there** | Commercial › Quotations opens with the upload window |
-| 3 | Upload a quote file | The file is listed, status **Not registered** |
-| 4 | **Start workflow** → type הצעת מחיר → **Register and submit** | Status **Submitted**, a new DMS-xxxxx ID; a record in the Document Register; rows Created + Submitted in Control Audit; **Approvals** shows 1 |
-| 5 | Wait 1 minute (or My workflows → **Move files now**) | The file is in `Quotations\Submitted`, read-only |
-| 6 | **Approvals** → Approve (stage 1), then Approve again (stage 2 - final approver) | After stage 1 the row shows stage 2; after stage 2 status **Approved (read-only)**; two Approved rows (Stage 1, Stage 2) in Control Audit |
-| 7 | **Move files now** | The file is in `Quotations\Current_ReadOnly`, read-only; CurrentUncPath and CurrentSHA256 on the record |
-| 8 | Repeat 3-4 with another file, then **Reject** in Approvals with a comment | My workflows: **Rejected - back to you** with the comment; after Move files now the file is back in Quotations, writable |
-| 9 | **Submit for approval** again, approve | Approved as in 6-7 |
-| 10 | Upload a new version of the approved quote (same name) and approve it | The old version moves to `Obsolete_ReadOnly`, the new one is in `Current_ReadOnly` |
-| 11 | Try to rename or delete an approved or submitted file, and a customer folder | Refused, with the reason |
-| 12 | Create a folder, rename it, delete it | Works; the deleted folder is in `04_Workflow_System\Recycle` |
-| 13 | Search **✦ Smart** "FCT quote", and AI Insights → Find a file | The quote is suggested with its status; Go to folder opens its folder |
-| 14 | Right-click the file in Explorer → **Start workflow** (`Install-DmsExplorerMenu.ps1 -AppUrl 'http://localhost:8080/dms/dms-page?lang=EN'`) | The page opens with the Start workflow form for that file |
-| 15 | My workflows → **All workflows** | Every workflow in the register, with the owner |
-| 16 | My workflows → **Withdraw** on a submitted document | Status back to Working, a Withdrawn row in Control Audit, the file returns to its place; submit it again to rerun the process from step 4 |
+| **A** | **Find the place** | |
+| 1 | Choose Customer_A, follow the Location lists to Commercial › Quotations | Each list offers only subfolders, blueprint order, English/Hebrew names; Thumbs.db never shows |
+| 2 | 🧭 **Path finder**: Customers › Customer_A › Projects › a project › Test engineering › Test reports | Missing blueprint folders show *(new)*; **Create and go** creates and opens it |
+| 3 | **What are you saving?** → Quotation → **Take me there** | Quotations opens with the upload window |
+| **B** | **New document and submission** | |
+| 4 | **＋ New document** → choose `Test Quote_Rev1.xlsx` → type הצעת מחיר → **Register and submit** | Status **Submitted**, a new DMS-xxxxx; **Approvals** badge = 1 |
+| 5 | Outlook and Teams of roneno | "DMS-xxxxx ... waiting for your approval" (email + Flow bot), link opens the page on **Approvals** |
+| 6 | SharePoint: Document Register and Control Audit | A record (status הוגש לאישור, DraftRevision 01); audit rows נוצר + הוגש; a row in DMS Notifications |
+| 7 | Wait 1 minute (or My workflows → **Move files now**) | The file is in `Quotations\Submitted`, read-only; the report line says MoveToSubmitted |
+| **C** | **Rejection** | |
+| 8 | **Approvals** → **Reject** with comment "fix the price" | Status **Rejected - back to you** with the comment; notification to the owner |
+| 9 | Move files now; open the file in Excel, change it, save | The file is back in Quotations, writable |
+| 10 | My workflows → **Submit for approval** | Submitted again; new notification to the approvers; the approval starts again at stage 1 |
+| **D** | **Approval** | |
+| 11 | **Approvals** → **Approve** (stage 1) | The row moves to **2 - final approver**; notification to the final approver |
+| 12 | **Approve** (stage 2) | Status **Approved (read-only)**; notification to the owner; audit rows Stage 1 + Stage 2 |
+| 13 | Move files now | The file is in `Quotations\Current_ReadOnly`, read-only; the record has CurrentUncPath, CurrentSHA256, CurrentRevision 01 |
+| **E** | **Protection** | |
+| 14 | Try to rename/delete the approved file, `Current_ReadOnly`, `Quotations` and `Customer_A` | All refused, with the reason (controlled document / managed by the DMS / company structure) |
+| 15 | In `Current_ReadOnly`: no Upload, New folder, Rename, Delete buttons | 🔒 "Managed by the DMS" banner |
+| 16 | New folder "Temp", rename it "Temp2", delete it | Works; it is in `04_Workflow_System\Recycle\<date>\roneno`; four FS rows in Control Audit |
+| **F** | **New revision** | |
+| 17 | On the approved file: **⟳ New revision** → a copy of the approved revision | `Test Quote_Rev02_DRAFT.xlsx` next to the document, opens in Excel; status Working, Rev01 still in `Current_ReadOnly` |
+| 18 | Edit, save, **Submit for approval**, approve both stages, Move files now | `Current_ReadOnly\Test Quote_Rev02.xlsx`; Rev01 in `Obsolete_ReadOnly`; CurrentRevision 02 |
+| 19 | **New revision** again → **a file from my computer** + Submit now | `..._Rev03_DRAFT` from the chosen file, submitted |
+| 20 | My workflows → **Withdraw** it | Back to Working, Withdrawn in the history, notification to the waiting approvers |
+| **G** | **Share with the customer** | |
+| 21 | On the approved file: **✉ Share with customer** → `edssrom@gmail.com` | "Invitation sent"; the copy is in the Exchange site `TemporaryUploads/Outbound/DMS-xxxxx_Rev02/`; a Shared row in the history |
+| 22 | Gmail edssrom@gmail.com | An invitation from SharePoint; opening it asks for a one-time code (or a Microsoft account) and shows the file **view only** |
+| 23 | Try to share a document that is not approved | Refused: only approved documents |
+| **H** | **Finding and follow-up** | |
+| 24 | Search **✦ Smart** "test quote"; AI Insights → Find a file "latest test quote of Customer_A" | The document is suggested with its status; Go to folder opens it |
+| 25 | My workflows (counts, history) and **All workflows** | Every step above is in the history, with who and when |
+| 26 | Explorer right-click on a file → **Start workflow** (`Install-DmsExplorerMenu.ps1 -AppUrl 'http://localhost:8080/dms/dms-page?lang=EN'`) | The page opens with the Start workflow form for that file |
 
 **After the pilot**: restore the real approvers with the command `Set-DmsTestApprover.ps1` printed (`-Restore <backup file>`), and stop the page with Ctrl+C.
 
@@ -141,6 +177,7 @@ All the metadata is in SharePoint (`DocumentControl` site), which Microsoft 365 
 - **Document Register**: one record per document: ID, title, type, area, control mode, owner, status, current and draft revision, working and current paths, SHA-256 of the current version, last approval time.
 - **Control Audit**: every event, with who and when: registered, submitted, each approval or rejection (stage and comment), withdrawn, new revision, every file move by the Workflow Service, and every change made on the page in the repository (upload, new folder, rename, delete; CorrelationId `FS`).
 - **Approver Matrix**: who approves each document type.
+- **DMS Notifications**: every email/Teams notification of the pilot (recipients, subject, message, link).
 
 The files themselves stay on the file server (backed up by the file server backup, Veeam). Deleted items go to `04_Workflow_System\Recycle\<date>\<user>`.
 

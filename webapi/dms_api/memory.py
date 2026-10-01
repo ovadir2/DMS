@@ -16,7 +16,7 @@ CHOICES = {
 
 class MemorySharePoint:
     def __init__(self, s: Settings):
-        self.s, self.items, self.audits = s, {}, []
+        self.s, self.items, self.audits, self.notifications = s, {}, [], []
 
     def documents(self, refresh: bool = False) -> list[dict]:
         return [dict(i) for i in self.items.values()]
@@ -48,6 +48,14 @@ class MemorySharePoint:
         self.audits.append({"documentId": document_id, "event": event, "fromStatus": from_status, "toStatus": to_status,
                             "actor": actor, "utc": datetime.now(timezone.utc).isoformat(), "source": source or self.s.choices["Manual"],
                             "details": details})
+
+    def share_with_guest(self, *, local_path, folder, email, subject, message) -> dict:
+        url = f"memory://{self.s.ex_library}/{folder}/{local_path.replace(chr(92), '/').rsplit('/', 1)[-1]}"
+        self.shares = getattr(self, "shares", []) + [{"email": email, "url": url, "subject": subject, "message": message}]
+        return {"url": url}
+
+    def notify(self, *, to, subject, body, link, ref) -> None:
+        self.notifications.append({"to": list(to), "subject": subject, "body": body, "link": link, "ref": ref})
 
     def audit_events(self, refresh: bool = False) -> list[dict]:
         return list(reversed(self.audits))

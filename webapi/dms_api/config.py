@@ -23,12 +23,12 @@ CHOICES = {
            "Created": "נוצר", "SubmittedEvent": "הוגש", "Manual": "ידני",
            "ApprovedEvent": "אושר", "RejectedEvent": "נדחה", "FileDone": "פעולת קובץ הושלמה",
            "FileFailed": "פעולת קובץ נכשלה", "WorkflowService": "שירות תהליכים", "Cancelled": "בוטל",
-           "StatusChanged": "שינוי סטטוס"},
+           "StatusChanged": "שינוי סטטוס", "PermissionChanged": "שינוי הרשאות"},
     "en": {"Working": "Working", "Submitted": "Submitted", "Approved_ReadOnly": "Approved_ReadOnly",
            "Created": "Created", "SubmittedEvent": "Submitted", "Manual": "Manual",
            "ApprovedEvent": "Approved", "RejectedEvent": "Rejected", "FileDone": "FileActionCompleted",
            "FileFailed": "FileActionFailed", "WorkflowService": "WorkflowService", "Cancelled": "Cancelled",
-           "StatusChanged": "StatusChanged"},
+           "StatusChanged": "StatusChanged", "PermissionChanged": "PermissionChanged"},
 }
 
 # Folders the Workflow Service manages next to each controlled file.
@@ -56,6 +56,11 @@ class Settings:
     max_upload_mb: int = 500
     search_limit: int = 200
     approvals: str = "flow"                 # flow (DC-P1 in Teams) | page (approve on the DMS page; turn DC-P1 off)
+    ex_site_url: str = ""                   # Large File Exchange site, for sharing approved files with customers
+    ex_library: str = "TemporaryUploads"
+    ex_folder: str = "Outbound"
+    notify: bool = True                     # page approvals: write DMS Notifications (email + Teams by DC-P2)
+    page_url: str = ""                      # the DMS page address used in notification links
     admins: list[str] = field(default_factory=list)   # DMS super users: submit any document, see all workflows
     sp_auth: str = "certificate"            # certificate (server) | interactive (pilot on a PC, your own sign-in)
     file_service_seconds: int = 0           # >0: run the Workflow Service file moves inside the web service
@@ -105,6 +110,11 @@ class Settings:
             sharepoint=e("DMS_SHAREPOINT", "online"),
             sp_auth=e("DMS_SP_AUTH", "certificate"),
             approvals=e("DMS_APPROVALS", "flow"),
+            ex_site_url=e("DMS_EX_SITE_URL", "").rstrip("/"),
+            ex_library=e("DMS_EX_LIBRARY", "TemporaryUploads"),
+            ex_folder=e("DMS_EX_FOLDER", "Outbound"),
+            notify=e("DMS_NOTIFY", "1") not in ("0", "false", "no"),
+            page_url=e("DMS_PAGE_URL", ""),
             admins=[a.strip().lower() for a in e("DMS_ADMINS", "").split(",") if a.strip()],
             file_service_seconds=int(e("DMS_FILE_SERVICE_SECONDS", "0")),
             ai_url=e("DMS_AI_URL", ""),
