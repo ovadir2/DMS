@@ -522,6 +522,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             out.setdefault(e["documentId"] or "", []).append(e)
         return out
 
+    def rule_for(document_type: str) -> dict | None:
+        """The Approver Matrix rule; a type without an active rule is approved by the super users (pilot)."""
+        rule = sp().approver_rule(document_type)
+        if not rule and s.admins:
+            rule = {"mandatory": [], "final": s.admins[0], "fallback": True}
+        return rule
+
     def approval_state(d: dict, events: list[dict], rules: dict) -> dict:
         """Where a submitted document stands, by the DC-P1 rules: stage 1 = every mandatory approver,
         stage 2 = the final approver. Decisions of the current cycle are the audit rows after the last submission."""
@@ -533,7 +540,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             cycle.append(e)
         t = d.get("documentType") or ""
         if t not in rules:
-            rules[t] = sp().approver_rule(t)
+            rules[t] = rule_for(t)
         rule = rules[t]
         if not rule:
             return {"stage": None, "pending": [], "approved": [], "rule": False}
@@ -624,7 +631,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 final = True
             else:                                               # stage 1 ends when nobody is left; then the final approver
                 left = [] if su else [p for p in st["pending"] if p != user.email]
-                final = not left and not sp().approver_rule(d.get("documentType") or "")["final"]
+                final = not left and not (rule_for(d.get("documentType") or "") or {}).get("final")
             if final:
                 sp().update(item_id, {"LifecycleStatus": c["Approved_ReadOnly"], "LastApprovedUtc": datetime.now(timezone.utc).isoformat()})
             sp().audit(document_id=doc_id, event=c["ApprovedEvent"], from_status=c["Submitted"],

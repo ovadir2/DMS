@@ -419,7 +419,7 @@ async function approvalsView(v) {
         <div style="margin-top:6px"><button type="button" class="pillbtn small" data-ok="${d.id}">✔ ${T.approve}${d.mine ? '' : ' (' + T.asSuper + ')'}</button>
         <button type="button" class="pillbtn small light" data-no="${d.id}" style="color:var(--err)">✖ ${T.reject}</button></div></td></tr>`).join('')}
     </table>` : `<p class="muted">${T.apNone}</p>`}`;
-  const all = v.querySelector('#ap-all'); if (all) all.onclick = () => { state.apAll = !state.apAll; render(); };
+  const all = v.querySelector('#ap-all'); if (all) all.onclick = () => { state.apAll = !state.apAll; render(); refreshApprovals(); };
   v.querySelectorAll('[data-ok],[data-no]').forEach(b => b.onclick = async () => {
     const approve = !!b.dataset.ok, id = b.dataset.ok || b.dataset.no;
     const comment = prompt(approve ? T.apComment : T.rejComment, '');
@@ -431,7 +431,7 @@ async function approvalsView(v) {
 }
 async function refreshApprovals() {
   if (cfg.approvals !== 'page') return;
-  try { const n = (await api('/api/approvals')).length; $('#ap-n').textContent = n; $('#ap-n').hidden = !n; } catch {}
+  try { const n = (await api('/api/approvals' + (state.apAll ? '?everyone=true' : ''))).length; $('#ap-n').textContent = n; $('#ap-n').hidden = !n; } catch {}
 }
 
 // Path finder: build a path level by level from the blueprint, including folders that do not exist yet
@@ -797,6 +797,7 @@ async function download(path) {
   try { me = await api('/api/me'); $('#who').textContent = (me.name || me.email) + (me.admin ? ' ★' : ''); } catch (e) { $('#who').textContent = ''; }
   try { const st = await api('/api/ai/status'); aiApi = st.enabled; aiUrl = st.url || aiUrl; ragTools = st.rag || []; addRagTabs(); } catch { aiApi = false; }
   $('#ai-chat').href = aiUrl;
+  if (me.admin) state.apAll = true;                // super users see every pending approval
   if (me.admin) $('#menu').insertAdjacentHTML('beforeend', `<button data-m="fl">⇪ ${T.flTitle}</button>`);
   if (cfg.approvals === 'page') { $('#ap-b').style.display = ''; refreshApprovals(); setInterval(refreshApprovals, 60000); }
   $('#ai-b').style.display = '';
