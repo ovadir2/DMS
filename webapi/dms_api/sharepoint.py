@@ -230,10 +230,17 @@ class SharePoint:
         return events
 
     def audit(self, *, document_id: str, event: str, from_status: str, to_status: str, actor: str, details: str,
-              source: str | None = None) -> None:
-        self._call("POST", f"{self._list(AUDIT)}/items", json={
+              source: str | None = None) -> int | None:
+        r = self._call("POST", f"{self._list(AUDIT)}/items", json={
             "Title": f"{event} {document_id}", "CorrelationId": document_id, "AuditEventType": event,
             "FromStatus": from_status, "ToStatus": to_status, "ActorEmail": actor,
             "EventUtc": datetime.now(timezone.utc).isoformat(), "EventSource": source or self.s.choices["Manual"],
-            "EventDetails": details})
+            "EventDetails": details[:60000]})
         self._audit_cache = None
+        return r.get("Id")
+
+    def attach(self, audit_id: int, name: str, path: str) -> None:
+        """Attach a file (e.g. the First loading trace log and CSV) to a Control Audit row."""
+        with open(path, "rb") as f:
+            self._call("POST", f"{self._list(AUDIT)}/items({audit_id})/AttachmentFiles/add(FileName='{quote(name)}')",
+                       data=f.read())

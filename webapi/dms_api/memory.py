@@ -44,10 +44,14 @@ class MemorySharePoint:
     def choices(self, field: str) -> list[str]:
         return CHOICES[self.s.choice_language][field]
 
-    def audit(self, *, document_id, event, from_status, to_status, actor, details, source=None) -> None:
+    def audit(self, *, document_id, event, from_status, to_status, actor, details, source=None) -> int:
         self.audits.append({"documentId": document_id, "event": event, "fromStatus": from_status, "toStatus": to_status,
                             "actor": actor, "utc": datetime.now(timezone.utc).isoformat(), "source": source or self.s.choices["Manual"],
                             "details": details})
+        return len(self.audits)
+
+    def attach(self, audit_id: int, name: str, path: str) -> None:
+        self.attachments = getattr(self, "attachments", []) + [{"auditId": audit_id, "name": name, "path": path}]
 
     def share_with_guest(self, *, local_path, folder, email, subject, message) -> dict:
         url = f"memory://{self.s.ex_library}/{folder}/{local_path.replace(chr(92), '/').rsplit('/', 1)[-1]}"

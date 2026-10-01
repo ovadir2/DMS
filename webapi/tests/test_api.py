@@ -872,7 +872,8 @@ def test_first_loading_writes_a_full_log(tmp_path):
     target = root / "02_Customers" / "Customer_A" / "Commercial"
     target.mkdir(parents=True)
     s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
-    c = TestClient(create_app(s, MemorySharePoint(s)))
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
     c.app.state.linker = FakeLinker({str(old / "A_Rev2.pdf")})
     j = _wait(c, c.post("/api/first-load", json={"source": str(old), "target": str(target), "documentType": "x",
                                                  "documentArea": "y", "dryRun": False}).json()["id"])
@@ -881,6 +882,9 @@ def test_first_loading_writes_a_full_log(tmp_path):
                  "WebAPI#1", "WebAPI#2", "Finished: 1 files - loaded: 1", "CSV report"):
         assert text in log, text
     assert j["log"].endswith(".log") and j["report"].replace(".csv", ".log") == j["log"]
+    summary = [a for a in sp.audits if a["documentId"].startswith("FIRST-LOAD-")]
+    assert len(summary) == 1 and "loaded: 1" in summary[0]["details"] and j["log"] in summary[0]["details"]
+    assert sorted(a["name"][-3:] for a in sp.attachments) == ["csv", "log"]
 
 
 def test_skeleton_is_protected_content_is_not(env):
