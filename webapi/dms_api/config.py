@@ -76,6 +76,7 @@ class Settings:
     ai_token: str = ""                      # service account token / API key of Open WebUI
     ai_model: str = "org-chat"              # the model the RH AI chat page uses
     ai_path: str = "/stream"                # the chat endpoint under DMS_AI_URL
+    ai_upload_path: str = "/upload"         # file upload (📎) under DMS_AI_URL; empty: send the file's text
     ai_max_tokens: int = 4096
     ai_max_chars: int = 60000               # document text sent with a question about a file
     ai_knowledge_ids: list[str] = field(default_factory=list)   # knowledge bases for general questions
@@ -141,6 +142,7 @@ class Settings:
             ai_token=e("DMS_AI_TOKEN", ""),
             ai_model=e("DMS_AI_MODEL", "org-chat"),
             ai_path=e("DMS_AI_PATH", "/stream"),
+            ai_upload_path=e("DMS_AI_UPLOAD_PATH", "/upload"),
             ai_max_tokens=int(e("DMS_AI_MAX_TOKENS", "4096")),
             ai_max_chars=int(e("DMS_AI_MAX_CHARS", "60000")),
             ai_knowledge_ids=[k.strip() for k in e("DMS_AI_KNOWLEDGE_IDS", "").split(",") if k.strip()],

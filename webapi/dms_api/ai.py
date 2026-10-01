@@ -2,13 +2,15 @@
 
 The DMS service posts to <DMS_AI_URL><DMS_AI_PATH> (default /stream) the same request the chat page sends:
 {"model": "org-chat", "messages": [...], "max_tokens": 4096}. The answer may come as one JSON, as a stream of
-"data: {...}" lines (OpenAI-style chunks) or as plain text; all are read. The chat has no file upload, so a
-question about a repository file sends the file's text (Word, Excel, PowerPoint, PDF, text) with the question,
-only after the user's AD read check, and only to the on-prem AI.
+"data: {...}" lines (OpenAI-style chunks) or as plain text; all are read. A question about a repository file
+uploads it like the page does (POST <DMS_AI_URL>/upload, field "file", cached by path and modification time)
+and attaches its id; if the upload fails, the file's text (Word, Excel, PowerPoint, PDF, text) goes with the
+question instead. Files are sent only after the user's AD read check, and only to the on-prem AI.
 """
 from __future__ import annotations
 
 import json
+import os
 import re
 
 import requests
@@ -36,6 +38,7 @@ class OpenWebUI:
         self.s = settings
         self.base = settings.ai_url.rstrip("/")
         self.http = session or requests.Session()
+        self._files: dict[tuple[str, float], str] = {}       # (path, mtime) -> uploaded file id
 
     @property
     def enabled(self) -> bool:
@@ -47,9 +50,38 @@ class OpenWebUI:
             h["Authorization"] = f"Bearer {self.s.ai_token}"
         return h
 
-    def chat(self, messages: list[dict], timeout: int = 180) -> str:
+    def upload(self, path: str) -> str:
+        """Upload a file like the chat page (📎); returns its id."""
+        key = (os.path.normcase(path), os.path.getmtime(path))
+        if key in self._files:
+            return self._files[key]
+        if os.path.getsize(path) > self.s.ai_max_file_mb * 1024 * 1024:
+            raise AiError(f"The file is larger than {self.s.ai_max_file_mb} MB")
+        h = {k: v for k, v in self._h().items() if k != "Content-Type"}
+        with open(path, "rb") as f:
+            r = self.http.post(self.base + "/" + self.s.ai_upload_path.lstrip("/"), headers=h,
+                               files={"file": (os.path.basename(path), f)}, timeout=120)
+        if r.status_code >= 400:
+            raise AiError(f"Upload: {r.status_code} {r.text[:200]}")
+        try:
+            data = json.loads(r.text)
+        except ValueError:
+            data = r.text.strip().strip('"')
+        if isinstance(data, list) and data:
+            data = data[0]
+        file_id = data if isinstance(data, str) else next(
+            (str(x) for x in (data.get("id"), data.get("file_id"), (data.get("file") or {}).get("id") if isinstance(data.get("file"), dict) else None,
+                              (data.get("data") or {}).get("id") if isinstance(data.get("data"), dict) else None) if x), "")
+        if not file_id or len(file_id) > 200:
+            raise AiError("Upload: no file id in the answer")
+        self._files[key] = file_id
+        return file_id
+
+    def chat(self, messages: list[dict], timeout: int = 180, files: list[dict] | None = None) -> str:
         url = self.base + "/" + (self.s.ai_path or "/stream").lstrip("/")
         body = {"model": self.s.ai_model or "org-chat", "messages": messages, "max_tokens": self.s.ai_max_tokens}
+        if files:
+            body["files"] = files
         r = self.http.post(url, headers=self._h(), json=body, timeout=timeout)
         if r.status_code in (401, 403):
             raise AiError("AI: the RH AI asks for a sign-in token (DMS_AI_TOKEN in the service .env)")
@@ -100,13 +132,24 @@ class OpenWebUI:
         if not self.enabled:
             raise AiError("AI Insights is not configured")
         system = SYSTEM.get(lang, SYSTEM["EN"]) + (f"\n\n{context}" if context else "")
+        files, user_text, attached = None, question, "uploaded"
         if file_path:
-            text = doc_text.extract(file_path, self.s.ai_max_chars)
-            if not text.strip():
-                raise AiError("AI: no text could be read from this file (a scan or an unsupported type)")
-            system += f"\n\nThe document's text:\n<<<\n{text}\n>>>"
-        answer = self.chat([{"role": "system", "content": system}, {"role": "user", "content": question}])
-        return {"answer": answer, "sources": [], "model": self.s.ai_model or "org-chat"}
+            name = os.path.basename(file_path)
+            try:
+                file_id = self.upload(file_path) if self.s.ai_upload_path else ""
+            except (AiError, requests.RequestException, OSError):
+                file_id = ""
+            if file_id:                                       # as the page does: id + the attached-files line
+                files = [{"type": "file", "id": file_id}]
+                user_text = f"קבצים מצורפים (שמות הקבצים כפי שהמשתמש העלה): {name}.\n\n{question}"
+            else:                                             # no upload: the text goes with the question
+                attached = "text"
+                text = doc_text.extract(file_path, self.s.ai_max_chars)
+                if not text.strip():
+                    raise AiError("AI: the file could not be uploaded and no text could be read from it")
+                system += f"\n\nThe document's text ({name}):\n<<<\n{text}\n>>>"
+        answer = self.chat([{"role": "system", "content": system}, {"role": "user", "content": user_text}], files=files)
+        return {"answer": answer, "sources": [], "model": self.s.ai_model or "org-chat", "file": attached if file_path else None}
 
     # ------------------------------------------------------------------ AI-assisted file finding
     def _complete(self, system: str, user: str, timeout: int = 25) -> str:
