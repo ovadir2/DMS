@@ -1088,3 +1088,10 @@ def test_main_search_covers_folders_file_names_and_document_ids(tmp_path):
     assert names(d["documentId"])[0] == ("document", "CRU 4 FCT Quote_Rev1")            # Document ID first
     assert names("quote fct")[0][0] == "document"                                       # words in any order
     assert ("file", "CRU 4 FCT Quote_Rev1.xlsx") not in names("quote fct")              # not listed twice
+
+
+def test_open_link_uses_the_short_path_only_when_long():
+    from dms_api import files
+    short = r"\\srv\Shares\02_Customers\A\Quote.xlsx"
+    assert files.office_uri(short) == "ms-excel:ofv|u|file://srv/Shares/02_Customers/A/Quote.xlsx"
+    assert files.short_path("\\\\srv\\" + "x" * 300 + ".docx").endswith(".docx")        # unchanged off Windows
