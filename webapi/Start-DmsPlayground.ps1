@@ -78,6 +78,7 @@ if ($Live) {
 if ($AiUrl) { $env:DMS_AI_URL = $AiUrl; $env:DMS_AI_TOKEN = $AiToken; $env:DMS_AI_MODEL = $AiModel }
 
 $url = "http://localhost:$Port/dms/dms-page?lang=$Lang"
+$env:DMS_PAGE_URL = $url   # notification links (DC-P2) open the page here
 Write-Host "DMS page on $url  (root: $env:DMS_REPOSITORY_ROOT). Ctrl+C to stop." -ForegroundColor Green
 Start-Job -ScriptBlock { param($u, $p) for ($i = 0; $i -lt 120; $i++) { Start-Sleep 2; try { Invoke-WebRequest "http://localhost:$p/api/health" -UseBasicParsing | Out-Null; Start-Process $u; break } catch {} } } -ArgumentList $url, $Port | Out-Null
 & $py -m uvicorn dms_api.main:app --host 127.0.0.1 --port $Port

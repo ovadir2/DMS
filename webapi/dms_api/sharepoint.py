@@ -19,6 +19,7 @@ from .config import Settings
 REGISTER = "Lists/DocumentRegister"
 AUDIT = "Lists/ControlAudit"
 MATRIX = "Lists/ApproverMatrix"
+NOTIFY = "Lists/DmsNotifications"
 REGISTER_FIELDS = ("Id", "Title", "DocumentId", "DocumentType", "DocumentArea", "ControlMode", "LifecycleStatus",
                    "WorkingUncPath", "CurrentUncPath", "CurrentSHA256", "CurrentRevision", "LastApprovedUtc",
                    "DraftRevision", "Modified", "Created")
@@ -173,6 +174,11 @@ class SharePoint:
         mandatory = [(u.get("EMail") or "").lower() for u in (r.get("MandatoryApprovers") or []) if u.get("EMail")]
         final = ((r.get("FinalApprover") or {}).get("EMail") or "").lower() or None
         return {"mandatory": mandatory, "final": final}
+
+    def notify(self, *, to: list[str], subject: str, body: str, link: str, ref: str) -> None:
+        """A row in DMS Notifications; the DC-P2 flow sends it by email and Teams."""
+        self._call("POST", f"{self._list(NOTIFY)}/items", json={
+            "Title": subject[:255], "NotifyTo": "; ".join(to), "MessageBody": body, "LinkUrl": link[:255], "RefId": ref})
 
     # ------------------------------------------------------------------ audit
     def audit_events(self, refresh: bool = False) -> list[dict]:

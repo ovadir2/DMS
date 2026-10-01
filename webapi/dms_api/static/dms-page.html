@@ -682,6 +682,8 @@ async function download(path) {
   $('#ai-b').style.display = '';
   if (!aiOn) $('#ai-t').textContent = T.findTab.replace('🔎 ', '');
   $('#ai-log').innerHTML = `<div class="muted small">${T.aiOnPrem}</div>`;
+  if (q.get('view') === 'approvals' && cfg.approvals === 'page') state.view = 'approvalsView';   // from a notification link
+  else if (q.get('view') === 'workflows') state.view = 'mine';
   await render();
   if (q.get('path')) startWorkflow(q.get('path'), q.get('name'));   // opened from the Explorer right-click
 })();
