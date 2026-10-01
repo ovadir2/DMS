@@ -84,8 +84,13 @@ function Set-ReadOnly([string]$Path, [bool]$On) {
     (Get-Item -LiteralPath $Path).IsReadOnly = $On
 }
 
-function Move-DmsFile([string]$Source, [string]$Target) {
-    # Moves never overwrite: an existing target gets a timestamp suffix.
+function Move-DmsFile([string]$Source, [string]$Target, [switch]$Replace) {
+    # Moves never overwrite (an existing target gets a timestamp suffix), unless -Replace: then an older
+    # copy of the same document is replaced, so the file keeps its name.
+    if ($Replace -and (Test-Path -LiteralPath $Target -PathType Leaf)) {
+        Set-ReadOnly $Target $false
+        Remove-Item -LiteralPath $Target -Force
+    }
     if (Test-Path -LiteralPath $Target) {
         $Target = Join-Path (Split-Path $Target) ('{0}_{1:yyyyMMddHHmmss}{2}' -f
             [IO.Path]::GetFileNameWithoutExtension($Target), (Get-Date), [IO.Path]::GetExtension($Target))
@@ -136,6 +141,14 @@ foreach ($item in $items) {
     $docFolder = if ((Split-Path $parent -Leaf) -in 'Working', 'Submitted', 'Current_ReadOnly', 'Obsolete_ReadOnly') { Split-Path $parent } else { $parent }
     $inWorking = $working
     $inSubmitted = Join-Path $docFolder "Submitted\$name"
+    if (-not (Test-Path -LiteralPath $inSubmitted)) {
+        # Older runs renamed it with a timestamp suffix: take the newest one, it goes back under its own name
+        $base = [IO.Path]::GetFileNameWithoutExtension($name); $ext = [IO.Path]::GetExtension($name)
+        $old = Get-ChildItem -LiteralPath (Join-Path $docFolder 'Submitted') -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match ('^' + [regex]::Escape($base) + '_\d{14}' + [regex]::Escape($ext) + '$') } |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($old) { $inSubmitted = $old.FullName }
+    }
     $action = $null; $details = $null
 
     try {
@@ -144,7 +157,7 @@ foreach ($item in $items) {
                 if (-not (Test-Path -LiteralPath $inWorking)) { continue }
                 $action = 'MoveToSubmitted'
                 if ($PSCmdlet.ShouldProcess($inWorking, $action)) {
-                    $target = Move-DmsFile $inWorking $inSubmitted
+                    $target = Move-DmsFile $inWorking (Join-Path $docFolder "Submitted\$name") -Replace
                     Set-ReadOnly $target $true
                     $sha = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
                     $details = "${action}: $inWorking -> $target. SHA-256 $sha"

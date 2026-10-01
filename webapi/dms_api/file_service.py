@@ -30,8 +30,12 @@ def _set_read_only(path: str, on: bool) -> None:
     os.chmod(path, (mode & ~stat.S_IWRITE & ~stat.S_IWGRP & ~stat.S_IWOTH) if on else (mode | stat.S_IWRITE))
 
 
-def _move(source: str, target: str) -> str:
-    """Never overwrites: an existing target gets a timestamp suffix."""
+def _move(source: str, target: str, replace: bool = False) -> str:
+    """Never overwrites (an existing target gets a timestamp suffix), unless replace: then an older copy
+    of the same document at the target is replaced, so the file keeps its name."""
+    if os.path.exists(target) and replace and os.path.isfile(target):
+        _set_read_only(target, False)
+        os.remove(target)
     if os.path.exists(target):
         base, ext = os.path.splitext(target)
         target = f"{base}_{datetime.now():%Y%m%d%H%M%S}{ext}"
@@ -80,6 +84,37 @@ def to_root(root: str, path: str | None) -> str | None:
     return None
 
 
+def find_submitted(folder: str, name: str) -> str | None:
+    """The document's file in <folder>\\Submitted: its own name, or (older runs) the name with a timestamp suffix."""
+    exact = os.path.join(folder, "Submitted", name)
+    if os.path.isfile(exact):
+        return exact
+    base, ext = os.path.splitext(name)
+    pattern = re.compile(re.escape(base) + r"_\d{14}" + re.escape(ext) + "$", re.I)
+    try:
+        hits = [os.path.join(folder, "Submitted", f) for f in os.listdir(os.path.join(folder, "Submitted")) if pattern.match(f)]
+    except OSError:
+        return None
+    return max(hits, key=os.path.getmtime) if hits else None
+
+
+def return_to_working(root: str, working_path: str | None) -> str | None:
+    """Withdrawn or rejected: the file goes back from Submitted to its own place, with its own name, writable.
+    Returns what was done, or None when there was nothing to move."""
+    working = to_root(root, working_path)
+    if not working or os.path.exists(working):
+        return None
+    name, parent = os.path.basename(working), os.path.dirname(working)
+    folder = os.path.dirname(parent) if os.path.basename(parent) in WORKFLOW_FOLDERS else parent
+    source = find_submitted(folder, name)
+    if not source:
+        return None
+    _set_read_only(source, False)
+    target = _move(source, working)
+    rel = lambda p: os.path.relpath(p, root)  # noqa: E731
+    return f"ReturnToWorking: {rel(source)} -> {rel(target)}"
+
+
 def run_once(sp, s: Settings) -> dict:
     """One pass over the register. Returns the counts and, per record, what was done or why not."""
     c = s.choices
@@ -100,18 +135,17 @@ def run_once(sp, s: Settings) -> dict:
             continue
         name, parent = os.path.basename(working), os.path.dirname(working)
         folder = os.path.dirname(parent) if os.path.basename(parent) in WORKFLOW_FOLDERS else parent
-        in_submitted = os.path.join(folder, "Submitted", name)
+        in_submitted = find_submitted(folder, name) or os.path.join(folder, "Submitted", name)
         action = details = None
         try:
             if status == c["Submitted"] and os.path.isfile(working):
                 action = "MoveToSubmitted"
-                target = _move(working, in_submitted)
+                target = _move(working, os.path.join(folder, "Submitted", name), replace=True)
                 _set_read_only(target, True)
                 details = f"{action}: {rel(working)} -> {rel(target)}. SHA-256 {_sha256(target)}"
             elif status == c["Working"] and os.path.isfile(in_submitted) and not os.path.exists(working):
                 action = "ReturnToWorking"
-                _set_read_only(in_submitted, False)
-                details = f"{action}: {rel(in_submitted)} -> {rel(_move(in_submitted, working))}"
+                details = return_to_working(s.repository_root, working)
             elif status == c["Approved_ReadOnly"]:
                 source = next((p for p in (in_submitted, working) if os.path.isfile(p)), None)
                 if not source:
