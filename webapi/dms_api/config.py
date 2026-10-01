@@ -20,9 +20,11 @@ def _load_dotenv() -> None:
 # Choice values as stored in the lists. The DocumentControl site is provisioned in Hebrew.
 CHOICES = {
     "he": {"Working": "בעבודה", "Submitted": "הוגש לאישור", "Approved_ReadOnly": "מאושר - קריאה בלבד",
-           "Created": "נוצר", "SubmittedEvent": "הוגש", "Manual": "ידני"},
+           "Created": "נוצר", "SubmittedEvent": "הוגש", "Manual": "ידני",
+           "ApprovedEvent": "אושר", "RejectedEvent": "נדחה", "FileDone": "פעולת קובץ הושלמה"},
     "en": {"Working": "Working", "Submitted": "Submitted", "Approved_ReadOnly": "Approved_ReadOnly",
-           "Created": "Created", "SubmittedEvent": "Submitted", "Manual": "Manual"},
+           "Created": "Created", "SubmittedEvent": "Submitted", "Manual": "Manual",
+           "ApprovedEvent": "Approved", "RejectedEvent": "Rejected", "FileDone": "FileActionCompleted"},
 }
 
 # Folders the Workflow Service manages next to each controlled file.
@@ -49,6 +51,11 @@ class Settings:
     customers_folder: str = "02_Customers"  # under the root: one folder per customer
     max_upload_mb: int = 500
     search_limit: int = 200
+    ai_url: str = ""                        # AI Insights: Open WebUI, e.g. https://chat.ai.rh-global.com
+    ai_token: str = ""                      # service account token / API key of Open WebUI
+    ai_model: str = ""                      # model id as listed in Open WebUI
+    ai_knowledge_ids: list[str] = field(default_factory=list)   # knowledge bases for general questions
+    ai_max_file_mb: int = 25
     protected_depth: int = 2                # 02_Customers\Customer_A and above cannot be renamed or deleted
 
     @property
@@ -86,4 +93,9 @@ class Settings:
             max_upload_mb=int(e("DMS_MAX_UPLOAD_MB", "500")),
             search_limit=int(e("DMS_SEARCH_LIMIT", "200")),
             protected_depth=int(e("DMS_PROTECTED_DEPTH", "2")),
+            ai_url=e("DMS_AI_URL", ""),
+            ai_token=e("DMS_AI_TOKEN", ""),
+            ai_model=e("DMS_AI_MODEL", ""),
+            ai_knowledge_ids=[k.strip() for k in e("DMS_AI_KNOWLEDGE_IDS", "").split(",") if k.strip()],
+            ai_max_file_mb=int(e("DMS_AI_MAX_FILE_MB", "25")),
         )

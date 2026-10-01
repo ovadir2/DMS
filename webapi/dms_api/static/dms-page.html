@@ -51,6 +51,26 @@
   .levels select { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink); max-width:260px; }
   .levels select:last-child:has(option[value=""]:checked) { border-color:var(--btn); box-shadow:0 0 0 2px rgba(42,82,121,.15); }
   .lsep { color:var(--muted); }
+  .hbtn.ai { color:#6d3fc0; font-weight:500; } button.link.ai { color:#6d3fc0; }
+  .drawer { position:fixed; top:0; inset-inline-end:0; height:100vh; width:min(460px, 100vw); background:#fff; box-shadow:-8px 0 30px rgba(20,35,55,.18);
+            transform:translateX(110%); transition:transform .2s; z-index:20; display:flex; flex-direction:column; }
+  [dir=rtl] .drawer { transform:translateX(-110%); }
+  .drawer.open { transform:none !important; }
+  .dr-h { display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--line); font-weight:700; color:#6d3fc0; font-size:17px; }
+  .dr-ctx { padding:10px 18px; background:#f5f1fc; display:flex; gap:10px; justify-content:space-between; align-items:center; font-size:14px; }
+  .dr-q { padding:10px 18px 0; display:flex; flex-wrap:wrap; gap:6px; }
+  .dr-log { flex:1; overflow:auto; padding:14px 18px; display:flex; flex-direction:column; gap:10px; }
+  .bubble { padding:10px 12px; border-radius:10px; max-width:90%; white-space:normal; line-height:1.5; }
+  .bubble.me { align-self:flex-end; background:var(--infobg); }
+  .bubble.bot { align-self:flex-start; background:#f4f5f7; }
+  .bubble .src { margin-top:6px; font-size:12px; color:var(--muted); }
+  .dr-in { display:flex; gap:8px; padding:12px 18px 16px; border-top:1px solid var(--line); align-items:flex-end; }
+  .dr-in textarea { flex:1; font:inherit; border:1px solid var(--line); border-radius:8px; padding:8px 10px; resize:vertical; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+  .chip { border:1px solid var(--line); background:#fff; border-radius:16px; padding:5px 12px; font:inherit; font-size:13px; cursor:pointer; color:var(--ink); }
+  .chip.on { border-color:var(--btn); box-shadow:0 0 0 2px rgba(42,82,121,.15); }
+  .Rejected { background:var(--errbg); color:var(--err); }
+  .timeline { margin:4px 0; padding-inline-start:20px; display:grid; gap:6px; }
   .guide { display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--band); border-radius:8px; padding:10px 14px; margin-bottom:12px; }
   .guide .gtitle { font-weight:600; color:var(--navy); }
   .guide select { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:6px; min-width:220px; background:#fff; }
@@ -85,6 +105,8 @@
     <span class="welcome" id="t-welcome"></span>
   </div>
   <span class="spacer"></span>
+  <button class="hbtn" id="wf-b"><svg class="icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h10M4 12h7M4 18h10"/><path d="m15 15 2.5 2.5L22 13"/></svg><span id="wf-t"></span></button>
+  <button class="hbtn ai" id="ai-b" style="display:none"><svg class="icon" width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8zM19 14l.9 2.6 2.6.9-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9z"/></svg><span id="ai-t"></span></button>
   <button class="hbtn" id="lang"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg><span id="lang-t"></span></button>
   <span class="hbtn muted"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span id="who"></span></span>
   <div class="menu"><button class="hbtn" id="menu-b" aria-label="menu"><svg width="6" height="22" viewBox="0 0 6 22" fill="#1f4a72"><circle cx="3" cy="3" r="2.4"/><circle cx="3" cy="11" r="2.4"/><circle cx="3" cy="19" r="2.4"/></svg></button>
@@ -104,6 +126,13 @@
   <section class="card" id="view"></section>
 </div>
 
+<aside id="ai-panel" class="drawer" aria-hidden="true">
+  <div class="dr-h"><span id="ai-title"></span><button type="button" class="hbtn" id="ai-x" aria-label="close">✕</button></div>
+  <div class="dr-ctx"><span id="ai-ctx"></span><button type="button" class="link small" id="ai-clear"></button></div>
+  <div class="dr-q" id="ai-quick"></div>
+  <div class="dr-log" id="ai-log"></div>
+  <form class="dr-in" id="ai-form"><textarea id="ai-q" rows="2"></textarea><button class="pillbtn small" id="ai-send"></button></form>
+</aside>
 <dialog id="dlg"><form method="dialog" id="dlg-form"><div class="dlg-h" id="dlg-h"></div><div class="dlg-b" id="dlg-b"></div><div class="dlg-f" id="dlg-f"></div></form></dialog>
 
 <script>
@@ -118,7 +147,7 @@ const T = {
         upload:'Upload file', uploadTitle:'Save a file in this folder', chooseFile:'File from your computer', folder:'Folder', overwrite:'Replace a file with the same name',
         ok:'OK', cancel:'Cancel', saved:'Saved to', notReg:'Not registered', none:'Nothing here.', results:'Results', type:'Document type', area:'Area', mode:'Control mode',
         titleF:'Title', registerSubmit:'Register and submit', registerOnly:'Register only', registered:'Registered as', err:'Error', docId:'Document ID', path:'Location', copy:'Copy path', copied:'Copied',
-        newFolder:'New folder', company:'Company', location:'Location', choose:'Choose…', whatSaving:'What are you saving?', chooseKind:'Choose a document kind', chooseProject:'Choose a project', takeMe:'Take me there', noProjects:'This customer has no projects yet.', createMissing:'This folder does not exist yet. Create it?', rename:'Rename', del:'Delete', newName:'New name', folderName:'Folder name', confirmDel:'Move to the recycle folder?', recycled:'Moved to the recycle folder. IT can restore it.',
+        newFolder:'New folder', company:'Company', aiInsights:'AI Insights', aiAbout:'About:', aiKnowledge:'RH company knowledge', aiAsk:'Ask', aiPlaceholder:'Ask about the document or the company knowledge…', aiClear:'Ask the company knowledge instead', aiThinking:'Thinking…', aiSources:'Sources', aiOnPrem:'Answers come from RH on-prem AI. Check important facts in the document.', qSummary:'Summarize this document', qReq:'List the key requirements', qRisk:'What are the risks and open issues?', qDates:'List dates, deadlines and validity', myWf:'My workflows', submitted:'Submitted', lastAction:'Last action', history:'History', by:'by', Rejected:'Rejected - back to you', waiting:'waiting', days:'days', location:'Location', choose:'Choose…', whatSaving:'What are you saving?', chooseKind:'Choose a document kind', chooseProject:'Choose a project', takeMe:'Take me there', noProjects:'This customer has no projects yet.', createMissing:'This folder does not exist yet. Create it?', rename:'Rename', del:'Delete', newName:'New name', folderName:'Folder name', confirmDel:'Move to the recycle folder?', recycled:'Moved to the recycle folder. IT can restore it.',
         Working:'Working', Submitted:'Submitted', Approved_ReadOnly:'Approved (read-only)', Other:'Other', None:'Not registered', other:'עברית' },
   HE: { welcome:'RH - מערכת ניהול מסמכים', search:'חיפוש', all:'הכל', customer:'לקוח', project:'פרויקט', document:'מזהה מסמך', file:'קובץ', description:'תיאור',
         go:'חיפוש', refresh:'רענון', lang:'עברית', customers:'לקוחות', myDocs:'המסמכים שלי', home:'לקוחות', noAccess:'אין לקוחות זמינים עבורך.',
@@ -126,7 +155,7 @@ const T = {
         upload:'העלאת קובץ', uploadTitle:'שמירת קובץ בתיקייה זו', chooseFile:'קובץ מהמחשב', folder:'תיקייה', overwrite:'החלפת קובץ קיים באותו שם',
         ok:'אישור', cancel:'ביטול', saved:'נשמר ב-', notReg:'לא רשום', none:'אין פריטים.', results:'תוצאות', type:'סוג מסמך', area:'תחום', mode:'מצב בקרה',
         titleF:'כותרת', registerSubmit:'רישום והגשה לאישור', registerOnly:'רישום בלבד', registered:'נרשם כ-', err:'שגיאה', docId:'מזהה מסמך', path:'מיקום', copy:'העתקת נתיב', copied:'הועתק',
-        newFolder:'תיקייה חדשה', company:'חברה', location:'מיקום', choose:'בחרו…', whatSaving:'מה שומרים?', chooseKind:'בחרו סוג מסמך', chooseProject:'בחרו פרויקט', takeMe:'קחו אותי לשם', noProjects:'ללקוח זה אין עדיין פרויקטים.', createMissing:'התיקייה עדיין לא קיימת. ליצור אותה?', rename:'שינוי שם', del:'מחיקה', newName:'שם חדש', folderName:'שם התיקייה', confirmDel:'להעביר לתיקיית המחזור?', recycled:'הועבר לתיקיית המחזור. מחלקת IT יכולה לשחזר.',
+        newFolder:'תיקייה חדשה', company:'חברה', aiInsights:'AI Insights', aiAbout:'על:', aiKnowledge:'הידע הארגוני של RH', aiAsk:'שאל', aiPlaceholder:'שאלו על המסמך או על הידע הארגוני…', aiClear:'לשאול את הידע הארגוני במקום', aiThinking:'חושב…', aiSources:'מקורות', aiOnPrem:'התשובות מגיעות מה-AI הפנימי של RH. בדקו עובדות חשובות במסמך.', qSummary:'סכם את המסמך', qReq:'מהן הדרישות העיקריות?', qRisk:'מהם הסיכונים והנושאים הפתוחים?', qDates:'מהם התאריכים, המועדים והתוקף?', myWf:'תהליכי האישור שלי', submitted:'הוגש', lastAction:'פעולה אחרונה', history:'היסטוריה', by:'על ידי', Rejected:'נדחה - חזר אליך', waiting:'ממתין', days:'ימים', location:'מיקום', choose:'בחרו…', whatSaving:'מה שומרים?', chooseKind:'בחרו סוג מסמך', chooseProject:'בחרו פרויקט', takeMe:'קחו אותי לשם', noProjects:'ללקוח זה אין עדיין פרויקטים.', createMissing:'התיקייה עדיין לא קיימת. ליצור אותה?', rename:'שינוי שם', del:'מחיקה', newName:'שם חדש', folderName:'שם התיקייה', confirmDel:'להעביר לתיקיית המחזור?', recycled:'הועבר לתיקיית המחזור. מחלקת IT יכולה לשחזר.',
         Working:'בעבודה', Submitted:'הוגש לאישור', Approved_ReadOnly:'מאושר - קריאה בלבד', Other:'אחר', None:'לא רשום', other:'English' } }[lang];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -159,23 +188,27 @@ $('#lang').onclick = () => { q.set('lang', lang === 'HE' ? 'EN' : 'HE'); locatio
 $('#scopes').innerHTML = ['all','customer','project','document','file'].map(k =>
   `<label><input type="radio" name="scope" value="${k}" ${k === 'all' ? 'checked' : ''}>${T[k]}</label>`).join('');
 $('#scopes').onchange = e => state.scope = e.target.value;
-$('#menu').innerHTML = `<button data-m="customers">${T.customers}</button><button data-m="mine">${T.myDocs}</button><button data-m="lang">${T.other}</button>`;
+$('#menu').innerHTML = `<button data-m="customers">${T.customers}</button><button data-m="mine">${T.myWf}</button><button data-m="ai">${T.aiInsights}</button><button data-m="lang">${T.other}</button>`;
 $('#menu-b').onclick = e => { e.stopPropagation(); $('#menu').classList.toggle('open'); };
 document.onclick = () => $('#menu').classList.remove('open');
-$('#menu').onclick = e => { const m = e.target.dataset.m; if (m === 'lang') return $('#lang').click(); if (m) { state.view = m; render(); } };
+$('#menu').onclick = e => { const m = e.target.dataset.m; if (m === 'lang') return $('#lang').click(); if (m === 'ai') return openAI(null); if (m) { state.view = m; render(); } };
+$('#wf-t').textContent = T.myWf; $('#wf-b').onclick = () => { state.view = 'mine'; render(); };
 $('#go').onclick = () => { if ($('#q').value.trim().length >= 2) { state.view = 'search'; render(); } };
 $('#q').onkeydown = e => { if (e.key === 'Enter') $('#go').click(); };
 $('#refresh').onclick = () => render();
 
 const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${esc(d ? (T[d.statusKey] || d.lifecycleStatus) : T.None)}</span>${d ? ` <span class="muted small">${esc(d.documentId)}</span>` : ''}`;
 function fileActions(f) {
-  return `${f.officeUri ? `<a class="link" href="${esc(f.officeUri)}">${T.open}</a>` : ''}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button>`
+  return (aiOn ? `<button type="button" class="link ai" data-ai="${esc(f.path)}">✦ AI</button>` : '') + `${f.officeUri ? `<a class="link" href="${esc(f.officeUri)}">${T.open}</a>` : ''}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button>`
     + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button>` : '')
                   : `<button type="button" class="link" data-st="${esc(f.path)}">${T.start}</button>`);
 }
 function wire(v) {
   v.querySelectorAll('[data-f]').forEach(a => a.onclick = () => { state.view = 'browse'; state.folder = a.dataset.f; render(); });
   v.querySelectorAll('[data-dl]').forEach(a => a.onclick = () => download(a.dataset.dl));
+  v.querySelectorAll('[data-ai]').forEach(a => a.onclick = () => openAI(a.dataset.ai));
+  v.querySelectorAll('[data-hist]').forEach(a => a.onclick = () => { const r = v.querySelector('#h-' + a.dataset.hist); r.hidden = !r.hidden; });
+  v.querySelectorAll('[data-sf]').forEach(a => a.onclick = () => { state.wfFilter = a.dataset.sf || null; render(); });
   v.querySelectorAll('[data-st]').forEach(a => a.onclick = () => startWorkflow(a.dataset.st));
   v.querySelectorAll('[data-sub]').forEach(b => b.onclick = async () => {
     b.disabled = true;
@@ -289,14 +322,61 @@ async function search(v) {
     </table>${r.length ? '' : `<p class="muted">${T.none}</p>`}`;
 }
 async function mine(v) {
-  const docs = await api('/api/documents?mine=true');
-  v.innerHTML = `<h2>${T.myDocs}</h2><table><tr><th>${T.docId}</th><th>${T.titleF}</th><th>${T.status}</th><th class="hide-s">${T.path}</th><th></th></tr>
-    ${docs.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}</td><td>${statusTag(d)}</td>
-      <td class="hide-s muted small ltr">${esc(d.currentUncPath || d.workingUncPath)}</td>
-      <td class="actions">${d.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${d.id}">${T.submit}</button>` : ''}
-        <button type="button" class="link" data-cp="${esc(d.currentUncPath || d.workingUncPath)}">${T.copy}</button></td></tr>`).join('')}
-    </table>${docs.length ? '' : `<p class="muted">${T.none}</p>`}`;
+  const r = await api('/api/my-workflows');
+  const keys = ['Working', 'Submitted', 'Approved_ReadOnly', 'Rejected'];
+  const items = r.items.filter(i => !state.wfFilter || i.statusKey === state.wfFilter);
+  const who = e => e ? `${esc(evName(e.event))} · ${esc((e.actor || '').split('@')[0])} · ${when(e.utc)}` : '';
+  const days = u => u ? Math.max(0, Math.floor((Date.now() - new Date(u)) / 864e5)) : null;
+  v.innerHTML = `<h2>${T.myWf}</h2>
+    <div class="chips"><button type="button" class="chip ${state.wfFilter ? '' : 'on'}" data-sf="">${T.all} <b>${r.items.length}</b></button>
+      ${keys.map(k => `<button type="button" class="chip ${k} ${state.wfFilter === k ? 'on' : ''}" data-sf="${k}">${T[k]} <b>${r.summary[k]}</b></button>`).join('')}</div>
+    <table><tr><th>${T.docId}</th><th>${T.titleF}</th><th>${T.status}</th><th class="hide-s">${T.submitted}</th><th class="hide-s">${T.lastAction}</th><th></th></tr>
+    ${items.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}</td>
+      <td><span class="status ${esc(d.statusKey)}">${esc(T[d.statusKey] || d.lifecycleStatus)}</span>
+        ${d.statusKey === 'Submitted' && days(d.submittedUtc) !== null ? `<div class="muted small">${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}</td>
+      <td class="hide-s muted small">${when(d.submittedUtc)}</td>
+      <td class="hide-s small">${who(d.decision || d.lastEvent)}${d.decision && d.decision.details ? `<div class="muted">${esc(d.decision.details)}</div>` : ''}</td>
+      <td class="actions">${['Working', 'Rejected'].includes(d.statusKey) ? `<button type="button" class="link" data-sub="${d.id}">${T.submit}</button>` : ''}
+        ${aiOn && (d.currentUncPath || d.workingUncPath) ? `<button type="button" class="link ai" data-ai="${esc(d.currentUncPath || d.workingUncPath)}">✦ AI</button>` : ''}
+        <button type="button" class="link" data-cp="${esc(d.currentUncPath || d.workingUncPath)}">${T.copy}</button>
+        <button type="button" class="link" data-hist="${d.id}">${T.history}</button></td></tr>
+      <tr id="h-${d.id}" hidden><td colspan="6"><ol class="timeline">${d.history.map(e => `<li><b>${esc(evName(e.event))}</b> <span class="muted">${when(e.utc)} · ${esc(e.actor)}${e.source ? ' · ' + esc(e.source) : ''}</span>${e.details ? `<div class="small">${esc(e.details)}</div>` : ''}</li>`).join('')}</ol></td></tr>`).join('')}
+    </table>${items.length ? '' : `<p class="muted">${T.none}</p>`}`;
 }
+
+// Control Audit event names are stored in the site language (Hebrew); show them in the page language
+const EV = { 'נוצר':'Created', 'הוגש':'Submitted', 'אושר':'Approved', 'נדחה':'Rejected', 'שינוי סטטוס':'Status changed', 'בוטל':'Cancelled',
+             'פעולת קובץ הושלמה':'File moved', 'פעולת קובץ נכשלה':'File action failed', 'הואצל':'Delegated', 'פג תוקף':'Expired' };
+const evName = e => lang === 'HE' ? e : (EV[e] || e);
+
+// ---------------------------------------------------------------- AI Insights (RH on-prem RAG LLM)
+let aiOn = false, aiFile = null;
+function openAI(path) {
+  aiFile = path || null;
+  $('#ai-ctx').innerHTML = `${T.aiAbout} <b>${esc(aiFile ? aiFile.split(/[\\/]/).pop() : T.aiKnowledge)}</b>`;
+  $('#ai-clear').hidden = !aiFile;
+  $('#ai-quick').innerHTML = (aiFile ? ['qSummary', 'qReq', 'qRisk', 'qDates'] : []).map(k => `<button type="button" class="chip" data-q="${k}">${T[k]}</button>`).join('');
+  $('#ai-quick').querySelectorAll('[data-q]').forEach(b => b.onclick = () => askAI(T[b.dataset.q]));
+  $('#ai-panel').classList.add('open'); $('#ai-panel').setAttribute('aria-hidden', 'false'); $('#ai-q').focus();
+}
+async function askAI(question) {
+  const log = $('#ai-log');
+  log.insertAdjacentHTML('beforeend', `<div class="bubble me">${esc(question)}</div><div class="bubble bot pending">${T.aiThinking}</div>`);
+  log.scrollTop = log.scrollHeight;
+  const pending = log.querySelector('.pending');
+  try {
+    const r = await api('/api/ai/ask', { method:'POST', body:JSON.stringify({ question, path: aiFile, lang }) });
+    pending.innerHTML = esc(r.answer).replace(/\n/g, '<br>') + (r.sources?.length ? `<div class="src">${T.aiSources}: ${r.sources.map(esc).join(', ')}</div>` : '');
+  } catch (e) { pending.innerHTML = `<span style="color:var(--err)">${T.err}: ${esc(e.message)}</span>`; }
+  pending.classList.remove('pending'); log.scrollTop = log.scrollHeight;
+}
+$('#ai-t').textContent = T.aiInsights; $('#ai-title').textContent = '✦ ' + T.aiInsights; $('#ai-send').textContent = T.aiAsk;
+$('#ai-q').placeholder = T.aiPlaceholder; $('#ai-clear').textContent = T.aiClear;
+$('#ai-b').onclick = () => openAI(null);
+$('#ai-x').onclick = () => { $('#ai-panel').classList.remove('open'); $('#ai-panel').setAttribute('aria-hidden', 'true'); };
+$('#ai-clear').onclick = () => openAI(null);
+$('#ai-form').onsubmit = e => { e.preventDefault(); const q = $('#ai-q').value.trim(); if (q.length > 1) { $('#ai-q').value = ''; askAI(q); } };
+$('#ai-q').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#ai-form').requestSubmit(); } };
 
 // ---------------------------------------------------------------- dialogs
 function dialog(title, body, buttons) {
@@ -375,6 +455,9 @@ async function download(path) {
     if (r?.state && !location.search) return location.replace(location.pathname + r.state);
   }
   try { const me = await api('/api/me'); $('#who').textContent = me.name || me.email; } catch (e) { $('#who').textContent = ''; }
+  try { aiOn = (await api('/api/ai/status')).enabled; } catch { aiOn = false; }
+  $('#ai-b').style.display = aiOn ? '' : 'none';
+  $('#ai-log').innerHTML = `<div class="muted small">${T.aiOnPrem}</div>`;
   await render();
   if (q.get('path')) startWorkflow(q.get('path'), q.get('name'));   // opened from the Explorer right-click
 })();
