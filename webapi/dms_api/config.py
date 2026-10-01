@@ -51,6 +51,7 @@ class Settings:
     customers_folder: str = "02_Customers"  # under the root: one folder per customer
     max_upload_mb: int = 500
     search_limit: int = 200
+    sharepoint: str = "online"              # online | memory (try the page on a PC without SharePoint)
     ai_url: str = ""                        # AI Insights: Open WebUI, e.g. https://chat.ai.rh-global.com
     ai_token: str = ""                      # service account token / API key of Open WebUI
     ai_model: str = ""                      # model id as listed in Open WebUI
@@ -93,6 +94,7 @@ class Settings:
             max_upload_mb=int(e("DMS_MAX_UPLOAD_MB", "500")),
             search_limit=int(e("DMS_SEARCH_LIMIT", "200")),
             protected_depth=int(e("DMS_PROTECTED_DEPTH", "2")),
+            sharepoint=e("DMS_SHAREPOINT", "online"),
             ai_url=e("DMS_AI_URL", ""),
             ai_token=e("DMS_AI_TOKEN", ""),
             ai_model=e("DMS_AI_MODEL", ""),

@@ -69,6 +69,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     app = FastAPI(title="RH DMS Web API", version="1.1")
     app.state.settings = s
+    if sharepoint is None and s.sharepoint == "memory":
+        from .memory import MemorySharePoint
+        sharepoint = MemorySharePoint(s)
     app.state.sp = sharepoint or SharePoint(s)
     app.state.ai = ai or OpenWebUI(s)
     if s.allowed_origins:
@@ -113,7 +116,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/client-config")
     def client_config():
-        return {"authMode": s.auth_mode, "tenantId": s.tenant_id, "clientId": s.spa_client_id,
+        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,
                 "repositoryRoot": s.repository_root}
 
@@ -415,6 +418,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         items.sort(key=lambda x: (x["lastEvent"] or {}).get("utc") or x.get("modified") or "", reverse=True)
         summary = {k: sum(1 for i in items if i["statusKey"] == k) for k in ("Working", "Submitted", "Approved_ReadOnly", "Rejected")}
         return {"summary": summary, "items": items}
+
+    @app.post("/api/playground/decide/{item_id}", include_in_schema=False)
+    def playground_decide(item_id: int, approve: bool = True, comment: str = "", user: User = Depends(current_user)):
+        """Playground only (DMS_SHAREPOINT=memory): approve or reject as the approvers would in Teams."""
+        if s.sharepoint != "memory":
+            raise HTTPException(404)
+        try:
+            return with_key(sp().decide(item_id, approve, "approver@rh.co.il", comment))
+        except (KeyError, ValueError) as e:
+            raise HTTPException(409, str(e)) from None
 
     @app.get("/api/ai/status")
     def ai_status(_: User = Depends(current_user)):

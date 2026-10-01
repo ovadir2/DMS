@@ -421,3 +421,24 @@ def test_find_with_ai_plan_and_rank(env, limited):
     assert all("Customer_B" not in p for p in ai.ranked)
     assert [x["name"] for x in r["suggestions"]] == ["ECO-17 connector change.docx"]
     assert r["suggestions"][0]["reason"] == "ECO about the connector"
+
+
+def test_playground_memory_mode(tmp_path):
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory")
+    c = TestClient(create_app(s))
+    assert c.get("/api/client-config").json()["playground"] is True
+    assert "הצעת מחיר" in c.get("/api/options").json()["DocumentType"]
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "documentType": "הצעת מחיר", "documentArea": "מסחרי", "submit": True}).json()
+    assert d["statusKey"] == "Submitted"
+    r = c.post(f"/api/playground/decide/{d['id']}", params={"approve": False, "comment": "fix p.2"}).json()
+    assert r["statusKey"] == "Working"
+    wf = c.get("/api/my-workflows").json()
+    assert wf["items"][0]["statusKey"] == "Rejected" and wf["items"][0]["decision"]["details"] == "fix p.2"
+    c.post(f"/api/documents/{d['id']}/submit")
+    assert c.post(f"/api/playground/decide/{d['id']}").json()["statusKey"] == "Approved_ReadOnly"
+    s2 = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER)
+    assert TestClient(create_app(s2, FakeSharePoint(s2))).post("/api/playground/decide/1").status_code == 404
