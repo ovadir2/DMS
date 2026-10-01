@@ -70,6 +70,23 @@
     "PPAP",
     "gMSA",
     "yyyyMMdd",
-    "yyyyMMddHHmmss"
+    "yyyyMMddHHmmss",
+    "PYTHONUTF",
+    "dotenv",
+    "fastapi",
+    "getbyinternalnameortitle",
+    "httpx",
+    "msal",
+    "pytest",
+    "sess",
+    "uvicorn",
+    "venv",
+    "webapi",
+    "rhisrael",
+    "onmicrosoft",
+    "powerautomate",
+    "sharepointonline",
+    "sharepointonl",
+    "logicflows"
   ]
 }

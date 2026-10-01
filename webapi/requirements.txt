@@ -1,0 +1,5 @@
+fastapi>=0.115,<1
+uvicorn>=0.30
+requests>=2.32
+msal>=1.30
+PyJWT[crypto]>=2.9
