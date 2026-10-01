@@ -905,3 +905,25 @@ def test_ai_questions_are_kept_in_control_audit(env):
     rows = [a for a in sp.audits if a["document_id"] == "AI"]
     assert [r["details"].split(":")[0] for r in rows] == ["ai-chat", "ai-find"]
     assert "FCT lead time" in rows[0]["details"]
+
+
+def test_rag_tool_answers_and_is_audited(env):
+    c, sp, q = env
+
+    class Http:
+        def post(self, url, params=None, json=None, headers=None, timeout=None):
+            self.sent = (url, params, json)
+            class R:
+                status_code, text = 200, ""
+                def json(self):
+                    return [{"output": "Calibration is yearly (QP-07)."}]
+            return R()
+    http = Http()
+    rag = c.app.state.rag
+    assert c.get("/api/ai/status").json()["rag"] == []                  # not configured
+    rag.http, rag.s.rag_url, rag.s.rag_tools = http, "https://aiportal.ai.rh-global.com/webhook/tools", ["qms"]
+    assert c.get("/api/ai/status").json()["rag"] == [{"tool": "qms", "page": "https://aiportal.ai.rh-global.com/webhook/tools?tool=qms"}]
+    r = c.post("/api/ai/rag", json={"question": "How often is calibration?", "tool": "qms"}).json()
+    assert r["answer"] == "Calibration is yearly (QP-07)."
+    assert http.sent[1] == {"tool": "qms"} and http.sent[2]["chatInput"] == "How often is calibration?"
+    assert [a["details"].split(":")[0] for a in sp.audits if a["document_id"] == "AI"] == ["ai-rag"]
