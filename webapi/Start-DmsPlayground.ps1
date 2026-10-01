@@ -50,10 +50,9 @@ if ($Live -and -not $ClientId) { throw '-Live needs -ClientId (the Entra app you
 $py = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path $py)) {
     Write-Host 'First run: creating .venv and installing packages...' -ForegroundColor Cyan
-    $base = if (Get-Command py -ErrorAction SilentlyContinue) { @('py', '-3') }
-            elseif (Get-Command python -ErrorAction SilentlyContinue) { @('python') }
-            else { throw 'Python 3.11+ is not installed. Install it: winget install -e --id Python.Python.3.12  (then open a new PowerShell window)' }
-    & $base[0] @($base | Select-Object -Skip 1) -m venv .venv
+    if (Get-Command py -ErrorAction SilentlyContinue) { py -3 -m venv .venv }
+    elseif (Get-Command python -ErrorAction SilentlyContinue) { python -m venv .venv }
+    else { throw 'Python 3.11+ is not installed. Install it: winget install -e --id Python.Python.3.12  (then open a new PowerShell window)' }
     if (-not (Test-Path $py)) { throw 'Could not create .venv. Check that Python 3.11+ is installed (python --version).' }
     & $py -m pip install --quiet --upgrade pip
 }
