@@ -52,6 +52,11 @@ class MemorySharePoint:
     def audit_events(self, refresh: bool = False) -> list[dict]:
         return list(reversed(self.audits))
 
+    def approver_rule(self, document_type: str) -> dict | None:
+        """Playground: the super users (or you) approve every document type."""
+        people = ([self.s.dev_user] if self.s.dev_user else []) or self.s.admins
+        return {"mandatory": people[:1], "final": people[0]} if people else None
+
     # Playground only: decide an approval as if the approvers did it in Teams
     def decide(self, item_id: int, approve: bool, actor: str, comment: str = "") -> dict:
         c = self.s.choices

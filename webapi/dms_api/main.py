@@ -58,6 +58,11 @@ class AskRequest(BaseModel):
     lang: str = "EN"
 
 
+class DecisionRequest(BaseModel):
+    approve: bool
+    comment: str = Field("", max_length=1000)
+
+
 class FindRequest(BaseModel):
     question: str = Field(min_length=2, max_length=1000)
     lang: str = "EN"
@@ -126,6 +131,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.get("/api/client-config")
     def client_config():
         return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "fileService": s.file_service_seconds > 0,
+                "approvals": s.approvals,
                 "site": s.site_url if s.sharepoint != "memory" else "", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,
                 "repositoryRoot": s.repository_root}
@@ -406,12 +412,105 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         log(user, "delete", f"{full} -> {moved}")
         return {"deleted": full, "recycledTo": moved}
 
+    # ------------------------------------------------------------------ approvals on the page (DMS_APPROVALS=page)
+    def events_by_doc() -> dict[str, list[dict]]:
+        out: dict[str, list[dict]] = {}
+        for e in sp().audit_events():
+            out.setdefault(e["documentId"] or "", []).append(e)
+        return out
+
+    def approval_state(d: dict, events: list[dict], rules: dict) -> dict:
+        """Where a submitted document stands, by the DC-P1 rules: stage 1 = every mandatory approver,
+        stage 2 = the final approver. Decisions of the current cycle are the audit rows after the last submission."""
+        c = s.choices
+        cycle = []
+        for e in events:                                        # newest first
+            if e["event"] in (c["SubmittedEvent"], c["RejectedEvent"]):
+                break
+            cycle.append(e)
+        t = d.get("documentType") or ""
+        if t not in rules:
+            rules[t] = sp().approver_rule(t)
+        rule = rules[t]
+        if not rule:
+            return {"stage": None, "pending": [], "approved": [], "rule": False}
+        approvals = [e for e in cycle if e["event"] == c["ApprovedEvent"]]
+        stage1 = {e["actor"] for e in approvals if (e.get("details") or "").startswith("Stage 1")}
+        su = any((e.get("details") or "").startswith("Stage 1 (super user)") for e in approvals)
+        pending1 = [] if su else [m for m in rule["mandatory"] if m not in stage1]
+        if pending1:
+            return {"stage": 1, "pending": pending1, "approved": sorted(stage1), "rule": True}
+        return {"stage": 2, "pending": [rule["final"]] if rule["final"] else [], "approved": sorted(stage1), "rule": True}
+
+    @app.get("/api/approvals")
+    def approvals(everyone: bool = Query(False, description="Super users: every pending approval"), user: User = Depends(current_user)):
+        """Documents waiting for this user's approval (DMS_APPROVALS=page)."""
+        if s.approvals != "page":
+            return []
+        by_doc, rules, out = events_by_doc(), {}, []
+        for d in sp().documents():
+            if d.get("lifecycleStatus") != s.choices["Submitted"]:
+                continue
+            events = by_doc.get(d.get("documentId") or "", [])
+            st = approval_state(d, events, rules)
+            if user.email in st["pending"] or (everyone and is_admin(user)):
+                submitted = next((e for e in events if e["event"] == s.choices["SubmittedEvent"]), None)
+                path = d.get("workingUncPath") or ""
+                folder = os.path.dirname(path)
+                in_sub = os.path.join(folder if os.path.basename(folder) != "Submitted" else os.path.dirname(folder), "Submitted", os.path.basename(path))
+                file = in_sub if path and os.path.isfile(in_sub) else path
+                out.append({**with_key(d), **st, "submittedUtc": submitted["utc"] if submitted else None,
+                            "submittedBy": submitted["actor"] if submitted else None, "file": file,
+                            "officeUri": files.office_uri(file) if file else None, "mine": user.email in st["pending"]})
+        return sorted(out, key=lambda x: x.get("submittedUtc") or "")
+
+    @app.post("/api/approvals/{item_id}")
+    def decide(item_id: int, req: DecisionRequest, user: User = Depends(current_user)):
+        """Approve or reject on the page (DMS_APPROVALS=page). A super user may decide any stage."""
+        c = s.choices
+        if s.approvals != "page":
+            raise HTTPException(409, "Approvals are done in Teams (DC-P1)")
+        d = sp().document(item_id)
+        if d.get("lifecycleStatus") != c["Submitted"]:
+            raise HTTPException(409, "The document is not waiting for approval")
+        st = approval_state(d, events_by_doc().get(d.get("documentId") or "", []), {})
+        if not st["rule"]:
+            raise HTTPException(409, "No active Approver Matrix rule for this document type")
+        su = user.email not in st["pending"]
+        if su and not is_admin(user):
+            raise HTTPException(403, "You are not an approver of this stage")
+        if not req.approve and not req.comment.strip():
+            raise HTTPException(400, "Please write why the document is rejected")
+        tag = f"Stage {st['stage']}" + (" (super user)" if su else "")
+        doc_id = d.get("documentId") or f"ID {item_id}"
+        if not req.approve:
+            sp().update(item_id, {"LifecycleStatus": c["Working"]})
+            sp().audit(document_id=doc_id, event=c["RejectedEvent"], from_status=c["Submitted"], to_status=c["Working"],
+                       actor=user.email, details=f"{tag}: {req.comment.strip()}")
+        else:
+            if st["stage"] == 2:
+                final = True
+            else:                                               # stage 1 ends when nobody is left; then the final approver
+                left = [] if su else [p for p in st["pending"] if p != user.email]
+                final = not left and not sp().approver_rule(d.get("documentType") or "")["final"]
+            if final:
+                sp().update(item_id, {"LifecycleStatus": c["Approved_ReadOnly"], "LastApprovedUtc": datetime.now(timezone.utc).isoformat()})
+            sp().audit(document_id=doc_id, event=c["ApprovedEvent"], from_status=c["Submitted"],
+                       to_status=c["Approved_ReadOnly"] if final else c["Submitted"], actor=user.email,
+                       details=tag + (f": {req.comment.strip()}" if req.comment.strip() else ""))
+        log(user, "approve" if req.approve else "reject", f"{doc_id} {tag}")
+        d = with_key(sp().document(item_id))
+        if d["statusKey"] == "Submitted":
+            d.update(approval_state(d, events_by_doc().get(d.get("documentId") or "", []), {}))
+        return d
+
     @app.get("/api/my-workflows")
     def my_workflows(everyone: bool = Query(False, description="Super users: everyone's workflows"),
                      user: User = Depends(current_user)):
         """Every document the user owns or registered/submitted, with its workflow status, the last
         decision and the full history from Control Audit."""
         c = s.choices
+        rules: dict = {}
         by_doc: dict[str, list[dict]] = {}
         for e in sp().audit_events():
             by_doc.setdefault(e["documentId"] or "", []).append(e)
@@ -426,6 +525,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             submitted = next((e for e in events if e["event"] == c["SubmittedEvent"]), None)
             if doc["statusKey"] == "Working" and decision and decision["event"] == c["RejectedEvent"]:
                 doc["statusKey"] = "Rejected"                           # returned to the owner after a rejection
+            if s.approvals == "page" and doc["statusKey"] == "Submitted":
+                doc.update(approval_state(d, events, rules))
             doc.update(submittedUtc=submitted["utc"] if submitted else None, decision=decision,
                        lastEvent=events[0] if events else None, history=list(reversed(events)))
             items.append(doc)

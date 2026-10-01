@@ -53,6 +53,7 @@ class Settings:
     customers_folder: str = "02_Customers"  # under the root: one folder per customer
     max_upload_mb: int = 500
     search_limit: int = 200
+    approvals: str = "flow"                 # flow (DC-P1 in Teams) | page (approve on the DMS page; turn DC-P1 off)
     admins: list[str] = field(default_factory=list)   # DMS super users: submit any document, see all workflows
     sp_auth: str = "certificate"            # certificate (server) | interactive (pilot on a PC, your own sign-in)
     file_service_seconds: int = 0           # >0: run the Workflow Service file moves inside the web service
@@ -101,6 +102,7 @@ class Settings:
             protected_depth=int(e("DMS_PROTECTED_DEPTH", "2")),
             sharepoint=e("DMS_SHAREPOINT", "online"),
             sp_auth=e("DMS_SP_AUTH", "certificate"),
+            approvals=e("DMS_APPROVALS", "flow"),
             admins=[a.strip().lower() for a in e("DMS_ADMINS", "").split(",") if a.strip()],
             file_service_seconds=int(e("DMS_FILE_SERVICE_SECONDS", "0")),
             ai_url=e("DMS_AI_URL", ""),

@@ -14,7 +14,10 @@
     -FileServiceSeconds (Submitted -> Submitted folder, Approved -> Current_ReadOnly, Rejected -> back),
     so do not also run Invoke-DmsWorkflowService.ps1 at the same time.
 
-    -Admins are DMS super users (submit any document, see all workflows).
+    -Approvals page (default): approvers approve or reject on the page (Approvals), by the same rules as
+    DC-P1 (Approver Matrix: all mandatory approvers, then the final approver). Turn DC-P1 Off in Power
+    Automate for the pilot, or the approvals are also sent to Teams. -Approvals flow: DC-P1 in Teams.
+    -Admins are DMS super users (submit any document, decide any approval stage, see all workflows).
     The first run creates .venv and installs the packages (needs Python 3.11+, "py" launcher).
     Uploads, renames and deletes are real changes in -Root. Stop with Ctrl+C.
 
@@ -32,6 +35,7 @@ param(
     [string] $TenantName = 'rhisrael',
     [string] $Site = 'DocumentControl-TEST',
     [string[]] $Admins = @('roneno@rh.co.il'),
+    [ValidateSet('page', 'flow')] [string] $Approvals = 'page',
     [int] $FileServiceSeconds = 60,
     [string] $User,
     [int] $Port = 8080,
@@ -54,6 +58,7 @@ if (-not (Test-Path $py)) {
 $env:DMS_REPOSITORY_ROOT = (Resolve-Path -LiteralPath $Root).ProviderPath
 $env:DMS_AUTH_MODE = 'dev'
 $env:DMS_ADMINS = ($Admins -join ',').ToLower()
+$env:DMS_APPROVALS = $Approvals
 $env:DMS_DEV_USER = if ($User) { $User.ToLower() } elseif ($Live) { '' } else { "$env:USERNAME@rh.co.il".ToLower() }
 if ($Live) {
     $env:DMS_SHAREPOINT = 'online'
@@ -63,6 +68,7 @@ if ($Live) {
     $env:DMS_CLIENT_ID = $ClientId
     $env:DMS_FILE_SERVICE_SECONDS = "$FileServiceSeconds"
     Write-Host "Live pilot: $env:DMS_SITE_URL. Sign in to SharePoint in the browser window that opens." -ForegroundColor Yellow
+    if ($Approvals -eq 'page') { Write-Host 'Approvals on the page: turn the DC-P1 flow Off in Power Automate for the pilot.' -ForegroundColor Yellow }
 } else {
     $env:DMS_SHAREPOINT = 'memory'
 }

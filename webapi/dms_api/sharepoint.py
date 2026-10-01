@@ -18,6 +18,7 @@ from .config import Settings
 
 REGISTER = "Lists/DocumentRegister"
 AUDIT = "Lists/ControlAudit"
+MATRIX = "Lists/ApproverMatrix"
 REGISTER_FIELDS = ("Id", "Title", "DocumentId", "DocumentType", "DocumentArea", "ControlMode", "LifecycleStatus",
                    "WorkingUncPath", "CurrentUncPath", "CurrentSHA256", "CurrentRevision", "LastApprovedUtc",
                    "DraftRevision", "Modified", "Created")
@@ -159,6 +160,19 @@ class SharePoint:
     def choices(self, field: str) -> list[str]:
         r = self._call("GET", f"{self._list(REGISTER)}/fields/getbyinternalnameortitle('{field}')?$select=Choices")
         return list(r.get("Choices") or [])
+
+    def approver_rule(self, document_type: str) -> dict | None:
+        """The active Approver Matrix rule for a document type: {mandatory: [emails], final: email}."""
+        t = document_type.replace("'", "''")
+        url = (f"{self._list(MATRIX)}/items?$select=Id,DocumentType,IsActive,MandatoryApprovers/EMail,FinalApprover/EMail"
+               f"&$expand=MandatoryApprovers,FinalApprover&$filter=DocumentType eq '{t}' and IsActive eq 1&$top=1")
+        rows = self._call("GET", url).get("value", [])
+        if not rows:
+            return None
+        r = rows[0]
+        mandatory = [(u.get("EMail") or "").lower() for u in (r.get("MandatoryApprovers") or []) if u.get("EMail")]
+        final = ((r.get("FinalApprover") or {}).get("EMail") or "").lower() or None
+        return {"mandatory": mandatory, "final": final}
 
     # ------------------------------------------------------------------ audit
     def audit_events(self, refresh: bool = False) -> list[dict]:

@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 640" width="1240" height="640" font-family="Segoe UI, Arial, sans-serif">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1B2A33"/></marker><marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2F7D32"/></marker><marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#B3261E"/></marker></defs>
+<rect width="1240" height="640" fill="#ffffff"/>
+<text x="26" y="40" font-size="24" font-weight="700" fill="#1B2A33">DMS pilot - end to end</text>
+<text x="26" y="66" font-size="14" fill="#5D6F7A">From the file on the file server, through the DMS page and the approval, to the approved read-only version</text>
+<rect x="26" y="96" width="212" height="132" rx="9" fill="#fff" stroke="#0E6F73" stroke-width="1.6"/>
+<path d="M27 126 V105 a8 8 0 0 1 8 -8 H229 a8 8 0 0 1 8 8 V126 z" fill="#0E6F73"/>
+<circle cx="42" cy="111" r="10" fill="#fff"/><text x="42" y="115.5" font-size="12" font-weight="700" fill="#0E6F73" text-anchor="middle">1</text>
+<text x="58" y="116" font-size="11.5" font-weight="600" fill="#fff">User · DMS page</text>
+<text x="38" y="148" font-size="15" font-weight="700" fill="#1B2A33">Choose the place</text>
+<text x="38" y="170" font-size="12" fill="#5D6F7A">Customer › blueprint folder</text>
+<text x="38" y="187" font-size="12" fill="#5D6F7A">(Location lists), only what AD</text>
+<text x="38" y="204" font-size="12" fill="#5D6F7A">allows</text>
+<rect x="268" y="96" width="212" height="132" rx="9" fill="#fff" stroke="#0E6F73" stroke-width="1.6"/>
+<path d="M269 126 V105 a8 8 0 0 1 8 -8 H471 a8 8 0 0 1 8 8 V126 z" fill="#0E6F73"/>
+<circle cx="284" cy="111" r="10" fill="#fff"/><text x="284" y="115.5" font-size="12" font-weight="700" fill="#0E6F73" text-anchor="middle">2</text>
+<text x="300" y="116" font-size="11.5" font-weight="600" fill="#fff">User · DMS page</text>
+<text x="280" y="148" font-size="15" font-weight="700" fill="#1B2A33">Save the file</text>
+<text x="280" y="170" font-size="12" fill="#5D6F7A">Upload into the folder, or</text>
+<text x="280" y="187" font-size="12" fill="#5D6F7A">"What are you saving?".</text>
+<text x="280" y="204" font-size="12" fill="#5D6F7A">Status: not registered</text>
+<rect x="510" y="96" width="212" height="132" rx="9" fill="#fff" stroke="#0E6F73" stroke-width="1.6"/>
+<path d="M511 126 V105 a8 8 0 0 1 8 -8 H713 a8 8 0 0 1 8 8 V126 z" fill="#0E6F73"/>
+<circle cx="526" cy="111" r="10" fill="#fff"/><text x="526" y="115.5" font-size="12" font-weight="700" fill="#0E6F73" text-anchor="middle">3</text>
+<text x="542" y="116" font-size="11.5" font-weight="600" fill="#fff">User · DMS page</text>
+<text x="522" y="148" font-size="15" font-weight="700" fill="#1B2A33">Start workflow</text>
+<text x="522" y="170" font-size="12" fill="#5D6F7A">Document type, area → Register</text>
+<text x="522" y="187" font-size="12" fill="#5D6F7A">and submit</text>
+<rect x="752" y="96" width="212" height="132" rx="9" fill="#fff" stroke="#1F5FA8" stroke-width="1.6"/>
+<path d="M753 126 V105 a8 8 0 0 1 8 -8 H955 a8 8 0 0 1 8 8 V126 z" fill="#1F5FA8"/>
+<circle cx="768" cy="111" r="10" fill="#fff"/><text x="768" y="115.5" font-size="12" font-weight="700" fill="#1F5FA8" text-anchor="middle">4</text>
+<text x="784" y="116" font-size="11.5" font-weight="600" fill="#fff">SharePoint</text>
+<text x="764" y="148" font-size="15" font-weight="700" fill="#1B2A33">Register record</text>
+<text x="764" y="170" font-size="12" fill="#5D6F7A">DMS-xxxxx, status Submitted.</text>
+<text x="764" y="187" font-size="12" fill="#5D6F7A">Control Audit: Created +</text>
+<text x="764" y="204" font-size="12" fill="#5D6F7A">Submitted</text>
+<rect x="994" y="96" width="212" height="132" rx="9" fill="#fff" stroke="#A86400" stroke-width="1.6"/>
+<path d="M995 126 V105 a8 8 0 0 1 8 -8 H1197 a8 8 0 0 1 8 8 V126 z" fill="#A86400"/>
+<circle cx="1010" cy="111" r="10" fill="#fff"/><text x="1010" y="115.5" font-size="12" font-weight="700" fill="#A86400" text-anchor="middle">5</text>
+<text x="1026" y="116" font-size="11.5" font-weight="600" fill="#fff">Workflow Service</text>
+<text x="1006" y="148" font-size="15" font-weight="700" fill="#1B2A33">Lock for review</text>
+<text x="1006" y="170" font-size="12" fill="#5D6F7A">File → Submitted folder,</text>
+<text x="1006" y="187" font-size="12" fill="#5D6F7A">read-only, SHA-256</text>
+<path d="M238 162.0 H265" stroke="#1B2A33" stroke-width="1.8" fill="none" marker-end="url(#a)"/>
+<path d="M480 162.0 H507" stroke="#1B2A33" stroke-width="1.8" fill="none" marker-end="url(#a)"/>
+<path d="M722 162.0 H749" stroke="#1B2A33" stroke-width="1.8" fill="none" marker-end="url(#a)"/>
+<path d="M964 162.0 H991" stroke="#1B2A33" stroke-width="1.8" fill="none" marker-end="url(#a)"/>
+<path d="M1100.0 228 V327" stroke="#1B2A33" stroke-width="1.8" fill="none" marker-end="url(#a)"/>
+<rect x="994" y="330" width="212" height="132" rx="9" fill="#fff" stroke="#6D3FC0" stroke-width="1.6"/>
+<path d="M995 360 V339 a8 8 0 0 1 8 -8 H1197 a8 8 0 0 1 8 8 V360 z" fill="#6D3FC0"/>
+<circle cx="1010" cy="345" r="10" fill="#fff"/><text x="1010" y="349.5" font-size="12" font-weight="700" fill="#6D3FC0" text-anchor="middle">6</text>
+<text x="1026" y="350" font-size="11.5" font-weight="600" fill="#fff">Approvers · DMS page / Teams</text>
+<text x="1006" y="382" font-size="15" font-weight="700" fill="#1B2A33">Stage 1</text>
+<text x="1006" y="404" font-size="12" fill="#5D6F7A">Every mandatory approver from</text>
+<text x="1006" y="421" font-size="12" fill="#5D6F7A">the Approver Matrix approves</text>
+<rect x="752" y="330" width="212" height="132" rx="9" fill="#fff" stroke="#6D3FC0" stroke-width="1.6"/>
+<path d="M753 360 V339 a8 8 0 0 1 8 -8 H955 a8 8 0 0 1 8 8 V360 z" fill="#6D3FC0"/>
+<circle cx="768" cy="345" r="10" fill="#fff"/><text x="768" y="349.5" font-size="12" font-weight="700" fill="#6D3FC0" text-anchor="middle">7</text>
+<text x="784" y="350" font-size="11.5" font-weight="600" fill="#fff">Approvers · DMS page / Teams</text>
+<text x="764" y="382" font-size="15" font-weight="700" fill="#1B2A33">Stage 2</text>
+<text x="764" y="404" font-size="12" fill="#5D6F7A">The final approver approves</text>
+<rect x="510" y="330" width="212" height="132" rx="9" fill="#fff" stroke="#1F5FA8" stroke-width="1.6"/>
+<path d="M511 360 V339 a8 8 0 0 1 8 -8 H713 a8 8 0 0 1 8 8 V360 z" fill="#1F5FA8"/>
+<circle cx="526" cy="345" r="10" fill="#fff"/><text x="526" y="349.5" font-size="12" font-weight="700" fill="#1F5FA8" text-anchor="middle">8</text>
+<text x="542" y="350" font-size="11.5" font-weight="600" fill="#fff">SharePoint</text>
+<text x="522" y="382" font-size="15" font-weight="700" fill="#1B2A33">Approved</text>
+<text x="522" y="404" font-size="12" fill="#5D6F7A">Status Approved - read-only.</text>
+<text x="522" y="421" font-size="12" fill="#5D6F7A">Decision in Control Audit</text>
+<rect x="268" y="330" width="212" height="132" rx="9" fill="#fff" stroke="#A86400" stroke-width="1.6"/>
+<path d="M269 360 V339 a8 8 0 0 1 8 -8 H471 a8 8 0 0 1 8 8 V360 z" fill="#A86400"/>
+<circle cx="284" cy="345" r="10" fill="#fff"/><text x="284" y="349.5" font-size="12" font-weight="700" fill="#A86400" text-anchor="middle">9</text>
+<text x="300" y="350" font-size="11.5" font-weight="600" fill="#fff">Workflow Service</text>
+<text x="280" y="382" font-size="15" font-weight="700" fill="#1B2A33">Current version</text>
+<text x="280" y="404" font-size="12" fill="#5D6F7A">File → Current_ReadOnly,</text>
+<text x="280" y="421" font-size="12" fill="#5D6F7A">previous → Obsolete_ReadOnly,</text>
+<text x="280" y="438" font-size="12" fill="#5D6F7A">path + SHA-256 to the record</text>
+<rect x="26" y="330" width="212" height="132" rx="9" fill="#fff" stroke="#0E6F73" stroke-width="1.6"/>
+<path d="M27 360 V339 a8 8 0 0 1 8 -8 H229 a8 8 0 0 1 8 8 V360 z" fill="#0E6F73"/>
+<circle cx="42" cy="345" r="10" fill="#fff"/><text x="42" y="349.5" font-size="12" font-weight="700" fill="#0E6F73" text-anchor="middle">10</text>
+<text x="58" y="350" font-size="11.5" font-weight="600" fill="#fff">User · DMS page</text>
+<text x="38" y="382" font-size="15" font-weight="700" fill="#1B2A33">Follow and find</text>
+<text x="38" y="404" font-size="12" fill="#5D6F7A">My workflows, status on every</text>
+<text x="38" y="421" font-size="12" fill="#5D6F7A">file, Find a file, AI Insights</text>
+<path d="M994 396.0 H967" stroke="#2F7D32" stroke-width="1.8" fill="none" marker-end="url(#g)"/>
+<path d="M752 396.0 H725" stroke="#2F7D32" stroke-width="1.8" fill="none" marker-end="url(#g)"/>
+<path d="M510 396.0 H483" stroke="#1B2A33" stroke-width="1.8" fill="none" marker-end="url(#a)"/>
+<path d="M268 396.0 H241" stroke="#1B2A33" stroke-width="1.8" fill="none" marker-end="url(#a)"/>
+<text x="979.0" y="388.0" font-size="11" font-weight="700" fill="#2F7D32" text-anchor="middle">ok</text>
+<text x="737.0" y="388.0" font-size="11" font-weight="700" fill="#2F7D32" text-anchor="middle">ok</text>
+<rect x="752" y="502" width="454" height="58" rx="9" fill="#FBE4E2" stroke="#B3261E" stroke-dasharray="6 4"/>
+<text x="764" y="521" font-size="12" fill="#B3261E">Rejected in stage 1 or 2 (comment required): status back to Working,</text>
+<text x="764" y="537" font-size="12" fill="#B3261E">file back where it was saved and writable, comment in My workflows.</text>
+<text x="764" y="553" font-size="12" fill="#B3261E">Fix it and submit again (step 3).</text>
+<path d="M858.0 462 V499" stroke="#B3261E" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#r)"/>
+<path d="M1100.0 462 V499" stroke="#B3261E" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#r)"/>
+<text x="1106.0" y="486" font-size="11" font-weight="700" fill="#B3261E">reject</text>
+<rect x="26" y="604" width="14" height="14" rx="3" fill="#0E6F73"/><text x="46" y="616" font-size="12.5" fill="#5D6F7A">User · DMS page</text>
+<rect x="160.0" y="604" width="14" height="14" rx="3" fill="#6B7684"/><text x="180.0" y="616" font-size="12.5" fill="#5D6F7A">File server</text>
+<rect x="265.2" y="604" width="14" height="14" rx="3" fill="#1F5FA8"/><text x="285.2" y="616" font-size="12.5" fill="#5D6F7A">SharePoint</text>
+<rect x="363.2" y="604" width="14" height="14" rx="3" fill="#6D3FC0"/><text x="383.2" y="616" font-size="12.5" fill="#5D6F7A">Approvers · DMS page / Teams</text>
+<rect x="590.8" y="604" width="14" height="14" rx="3" fill="#A86400"/><text x="610.8" y="616" font-size="12.5" fill="#5D6F7A">Workflow Service</text>
+<text x="26" y="522" font-size="12" fill="#5D6F7A">Pilot: approvers decide on the DMS page</text>
+<text x="26" y="539" font-size="12" fill="#5D6F7A">(Approvals). In production: Teams (DC-P1).</text>
+</svg>

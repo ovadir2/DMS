@@ -21,7 +21,8 @@ cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C
 - Your real folders, the real Document Register and Control Audit on `DocumentControl-TEST`, and the real approval flow: submitting from the page sets the status, and DC-P1 sends the approvals to Teams.
 - A browser window opens once to sign in to SharePoint, with the Entra app you use for PnP (`$C`). The token is cached in `%LOCALAPPDATA%\DMS`. You are the DMS user (no AD checks on the PC).
 - The Workflow Service file moves run inside the page service every 60 seconds (Submitted -> `Submitted`, Approved -> `Current_ReadOnly`, Rejected -> back). **My workflows > Move files now** runs them at once. Do not run `Invoke-DmsWorkflowService.ps1` at the same time.
-- `-Admins` (default `roneno@rh.co.il`) are DMS super users: they may submit any document and see **All workflows**.
+- **Approvals on the page** (default `-Approvals page`): the header shows **Approvals** with the number waiting; approvers approve (optional comment) or reject (comment required) by the DC-P1 rules (Approver Matrix: every mandatory approver, then the final approver). Turn **DC-P1 Off** in Power Automate for the pilot. `-Approvals flow` keeps the approvals in Teams.
+- `-Admins` (default `roneno@rh.co.il`) are DMS super users: they may submit any document, decide any approval stage and see **All workflows** and **All pending approvals**.
 - For one person to approve everything during the pilot: `..\scripts\Set-DmsTestApprover.ps1 -TenantName rhisrael -DocControlSiteAlias DocumentControl-TEST -ClientId $C -Approver roneno@rh.co.il` (it saves a backup and prints the command to restore the real approvers).
 
 ## How it knows the AD permissions
@@ -53,6 +54,7 @@ So the NTFS permissions on the file server (the `DL_FS_*` groups, docs/02 §3.2)
 | Start workflow (register and submit) | `POST /api/documents` | As before |
 | **My workflows** (header): every document the user owns or registered/submitted, with counts per status (Working, Submitted, Approved, Rejected - back to you), days waiting, the last decision with the approver's comment, and the full history | `GET /api/my-workflows` | The user's own workflows only. Built from the Document Register and Control Audit |
 | Submit (or resubmit after a rejection) | `POST /api/documents/{id}/submit` | Owner only |
+| **Approvals** (header, pilot `DMS_APPROVALS=page`): documents waiting for the user's approval, with stage, who approved, days waiting; Approve / Reject with comment | `GET /api/approvals`, `POST /api/approvals/{id}` | Only the pending approvers of the current stage (Approver Matrix), or a super user. Each decision is a Control Audit row |
 | **AI Insights** (header, or ✦ AI on a file): ask about a document (summary, key requirements, risks, dates) or the company knowledge | `GET /api/ai/status`, `POST /api/ai/ask` | See below |
 | **Find a file** (AI Insights panel, or **✦ Smart** in the search): describe the file in your own words ("the latest FCT report of the CRU4 project") and get a short list of suggestions, each with where it is, its DMS status, why it was suggested, and Open / Go to folder / Ask about it | `POST /api/ai/find` | Searches only folders the user may read (AD). Superseded revisions and the approval queue are skipped. Works without the AI too, by keywords |
 
