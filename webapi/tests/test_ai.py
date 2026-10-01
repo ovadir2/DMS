@@ -115,3 +115,18 @@ def test_file_is_uploaded_once_and_attached_like_the_page(tmp_path):
     assert body["messages"][-1]["content"].startswith("קבצים מצורפים (שמות הקבצים כפי שהמשתמש העלה): trade_execution_log.csv.")
     ai.ask("again", file_path=str(f))
     assert len(sess.calls) == 3                                                    # no second upload
+
+
+def test_more_stream_shapes_and_an_unreadable_answer():
+    p = OpenWebUI.parse
+    assert p('data: {"type":"start","id":"x"}\ndata: {"type":"delta","delta":"שלו"}\ndata: {"type":"delta","delta":"ם"}\ndata: {"type":"done"}') == "שלום"
+    assert p('event: message\ndata: {"token":"a"}\n\nevent: message\ndata: {"token":"b"}') == "ab"
+    assert p('{"data":{"output":"ok"}}') == "ok"
+    assert p('[{"output":"one"}]') == "one"
+    assert p('"quoted"') == "quoted"
+    sess = ChatSession(['data: {"type":"start"}\ndata: {"type":"done"}'])
+    try:
+        OpenWebUI(Settings(**S), sess).ask("hi")
+        raise AssertionError("expected AiError")
+    except AiError as e:
+        assert "It starts with: data:" in str(e)
