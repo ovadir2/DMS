@@ -110,6 +110,7 @@
     "sugg",
     "LOCALAPPDATA",
     "pscustomobject",
-    "winget"
+    "winget",
+    "ehthumbs"
   ]
 }
