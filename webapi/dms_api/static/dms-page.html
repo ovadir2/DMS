@@ -163,7 +163,7 @@ const T = {
         upload:'Upload file', uploadTitle:'Save a file in this folder', chooseFile:'File from your computer', folder:'Folder', overwrite:'Replace a file with the same name',
         ok:'OK', cancel:'Cancel', saved:'Saved to', notReg:'Not registered', none:'Nothing here.', results:'Results', type:'Document type', area:'Area', mode:'Control mode',
         titleF:'Title', registerSubmit:'Register and submit', registerOnly:'Register only', registered:'Registered as', err:'Error', docId:'Document ID', path:'Location', copy:'Copy path', copied:'Copied',
-        newFolder:'New folder', company:'Company', allWf:'All workflows', pathFinder:'Path finder', pfIntro:'Build the path step by step from the blueprint tree. Folders marked (new) do not exist yet.', pfNew:'new', pfResult:'Path', pfGo:'Go there', pfCreate:'Create and go', pfUpload:'Upload here', pfMissing:'This folder does not exist yet.', pfClose:'Close', withdraw:'Withdraw', withdrawQ:'Take this document back to Working? The approval stops and the file returns to its place.', approvals:'Approvals', apTitle:'Waiting for my approval', apAll:'All pending approvals', stage:'Stage', stage1:'1 - mandatory approvers', stage2:'2 - final approver', approve:'Approve', reject:'Reject', apComment:'Comment (optional)', rejComment:'Why is it rejected? (required)', waitingFor:'Waiting for', approvedBy:'Approved by', owner:'Owner', apNone:'Nothing is waiting for your approval.', asSuper:'as super user', fsRun:'Move files now', fsDone:'Files moved', liveBanner:'Pilot - live: SharePoint {site}. Approvals {where}. Files are moved by the DMS service.', apPage:'on this page (Approvals)', apTeams:'in Teams', pgBanner:'Playground: a temporary register in memory, no SharePoint and no AD checks. Approve or reject on this page (Approvals).', pgApprove:'Approve (test)', pgReject:'Reject (test)', pgComment:'Rejection comment', aiInsights:'AI Insights', findTab:'🔎 Find a file', askTab:'Ask', findPh:'Describe the file, e.g. the latest FCT quote for Customer_A', findCtx:'Searching only what you are allowed to see', goFolder:'Go to folder', askAbout:'Ask about it', found:'Suggestions', noneFound:'No matching files were found. Try other words.', smart:'✦ Smart', searchedIn:'Searched in', aiAbout:'About:', aiKnowledge:'RH company knowledge', aiAsk:'Ask', aiPlaceholder:'Ask about the document or the company knowledge…', aiClear:'Ask the company knowledge instead', aiThinking:'Thinking…', aiSources:'Sources', aiOnPrem:'Answers come from RH on-prem AI. Check important facts in the document.', qSummary:'Summarize this document', qReq:'List the key requirements', qRisk:'What are the risks and open issues?', qDates:'List dates, deadlines and validity', myWf:'My workflows', submitted:'Submitted', lastAction:'Last action', history:'History', by:'by', Rejected:'Rejected - back to you', waiting:'waiting', days:'days', location:'Location', choose:'Choose…', whatSaving:'What are you saving?', chooseKind:'Choose a document kind', chooseProject:'Choose a project', takeMe:'Take me there', noProjects:'This customer has no projects yet.', createMissing:'This folder does not exist yet. Create it?', rename:'Rename', del:'Delete', newName:'New name', folderName:'Folder name', confirmDel:'Move to the recycle folder?', recycled:'Moved to the recycle folder. IT can restore it.',
+        newFolder:'New folder', company:'Company', allWf:'All workflows', managed:'Managed by the DMS', managedNote:'This folder is managed by the DMS workflow: read only, nothing can be added, renamed or deleted here.', newRev:'New revision', newRevTitle:'New revision of', revFrom:'Start from', revCopy:'A copy of the approved revision', revUpload:'A file from my computer', revSubmit:'Submit for approval now', revDone:'Draft created', newDoc:'New document', newDocTitle:'New document in this folder', revCurrent:'Current approved', revNext:'New revision', pathFinder:'Path finder', pfIntro:'Build the path step by step from the blueprint tree. Folders marked (new) do not exist yet.', pfNew:'new', pfResult:'Path', pfGo:'Go there', pfCreate:'Create and go', pfUpload:'Upload here', pfMissing:'This folder does not exist yet.', pfClose:'Close', withdraw:'Withdraw', withdrawQ:'Take this document back to Working? The approval stops and the file returns to its place.', approvals:'Approvals', apTitle:'Waiting for my approval', apAll:'All pending approvals', stage:'Stage', stage1:'1 - mandatory approvers', stage2:'2 - final approver', approve:'Approve', reject:'Reject', apComment:'Comment (optional)', rejComment:'Why is it rejected? (required)', waitingFor:'Waiting for', approvedBy:'Approved by', owner:'Owner', apNone:'Nothing is waiting for your approval.', asSuper:'as super user', fsRun:'Move files now', fsDone:'Files moved', liveBanner:'Pilot - live: SharePoint {site}. Approvals {where}. Files are moved by the DMS service.', apPage:'on this page (Approvals)', apTeams:'in Teams', pgBanner:'Playground: a temporary register in memory, no SharePoint and no AD checks. Approve or reject on this page (Approvals).', pgApprove:'Approve (test)', pgReject:'Reject (test)', pgComment:'Rejection comment', aiInsights:'AI Insights', findTab:'🔎 Find a file', askTab:'Ask', findPh:'Describe the file, e.g. the latest FCT quote for Customer_A', findCtx:'Searching only what you are allowed to see', goFolder:'Go to folder', askAbout:'Ask about it', found:'Suggestions', noneFound:'No matching files were found. Try other words.', smart:'✦ Smart', searchedIn:'Searched in', aiAbout:'About:', aiKnowledge:'RH company knowledge', aiAsk:'Ask', aiPlaceholder:'Ask about the document or the company knowledge…', aiClear:'Ask the company knowledge instead', aiThinking:'Thinking…', aiSources:'Sources', aiOnPrem:'Answers come from RH on-prem AI. Check important facts in the document.', qSummary:'Summarize this document', qReq:'List the key requirements', qRisk:'What are the risks and open issues?', qDates:'List dates, deadlines and validity', myWf:'My workflows', submitted:'Submitted', lastAction:'Last action', history:'History', by:'by', Rejected:'Rejected - back to you', waiting:'waiting', days:'days', location:'Location', choose:'Choose…', whatSaving:'What are you saving?', chooseKind:'Choose a document kind', chooseProject:'Choose a project', takeMe:'Take me there', noProjects:'This customer has no projects yet.', createMissing:'This folder does not exist yet. Create it?', rename:'Rename', del:'Delete', newName:'New name', folderName:'Folder name', confirmDel:'Move to the recycle folder?', recycled:'Moved to the recycle folder. IT can restore it.',
         Working:'Working', Submitted:'Submitted', Approved_ReadOnly:'Approved (read-only)', Other:'Other', None:'Not registered', other:'עברית' },
   HE: { welcome:'RH - מערכת ניהול מסמכים', search:'חיפוש', all:'הכל', customer:'לקוח', project:'פרויקט', document:'מזהה מסמך', file:'קובץ', description:'תיאור',
         go:'חיפוש', refresh:'רענון', lang:'עברית', customers:'לקוחות', myDocs:'המסמכים שלי', home:'לקוחות', noAccess:'אין לקוחות זמינים עבורך.',
@@ -171,7 +171,7 @@ const T = {
         upload:'העלאת קובץ', uploadTitle:'שמירת קובץ בתיקייה זו', chooseFile:'קובץ מהמחשב', folder:'תיקייה', overwrite:'החלפת קובץ קיים באותו שם',
         ok:'אישור', cancel:'ביטול', saved:'נשמר ב-', notReg:'לא רשום', none:'אין פריטים.', results:'תוצאות', type:'סוג מסמך', area:'תחום', mode:'מצב בקרה',
         titleF:'כותרת', registerSubmit:'רישום והגשה לאישור', registerOnly:'רישום בלבד', registered:'נרשם כ-', err:'שגיאה', docId:'מזהה מסמך', path:'מיקום', copy:'העתקת נתיב', copied:'הועתק',
-        newFolder:'תיקייה חדשה', company:'חברה', allWf:'כל תהליכי האישור', pathFinder:'איתור נתיב', pfIntro:'בנו את הנתיב שלב אחר שלב לפי עץ הבלופרינט. תיקיות שמסומנות (חדש) עדיין לא קיימות.', pfNew:'חדש', pfResult:'נתיב', pfGo:'מעבר לתיקייה', pfCreate:'יצירה ומעבר', pfUpload:'העלאה לכאן', pfMissing:'התיקייה עדיין לא קיימת.', pfClose:'סגירה', withdraw:'משיכה', withdrawQ:'להחזיר את המסמך לבעבודה? תהליך האישור ייעצר והקובץ יחזור למקומו.', approvals:'אישורים', apTitle:'ממתינים לאישורי', apAll:'כל האישורים הממתינים', stage:'שלב', stage1:'1 - מאשרי חובה', stage2:'2 - מאשר סופי', approve:'אישור', reject:'דחייה', apComment:'הערה (רשות)', rejComment:'מדוע נדחה? (חובה)', waitingFor:'ממתין ל', approvedBy:'אושר על ידי', owner:'בעלים', apNone:'אין מסמכים שממתינים לאישורך.', asSuper:'כמשתמש-על', fsRun:'העברת קבצים עכשיו', fsDone:'קבצים שהועברו', liveBanner:'פיילוט - חי: SharePoint {site}. אישורים {where}. הקבצים מועברים על ידי שירות ה-DMS.', apPage:'בדף זה (אישורים)', apTeams:'ב-Teams', pgBanner:'סביבת ניסוי: רישום זמני בזיכרון, ללא SharePoint וללא בדיקות AD. אשרו או דחו בדף זה (אישורים).', pgApprove:'אישור (ניסוי)', pgReject:'דחייה (ניסוי)', pgComment:'סיבת הדחייה', aiInsights:'AI Insights', findTab:'🔎 חיפוש קובץ', askTab:'שאלה', findPh:'תארו את הקובץ, למשל הצעת המחיר האחרונה ל-FCT של Customer_A', findCtx:'החיפוש רק במה שמותר לך לראות', goFolder:'לתיקייה', askAbout:'שאל עליו', found:'הצעות', noneFound:'לא נמצאו קבצים מתאימים. נסו מילים אחרות.', smart:'✦ חכם', searchedIn:'חיפוש ב-', aiAbout:'על:', aiKnowledge:'הידע הארגוני של RH', aiAsk:'שאל', aiPlaceholder:'שאלו על המסמך או על הידע הארגוני…', aiClear:'לשאול את הידע הארגוני במקום', aiThinking:'חושב…', aiSources:'מקורות', aiOnPrem:'התשובות מגיעות מה-AI הפנימי של RH. בדקו עובדות חשובות במסמך.', qSummary:'סכם את המסמך', qReq:'מהן הדרישות העיקריות?', qRisk:'מהם הסיכונים והנושאים הפתוחים?', qDates:'מהם התאריכים, המועדים והתוקף?', myWf:'תהליכי האישור שלי', submitted:'הוגש', lastAction:'פעולה אחרונה', history:'היסטוריה', by:'על ידי', Rejected:'נדחה - חזר אליך', waiting:'ממתין', days:'ימים', location:'מיקום', choose:'בחרו…', whatSaving:'מה שומרים?', chooseKind:'בחרו סוג מסמך', chooseProject:'בחרו פרויקט', takeMe:'קחו אותי לשם', noProjects:'ללקוח זה אין עדיין פרויקטים.', createMissing:'התיקייה עדיין לא קיימת. ליצור אותה?', rename:'שינוי שם', del:'מחיקה', newName:'שם חדש', folderName:'שם התיקייה', confirmDel:'להעביר לתיקיית המחזור?', recycled:'הועבר לתיקיית המחזור. מחלקת IT יכולה לשחזר.',
+        newFolder:'תיקייה חדשה', company:'חברה', allWf:'כל תהליכי האישור', managed:'מנוהל על ידי ה-DMS', managedNote:'תיקייה זו מנוהלת על ידי תהליך ה-DMS: לקריאה בלבד, אי אפשר להוסיף, לשנות שם או למחוק כאן.', newRev:'גרסה חדשה', newRevTitle:'גרסה חדשה של', revFrom:'להתחיל מ', revCopy:'עותק של הגרסה המאושרת', revUpload:'קובץ מהמחשב שלי', revSubmit:'להגיש לאישור עכשיו', revDone:'הטיוטה נוצרה', newDoc:'מסמך חדש', newDocTitle:'מסמך חדש בתיקייה זו', revCurrent:'הגרסה המאושרת', revNext:'הגרסה החדשה', pathFinder:'איתור נתיב', pfIntro:'בנו את הנתיב שלב אחר שלב לפי עץ הבלופרינט. תיקיות שמסומנות (חדש) עדיין לא קיימות.', pfNew:'חדש', pfResult:'נתיב', pfGo:'מעבר לתיקייה', pfCreate:'יצירה ומעבר', pfUpload:'העלאה לכאן', pfMissing:'התיקייה עדיין לא קיימת.', pfClose:'סגירה', withdraw:'משיכה', withdrawQ:'להחזיר את המסמך לבעבודה? תהליך האישור ייעצר והקובץ יחזור למקומו.', approvals:'אישורים', apTitle:'ממתינים לאישורי', apAll:'כל האישורים הממתינים', stage:'שלב', stage1:'1 - מאשרי חובה', stage2:'2 - מאשר סופי', approve:'אישור', reject:'דחייה', apComment:'הערה (רשות)', rejComment:'מדוע נדחה? (חובה)', waitingFor:'ממתין ל', approvedBy:'אושר על ידי', owner:'בעלים', apNone:'אין מסמכים שממתינים לאישורך.', asSuper:'כמשתמש-על', fsRun:'העברת קבצים עכשיו', fsDone:'קבצים שהועברו', liveBanner:'פיילוט - חי: SharePoint {site}. אישורים {where}. הקבצים מועברים על ידי שירות ה-DMS.', apPage:'בדף זה (אישורים)', apTeams:'ב-Teams', pgBanner:'סביבת ניסוי: רישום זמני בזיכרון, ללא SharePoint וללא בדיקות AD. אשרו או דחו בדף זה (אישורים).', pgApprove:'אישור (ניסוי)', pgReject:'דחייה (ניסוי)', pgComment:'סיבת הדחייה', aiInsights:'AI Insights', findTab:'🔎 חיפוש קובץ', askTab:'שאלה', findPh:'תארו את הקובץ, למשל הצעת המחיר האחרונה ל-FCT של Customer_A', findCtx:'החיפוש רק במה שמותר לך לראות', goFolder:'לתיקייה', askAbout:'שאל עליו', found:'הצעות', noneFound:'לא נמצאו קבצים מתאימים. נסו מילים אחרות.', smart:'✦ חכם', searchedIn:'חיפוש ב-', aiAbout:'על:', aiKnowledge:'הידע הארגוני של RH', aiAsk:'שאל', aiPlaceholder:'שאלו על המסמך או על הידע הארגוני…', aiClear:'לשאול את הידע הארגוני במקום', aiThinking:'חושב…', aiSources:'מקורות', aiOnPrem:'התשובות מגיעות מה-AI הפנימי של RH. בדקו עובדות חשובות במסמך.', qSummary:'סכם את המסמך', qReq:'מהן הדרישות העיקריות?', qRisk:'מהם הסיכונים והנושאים הפתוחים?', qDates:'מהם התאריכים, המועדים והתוקף?', myWf:'תהליכי האישור שלי', submitted:'הוגש', lastAction:'פעולה אחרונה', history:'היסטוריה', by:'על ידי', Rejected:'נדחה - חזר אליך', waiting:'ממתין', days:'ימים', location:'מיקום', choose:'בחרו…', whatSaving:'מה שומרים?', chooseKind:'בחרו סוג מסמך', chooseProject:'בחרו פרויקט', takeMe:'קחו אותי לשם', noProjects:'ללקוח זה אין עדיין פרויקטים.', createMissing:'התיקייה עדיין לא קיימת. ליצור אותה?', rename:'שינוי שם', del:'מחיקה', newName:'שם חדש', folderName:'שם התיקייה', confirmDel:'להעביר לתיקיית המחזור?', recycled:'הועבר לתיקיית המחזור. מחלקת IT יכולה לשחזר.',
         Working:'בעבודה', Submitted:'הוגש לאישור', Approved_ReadOnly:'מאושר - קריאה בלבד', Other:'אחר', None:'לא רשום', other:'English' } }[lang];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -218,9 +218,12 @@ const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${
 function fileActions(f) {
   return (aiOn ? `<button type="button" class="link ai" data-ai="${esc(f.path)}">✦ AI</button>` : '') + `${f.officeUri ? `<a class="link" href="${esc(f.officeUri)}">${T.open}</a>` : ''}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button>`
     + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button>` : '')
-                  : `<button type="button" class="link" data-st="${esc(f.path)}">${T.start}</button>`);
+        + (f.document.statusKey === 'Approved_ReadOnly' && samePath(f.path, f.document.currentUncPath) ? `<button type="button" class="link" data-rev="${f.document.id}">⟳ ${T.newRev}</button>` : '')
+                  : (f.managed ? '' : `<button type="button" class="link" data-st="${esc(f.path)}">${T.start}</button>`));
 }
+const samePath = (a, b) => !!a && !!b && a.replace(/\//g, '\\').toLowerCase() === b.replace(/\//g, '\\').toLowerCase();
 function wire(v) {
+  v.querySelectorAll('[data-rev]').forEach(b => b.onclick = () => newRevision(+b.dataset.rev));
   v.querySelectorAll('[data-f]').forEach(a => a.onclick = () => { state.view = 'browse'; state.folder = a.dataset.f; render(); });
   v.querySelectorAll('[data-dl]').forEach(a => a.onclick = () => download(a.dataset.dl));
   v.querySelectorAll('[data-ai]').forEach(a => a.onclick = () => openAI(a.dataset.ai));
@@ -287,19 +290,21 @@ function folderTile(f) {
 async function browse(v) {
   const r = await api('/api/browse?path=' + encodeURIComponent(state.folder));
   state.folder = r.path; state.ctx = r.context;
-  const folders = r.folders.filter(f => !['Submitted','Obsolete_ReadOnly','Working'].includes(f.name));
+  const folders = r.folders.filter(f => !['Submitted','Working'].includes(f.name));
+  r.files.forEach(f => f.managed = r.managed);
   const bar = await levelBar(r.path);
   v.innerHTML = `<div class="crumbs"><a data-home>⌂ ${T.home}</a></div>${bar}
     ${r.node && hint(r.node) ? `<p class="muted" style="margin:-4px 0 12px">${esc(hint(r.node))}</p>` : ''}
     ${r.context.customer ? guideBar(r.context) : ''}
-    <div class="toolbar"><button type="button" class="pillbtn small light" id="pf-b">🧭 ${T.pathFinder}</button><span class="spacer"></span>${r.canWrite ? `<button type="button" class="pillbtn small light" id="mk">${T.newFolder}</button><button type="button" class="pillbtn small" id="up">${T.upload}</button>` : ''}</div>
-    ${folders.length ? `<div class="grid" style="margin-bottom:16px">${folders.map(f => `<div class="tilewrap">${folderTile(f)}${r.canWrite && !f.label ? `<div class="tileacts">${editActions(f)}</div>` : ''}</div>`).join('')}</div>` : ''}
+    ${r.managed ? `<div class="msg" style="background:var(--band)">🔒 ${T.managedNote}</div>` : ''}
+    <div class="toolbar"><button type="button" class="pillbtn small light" id="pf-b">🧭 ${T.pathFinder}</button><span class="spacer"></span>${r.canWrite ? `<button type="button" class="pillbtn small light" id="mk">${T.newFolder}</button><button type="button" class="pillbtn small light" id="up">${T.upload}</button><button type="button" class="pillbtn small" id="nd">＋ ${T.newDoc}</button>` : ''}</div>
+    ${folders.length ? `<div class="grid" style="margin-bottom:16px">${folders.map(f => `<div class="tilewrap">${folderTile(f)}${f.workflowFolder ? `<div class="tileacts muted">🔒 ${T.managed}</div>` : (r.canWrite && !f.label ? `<div class="tileacts">${editActions(f)}</div>` : '')}</div>`).join('')}</div>` : ''}
     ${r.files.length ? `<table><tr><th>${T.name}</th><th>${T.status}</th><th class="hide-s">${T.modified}</th><th></th></tr>
     ${r.files.map(f => `<tr><td><span style="display:inline-flex;gap:8px;align-items:center">${ICON_FILE}${esc(f.name)}</span></td><td>${statusTag(f.document)}</td><td class="hide-s muted">${when(f.modified)}</td><td class="actions">${fileActions(f)}${r.canWrite && !f.document && !f.readOnly ? editActions(f) : ''}</td></tr>`).join('')}
     </table>` : ''}${folders.length + r.files.length ? '' : `<p class="muted">${T.none}</p>`}`;
   v.querySelector('[data-home]').onclick = () => { state.view = 'customers'; render(); };
   v.querySelector('#pf-b').onclick = () => pathFinder(r.path);
-  if (r.canWrite) { v.querySelector('#up').onclick = () => uploadDialog(r.path); v.querySelector('#mk').onclick = () => newFolderDialog(r.path); }
+  if (r.canWrite) { v.querySelector('#nd').onclick = () => newDocument(r.path); v.querySelector('#up').onclick = () => uploadDialog(r.path); v.querySelector('#mk').onclick = () => newFolderDialog(r.path); }
   v.querySelectorAll('[data-rn]').forEach(b => b.onclick = () => renameDialog(b.dataset.rn));
   v.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteItem(b.dataset.del));
   wireLevels(v);
@@ -376,6 +381,7 @@ async function mine(v) {
         ${aiOn && (d.currentUncPath || d.workingUncPath) ? `<button type="button" class="link ai" data-ai="${esc(d.currentUncPath || d.workingUncPath)}">✦ AI</button>` : ''}
         <button type="button" class="link" data-cp="${esc(d.currentUncPath || d.workingUncPath)}">${T.copy}</button>
         ${d.statusKey === 'Submitted' ? `<button type="button" class="link" data-wd="${d.id}" style="color:var(--err)">${T.withdraw}</button>` : ''}
+        ${d.statusKey === 'Approved_ReadOnly' ? `<button type="button" class="link" data-rev="${d.id}">⟳ ${T.newRev}</button>` : ''}
         <button type="button" class="link" data-hist="${d.id}">${T.history}</button>
 </td></tr>
       <tr id="h-${d.id}" hidden><td colspan="6"><ol class="timeline">${d.history.map(e => `<li><b>${esc(evName(e.event))}</b> <span class="muted">${when(e.utc)} · ${esc(e.actor)}${e.source ? ' · ' + esc(e.source) : ''}</span>${e.details ? `<div class="small">${esc(e.details)}</div>` : ''}</li>`).join('')}</ol></td></tr>`).join('')}
@@ -560,6 +566,56 @@ async function uploadDialog(folder) {
     const fd = new FormData(r.form); fd.set('folder', folder); fd.set('overwrite', r.form.overwrite.checked ? 'true' : 'false');
     try { const x = await api('/api/files/upload', { method:'POST', body:fd }); $('#dlg').close(); render(); return x; }
     catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); r = await new Promise(res => $('#dlg-form').onsubmit = ev => { ev.preventDefault(); res({ action: ev.submitter?.value, form: ev.target }); }); }
+  }
+  $('#dlg').close();
+}
+// New revision of an approved document: from a copy of the approved file or from a file on the PC
+async function newRevision(id) {
+  const d = await api(`/api/documents/${id}`);
+  const cur = d.currentRevision || '01', next = String((parseInt(cur, 10) || 1) + 1).padStart(2, '0');
+  let r = await dialog(`${T.newRevTitle} ${d.documentId} - ${d.title}`,
+    `<div class="small">${T.revCurrent}: <b>Rev ${esc(cur)}</b> · ${T.revNext}: <b>Rev ${next}</b></div>
+     <label style="color:var(--ink)">${T.revFrom}</label>
+     <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="radio" name="src" value="copy" checked>${T.revCopy}</label>
+     <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="radio" name="src" value="file">${T.revUpload}</label>
+     <input type="file" name="file">
+     <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="submit">${T.revSubmit}</label>`,
+    [['cancel', T.cancel, 'light'], ['ok', T.ok]]);
+  while (r.action === 'ok') {
+    const fd = new FormData();
+    const useFile = r.form.src.value === 'file';
+    if (useFile) { if (!r.form.file.files.length) { note(T.chooseFile, 'err'); r = await again(); continue; } fd.set('file', r.form.file.files[0]); }
+    fd.set('submit', r.form.submit.checked ? 'true' : 'false');
+    try {
+      const x = await api(`/api/documents/${id}/revise`, { method:'POST', body:fd });
+      $('#dlg').close(); refreshApprovals();
+      state.view = 'browse'; state.folder = x.draft.replace(/[\\/][^\\/]+$/, ''); await render();
+      if (!r.form.submit.checked && x.officeUri) location.href = x.officeUri;    // open the draft in Excel/Word
+      return x;
+    } catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); r = await again(); }
+  }
+  $('#dlg').close();
+}
+const again = () => new Promise(res => $('#dlg-form').onsubmit = ev => { ev.preventDefault(); res({ action: ev.submitter?.value, form: ev.target }); });
+// New document: a file from the PC, saved in this folder and registered (and submitted) in one step
+async function newDocument(folder) {
+  const o = await api('/api/options');
+  const opt = a => a.map(x => `<option>${esc(x)}</option>`).join('');
+  let r = await dialog(T.newDocTitle, `<label>${T.chooseFile}<input type="file" name="file" required></label>
+      <label>${T.titleF}<input type="text" name="title" placeholder="${esc(T.titleF)}"></label>
+      <label>${T.type}<select name="documentType">${opt(o.DocumentType)}</select></label>
+      <label>${T.area}<select name="documentArea">${opt(o.DocumentArea)}</select></label>
+      <label>${T.mode}<select name="controlMode">${opt(o.ControlMode)}</select></label>`,
+    [['cancel', T.cancel, 'light'], ['save', T.registerOnly, 'light'], ['submit', T.registerSubmit]]);
+  while (r.action === 'save' || r.action === 'submit') {
+    const f = r.form;
+    try {
+      const fd = new FormData(); fd.set('folder', folder); fd.set('file', f.file.files[0]); fd.set('overwrite', 'false');
+      const up = await api('/api/files/upload', { method:'POST', body:fd });
+      await api('/api/documents', { method:'POST', body:JSON.stringify({ path: up.path, title: f.title.value.trim() || null,
+        documentType: f.documentType.value, documentArea: f.documentArea.value, controlMode: f.controlMode.value, submit: r.action === 'submit' }) });
+      $('#dlg').close(); refreshApprovals(); render(); return;
+    } catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); r = await again(); }
   }
   $('#dlg').close();
 }

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import ntpath
 import os
+import re
+import shutil
 import stat
 import uuid
 from collections.abc import Callable, Iterator
@@ -104,7 +106,9 @@ def list_folder(root: str, path: str | None, can: Can = _allow_all) -> dict:
                 files.append(item)
     parent = None if _norm(folder) == _norm(root) else os.path.dirname(folder)
     rel = os.path.relpath(folder, root)
-    return {"path": folder, "relative": "" if rel == "." else rel, "parent": parent, "canWrite": can(folder, "write"),
+    managed = any(p in WORKFLOW_FOLDERS[1:] for p in ([] if rel == "." else rel.replace("\\", "/").split("/")))
+    return {"path": folder, "relative": "" if rel == "." else rel, "parent": parent, "managed": managed,
+            "canWrite": not managed and can(folder, "write"),
             "folders": folders, "files": files}
 
 
@@ -187,7 +191,46 @@ def check_editable(root: str, path: str, protected_depth: int) -> str:
         raise PathNotAllowed("workflow folders are managed by the DMS")
     if not os.path.exists(full):
         raise FileNotFoundError(full)
+    if os.path.isdir(full) and contains_workflow_folder(full):
+        raise PathNotAllowed("this folder holds DMS workflow folders (Submitted / Current_ReadOnly / Obsolete_ReadOnly)")
     return full
+
+
+def in_workflow_folder(root: str, path: str) -> bool:
+    """True for Submitted / Current_ReadOnly / Obsolete_ReadOnly and anything inside them."""
+    rel = os.path.relpath(path, root).replace("\\", "/").split("/")
+    return any(p in WORKFLOW_FOLDERS[1:] for p in rel)
+
+
+def contains_workflow_folder(folder: str) -> bool:
+    for _dirpath, dirs, _files in os.walk(folder):
+        if any(d in WORKFLOW_FOLDERS for d in dirs):
+            return True
+    return False
+
+
+_REV = re.compile(r"^(?P<base>.*?)[ _\-]*rev\.?\s*(?P<rev>\d+)(?:_draft)?$", re.I)
+
+
+def parse_revision(filename: str) -> tuple[str, int | None, str]:
+    """'CRU 4 FCT Quote_Rev1.xlsx' -> ('CRU 4 FCT Quote', 1, '.xlsx'); without a revision -> (stem, None, ext)."""
+    stem, ext = os.path.splitext(filename)
+    stem = re.sub(r"_DRAFT$", "", stem, flags=re.I)
+    m = _REV.match(stem)
+    return (m.group("base").rstrip(" _-"), int(m.group("rev")), ext) if m else (stem, None, ext)
+
+
+def copy_writable(source: str, target: str) -> str:
+    """Copy a (read-only) approved file to a new writable draft."""
+    if os.path.exists(target):
+        raise FileExistsError(target)
+    shutil.copy2(source, target)
+    os.chmod(target, os.stat(target).st_mode | stat.S_IWRITE)
+    return target
+
+
+def revision_name(base: str, rev: int, ext: str) -> str:
+    return f"{base}_Rev{rev:02d}_DRAFT{ext}"
 
 
 def make_folder(root: str, parent: str, name: str) -> str:

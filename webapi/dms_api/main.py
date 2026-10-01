@@ -386,6 +386,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         target_dir = files.resolve(s.repository_root, folder)
         if not os.path.isdir(target_dir):
             raise HTTPException(404, "Folder not found")
+        if files.in_workflow_folder(s.repository_root, target_dir):
+            raise HTTPException(403, "Workflow folders are managed by the DMS")
         if not user.can(target_dir, "write"):
             raise HTTPException(403, "You do not have permission to save files in this folder")
         try:
@@ -395,6 +397,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, "A file with this name already exists in the folder") from None
         except (ValueError, PermissionError) as e:
             raise HTTPException(400, str(e)) from None
+        log(user, "upload", path)
         d = find_registered(path, register_index())
         return {"name": os.path.basename(path), "path": path, "document": with_key(d) if d else None}
 
@@ -408,12 +411,26 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     return d
         return None
 
+    FILE_OPS = {"upload", "new-folder", "rename", "delete"}
+
     def log(user: User, action: str, detail: str) -> None:
+        """Service log; repository changes (upload, new folder, rename, delete) also go to Control Audit
+        in SharePoint (CorrelationId FS), so every change is kept there with who and when."""
         logger.info("%s %s %s", user.email, action, detail)
+        if action in FILE_OPS:
+            root = s.repository_root.rstrip("\\/")
+            short = detail.replace(root + os.sep, "").replace(root + "/", "").replace(root + "\\", "")
+            try:
+                sp().audit(document_id="FS", event=s.choices["FileDone"], from_status="", to_status="",
+                           actor=user.email, details=f"{action}: {short}")
+            except Exception as e:  # noqa: BLE001 - the change itself is done; do not fail the request
+                logger.warning("audit row not written for %s: %s", action, e)
 
     @app.post("/api/folders", status_code=201)
     def new_folder(req: NewFolderRequest, user: User = Depends(current_user)):
         parent = files.resolve(s.repository_root, req.parent)
+        if files.in_workflow_folder(s.repository_root, parent):
+            raise HTTPException(403, "Workflow folders are managed by the DMS")
         if not user.can(parent, "write"):
             raise HTTPException(403, "You do not have permission to create folders here")
         try:
@@ -430,6 +447,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         full = files.resolve(s.repository_root, req.path)
         if not (user.can(full, "write") and user.can(os.path.dirname(full), "write")):
             raise HTTPException(403, "You do not have permission to rename this item")
+        if os.path.exists(full):
+            files.check_editable(s.repository_root, full, s.protected_depth)   # workflow folders first: clearest reason
         d = registered_inside(full)
         if d:
             raise HTTPException(409, f"It holds a controlled document ({d.get('documentId')}) and cannot be renamed")
@@ -450,6 +469,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         full = files.resolve(s.repository_root, req.path)
         if not (user.can(full, "write") and user.can(os.path.dirname(full), "write")):
             raise HTTPException(403, "You do not have permission to delete this item")
+        if os.path.exists(full):
+            files.check_editable(s.repository_root, full, s.protected_depth)
         d = registered_inside(full)
         if d:
             raise HTTPException(409, f"It holds a controlled document ({d.get('documentId')}) and cannot be deleted")
@@ -741,6 +762,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         doc = sp().create_document(title=title, path=path, document_type=req.documentType,
                                    document_area=req.documentArea, owner_email=user.email,
                                    control_mode=req.controlMode, document_id=req.documentId)
+        rev = files.parse_revision(os.path.basename(path))[1]
+        sp().update(doc["id"], {"DraftRevision": f"{rev or 1:02d}"})
         sp().audit(document_id=doc["documentId"], event=s.choices["Created"], from_status="",
                    to_status=s.choices["Working"], actor=user.email,
                    details=f"Registered from the DMS page: {os.path.relpath(path, s.repository_root)}")
@@ -762,6 +785,54 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                    to_status=s.choices["Submitted"], actor=user.email, details="Submitted from the DMS page")
         return with_key(sp().document(item_id))
 
+    @app.post("/api/documents/{item_id}/revise")
+    def revise(item_id: int, file: UploadFile | None = File(None), submit: bool = Form(False),
+               user: User = Depends(current_user)):
+        """Start the next revision of an approved document, on the same record: from a copy of the
+        approved version, or from a file uploaded from the user's PC. The draft is saved next to the
+        document as <name>_RevNN_DRAFT.<ext>; on approval the file service makes it the current version
+        and moves the previous one to Obsolete_ReadOnly."""
+        from .file_service import to_root
+        c = s.choices
+        d = sp().document(item_id)
+        if d.get("lifecycleStatus") != c["Approved_ReadOnly"]:
+            raise HTTPException(409, "Only an approved document can get a new revision")
+        current = to_root(s.repository_root, d.get("currentUncPath"))
+        if not current or not os.path.isfile(current):
+            raise HTTPException(409, "The approved file was not found on the file server")
+        if not user.can(current):
+            raise HTTPException(403, "You do not have access to this document")
+        cur_dir = os.path.dirname(current)
+        place = os.path.dirname(cur_dir) if os.path.basename(cur_dir) in WORKFLOW_FOLDERS else cur_dir
+        if not user.can(place, "write"):
+            raise HTTPException(403, "You do not have permission to save files in this folder")
+        base, rev, ext = files.parse_revision(os.path.basename(current))
+        cur_rev = int(d["currentRevision"]) if str(d.get("currentRevision") or "").isdigit() else (rev or 1)
+        new_rev = cur_rev + 1
+        if file is not None and file.filename:
+            ext = os.path.splitext(file.filename)[1] or ext
+        name = files.revision_name(base, new_rev, ext)
+        target = os.path.join(place, name)
+        if os.path.exists(target):
+            raise HTTPException(409, f"{name} already exists in the folder")
+        try:
+            if file is not None and file.filename:
+                target = files.save_upload(s.repository_root, place, name, file.file, s.max_upload_mb * 1024 * 1024)
+                how = f"uploaded {os.path.basename(file.filename)}"
+            else:
+                files.copy_writable(current, target)
+                how = f"a copy of revision {cur_rev:02d}"
+        except (ValueError, PermissionError) as e:
+            raise HTTPException(400, str(e)) from None
+        sp().update(item_id, {"WorkingUncPath": target, "DraftRevision": f"{new_rev:02d}", "LifecycleStatus": c["Working"]})
+        sp().audit(document_id=d.get("documentId") or f"ID {item_id}", event=c["StatusChanged"], from_status=c["Approved_ReadOnly"],
+                   to_status=c["Working"], actor=user.email,
+                   details=f"New revision {new_rev:02d} from {how}: {os.path.relpath(target, s.repository_root)}")
+        log(user, "revise", f"{d.get('documentId')} -> {target}")
+        if submit:
+            return {**submit_doc(item_id, user), "draft": target, "officeUri": files.office_uri(target)}
+        return {**with_key(sp().document(item_id)), "draft": target, "officeUri": files.office_uri(target)}
+
     @app.post("/api/documents/{item_id}/withdraw")
     def withdraw(item_id: int, user: User = Depends(current_user)):
         """Take a submitted document back to Working (owner or super user). The approval cycle ends,
@@ -777,6 +848,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                    to_status=c["Working"], actor=user.email, details="Withdrawn from the DMS page")
         log(user, "withdraw", doc.get("documentId") or str(item_id))
         return with_key(sp().document(item_id))
+
+    submit_doc = submit                                         # used where a parameter is called "submit"
 
     @app.get("/api/files/download")
     def download(path: str, user: User = Depends(current_user)):
