@@ -4,6 +4,14 @@ A small web service inside the company network that "wraps" the file server repo
 
 Everything else stays as it is: SharePoint keeps the records, the approval flow (DC-P1) sends the approvals in Teams, the Workflow Service (`scripts/Invoke-DmsWorkflowService.ps1`) moves the files, and the Explorer right-click still works.
 
+## Try it on your PC (playground)
+
+```powershell
+cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root
+```
+
+It opens `http://localhost:8080/dms/dms-page?lang=EN` on your real folders, with a temporary in-memory register instead of SharePoint and no AD checks (you are the only user). Approve or reject in **My workflows** (the yellow test buttons) instead of Teams. Uploads, renames and deletes are real changes in `-Root`, so use the test share. Add `-Lang HE` for Hebrew, and `-AiUrl https://chat.ai.rh-global.com -AiToken <token> -AiModel <model>` to try AI Insights against the on-prem LLM. Without them, Find a file works by keywords.
+
 ## How it knows the AD permissions
 
 1. IIS signs the user in with **Windows Authentication**, using the login of the person at the PC. Browsers on domain PCs do this silently.
