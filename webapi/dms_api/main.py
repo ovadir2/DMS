@@ -425,7 +425,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         c = s.choices
         cycle = []
         for e in events:                                        # newest first
-            if e["event"] in (c["SubmittedEvent"], c["RejectedEvent"]):
+            if e["event"] in (c["SubmittedEvent"], c["RejectedEvent"], c["Cancelled"]):
                 break
             cycle.append(e)
         t = d.get("documentType") or ""
@@ -710,6 +710,22 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         sp().update(item_id, {"LifecycleStatus": s.choices["Submitted"]})
         sp().audit(document_id=doc["documentId"], event=s.choices["SubmittedEvent"], from_status=s.choices["Working"],
                    to_status=s.choices["Submitted"], actor=user.email, details="Submitted from the DMS page")
+        return with_key(sp().document(item_id))
+
+    @app.post("/api/documents/{item_id}/withdraw")
+    def withdraw(item_id: int, user: User = Depends(current_user)):
+        """Take a submitted document back to Working (owner or super user). The approval cycle ends,
+        the file service returns the file to its place, and it can be submitted again."""
+        c = s.choices
+        doc = sp().document(item_id)
+        if (doc.get("ownerEmail") or "").lower() != user.email and not is_admin(user):
+            raise HTTPException(403, "Only the document owner (or a DMS super user) can withdraw it")
+        if doc.get("lifecycleStatus") != c["Submitted"]:
+            raise HTTPException(409, "Only a submitted document can be withdrawn")
+        sp().update(item_id, {"LifecycleStatus": c["Working"]})
+        sp().audit(document_id=doc.get("documentId") or f"ID {item_id}", event=c["Cancelled"], from_status=c["Submitted"],
+                   to_status=c["Working"], actor=user.email, details="Withdrawn from the DMS page")
+        log(user, "withdraw", doc.get("documentId") or str(item_id))
         return with_key(sp().document(item_id))
 
     @app.get("/api/files/download")
