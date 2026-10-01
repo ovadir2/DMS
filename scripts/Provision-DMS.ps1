@@ -546,7 +546,7 @@ $Lists = @(
        Versioning=$true; MajorVersions=50
        Perms=@{ DcOwners='FullControl'; DcService='AppendOnly'; DcControllers='Read'; DcAuditors='Read' }
        Views=@(@{En='All Events'; He='כל האירועים'; Default=$true
-                 Fields=@('EventUtc','CorrelationId','AuditEventType','FromStatus','ToStatus','ActorEmail','EventSource')
+                 Fields=@('EventUtc','CorrelationId','AuditEventType','FromStatus','ToStatus','ActorEmail','EventSource','EventDetails','Attachments')
                  Query="<OrderBy><FieldRef Name='EventUtc' Ascending='FALSE' /></OrderBy>"}) }
     @{ Site='DC'; Key='UiLabels'; Url='Lists/UiLabels'; Tpl='GenericList'; Ct='UiLabel'
        En='UI Labels'; He='תוויות ממשק'; TitleEn='Label Key'; TitleHe='מפתח תווית'
@@ -586,7 +586,7 @@ $Lists = @(
        Versioning=$true; MajorVersions=50
        Perms=@{ ExOwners='FullControl'; ExService='AppendOnly'; ExControllers='Read'; ExAuditors='Read' }
        Views=@(@{En='All Events'; He='כל האירועים'; Default=$true
-                 Fields=@('EventUtc','CorrelationId','AuditEventType','FromStatus','ToStatus','ActorEmail','EventSource')
+                 Fields=@('EventUtc','CorrelationId','AuditEventType','FromStatus','ToStatus','ActorEmail','EventSource','EventDetails','Attachments')
                  Query="<OrderBy><FieldRef Name='EventUtc' Ascending='FALSE' /></OrderBy>"}) }
     @{ Site='EX'; Key='RoutingCatalog'; Url='Lists/RoutingCatalog'; Tpl='GenericList'; Ct='RoutingEntry'
        En='Routing Catalog'; He='קטלוג ניתוב'; TitleEn='Route Name'; TitleHe='שם הניתוב'

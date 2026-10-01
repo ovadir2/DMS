@@ -159,6 +159,13 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
             row["result"] = f"error - {e}"
             L(f"    ERROR: {e!r}")
             L("    " + traceback.format_exc().strip().replace("\n", "\n    "))
+            if not dry_run:
+                try:
+                    sp.audit(document_id=f"FIRST-LOAD-{stamp}", event=c["FileFailed"], from_status="", to_status="",
+                             actor=actor, details=f"DMS First loading failed for {it['source']} -> {it['current']}: {e}",
+                             source=c["WorkflowService"])
+                except Exception as ae:  # noqa: BLE001
+                    L(f"    Control Audit write failed: {ae!r}")
         job["rows"].append(row)
         job["done"] += 1
     job["report"] = _write_report(s, job)
@@ -170,6 +177,24 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
     L(f"  File Linker: {sum(1 for r in job['rows'] if r['fileLinker'] == 'updated')} updated, "
       f"{sum(1 for r in job['rows'] if r['fileLinker'].startswith('error'))} errors")
     L(f"  CSV report: {job['report']}")
+    summary = (f"DMS First loading{' (dry run)' if dry_run else ''}: {source} -> {target}. {len(items)} files - "
+               + ", ".join(f"{k}: {v}" for k, v in sorted(counts.items()))
+               + f". Trace log: {log_path}. CSV: {job['report']}")
+    try:
+        failed = any(r["result"].startswith("error") for r in job["rows"])
+        audit_id = sp.audit(document_id=f"FIRST-LOAD-{stamp}", event=c["FileFailed" if failed else "FileDone"],
+                            from_status="", to_status="", actor=actor, details=summary, source=c["WorkflowService"])
+        L(f"  Control Audit summary row: FIRST-LOAD-{stamp}")
+        if logf:
+            logf.close()
+            logf = None
+        if audit_id and hasattr(sp, "attach"):
+            for path in (log_path, job["report"]):
+                if path and os.path.isfile(path):
+                    sp.attach(audit_id, os.path.basename(path), path)
+    except Exception as e:  # noqa: BLE001 - the run is done; the trace stays on the file server
+        L(f"  Control Audit summary / attachments failed: {e!r}")
+        job["auditError"] = str(e)
     if logf:
         logf.close()
     job["state"] = "finished"
