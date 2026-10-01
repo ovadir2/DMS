@@ -1065,3 +1065,26 @@ def test_rename_a_working_document(tmp_path):
     assert c.post(f"/api/documents/{d['id']}/rename", json={"newName": "Other.xlsx"}).status_code == 409   # name taken
     c.post(f"/api/documents/{d['id']}/submit")
     assert c.post(f"/api/documents/{d['id']}/rename", json={"newName": "X"}).status_code == 409             # submitted
+
+
+def test_main_search_covers_folders_file_names_and_document_ids(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    qa = root / "01_Management" / "Quality" / "Quality and Standards"
+    qa.mkdir(parents=True)
+    (qa / "QP-2.1 V06 הודעות ללקוחות.docx").write_text("x")
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "CRU 4 FCT Quote_Rev1.xlsx").write_text("x")
+    (root / "04_Workflow_System" / "Recycle").mkdir(parents=True)
+    (root / "04_Workflow_System" / "Recycle" / "QP-2.1 old.docx").write_text("x")      # system folder: never found
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
+    c = TestClient(create_app(s, MemorySharePoint(s)))
+    d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx")}).json()
+    names = lambda text: [(x["kind"], x["name"]) for x in c.get("/api/search", params={"q": text, "scope": "quick"}).json()]  # noqa: E731
+    assert ("file", "QP-2.1 V06 הודעות ללקוחות.docx") in names("QP-2.1")                 # Management, file name
+    assert all("old" not in n for _, n in names("QP-2.1"))
+    assert ("folder", "Quality and Standards") in names("standards")                    # folder
+    assert names(d["documentId"])[0] == ("document", "CRU 4 FCT Quote_Rev1")            # Document ID first
+    assert names("quote fct")[0][0] == "document"                                       # words in any order
+    assert ("file", "CRU 4 FCT Quote_Rev1.xlsx") not in names("quote fct")              # not listed twice

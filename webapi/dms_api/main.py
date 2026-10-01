@@ -194,6 +194,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def customers_root() -> str:
         return os.path.join(s.repository_root, s.customers_folder)
 
+    def search_roots() -> list[str]:
+        """The user areas of the repository (01_Management, 02_Customers, ...), without the system folders."""
+        try:
+            return [e.path for e in sorted(os.scandir(s.repository_root), key=lambda e: e.name)
+                    if e.is_dir() and e.name not in blueprint.HIDDEN_AT_ROOT and not files.is_hidden(e)]
+        except OSError:
+            return [customers_root()]
+
     def doc_path(d: dict) -> str | None:
         return d.get("currentUncPath") or d.get("workingUncPath")
 
@@ -394,24 +402,40 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def search(q: str = Query(..., min_length=2), scope: str = Query("all", description="all | customer | project | document | file | quick (customers, folders, documents)"),
                customer: str | None = Query(None, description="Customer folder path, to search inside one customer"),
                user: User = Depends(current_user)):
-        """Customers, project folders, registered documents and file names the user may see."""
+        """Customers, folders, registered documents (Document ID, title, type, file name) and file names the
+        user may see, in the whole repository. Several words match in any order. An exact Document ID comes first."""
         out: list[dict] = []
-        ql = q.lower()
+        words = q.lower().split()
+        seen: set[str] = set()
         if scope in ("all", "customer", "quick"):
             out += [{"kind": "customer", **c} for c in customers(q, user)]
         if scope in ("all", "document", "quick"):
+            docs = []
             for d in sp().documents():
-                if (ql in (d.get("documentId") or "").lower() or ql in (d.get("title") or "").lower()) and visible(d, user):
-                    out.append({"kind": "document", "name": d.get("title"), "path": doc_path(d), "document": with_key(d)})
-        start = files.resolve(s.repository_root, customer) if customer else customers_root()
-        if os.path.isdir(start) and scope in ("all", "project", "file", "quick"):
+                if d.get("lifecycleStatus") == s.choices["Archived"]:
+                    continue
+                path = doc_path(d) or ""
+                hay = " ".join([d.get("documentId") or "", d.get("title") or "", d.get("documentType") or "",
+                                os.path.basename(path.replace("\\", "/"))]).lower()
+                if all(w in hay for w in words) and visible(d, user):
+                    exact = (d.get("documentId") or "").lower() == q.strip().lower()
+                    docs.append((not exact, {"kind": "document", "name": d.get("title"), "path": path, "document": with_key(d)}))
+                    seen.add(os.path.normcase(path))
+            out += [x for _, x in sorted(docs, key=lambda t: t[0])]
+        starts = [files.resolve(s.repository_root, customer)] if customer else search_roots()
+        if scope in ("all", "project", "file", "quick"):
             idx = register_index()
-            for hit in files.walk_search(start, q, user.can, s.search_limit, folders_only=scope in ("project", "quick")):
-                if hit["isFolder"]:
-                    out.append({"kind": "folder", **hit})
-                elif scope in ("all", "file"):
-                    d = find_registered(hit["path"], idx)
-                    out.append({"kind": "file", **hit, "document": with_key(d) if d else None})
+            left = s.search_limit
+            for start in [p for p in starts if os.path.isdir(p)]:
+                for hit in files.walk_search(start, q, user.can, left, folders_only=scope == "project"):
+                    left -= 1
+                    if hit["isFolder"]:
+                        out.append({"kind": "folder", **hit})
+                    elif os.path.normcase(hit["path"]) not in seen:
+                        d = find_registered(hit["path"], idx)
+                        out.append({"kind": "file", **hit, "document": with_key(d) if d else None})
+                if left <= 0:
+                    break
         return out[: s.search_limit]
 
     @app.post("/api/guide/create", status_code=201)
@@ -765,7 +789,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         q_low = req.question.lower()
         cust = next((c for c in cust_list if str(plan.get("customer") or "").lower() == c["name"].lower()), None) \
             or next((c for c in cust_list if c["name"].lower() in q_low), None)
-        start, project = cust["path"] if cust else customers_root(), None
+        start, project = cust["path"] if cust else s.repository_root, None
         if cust and plan.get("project"):
             want = str(plan["project"]).lower()
             project = next((p for p in projects(cust["path"], user) if want in p["name"].lower()), None)
@@ -777,7 +801,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             terms = [t for t in terms if t.lower() != cust["name"].lower()] or terms
         idx = register_index()
         found: list[tuple[float, str, float]] = []
-        for e in finder.walk_files(start, lambda p: user.can(p)):
+        walk = (e for root in ([start] if start != s.repository_root else search_roots())
+                for e in finder.walk_files(root, lambda p: user.can(p)))
+        for e in walk:
             rel = os.path.relpath(e.path, s.repository_root)
             sc = finder.score(rel, e.name, terms, kind_folder, plan.get("extensions") or [])
             if sc <= 0:

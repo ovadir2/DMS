@@ -146,9 +146,9 @@ def save_upload(root: str, folder: str, filename: str, stream: BinaryIO, max_byt
 
 def walk_search(start: str, text: str, can: Can = _allow_all, limit: int = 200,
                 folders_only: bool = False) -> Iterator[dict]:
-    """Files and folders under `start` whose name contains `text` (case-insensitive), skipping
-    what the user may not read. Stops after `limit` results."""
-    text, found, stack = text.lower(), 0, [start]
+    """Files and folders under `start` whose name contains every word of `text` (any order, case-insensitive),
+    skipping what the user may not read. Stops after `limit` results."""
+    words, found, stack = text.lower().split(), 0, [start]
     while stack and found < limit:
         current = stack.pop()
         try:
@@ -161,7 +161,8 @@ def walk_search(start: str, text: str, can: Can = _allow_all, limit: int = 200,
             is_dir = entry.is_dir()
             if is_dir:
                 stack.append(entry.path)
-            if text in entry.name.lower() and (is_dir or not folders_only):
+            name = entry.name.lower()
+            if words and all(w in name for w in words) and (is_dir or not folders_only):
                 found += 1
                 yield {"name": entry.name, "path": entry.path, "isFolder": is_dir,
                        "officeUri": None if is_dir else office_uri(entry.path)}
