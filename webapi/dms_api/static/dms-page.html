@@ -1,0 +1,169 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RH DMS</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#5d6675; --line:#dfe3ea; --accent:#0b5cad; --ok:#1f7a3d; --warn:#9a6700; --err:#b42318; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 "Segoe UI", Arial, sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--accent); color:#fff; padding:12px 16px; display:flex; gap:12px; align-items:center; }
+  header h1 { font-size:18px; margin:0; flex:1; }
+  header a { color:#fff; }
+  nav { display:flex; gap:4px; padding:8px 16px 0; flex-wrap:wrap; }
+  nav button { border:1px solid var(--line); border-bottom:none; background:#e9edf3; padding:8px 14px; cursor:pointer; border-radius:6px 6px 0 0; font:inherit; }
+  nav button.on { background:var(--card); font-weight:600; }
+  main { background:var(--card); margin:0 16px 16px; border:1px solid var(--line); padding:16px; border-radius:0 6px 6px 6px; min-height:300px; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:start; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .crumbs { margin-bottom:8px; color:var(--muted); word-break:break-all; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; background:#eef1f5; }
+  .Working { background:#fff4d6; color:var(--warn); } .Submitted { background:#e3efff; color:var(--accent); } .Approved_ReadOnly { background:#e2f4e8; color:var(--ok); }
+  form { display:grid; gap:10px; max-width:640px; }
+  label { display:grid; gap:4px; color:var(--muted); }
+  input, select { font:inherit; padding:7px 8px; border:1px solid var(--line); border-radius:4px; color:var(--ink); }
+  .btn { background:var(--accent); color:#fff; border:none; padding:8px 14px; border-radius:4px; cursor:pointer; font:inherit; }
+  .btn.alt { background:#e9edf3; color:var(--ink); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  .msg { padding:8px 10px; border-radius:4px; margin-bottom:10px; }
+  .msg.ok { background:#e2f4e8; } .msg.err { background:#fde8e6; color:var(--err); }
+  a.link { color:var(--accent); cursor:pointer; text-decoration:none; }
+  .muted { color:var(--muted); }
+</style>
+</head>
+<body>
+<header><h1 id="t-title"></h1><span id="who" class="muted" style="color:#dbe8f7"></span><a id="lang-switch" href="#"></a></header>
+<nav id="tabs"></nav>
+<main id="view"></main>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+<script>
+const q = new URLSearchParams(location.search);
+const lang = (q.get('lang') || 'EN').toUpperCase() === 'HE' ? 'HE' : 'EN';
+document.documentElement.lang = lang.toLowerCase();
+document.documentElement.dir = lang === 'HE' ? 'rtl' : 'ltr';
+const T = {
+  EN: { title:'RH Document Management', browse:'Repository', mine:'My documents', register:'Start workflow', name:'Name', status:'Status', modified:'Modified',
+        notReg:'Not registered', open:'Open', download:'Download', start:'Start workflow', submit:'Submit for approval', docId:'Document ID', type:'Document type',
+        area:'Area', mode:'Control mode', titleF:'Title', file:'File', registerOnly:'Register only', registerSubmit:'Register and submit', up:'Up',
+        done:'Saved. Document', err:'Error', none:'Nothing here.', copy:'Copy path', copied:'Path copied', switchTo:'עברית', pickFile:'Pick a file in Repository and click Start workflow.',
+        Working:'Working', Submitted:'Submitted', Approved_ReadOnly:'Approved (read-only)', Other:'Other' },
+  HE: { title:'ניהול מסמכים RH', browse:'מאגר', mine:'המסמכים שלי', register:'שליחה לאישור', name:'שם', status:'סטטוס', modified:'עודכן',
+        notReg:'לא רשום', open:'פתיחה', download:'הורדה', start:'שליחה לאישור', submit:'הגשה לאישור', docId:'מזהה מסמך', type:'סוג מסמך',
+        area:'תחום', mode:'מצב בקרה', titleF:'כותרת', file:'קובץ', registerOnly:'רישום בלבד', registerSubmit:'רישום והגשה לאישור', up:'למעלה',
+        done:'נשמר. מסמך', err:'שגיאה', none:'אין פריטים.', copy:'העתקת נתיב', copied:'הנתיב הועתק', switchTo:'English', pickFile:'בחרו קובץ במאגר ולחצו שליחה לאישור.',
+        Working:'בעבודה', Submitted:'הוגש לאישור', Approved_ReadOnly:'מאושר - קריאה בלבד', Other:'אחר' } }[lang];
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+$('#t-title').textContent = T.title;
+$('#lang-switch').textContent = T.switchTo;
+$('#lang-switch').onclick = e => { e.preventDefault(); q.set('lang', lang === 'HE' ? 'EN' : 'HE'); location.search = q.toString(); };
+
+let cfg, msal, account, state = { tab: q.get('path') ? 'register' : 'browse', folder: null, file: q.get('path') };
+
+async function token() {
+  if (cfg.authMode !== 'entra') return null;
+  const req = { scopes: [cfg.scope], account };
+  try { return (await msal.acquireTokenSilent(req)).accessToken; }
+  catch { await msal.acquireTokenRedirect(req); }
+}
+async function api(path, opts = {}) {
+  const t = await token();
+  const r = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}) } });
+  const body = r.headers.get('content-type')?.includes('json') ? await r.json() : null;
+  if (!r.ok) throw new Error(typeof body?.detail === 'string' ? body.detail : (body?.detail?.message || r.statusText));
+  return body;
+}
+const pill = d => d ? `<span class="pill ${esc(d.statusKey)}">${esc(T[d.statusKey] || d.lifecycleStatus)}</span> <span class="muted">${esc(d.documentId)}</span>` : `<span class="muted">${T.notReg}</span>`;
+const when = s => s ? new Date(s).toLocaleString(lang === 'HE' ? 'he-IL' : 'en-GB') : '';
+
+function tabs() {
+  $('#tabs').innerHTML = ['browse', 'mine', 'register'].map(k => `<button class="${state.tab === k ? 'on' : ''}" data-k="${k}">${T[k]}</button>`).join('');
+  $('#tabs').querySelectorAll('button').forEach(b => b.onclick = () => { state.tab = b.dataset.k; render(); });
+}
+async function render() {
+  tabs();
+  const v = $('#view');
+  v.innerHTML = '…';
+  try { await ({ browse, mine, register })[state.tab](v); }
+  catch (e) { v.innerHTML = `<div class="msg err">${T.err}: ${esc(e.message)}</div>`; }
+}
+async function browse(v) {
+  const r = await api('/api/browse' + (state.folder ? '?path=' + encodeURIComponent(state.folder) : ''));
+  state.folder = r.path;
+  v.innerHTML = `<div class="crumbs" dir="ltr">${esc(r.path)}</div>
+    ${r.parent ? `<p><a class="link" data-f="${esc(r.parent)}">⬑ ${T.up}</a></p>` : ''}
+    <table><tr><th>${T.name}</th><th>${T.status}</th><th>${T.modified}</th><th></th></tr>
+    ${r.folders.map(f => `<tr><td><a class="link" data-f="${esc(f.path)}">📁 ${esc(f.name)}</a></td><td></td><td>${when(f.modified)}</td><td></td></tr>`).join('')}
+    ${r.files.map(f => `<tr><td>${esc(f.name)}</td><td>${pill(f.document)}</td><td>${when(f.modified)}</td><td class="row">
+        ${f.officeUri ? `<a class="link" href="${esc(f.officeUri)}">${T.open}</a>` : ''}
+        <a class="link" data-dl="${esc(f.path)}">${T.download}</a>
+        <a class="link" data-cp="${esc(f.path)}">${T.copy}</a>
+        ${f.document ? '' : `<a class="link" data-st="${esc(f.path)}">${T.start}</a>`}</td></tr>`).join('')}
+    </table>${r.folders.length + r.files.length ? '' : `<p class="muted">${T.none}</p>`}`;
+  v.querySelectorAll('[data-f]').forEach(a => a.onclick = () => { state.folder = a.dataset.f; render(); });
+  v.querySelectorAll('[data-st]').forEach(a => a.onclick = () => { state.file = a.dataset.st; state.tab = 'register'; render(); });
+  v.querySelectorAll('[data-cp]').forEach(a => a.onclick = async () => { await navigator.clipboard.writeText(a.dataset.cp); a.textContent = T.copied; });
+  v.querySelectorAll('[data-dl]').forEach(a => a.onclick = () => download(a.dataset.dl));
+}
+async function download(path) {
+  const t = await token();
+  const r = await fetch('/api/files/download?path=' + encodeURIComponent(path), { headers: t ? { Authorization: 'Bearer ' + t } : {} });
+  if (!r.ok) return alert(T.err);
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await r.blob()), download: path.split(/[\\/]/).pop() });
+  a.click();
+}
+async function mine(v) {
+  const docs = await api('/api/documents?mine=true');
+  v.innerHTML = `<table><tr><th>${T.docId}</th><th>${T.titleF}</th><th>${T.status}</th><th>${T.file}</th><th></th></tr>
+    ${docs.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}</td><td>${pill(d)}</td>
+      <td class="muted">${esc(d.currentUncPath || d.workingUncPath)}</td>
+      <td>${d.statusKey === 'Working' ? `<button class="btn" data-sub="${d.id}">${T.submit}</button>` : ''}</td></tr>`).join('')}
+    </table>${docs.length ? '' : `<p class="muted">${T.none}</p>`}`;
+  v.querySelectorAll('[data-sub]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try { await api(`/api/documents/${b.dataset.sub}/submit`, { method: 'POST' }); render(); }
+    catch (e) { b.disabled = false; alert(e.message); }
+  });
+}
+async function register(v) {
+  if (!state.file) { v.innerHTML = `<p class="muted">${T.pickFile}</p>`; return; }
+  const o = await api('/api/options');
+  const opt = a => a.map(x => `<option>${esc(x)}</option>`).join('');
+  const name = q.get('name') || state.file.split(/[\\/]/).pop();
+  v.innerHTML = `<div id="m"></div><form id="f">
+    <label>${T.file}<input name="path" dir="ltr" value="${esc(state.file)}" readonly></label>
+    <label>${T.titleF}<input name="title" value="${esc(name.replace(/\.[^.]+$/, ''))}" required></label>
+    <label>${T.type}<select name="documentType" required>${opt(o.DocumentType)}</select></label>
+    <label>${T.area}<select name="documentArea" required>${opt(o.DocumentArea)}</select></label>
+    <label>${T.mode}<select name="controlMode">${opt(o.ControlMode)}</select></label>
+    <div class="row"><button class="btn" name="go" value="submit">${T.registerSubmit}</button><button class="btn alt" name="go" value="save">${T.registerOnly}</button></div></form>`;
+  $('#f').onsubmit = async e => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    f.submit = e.submitter?.value === 'submit';
+    try {
+      const d = await api('/api/documents', { method: 'POST', body: JSON.stringify(f) });
+      $('#m').innerHTML = `<div class="msg ok">${T.done} ${esc(d.documentId)} - ${esc(T[d.statusKey] || d.lifecycleStatus)}</div>`;
+      e.target.querySelectorAll('button').forEach(b => b.disabled = true);
+    } catch (x) { $('#m').innerHTML = `<div class="msg err">${T.err}: ${esc(x.message)}</div>`; }
+  };
+}
+
+(async () => {
+  cfg = await (await fetch('/api/client-config')).json();
+  if (cfg.authMode === 'entra') {
+    msal = new msalBrowser.PublicClientApplication({ auth: { clientId: cfg.clientId, authority: 'https://login.microsoftonline.com/' + cfg.tenantId, redirectUri: location.origin + location.pathname } });
+    await msal.initialize();
+    const r = await msal.handleRedirectPromise();
+    account = r?.account || msal.getAllAccounts()[0];
+    if (!account) return msal.loginRedirect({ scopes: [cfg.scope], state: location.search });
+    if (r?.state && !location.search) return location.replace(location.pathname + r.state);  // restore ?lang&path&name
+  }
+  try { $('#who').textContent = (await api('/api/me')).email; } catch {}
+  render();
+})();
+</script>
+</body>
+</html>
