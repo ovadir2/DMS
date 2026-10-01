@@ -74,7 +74,10 @@ class Settings:
     sharepoint: str = "online"              # online | memory (try the page on a PC without SharePoint)
     ai_url: str = ""                        # AI Insights: Open WebUI, e.g. https://chat.ai.rh-global.com
     ai_token: str = ""                      # service account token / API key of Open WebUI
-    ai_model: str = ""                      # model id as listed in Open WebUI (empty: the first model offered)
+    ai_model: str = "org-chat"              # the model the RH AI chat page uses
+    ai_path: str = "/stream"                # the chat endpoint under DMS_AI_URL
+    ai_max_tokens: int = 4096
+    ai_max_chars: int = 60000               # document text sent with a question about a file
     ai_knowledge_ids: list[str] = field(default_factory=list)   # knowledge bases for general questions
     ai_max_file_mb: int = 25
     rag_url: str = ""                       # AI Insights RAG tools (n8n), e.g. https://aiportal.ai.rh-global.com/webhook
@@ -136,7 +139,10 @@ class Settings:
             file_service_seconds=int(e("DMS_FILE_SERVICE_SECONDS", "0")),
             ai_url=e("DMS_AI_URL", "https://chat.ai.rh-global.com"),
             ai_token=e("DMS_AI_TOKEN", ""),
-            ai_model=e("DMS_AI_MODEL", ""),
+            ai_model=e("DMS_AI_MODEL", "org-chat"),
+            ai_path=e("DMS_AI_PATH", "/stream"),
+            ai_max_tokens=int(e("DMS_AI_MAX_TOKENS", "4096")),
+            ai_max_chars=int(e("DMS_AI_MAX_CHARS", "60000")),
             ai_knowledge_ids=[k.strip() for k in e("DMS_AI_KNOWLEDGE_IDS", "").split(",") if k.strip()],
             ai_max_file_mb=int(e("DMS_AI_MAX_FILE_MB", "25")),
             rag_url=e("DMS_RAG_URL", "https://aiportal.ai.rh-global.com/webhook"),

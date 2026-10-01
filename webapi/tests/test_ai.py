@@ -1,76 +1,79 @@
-"""Open WebUI payloads, with the HTTP session mocked."""
+"""The RH AI chat client (https://chat.ai.rh-global.com/stream), with the HTTP session mocked."""
 from __future__ import annotations
 
 import json
+import zipfile
 
 from dms_api.ai import AiError, OpenWebUI
 from dms_api.config import Settings
 
 
 class Resp:
-    def __init__(self, body, status=200):
-        self.status_code, self._b = status, body
-        self.content = json.dumps(body).encode()
-        self.text = self.content.decode()
-
-    def json(self):
-        return self._b
+    def __init__(self, text, status=200):
+        self.status_code, self.text = status, text if isinstance(text, str) else json.dumps(text)
 
 
-class Session:
-    def __init__(self):
-        self.calls = []
-
-    def post(self, url, headers=None, json=None, files=None, timeout=None):
-        self.calls.append(("POST", url, json, files))
-        if url.endswith("/api/v1/files/"):
-            return Resp({"id": "f-1"})
-        return Resp({"choices": [{"message": {"content": "The quote is valid 30 days."}}],
-                     "sources": [{"source": {"name": "CRU 4 FCT Quote_Rev1.xlsx"}}]})
-
-    def get(self, url, headers=None, timeout=None):
-        self.calls.append(("GET", url, None, None))
-        return Resp({"status": "completed"})
-
-
-def test_ask_about_a_file_uploads_once(tmp_path):
-    f = tmp_path / "CRU 4 FCT Quote_Rev1.xlsx"
-    f.write_bytes(b"x")
-    s = Settings(ai_url="https://chat.ai.rh-global.com/", ai_token="t", ai_model="rh-rag", ai_knowledge_ids=["kb1"])
-    sess = Session()
-    ai = OpenWebUI(s, sess)
-    r = ai.ask("Validity?", lang="HE", file_path=str(f), context="Document: x")
-    assert r == {"answer": "The quote is valid 30 days.", "sources": ["CRU 4 FCT Quote_Rev1.xlsx"], "model": "rh-rag"}
-    up, status, chat = sess.calls
-    assert up[1] == "https://chat.ai.rh-global.com/api/v1/files/" and status[1].endswith("/f-1/process/status")
-    assert chat[1].endswith("/api/chat/completions") and chat[2]["files"] == [{"type": "file", "id": "f-1"}]
-    assert chat[2]["model"] == "rh-rag" and "בעברית" in chat[2]["messages"][0]["content"] and chat[2]["stream"] is False
-    ai.ask("Again?", file_path=str(f))
-    assert [c[1].rsplit("/", 2)[-1] for c in sess.calls[3:]] == ["completions"]       # cached, no second upload
-
-
-def test_general_question_uses_knowledge(tmp_path):
-    s = Settings(ai_url="https://chat.ai.rh-global.com", ai_token="t", ai_model="rh-rag", ai_knowledge_ids=["kb1", "kb2"])
-    sess = Session()
-    OpenWebUI(s, sess).ask("NDA policy?")
-    assert sess.calls[0][2]["files"] == [{"type": "collection", "id": "kb1"}, {"type": "collection", "id": "kb2"}]
-
-
-class ChatSession(Session):
+class ChatSession:
     def __init__(self, answers):
-        super().__init__()
-        self.answers = list(answers)
+        self.answers, self.calls = list(answers), []
 
-    def post(self, url, headers=None, json=None, files=None, timeout=None):
-        self.calls.append(("POST", url, json, files))
-        return Resp({"choices": [{"message": {"content": self.answers.pop(0)}}]})
+    def post(self, url, headers=None, json=None, timeout=None):
+        self.calls.append((url, headers, json))
+        a = self.answers.pop(0)
+        return a if isinstance(a, Resp) else Resp(a)
+
+
+S = dict(ai_url="https://chat.ai.rh-global.com")
+
+
+def test_request_is_the_chat_page_request():
+    sess = ChatSession([{"choices": [{"message": {"content": "Hello"}}]}])
+    r = OpenWebUI(Settings(**S), sess).ask("hi")
+    url, headers, body = sess.calls[0]
+    assert url == "https://chat.ai.rh-global.com/stream" and "Authorization" not in headers
+    assert body["model"] == "org-chat" and body["max_tokens"] == 4096 and body["messages"][-1] == {"role": "user", "content": "hi"}
+    assert r["answer"] == "Hello"
+
+
+def test_streamed_and_plain_answers():
+    sse = 'data: {"choices":[{"delta":{"content":"של"}}]}\n\ndata: {"choices":[{"delta":{"content":"ום"}}]}\n\ndata: [DONE]\n'
+    assert OpenWebUI.parse(sse) == "שלום"
+    assert OpenWebUI.parse('{"content":"a"}\n{"content":"b"}') == "ab"
+    assert OpenWebUI.parse("just text") == "just text"
+    assert OpenWebUI.parse('{"message":{"role":"assistant","content":"ok"}}') == "ok"
+
+
+def test_question_about_a_file_sends_its_text(tmp_path):
+    f = tmp_path / "QP-2.1.docx"
+    with zipfile.ZipFile(f, "w") as z:
+        z.writestr("word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                   '<w:body><w:p><w:r><w:t>הודעות ללקוחות</w:t></w:r></w:p><w:p><w:r><w:t>מוצרים רפואיים</w:t></w:r></w:p></w:body></w:document>')
+    sess = ChatSession(["סיכום"])
+    r = OpenWebUI(Settings(**S), sess).ask("סכם", lang="HE", file_path=str(f), context="Document: QP-2.1.docx")
+    system = sess.calls[0][2]["messages"][0]["content"]
+    assert "הודעות ללקוחות\nמוצרים רפואיים" in system and "Document: QP-2.1.docx" in system and r["answer"] == "סיכום"
+
+
+def test_refusal_and_unreadable_file(tmp_path):
+    sess = ChatSession([Resp("no", 401)])
+    try:
+        OpenWebUI(Settings(**S), sess).ask("hi")
+        raise AssertionError("expected AiError")
+    except AiError as e:
+        assert "DMS_AI_TOKEN" in str(e)
+    scan = tmp_path / "scan.png"
+    scan.write_bytes(b"\x89PNG")
+    try:
+        OpenWebUI(Settings(**S), ChatSession([])).ask("hi", file_path=str(scan))
+        raise AssertionError("expected AiError")
+    except AiError as e:
+        assert "no text" in str(e)
 
 
 def test_plan_and_rank_parse_wrapped_json():
-    s = Settings(ai_url="https://chat.ai.rh-global.com", ai_token="t", ai_model="rh-rag")
     sess = ChatSession(['Here is the plan:\n```json\n{"terms": ["FCT", "quote"], "customer": "Customer_A", "kind": "quotation"}\n```',
                         '[{"i": 1, "reason": "newest quote"}, {"i": 9, "reason": "out of range"}, {"i": 1, "reason": "dup"}, {"x": 0}]'])
-    ai = OpenWebUI(s, sess)
+    ai = OpenWebUI(Settings(**S), sess)
     plan = ai.plan_search("latest FCT quote for Customer_A", ["Customer_A"], [("quotation", "Quotation")])
     assert plan["terms"] == ["FCT", "quote"] and "Customer_A" in sess.calls[0][2]["messages"][0]["content"]
     cands = [{"relative": "a.xlsx", "modified": "2026-01-01"}, {"relative": "b.xlsx", "modified": "2026-09-01", "documentId": "DMS-1", "status": "x"}]
@@ -78,32 +81,18 @@ def test_plan_and_rank_parse_wrapped_json():
     assert "Hebrew" in sess.calls[1][2]["messages"][0]["content"]
 
 
-def test_model_defaults_to_the_first_offered():
-    class Models(Session):
-        def get(self, url, headers=None, timeout=None):
-            self.calls.append(("GET", url, None, None))
-            return Resp({"data": [{"id": "rh-rag"}, {"id": "other"}]})
-    http = Models()
-    ai = OpenWebUI(Settings(ai_url="https://chat.ai.rh-global.com", ai_token="t"), http)
-    assert ai.enabled
-    ai.ask("hello")
-    assert http.calls[0][1].endswith("/api/models") and http.calls[1][2]["model"] == "rh-rag"
-
-
-def test_no_token_sends_no_authorization_and_explains_a_refusal():
-    class Refuse(Session):
-        def post(self, url, headers=None, json=None, files=None, timeout=None):
-            self.calls.append(("POST", url, headers, None))
-            return Resp({"detail": "Not authenticated"}, 401)
-    http = Refuse()
-    ai = OpenWebUI(Settings(ai_url="https://chat.ai.rh-global.com", ai_model="m"), http)
-    assert ai.enabled
-    try:
-        ai.ask("hi")
-        raise AssertionError("expected AiError")
-    except AiError as e:
-        assert "DMS_AI_TOKEN" in str(e)
-    assert "Authorization" not in http.calls[0][2]
+def test_xlsx_and_pptx_text(tmp_path):
+    from dms_api import doc_text
+    x = tmp_path / "a.xlsx"
+    with zipfile.ZipFile(x, "w") as z:
+        z.writestr("xl/sharedStrings.xml", '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Price</t></si></sst>')
+        z.writestr("xl/worksheets/sheet1.xml", '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+                   '<row><c t="s"><v>0</v></c><c><v>120</v></c></row></sheetData></worksheet>')
+    assert "Price\t120" in doc_text.extract(str(x))
+    p = tmp_path / "a.pptx"
+    with zipfile.ZipFile(p, "w") as z:
+        z.writestr("ppt/slides/slide1.xml", '<p:sld xmlns:p="p" xmlns:a="a"><a:p><a:t>Kickoff</a:t></a:p></p:sld>')
+    assert "[Slide 1]\nKickoff" in doc_text.extract(str(p))
 
 
 def test_answer_in_the_language_of_the_question():
