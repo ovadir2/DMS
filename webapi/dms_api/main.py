@@ -39,6 +39,10 @@ class RenameRequest(BaseModel):
     newName: str
 
 
+class DocRenameRequest(BaseModel):
+    newName: str = Field(min_length=1, max_length=200)
+
+
 class DeleteRequest(BaseModel):
     path: str
 
@@ -1084,6 +1088,47 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             to, details = c["Archived"], f"Working document deleted{where}"
         sp().audit(document_id=doc_id, event=c["Cancelled"], from_status=c["Working"], to_status=to, actor=user.email, details=details)
         log(user, "delete-document", f"{doc_id}: {details}")
+        return with_key(sp().document(item_id))
+
+    @app.post("/api/documents/{item_id}/rename")
+    def rename_document(item_id: int, req: DocRenameRequest, user: User = Depends(current_user)):
+        """Rename the file of a document in Working (owner or super user). The register follows: working path,
+        title (when it was the file name) and draft revision (from a _RevNN in the new name)."""
+        from .file_service import to_root
+        c = s.choices
+        d = sp().document(item_id)
+        if (d.get("ownerEmail") or "").lower() != user.email and not is_admin(user):
+            raise HTTPException(403, "Only the document owner (or a DMS super user) can rename it")
+        if d.get("lifecycleStatus") != c["Working"]:
+            raise HTTPException(409, "Only a document in Working can be renamed (withdraw it first)")
+        file_back(d, c["Working"])                              # a copy left in Submitted comes back first
+        working = to_root(s.repository_root, d.get("workingUncPath"))
+        if not working or not os.path.isfile(working):
+            raise HTTPException(409, "The working file was not found on the file server")
+        if not (user.can(working, "write") and user.can(os.path.dirname(working), "write")):
+            raise HTTPException(403, "You do not have permission to rename this file")
+        old_base, ext = os.path.splitext(os.path.basename(working))
+        name = req.newName.strip()
+        if not os.path.splitext(name)[1]:
+            name += ext                                         # keep the file type
+        try:
+            path = files.rename_item(s.repository_root, working, name, 0)
+        except FileExistsError:
+            raise HTTPException(409, "A file with this name already exists in the folder") from None
+        except (PermissionError, ValueError) as e:
+            raise HTTPException(409, str(e)) from None
+        values = {"WorkingUncPath": path}
+        if (d.get("title") or "") == old_base:
+            values["Title"] = os.path.splitext(os.path.basename(path))[0]
+        rev = files.parse_revision(os.path.basename(path))[1]
+        if rev:
+            values["DraftRevision"] = f"{rev:02d}"
+        sp().update(item_id, values)
+        doc_id = d.get("documentId") or f"ID {item_id}"
+        details = f"Renamed: {os.path.basename(working)} -> {os.path.basename(path)}"
+        sp().audit(document_id=doc_id, event=c["StatusChanged"], from_status=c["Working"], to_status=c["Working"],
+                   actor=user.email, details=details)
+        log(user, "rename-document", f"{doc_id}: {details}")
         return with_key(sp().document(item_id))
 
     submit_doc = submit                                         # used where a parameter is called "submit"

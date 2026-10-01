@@ -259,7 +259,7 @@ $('#refresh').onclick = () => render();
 const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${esc(d ? (T[d.statusKey] || d.lifecycleStatus) : T.None)}</span>${d ? ` <span class="muted small">${esc(d.documentId)}</span>` : ''}`;
 function fileActions(f) {
   return (aiOn ? `<button type="button" class="link ai" data-ai="${esc(f.path)}">✦ AI</button>` : '') + `${f.officeUri ? `<a class="link" href="${esc(f.officeUri)}">${T.open}</a>` : ''}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cp="${esc(f.path)}">🔗 ${T.copyLink}</button>`
-    + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
+    + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-drn="${f.document.id}" data-name="${esc(f.name)}">${T.rename}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
         + (f.document.statusKey === 'Approved_ReadOnly' && samePath(f.path, f.document.currentUncPath) ? `<button type="button" class="link" data-rev="${f.document.id}">⟳ ${T.newRev}</button><button type="button" class="link" data-share="${f.document.id}">✉ ${T.share}</button>` : '')
                   : (f.managed ? '' : `<button type="button" class="link" data-st="${esc(f.path)}">${T.start}</button>`));
 }
@@ -292,6 +292,8 @@ function wire(v) {
     try { await api(`/api/documents/${b.dataset.sub}/submit`, { method:'POST' }); refreshApprovals(); render(); } catch (e) { b.disabled = false; alert(e.message); }
   });
   v.querySelectorAll('[data-cp]').forEach(a => a.onclick = async () => { await copyText(a.dataset.cp); a.textContent = T.copied; });
+  v.querySelectorAll('[data-drn]').forEach(b => b.onclick = () =>
+    simpleDialog(T.rename, T.newName, b.dataset.name, `/api/documents/${b.dataset.drn}/rename`, newName => ({ newName })));
   v.querySelectorAll('[data-ddel]').forEach(b => b.onclick = async () => {
     if (!confirm(T.delDocQ)) return;
     try { await api(`/api/documents/${b.dataset.ddel}/delete`, { method:'POST' }); render(); } catch (e) { alert(e.message); }
@@ -434,7 +436,7 @@ async function mine(v) {
         ${d.statusKey === 'Submitted' && d.pending && d.pending.length ? `<div class="small">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')} (${T.stage} ${d.stage})</div>` : ''}</td>
       <td class="hide-s muted small">${when(d.submittedUtc)}</td>
       <td class="hide-s small">${who(d.decision || d.lastEvent)}${d.decision && d.decision.details ? `<div class="muted">${esc(d.decision.details)}</div>` : ''}</td>
-      <td class="actions">${state.everyone ? `<div class="muted small">${esc(d.ownerName || d.ownerEmail || '')}</div>` : ''}${['Working', 'Rejected'].includes(d.statusKey) ? `<button type="button" class="link" data-sub="${d.id}">${T.submit}</button><button type="button" class="link" data-ddel="${d.id}" style="color:var(--err)">${T.del}</button>` : ''}
+      <td class="actions">${state.everyone ? `<div class="muted small">${esc(d.ownerName || d.ownerEmail || '')}</div>` : ''}${['Working', 'Rejected'].includes(d.statusKey) ? `<button type="button" class="link" data-sub="${d.id}">${T.submit}</button><button type="button" class="link" data-drn="${d.id}" data-name="${esc((d.workingUncPath || '').split(/[\\/]/).pop())}">${T.rename}</button><button type="button" class="link" data-ddel="${d.id}" style="color:var(--err)">${T.del}</button>` : ''}
         ${aiOn && (d.currentUncPath || d.workingUncPath) ? `<button type="button" class="link ai" data-ai="${esc(d.currentUncPath || d.workingUncPath)}">✦ AI</button>` : ''}
         ${d.currentUncPath ? `<button type="button" class="link" data-cp="${esc(d.currentUncPath)}">🔗 ${T.copy}</button>` : ''}
         ${d.workingUncPath ? `<button type="button" class="link" data-cp="${esc(d.workingUncPath)}">🔗 ${T.copyWorking}</button>` : ''}
