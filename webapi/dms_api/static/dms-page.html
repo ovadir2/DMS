@@ -66,6 +66,13 @@
   .bubble .src { margin-top:6px; font-size:12px; color:var(--muted); }
   .dr-in { display:flex; gap:8px; padding:12px 18px 16px; border-top:1px solid var(--line); align-items:flex-end; }
   .dr-in textarea { flex:1; font:inherit; border:1px solid var(--line); border-radius:8px; padding:8px 10px; resize:vertical; }
+  .dr-tabs { display:flex; gap:4px; padding:10px 18px 0; }
+  .dr-tabs button { flex:1; border:1px solid var(--line); background:#fff; border-radius:8px; padding:7px; font:inherit; cursor:pointer; color:var(--ink); }
+  .dr-tabs button.on { border-color:#6d3fc0; color:#6d3fc0; font-weight:600; background:#f5f1fc; }
+  .bubble.wide { max-width:100%; width:100%; }
+  .sugg { border:1px solid var(--line); border-radius:8px; padding:9px 11px; background:#fff; margin-top:8px; display:grid; gap:3px; }
+  .sg-n { font-weight:500; } .sg-r { color:#5b3aa0; } .sg-a button, .sg-a a { margin-inline-end:12px; }
+  .sugg-list { display:grid; gap:4px; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
   .chip { border:1px solid var(--line); background:#fff; border-radius:16px; padding:5px 12px; font:inherit; font-size:13px; cursor:pointer; color:var(--ink); }
   .chip.on { border-color:var(--btn); box-shadow:0 0 0 2px rgba(42,82,121,.15); }
@@ -128,6 +135,7 @@
 
 <aside id="ai-panel" class="drawer" aria-hidden="true">
   <div class="dr-h"><span id="ai-title"></span><button type="button" class="hbtn" id="ai-x" aria-label="close">✕</button></div>
+  <div class="dr-tabs"><button type="button" data-mode="find" id="m-find"></button><button type="button" data-mode="ask" id="m-ask"></button></div>
   <div class="dr-ctx"><span id="ai-ctx"></span><button type="button" class="link small" id="ai-clear"></button></div>
   <div class="dr-q" id="ai-quick"></div>
   <div class="dr-log" id="ai-log"></div>
@@ -147,7 +155,7 @@ const T = {
         upload:'Upload file', uploadTitle:'Save a file in this folder', chooseFile:'File from your computer', folder:'Folder', overwrite:'Replace a file with the same name',
         ok:'OK', cancel:'Cancel', saved:'Saved to', notReg:'Not registered', none:'Nothing here.', results:'Results', type:'Document type', area:'Area', mode:'Control mode',
         titleF:'Title', registerSubmit:'Register and submit', registerOnly:'Register only', registered:'Registered as', err:'Error', docId:'Document ID', path:'Location', copy:'Copy path', copied:'Copied',
-        newFolder:'New folder', company:'Company', aiInsights:'AI Insights', aiAbout:'About:', aiKnowledge:'RH company knowledge', aiAsk:'Ask', aiPlaceholder:'Ask about the document or the company knowledge…', aiClear:'Ask the company knowledge instead', aiThinking:'Thinking…', aiSources:'Sources', aiOnPrem:'Answers come from RH on-prem AI. Check important facts in the document.', qSummary:'Summarize this document', qReq:'List the key requirements', qRisk:'What are the risks and open issues?', qDates:'List dates, deadlines and validity', myWf:'My workflows', submitted:'Submitted', lastAction:'Last action', history:'History', by:'by', Rejected:'Rejected - back to you', waiting:'waiting', days:'days', location:'Location', choose:'Choose…', whatSaving:'What are you saving?', chooseKind:'Choose a document kind', chooseProject:'Choose a project', takeMe:'Take me there', noProjects:'This customer has no projects yet.', createMissing:'This folder does not exist yet. Create it?', rename:'Rename', del:'Delete', newName:'New name', folderName:'Folder name', confirmDel:'Move to the recycle folder?', recycled:'Moved to the recycle folder. IT can restore it.',
+        newFolder:'New folder', company:'Company', aiInsights:'AI Insights', findTab:'🔎 Find a file', askTab:'Ask', findPh:'Describe the file, e.g. the latest FCT quote for Customer_A', findCtx:'Searching only what you are allowed to see', goFolder:'Go to folder', askAbout:'Ask about it', found:'Suggestions', noneFound:'No matching files were found. Try other words.', smart:'✦ Smart', searchedIn:'Searched in', aiAbout:'About:', aiKnowledge:'RH company knowledge', aiAsk:'Ask', aiPlaceholder:'Ask about the document or the company knowledge…', aiClear:'Ask the company knowledge instead', aiThinking:'Thinking…', aiSources:'Sources', aiOnPrem:'Answers come from RH on-prem AI. Check important facts in the document.', qSummary:'Summarize this document', qReq:'List the key requirements', qRisk:'What are the risks and open issues?', qDates:'List dates, deadlines and validity', myWf:'My workflows', submitted:'Submitted', lastAction:'Last action', history:'History', by:'by', Rejected:'Rejected - back to you', waiting:'waiting', days:'days', location:'Location', choose:'Choose…', whatSaving:'What are you saving?', chooseKind:'Choose a document kind', chooseProject:'Choose a project', takeMe:'Take me there', noProjects:'This customer has no projects yet.', createMissing:'This folder does not exist yet. Create it?', rename:'Rename', del:'Delete', newName:'New name', folderName:'Folder name', confirmDel:'Move to the recycle folder?', recycled:'Moved to the recycle folder. IT can restore it.',
         Working:'Working', Submitted:'Submitted', Approved_ReadOnly:'Approved (read-only)', Other:'Other', None:'Not registered', other:'עברית' },
   HE: { welcome:'RH - מערכת ניהול מסמכים', search:'חיפוש', all:'הכל', customer:'לקוח', project:'פרויקט', document:'מזהה מסמך', file:'קובץ', description:'תיאור',
         go:'חיפוש', refresh:'רענון', lang:'עברית', customers:'לקוחות', myDocs:'המסמכים שלי', home:'לקוחות', noAccess:'אין לקוחות זמינים עבורך.',
@@ -155,7 +163,7 @@ const T = {
         upload:'העלאת קובץ', uploadTitle:'שמירת קובץ בתיקייה זו', chooseFile:'קובץ מהמחשב', folder:'תיקייה', overwrite:'החלפת קובץ קיים באותו שם',
         ok:'אישור', cancel:'ביטול', saved:'נשמר ב-', notReg:'לא רשום', none:'אין פריטים.', results:'תוצאות', type:'סוג מסמך', area:'תחום', mode:'מצב בקרה',
         titleF:'כותרת', registerSubmit:'רישום והגשה לאישור', registerOnly:'רישום בלבד', registered:'נרשם כ-', err:'שגיאה', docId:'מזהה מסמך', path:'מיקום', copy:'העתקת נתיב', copied:'הועתק',
-        newFolder:'תיקייה חדשה', company:'חברה', aiInsights:'AI Insights', aiAbout:'על:', aiKnowledge:'הידע הארגוני של RH', aiAsk:'שאל', aiPlaceholder:'שאלו על המסמך או על הידע הארגוני…', aiClear:'לשאול את הידע הארגוני במקום', aiThinking:'חושב…', aiSources:'מקורות', aiOnPrem:'התשובות מגיעות מה-AI הפנימי של RH. בדקו עובדות חשובות במסמך.', qSummary:'סכם את המסמך', qReq:'מהן הדרישות העיקריות?', qRisk:'מהם הסיכונים והנושאים הפתוחים?', qDates:'מהם התאריכים, המועדים והתוקף?', myWf:'תהליכי האישור שלי', submitted:'הוגש', lastAction:'פעולה אחרונה', history:'היסטוריה', by:'על ידי', Rejected:'נדחה - חזר אליך', waiting:'ממתין', days:'ימים', location:'מיקום', choose:'בחרו…', whatSaving:'מה שומרים?', chooseKind:'בחרו סוג מסמך', chooseProject:'בחרו פרויקט', takeMe:'קחו אותי לשם', noProjects:'ללקוח זה אין עדיין פרויקטים.', createMissing:'התיקייה עדיין לא קיימת. ליצור אותה?', rename:'שינוי שם', del:'מחיקה', newName:'שם חדש', folderName:'שם התיקייה', confirmDel:'להעביר לתיקיית המחזור?', recycled:'הועבר לתיקיית המחזור. מחלקת IT יכולה לשחזר.',
+        newFolder:'תיקייה חדשה', company:'חברה', aiInsights:'AI Insights', findTab:'🔎 חיפוש קובץ', askTab:'שאלה', findPh:'תארו את הקובץ, למשל הצעת המחיר האחרונה ל-FCT של Customer_A', findCtx:'החיפוש רק במה שמותר לך לראות', goFolder:'לתיקייה', askAbout:'שאל עליו', found:'הצעות', noneFound:'לא נמצאו קבצים מתאימים. נסו מילים אחרות.', smart:'✦ חכם', searchedIn:'חיפוש ב-', aiAbout:'על:', aiKnowledge:'הידע הארגוני של RH', aiAsk:'שאל', aiPlaceholder:'שאלו על המסמך או על הידע הארגוני…', aiClear:'לשאול את הידע הארגוני במקום', aiThinking:'חושב…', aiSources:'מקורות', aiOnPrem:'התשובות מגיעות מה-AI הפנימי של RH. בדקו עובדות חשובות במסמך.', qSummary:'סכם את המסמך', qReq:'מהן הדרישות העיקריות?', qRisk:'מהם הסיכונים והנושאים הפתוחים?', qDates:'מהם התאריכים, המועדים והתוקף?', myWf:'תהליכי האישור שלי', submitted:'הוגש', lastAction:'פעולה אחרונה', history:'היסטוריה', by:'על ידי', Rejected:'נדחה - חזר אליך', waiting:'ממתין', days:'ימים', location:'מיקום', choose:'בחרו…', whatSaving:'מה שומרים?', chooseKind:'בחרו סוג מסמך', chooseProject:'בחרו פרויקט', takeMe:'קחו אותי לשם', noProjects:'ללקוח זה אין עדיין פרויקטים.', createMissing:'התיקייה עדיין לא קיימת. ליצור אותה?', rename:'שינוי שם', del:'מחיקה', newName:'שם חדש', folderName:'שם התיקייה', confirmDel:'להעביר לתיקיית המחזור?', recycled:'הועבר לתיקיית המחזור. מחלקת IT יכולה לשחזר.',
         Working:'בעבודה', Submitted:'הוגש לאישור', Approved_ReadOnly:'מאושר - קריאה בלבד', Other:'אחר', None:'לא רשום', other:'English' } }[lang];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -185,7 +193,7 @@ async function api(path, opts = {}) {
 $('#t-welcome').textContent = T.welcome; $('#t-search').textContent = T.search; $('#t-refresh').textContent = T.refresh;
 $('#go').textContent = T.go; $('#q').placeholder = T.description; $('#lang-t').textContent = T.lang;
 $('#lang').onclick = () => { q.set('lang', lang === 'HE' ? 'EN' : 'HE'); location.search = q.toString(); };
-$('#scopes').innerHTML = ['all','customer','project','document','file'].map(k =>
+$('#scopes').innerHTML = ['all','customer','project','document','file','smart'].map(k =>
   `<label><input type="radio" name="scope" value="${k}" ${k === 'all' ? 'checked' : ''}>${T[k]}</label>`).join('');
 $('#scopes').onchange = e => state.scope = e.target.value;
 $('#menu').innerHTML = `<button data-m="customers">${T.customers}</button><button data-m="mine">${T.myWf}</button><button data-m="ai">${T.aiInsights}</button><button data-m="lang">${T.other}</button>`;
@@ -314,6 +322,7 @@ async function wireGuide(v, ctx) {
 }
 async function search(v) {
   const text = $('#q').value.trim();
+  if (state.scope === 'smart') return smartResults(v, text);
   const r = await api(`/api/search?q=${encodeURIComponent(text)}&scope=${state.scope}`);
   v.innerHTML = `<h2>${T.results} (${r.length})</h2><table><tr><th>${T.name}</th><th>${T.status}</th><th class="hide-s">${T.path}</th><th></th></tr>
     ${r.map(x => x.kind === 'customer' || x.kind === 'folder'
@@ -350,13 +359,52 @@ const EV = { 'נוצר':'Created', 'הוגש':'Submitted', 'אושר':'Approved'
 const evName = e => lang === 'HE' ? e : (EV[e] || e);
 
 // ---------------------------------------------------------------- AI Insights (RH on-prem RAG LLM)
-let aiOn = false, aiFile = null;
+let aiOn = false, aiFile = null, aiMode = 'find';
+async function findFiles(question) { return api('/api/ai/find', { method:'POST', body:JSON.stringify({ question, lang }) }); }
+function suggestionHtml(x) {
+  const loc = x.relative.split(/[\\/]/).slice(0, -1).join(' › ');
+  return `<div class="sugg"><div class="sg-n">${esc(x.name)} ${x.document ? statusTag(x.document) : ''}</div>
+    <div class="muted small ltr">${esc(loc)}</div>${x.reason ? `<div class="small sg-r">${esc(x.reason)}</div>` : ''}
+    <div class="small sg-a">${x.officeUri ? `<a class="link" href="${esc(x.officeUri)}">${T.open}</a>` : ''}
+      <button type="button" class="link" data-f="${esc(x.folder)}">${T.goFolder}</button>
+      <button type="button" class="link" data-dl="${esc(x.path)}">${T.download}</button>
+      ${aiOn ? `<button type="button" class="link ai" data-ai="${esc(x.path)}">✦ ${T.askAbout}</button>` : ''}</div></div>`;
+}
+const planText = p => [p.customer, p.project].filter(Boolean).join(lang === 'HE' ? ' ‹ ' : ' › ');
+async function smartResults(v, text) {
+  const r = await findFiles(text);
+  v.innerHTML = `<h2>${T.found} (${r.suggestions.length})</h2>${planText(r.plan) ? `<p class="muted small">${T.searchedIn} ${esc(planText(r.plan))}</p>` : ''}
+    ${r.suggestions.length ? `<div class="sugg-list">${r.suggestions.map(suggestionHtml).join('')}</div>` : `<p class="muted">${T.noneFound}</p>`}`;
+}
+function setMode(m) {
+  aiMode = m;
+  $('#m-find').classList.toggle('on', m === 'find'); $('#m-ask').classList.toggle('on', m === 'ask');
+  $('#ai-q').placeholder = m === 'find' ? T.findPh : T.aiPlaceholder;
+  $('#ai-send').textContent = m === 'find' ? T.go : T.aiAsk;
+  $('#ai-quick').hidden = m === 'find';
+  if (m === 'find') { $('#ai-ctx').innerHTML = esc(T.findCtx); $('#ai-clear').hidden = true; }
+  else { $('#ai-ctx').innerHTML = `${T.aiAbout} <b>${esc(aiFile ? aiFile.split(/[\\/]/).pop() : T.aiKnowledge)}</b>`; $('#ai-clear').hidden = !aiFile; }
+}
+async function findInPanel(question) {
+  const log = $('#ai-log');
+  log.insertAdjacentHTML('beforeend', `<div class="bubble me">🔎 ${esc(question)}</div><div class="bubble bot pending wide">${T.aiThinking}</div>`);
+  const pending = log.querySelector('.pending');
+  try {
+    const r = await findFiles(question);
+    pending.innerHTML = (planText(r.plan) ? `<div class="muted small">${T.searchedIn} ${esc(planText(r.plan))}</div>` : '')
+      + (r.suggestions.length ? r.suggestions.map(suggestionHtml).join('') : esc(T.noneFound));
+    wire(pending);
+  } catch (e) { pending.innerHTML = `<span style="color:var(--err)">${T.err}: ${esc(e.message)}</span>`; }
+  pending.classList.remove('pending'); log.scrollTop = log.scrollHeight;
+}
 function openAI(path) {
   aiFile = path || null;
   $('#ai-ctx').innerHTML = `${T.aiAbout} <b>${esc(aiFile ? aiFile.split(/[\\/]/).pop() : T.aiKnowledge)}</b>`;
   $('#ai-clear').hidden = !aiFile;
   $('#ai-quick').innerHTML = (aiFile ? ['qSummary', 'qReq', 'qRisk', 'qDates'] : []).map(k => `<button type="button" class="chip" data-q="${k}">${T[k]}</button>`).join('');
   $('#ai-quick').querySelectorAll('[data-q]').forEach(b => b.onclick = () => askAI(T[b.dataset.q]));
+  setMode(aiFile ? 'ask' : (aiOn ? aiMode : 'find'));
+  $('#m-ask').hidden = !aiOn;
   $('#ai-panel').classList.add('open'); $('#ai-panel').setAttribute('aria-hidden', 'false'); $('#ai-q').focus();
 }
 async function askAI(question) {
@@ -375,7 +423,9 @@ $('#ai-q').placeholder = T.aiPlaceholder; $('#ai-clear').textContent = T.aiClear
 $('#ai-b').onclick = () => openAI(null);
 $('#ai-x').onclick = () => { $('#ai-panel').classList.remove('open'); $('#ai-panel').setAttribute('aria-hidden', 'true'); };
 $('#ai-clear').onclick = () => openAI(null);
-$('#ai-form').onsubmit = e => { e.preventDefault(); const q = $('#ai-q').value.trim(); if (q.length > 1) { $('#ai-q').value = ''; askAI(q); } };
+$('#ai-form').onsubmit = e => { e.preventDefault(); const q = $('#ai-q').value.trim(); if (q.length > 1) { $('#ai-q').value = ''; aiMode === 'find' ? findInPanel(q) : askAI(q); } };
+$('#m-find').textContent = T.findTab; $('#m-ask').textContent = T.askTab;
+$('#m-find').onclick = () => setMode('find'); $('#m-ask').onclick = () => { setMode('ask'); };
 $('#ai-q').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#ai-form').requestSubmit(); } };
 
 // ---------------------------------------------------------------- dialogs
@@ -456,7 +506,8 @@ async function download(path) {
   }
   try { const me = await api('/api/me'); $('#who').textContent = me.name || me.email; } catch (e) { $('#who').textContent = ''; }
   try { aiOn = (await api('/api/ai/status')).enabled; } catch { aiOn = false; }
-  $('#ai-b').style.display = aiOn ? '' : 'none';
+  $('#ai-b').style.display = '';
+  if (!aiOn) $('#ai-t').textContent = T.findTab.replace('🔎 ', '');
   $('#ai-log').innerHTML = `<div class="muted small">${T.aiOnPrem}</div>`;
   await render();
   if (q.get('path')) startWorkflow(q.get('path'), q.get('name'));   // opened from the Explorer right-click

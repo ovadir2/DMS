@@ -54,3 +54,25 @@ def test_general_question_uses_knowledge(tmp_path):
     sess = Session()
     OpenWebUI(s, sess).ask("NDA policy?")
     assert sess.calls[0][2]["files"] == [{"type": "collection", "id": "kb1"}, {"type": "collection", "id": "kb2"}]
+
+
+class ChatSession(Session):
+    def __init__(self, answers):
+        super().__init__()
+        self.answers = list(answers)
+
+    def post(self, url, headers=None, json=None, files=None, timeout=None):
+        self.calls.append(("POST", url, json, files))
+        return Resp({"choices": [{"message": {"content": self.answers.pop(0)}}]})
+
+
+def test_plan_and_rank_parse_wrapped_json():
+    s = Settings(ai_url="https://chat.ai.rh-global.com", ai_token="t", ai_model="rh-rag")
+    sess = ChatSession(['Here is the plan:\n```json\n{"terms": ["FCT", "quote"], "customer": "Customer_A", "kind": "quotation"}\n```',
+                        '[{"i": 1, "reason": "newest quote"}, {"i": 9, "reason": "out of range"}, {"i": 1, "reason": "dup"}, {"x": 0}]'])
+    ai = OpenWebUI(s, sess)
+    plan = ai.plan_search("latest FCT quote for Customer_A", ["Customer_A"], [("quotation", "Quotation")])
+    assert plan["terms"] == ["FCT", "quote"] and "Customer_A" in sess.calls[0][2]["messages"][0]["content"]
+    cands = [{"relative": "a.xlsx", "modified": "2026-01-01"}, {"relative": "b.xlsx", "modified": "2026-09-01", "documentId": "DMS-1", "status": "x"}]
+    assert ai.rank("q", cands, "HE") == [{"i": 1, "reason": "newest quote"}]
+    assert "Hebrew" in sess.calls[1][2]["messages"][0]["content"]
