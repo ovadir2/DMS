@@ -113,7 +113,47 @@
   .dlg-b input[type=text], .dlg-b select { font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:6px; color:var(--ink); }
   .ltr { direction:ltr; unicode-bidi:plaintext; }
   .icon { flex:none; }
-  @media (max-width:700px) { header { padding:0 14px; gap:10px } .welcome { font-size:15px } .searchrow { flex-direction:column; align-items:stretch } .pillbtn { width:100% } td.hide-s, th.hide-s { display:none } }
+  /* ---------------- adaptive layout: desktop, tablet, phone */
+  html, body { overflow-x:clip; }
+  @media (max-width:1100px) {
+    header { gap:12px; padding:0 18px; }
+    #wf-t, #lang-t { display:none; }                      /* icons only; the title stays in the tooltip */
+    .hbtn { white-space:nowrap; } .brand { min-width:0; } .welcome { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .card { padding:18px; }
+    td.actions { white-space:normal; } td.actions a, td.actions button.link { display:inline-block; margin-block:2px; }
+  }
+  @media (max-width:760px) {
+    header { height:auto; min-height:58px; flex-wrap:wrap; padding:6px 10px; gap:4px; }
+    .brand { gap:10px; min-width:0; flex:1 1 auto; } .sep { display:none; }
+    .welcome { font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .spacer { display:none; }
+    #ap-t, #wf-t, #ai-t, #lang-t, #who { display:none; }
+    .hbtn { padding:8px; }
+    .pg-banner { padding:8px 12px; font-size:13px; }
+    .band { padding:12px 8px 24px; min-height:auto; }
+    .card { padding:14px 12px; margin-bottom:12px; }
+    .searchrow { flex-direction:column; align-items:stretch; gap:10px; } .searchrow .pillbtn { width:100%; }
+    .toolbar { flex-wrap:wrap; gap:8px; } .toolbar .spacer { display:none; }
+    .toolbar .pillbtn { flex:1 1 auto; padding:0 12px; }
+    .grid { grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:8px; }
+    .tile { padding:11px; }
+    .levels select, .guide select { flex:1 1 140px; max-width:100%; min-width:0; }
+    .lsep { display:none; }
+    td.hide-s, th.hide-s { display:none; }
+    /* tables become one card per row */
+    table, tbody, tr, td { display:block; width:100%; }
+    tr:has(> th) { display:none; }
+    tr[hidden] { display:none; }
+    tr { border-bottom:1px solid var(--line); padding:8px 2px; }
+    td { border:none; padding:2px 0; }
+    td.actions { white-space:normal; display:flex; flex-wrap:wrap; gap:6px 14px; padding-top:6px; }
+    td.actions a, td.actions button.link { margin:0; }
+    .flform .row { flex-direction:column; align-items:stretch; }
+    .dlg-f { flex-wrap:wrap; } .dlg-f .pillbtn { flex:1 1 auto; }
+    .dr-tabs { padding:8px 10px 0; } .dr-tabs button { padding:6px 4px; font-size:13px; }
+    .dr-h, .dr-ctx, .dr-log, .dr-in { padding-inline:12px; }
+    .rag-frame { height:55vh; }
+  }
 </style>
 </head>
 <body>
@@ -204,14 +244,14 @@ async function api(path, opts = {}) {
 
 // ---------------------------------------------------------------- chrome
 $('#t-welcome').textContent = T.welcome; $('#t-search').textContent = T.search; $('#t-refresh').textContent = T.refresh;
-$('#go').textContent = T.go; $('#q').placeholder = T.searchPh; $('#lang-t').textContent = T.lang;
+$('#go').textContent = T.go; $('#q').placeholder = T.searchPh; $('#lang-t').textContent = T.lang; $('#lang').title = T.lang;
 $('#lang').onclick = () => { q.set('lang', lang === 'HE' ? 'EN' : 'HE'); location.search = q.toString(); };
 $('#menu').innerHTML = `<button data-m="customers">${T.customers}</button><button data-m="mine">${T.myWf}</button><button data-m="pf">🧭 ${T.pathFinder}</button><button data-m="ai">${T.aiInsights}</button><button data-m="lang">${T.other}</button>`;
 $('#menu-b').onclick = e => { e.stopPropagation(); $('#menu').classList.toggle('open'); };
 document.onclick = () => $('#menu').classList.remove('open');
 $('#menu').onclick = e => { const m = e.target.dataset.m; if (m === 'lang') return $('#lang').click(); if (m === 'ai') return openAI(null); if (m === 'pf') return pathFinder(state.view === 'browse' ? state.folder : null); if (m === 'fl') { state.flTarget = state.view === 'browse' ? state.folder : state.flTarget; state.view = 'firstLoad'; return render(); } if (m) { state.view = m; render(); } };
-$('#ap-t').textContent = T.approvals; $('#ap-b').onclick = () => { state.view = 'approvalsView'; render(); };
-$('#wf-t').textContent = T.myWf; $('#wf-b').onclick = () => { state.view = 'mine'; render(); };
+$('#ap-t').textContent = T.approvals; $('#ap-b').title = T.approvals; $('#ap-b').onclick = () => { state.view = 'approvalsView'; render(); };
+$('#wf-t').textContent = T.myWf; $('#wf-b').title = T.myWf; $('#wf-b').onclick = () => { state.view = 'mine'; render(); };
 $('#go').onclick = () => { if ($('#q').value.trim().length >= 2) { state.view = 'search'; render(); } };
 $('#q').onkeydown = e => { if (e.key === 'Enter') $('#go').click(); };
 $('#refresh').onclick = () => render();
@@ -610,7 +650,7 @@ async function askAI(question) {
   }
   pending.classList.remove('pending'); log.scrollTop = log.scrollHeight;
 }
-$('#ai-t').textContent = T.aiInsights; $('#ai-title').textContent = '✦ ' + T.aiInsights; $('#ai-send').textContent = T.aiAsk;
+$('#ai-t').textContent = T.aiInsights; $('#ai-b').title = T.aiInsights; $('#ai-title').textContent = '✦ ' + T.aiInsights; $('#ai-send').textContent = T.aiAsk;
 $('#ai-q').placeholder = T.aiPlaceholder; $('#ai-clear').textContent = T.aiClear; $('#ai-chat').textContent = T.aiChat + ' ↗';
 $('#ai-b').onclick = () => openAI(null);
 $('#ai-x').onclick = () => { $('#ai-panel').classList.remove('open'); $('#ai-panel').setAttribute('aria-hidden', 'true'); };
