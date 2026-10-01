@@ -120,9 +120,23 @@ class SharePoint:
         return list(r.get("Choices") or [])
 
     # ------------------------------------------------------------------ audit
+    def audit_events(self, refresh: bool = False) -> list[dict]:
+        """Control Audit rows, newest first (pilot: the latest 5000)."""
+        if not refresh and getattr(self, "_audit_cache", None) and self._audit_cache[1] > time.time():
+            return self._audit_cache[0]
+        url = (f"{self._list(AUDIT)}/items?$select=Id,CorrelationId,AuditEventType,FromStatus,ToStatus,ActorEmail,EventUtc,"
+               f"EventSource,EventDetails&$orderby=EventUtc desc&$top=5000")
+        rows = self._call("GET", url).get("value", [])
+        events = [{"documentId": r.get("CorrelationId"), "event": r.get("AuditEventType"), "fromStatus": r.get("FromStatus"),
+                   "toStatus": r.get("ToStatus"), "actor": (r.get("ActorEmail") or "").lower(), "utc": r.get("EventUtc"),
+                   "source": r.get("EventSource"), "details": r.get("EventDetails")} for r in rows]
+        self._audit_cache = (events, time.time() + self.s.register_cache_seconds)
+        return events
+
     def audit(self, *, document_id: str, event: str, from_status: str, to_status: str, actor: str, details: str) -> None:
         self._call("POST", f"{self._list(AUDIT)}/items", json={
             "Title": f"{event} {document_id}", "CorrelationId": document_id, "AuditEventType": event,
             "FromStatus": from_status, "ToStatus": to_status, "ActorEmail": actor,
             "EventUtc": datetime.now(timezone.utc).isoformat(), "EventSource": self.s.choices["Manual"],
             "EventDetails": details})
+        self._audit_cache = None

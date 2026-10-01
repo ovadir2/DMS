@@ -31,7 +31,9 @@ So the NTFS permissions on the file server (the `DL_FS_*` groups, docs/02 §3.2)
 | Delete | `POST /api/items/delete` | Needs write permission. Moves the item to `04_Workflow_System\Recycle\<date>\<user>\...` so IT can restore it. Not for controlled documents |
 | Open (Excel/Word from the server), Download | `GET /api/files/download` | Read permission |
 | Start workflow (register and submit) | `POST /api/documents` | As before |
-| My documents (menu), Submit | `GET /api/documents?mine=true`, `POST /api/documents/{id}/submit` | Owner only |
+| **My workflows** (header): every document the user owns or registered/submitted, with counts per status (Working, Submitted, Approved, Rejected - back to you), days waiting, the last decision with the approver's comment, and the full history | `GET /api/my-workflows` | The user's own workflows only. Built from the Document Register and Control Audit |
+| Submit (or resubmit after a rejection) | `POST /api/documents/{id}/submit` | Owner only |
+| **AI Insights** (header, or ✦ AI on a file): ask about a document (summary, key requirements, risks, dates) or the company knowledge | `GET /api/ai/status`, `POST /api/ai/ask` | See below |
 
 Protected:
 - The company structure (`$Root`, `02_Customers`, each customer folder) cannot be renamed or deleted. The depth is set with `DMS_PROTECTED_DEPTH`.
@@ -39,6 +41,19 @@ Protected:
 - A registered file, or a folder that holds one, cannot be renamed or deleted.
 
 Every action is written to the service log, and registration and submission also to Control Audit. The full API is at `/docs`.
+
+## AI Insights (RH on-prem RAG LLM)
+
+AI Insights connects to RH's on-prem LLM, the Open WebUI at `https://chat.ai.rh-global.com`, through its API, with a service token (`DMS_AI_*` in `.env`). Without these settings, AI Insights stays hidden.
+
+- **About a file:** the service checks that the user may read the file (AD), uploads it to Open WebUI (once per version), and asks the question with the file attached. The DMS record (ID, type, status, revision, owner) is added as context.
+- **Company knowledge:** without a file, the question goes to the knowledge bases in `DMS_AI_KNOWLEDGE_IDS` (RAG), and the answer lists its sources.
+- Answers are in the page language (English or Hebrew). Documents go only to the on-prem LLM, and every question is written to the service log.
+
+Setup:
+1. In Open WebUI, create a service user for the DMS and get its token (Settings > Account; enable API keys in Admin > Settings if needed).
+2. Pick the model id (`GET /api/models`) and, optionally, the knowledge base ids (Workspace > Knowledge).
+3. The DMS server must reach `chat.ai.rh-global.com` over HTTPS.
 
 ## Install on a Windows server (IIS)
 

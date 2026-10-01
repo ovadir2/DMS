@@ -10,12 +10,14 @@ import logging
 import os
 from pathlib import Path
 
+import requests
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from . import blueprint, files
+from .ai import AiError, OpenWebUI
 from .auth import current_user
 from .config import WORKFLOW_FOLDERS, Settings
 from .security import User
@@ -49,13 +51,20 @@ class RegisterRequest(BaseModel):
     submit: bool = Field(False, description="Also submit it for approval")
 
 
-def create_app(settings: Settings | None = None, sharepoint: SharePoint | None = None) -> FastAPI:
+class AskRequest(BaseModel):
+    question: str = Field(min_length=2, max_length=4000)
+    path: str | None = Field(None, description="A repository file to ask about; without it the knowledge bases are used")
+    lang: str = "EN"
+
+
+def create_app(settings: Settings | None = None, sharepoint: SharePoint | None = None, ai: OpenWebUI | None = None) -> FastAPI:
     s = settings or Settings.from_env()
     if not logging.getLogger().handlers:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     app = FastAPI(title="RH DMS Web API", version="1.1")
     app.state.settings = s
     app.state.sp = sharepoint or SharePoint(s)
+    app.state.ai = ai or OpenWebUI(s)
     if s.allowed_origins:
         app.add_middleware(CORSMiddleware, allow_origins=s.allowed_origins, allow_credentials=True,
                            allow_methods=["*"], allow_headers=["*"])
@@ -375,6 +384,62 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         log(user, "delete", f"{full} -> {moved}")
         return {"deleted": full, "recycledTo": moved}
 
+    @app.get("/api/my-workflows")
+    def my_workflows(user: User = Depends(current_user)):
+        """Every document the user owns or registered/submitted, with its workflow status, the last
+        decision and the full history from Control Audit."""
+        c = s.choices
+        by_doc: dict[str, list[dict]] = {}
+        for e in sp().audit_events():
+            by_doc.setdefault(e["documentId"] or "", []).append(e)
+        items = []
+        for d in sp().documents():
+            events = by_doc.get(d.get("documentId") or "", [])          # newest first
+            asked = any(e["actor"] == user.email and e["event"] in (c["Created"], c["SubmittedEvent"]) for e in events)
+            if (d.get("ownerEmail") or "").lower() != user.email and not asked:
+                continue
+            doc = with_key(d)
+            decision = next((e for e in events if e["event"] in (c["ApprovedEvent"], c["RejectedEvent"])), None)
+            submitted = next((e for e in events if e["event"] == c["SubmittedEvent"]), None)
+            if doc["statusKey"] == "Working" and decision and decision["event"] == c["RejectedEvent"]:
+                doc["statusKey"] = "Rejected"                           # returned to the owner after a rejection
+            doc.update(submittedUtc=submitted["utc"] if submitted else None, decision=decision,
+                       lastEvent=events[0] if events else None, history=list(reversed(events)))
+            items.append(doc)
+        items.sort(key=lambda x: (x["lastEvent"] or {}).get("utc") or x.get("modified") or "", reverse=True)
+        summary = {k: sum(1 for i in items if i["statusKey"] == k) for k in ("Working", "Submitted", "Approved_ReadOnly", "Rejected")}
+        return {"summary": summary, "items": items}
+
+    @app.get("/api/ai/status")
+    def ai_status(_: User = Depends(current_user)):
+        return {"enabled": app.state.ai.enabled, "model": s.ai_model, "knowledge": bool(s.ai_knowledge_ids)}
+
+    @app.post("/api/ai/ask")
+    def ai_ask(req: AskRequest, user: User = Depends(current_user)):
+        """AI Insights: ask about one file (after the AD read check) or the company knowledge bases."""
+        ai: OpenWebUI = app.state.ai
+        if not ai.enabled:
+            raise HTTPException(503, "AI Insights is not configured (DMS_AI_URL, DMS_AI_TOKEN, DMS_AI_MODEL)")
+        path, context = None, ""
+        if req.path:
+            path = files.resolve(s.repository_root, req.path)
+            if not os.path.isfile(path):
+                raise HTTPException(404, "File not found")
+            if not user.can(path):
+                raise HTTPException(403, "You do not have access to this file")
+            d = find_registered(path, register_index())
+            context = f"Document: {os.path.basename(path)}" + (
+                f". DMS record {d.get('documentId')}, type {d.get('documentType')}, status {d.get('lifecycleStatus')},"
+                f" revision {d.get('currentRevision') or '-'}, owner {d.get('ownerName') or d.get('ownerEmail')}" if d else ". Not registered in the DMS")
+        try:
+            result = ai.ask(req.question, lang="HE" if req.lang.upper() == "HE" else "EN", file_path=path, context=context)
+        except AiError as e:
+            raise HTTPException(502, str(e)) from None
+        except requests.RequestException as e:
+            raise HTTPException(502, f"The AI service did not answer: {type(e).__name__}") from None
+        log(user, "ai-ask", f"{path or 'knowledge'}: {req.question[:120]!r}")
+        return result
+
     @app.get("/api/documents")
     def documents(mine: bool = False, status: str | None = Query(None, description="Working | Submitted | Approved_ReadOnly"),
                   user: User = Depends(current_user)):
@@ -411,7 +476,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                    document_area=req.documentArea, owner_email=user.email,
                                    control_mode=req.controlMode, document_id=req.documentId)
         sp().audit(document_id=doc["documentId"], event=s.choices["Created"], from_status="",
-                   to_status=s.choices["Working"], actor=user.email, details=f"Registered from the DMS page: {path}")
+                   to_status=s.choices["Working"], actor=user.email,
+                   details=f"Registered from the DMS page: {os.path.relpath(path, s.repository_root)}")
         if req.submit:
             return submit(doc["id"], user)
         return with_key(doc)

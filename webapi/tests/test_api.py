@@ -41,7 +41,11 @@ class FakeSharePoint:
                 "ControlMode": ["תהליך אישור רשות", "תהליך אישור חובה"]}[field]
 
     def audit(self, **kw):
-        self.audits.append(kw)
+        self.audits.append({**kw, "utc": f"2026-10-01T10:{len(self.audits):02d}:00Z"})
+
+    def audit_events(self, refresh=False):
+        return [{"documentId": a["document_id"], "event": a["event"], "fromStatus": a["from_status"], "toStatus": a["to_status"],
+                 "actor": a["actor"], "utc": a["utc"], "source": "ידני", "details": a["details"]} for a in reversed(self.audits)]
 
 
 @pytest.fixture
@@ -317,3 +321,55 @@ def test_levels_cascade(env, limited):
     assert len(lv) == 4                                                       # Current_ReadOnly is not offered
     nxt = c.get("/api/levels", params={"path": str(q.parent)}).json()
     assert nxt[-1]["selected"] is None and [o["name"] for o in nxt[-1]["options"]] == ["Quotations"]
+
+
+def test_my_workflows(env):
+    c, sp, q = env
+    a = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    (q / "B.docx").write_text("x")
+    b = c.post("/api/documents", json={"path": str(q / "B.docx"), "documentType": "נוהל", "documentArea": "מסחרי", "submit": True}).json()
+    (q / "C.docx").write_text("x")
+    c.post("/api/documents", json={"path": str(q / "C.docx"), "documentType": "נוהל", "documentArea": "מסחרי"})
+    # the flow: A approved, B rejected (back to Working)
+    sp.items[a["id"]]["lifecycleStatus"] = "מאושר - קריאה בלבד"
+    sp.audit(document_id=a["documentId"], event="אושר", from_status="הוגש לאישור", to_status="מאושר - קריאה בלבד", actor="boss@rh.co.il", details="ok")
+    sp.items[b["id"]]["lifecycleStatus"] = "בעבודה"
+    sp.audit(document_id=b["documentId"], event="נדחה", from_status="הוגש לאישור", to_status="בעבודה", actor="boss@rh.co.il", details="fix p.3")
+    # someone else's document is not listed
+    sp.items[99] = {**sp.items[a["id"]], "id": 99, "documentId": "DMS-00099", "ownerEmail": "other@rh.co.il"}
+    r = c.get("/api/my-workflows").json()
+    assert r["summary"] == {"Working": 1, "Submitted": 0, "Approved_ReadOnly": 1, "Rejected": 1}
+    by = {i["documentId"]: i for i in r["items"]}
+    assert set(by) == {"DMS-00001", "DMS-00002", "DMS-00003"}
+    assert by["DMS-00002"]["statusKey"] == "Rejected" and by["DMS-00002"]["decision"]["details"] == "fix p.3"
+    assert by["DMS-00001"]["decision"]["actor"] == "boss@rh.co.il" and by["DMS-00001"]["submittedUtc"]
+    assert [e["event"] for e in by["DMS-00001"]["history"]] == ["נוצר", "הוגש", "אושר"]
+
+
+class FakeAI:
+    enabled = True
+
+    def __init__(self):
+        self.calls = []
+
+    def ask(self, question, **kw):
+        self.calls.append((question, kw))
+        return {"answer": "summary", "sources": ["x.pdf"], "model": "m"}
+
+
+def test_ai_insights(env, limited):
+    c, sp, q = env
+    ai = FakeAI()
+    c.app.state.ai = ai
+    r = c.post("/api/ai/ask", json={"question": "Summarize", "path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "lang": "HE"})
+    assert r.status_code == 200 and r.json()["answer"] == "summary"
+    q_, kw = ai.calls[-1]
+    assert kw["file_path"].endswith("CRU 4 FCT Quote_Rev1.xlsx") and kw["lang"] == "HE" and "Not registered" in kw["context"]
+    assert c.post("/api/ai/ask", json={"question": "What is our NDA policy?"}).json()["sources"] == ["x.pdf"]
+    assert ai.calls[-1][1]["file_path"] is None
+    b = q.parents[2] / "Customer_B" / "secret.pdf"
+    b.write_text("x")
+    assert c.post("/api/ai/ask", json={"question": "Summarize", "path": str(b)}).status_code == 403
+    c.app.state.ai = type("Off", (), {"enabled": False})()
+    assert c.post("/api/ai/ask", json={"question": "hi"}).status_code == 503
