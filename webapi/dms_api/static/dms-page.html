@@ -3,166 +3,304 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RH DMS</title>
+<title>RH - Documents Management System</title>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#5d6675; --line:#dfe3ea; --accent:#0b5cad; --ok:#1f7a3d; --warn:#9a6700; --err:#b42318; }
-  * { box-sizing: border-box; }
-  body { margin:0; font:14px/1.45 "Segoe UI", Arial, sans-serif; background:var(--bg); color:var(--ink); }
-  header { background:var(--accent); color:#fff; padding:12px 16px; display:flex; gap:12px; align-items:center; }
-  header h1 { font-size:18px; margin:0; flex:1; }
-  header a { color:#fff; }
-  nav { display:flex; gap:4px; padding:8px 16px 0; flex-wrap:wrap; }
-  nav button { border:1px solid var(--line); border-bottom:none; background:#e9edf3; padding:8px 14px; cursor:pointer; border-radius:6px 6px 0 0; font:inherit; }
-  nav button.on { background:var(--card); font-weight:600; }
-  main { background:var(--card); margin:0 16px 16px; border:1px solid var(--line); padding:16px; border-radius:0 6px 6px 6px; min-height:300px; }
+  :root { --navy:#1f4a72; --btn:#2a5279; --teal:#3db7b3; --ink:#1d2733; --muted:#6b7684; --line:#d7dde4; --bg:#ffffff; --band:#eef4fa;
+          --ok:#1f7a3d; --okbg:#e3f4e8; --warn:#8a5a00; --warnbg:#fff3d6; --info:#1f5fa8; --infobg:#e4eefb; --err:#b42318; --errbg:#fde8e6; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 Roboto, "Segoe UI", Arial, sans-serif; color:var(--ink); background:var(--bg); }
+  header { height:76px; display:flex; align-items:center; gap:20px; padding:0 28px; background:#fff; box-shadow:0 2px 10px rgba(31,74,114,.12); position:relative; z-index:2; }
+  .brand { display:flex; align-items:center; gap:22px; }
+  .sep { width:1px; height:26px; background:#9fb0c2; }
+  .welcome { font-weight:700; font-size:19px; color:var(--navy); letter-spacing:.2px; }
+  .spacer { flex:1; }
+  .hbtn { display:flex; align-items:center; gap:6px; color:var(--navy); background:none; border:none; font:inherit; cursor:pointer; padding:6px; }
+  .hbtn.muted { color:var(--muted); cursor:default; }
+  .menu { position:relative; }
+  .menu-list { position:absolute; inset-inline-end:0; top:36px; background:#fff; border:1px solid var(--line); border-radius:6px; box-shadow:0 6px 20px rgba(0,0,0,.12); min-width:190px; display:none; }
+  .menu-list.open { display:block; }
+  .menu-list button { display:block; width:100%; text-align:start; padding:10px 14px; background:none; border:none; font:inherit; cursor:pointer; color:var(--ink); }
+  .menu-list button:hover { background:var(--band); }
+  .band { background:linear-gradient(var(--band), #fff 90px); padding:40px 16px 40px; min-height:calc(100vh - 76px); }
+  .card { max-width:1570px; margin:0 auto 22px; background:#fff; border-radius:8px; box-shadow:0 2px 12px rgba(31,74,114,.10); padding:22px 24px; }
+  .card h2 { margin:0 0 8px; font-size:18px; color:var(--navy); }
+  .radios { display:flex; gap:22px; flex-wrap:wrap; margin-bottom:8px; }
+  .radios label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .radios input { accent-color:var(--navy); width:17px; height:17px; margin:0; }
+  .searchrow { display:flex; gap:16px; align-items:center; }
+  .searchbox { flex:1; position:relative; }
+  .searchbox input { width:100%; height:47px; border:1px solid var(--line); border-radius:6px; padding:0 44px 0 12px; font:inherit; color:var(--ink); }
+  [dir=rtl] .searchbox input { padding:0 12px 0 44px; }
+  .searchbox svg { position:absolute; inset-inline-end:12px; top:13px; }
+  .pillbtn { height:47px; min-width:150px; border-radius:24px; background:var(--btn); color:#fff; border:none; font:inherit; font-weight:500; cursor:pointer; padding:0 26px; }
+  .pillbtn:disabled { opacity:.5; cursor:default; }
+  .pillbtn.small { height:38px; min-width:0; padding:0 20px; }
+  .pillbtn.light { background:#e8eef5; color:var(--navy); }
+  .refresh { display:inline-flex; gap:5px; align-items:center; color:var(--info); font-size:13px; margin-top:6px; background:none; border:none; cursor:pointer; padding:0; }
+  .crumbs { display:flex; flex-wrap:wrap; gap:6px; align-items:center; color:var(--muted); margin-bottom:12px; }
+  .crumbs a { color:var(--info); cursor:pointer; }
+  .toolbar { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px; }
+  .tile { border:1px solid var(--line); border-radius:8px; padding:14px; cursor:pointer; display:flex; gap:10px; align-items:center; color:var(--navy); font-weight:500; background:#fff; text-align:start; font:inherit; }
+  .tile:hover { border-color:var(--btn); box-shadow:0 2px 8px rgba(31,74,114,.12); }
   table { width:100%; border-collapse:collapse; }
-  th, td { text-align:start; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
-  th { color:var(--muted); font-weight:600; }
-  .crumbs { margin-bottom:8px; color:var(--muted); word-break:break-all; }
-  .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; background:#eef1f5; }
-  .Working { background:#fff4d6; color:var(--warn); } .Submitted { background:#e3efff; color:var(--accent); } .Approved_ReadOnly { background:#e2f4e8; color:var(--ok); }
-  form { display:grid; gap:10px; max-width:640px; }
-  label { display:grid; gap:4px; color:var(--muted); }
-  input, select { font:inherit; padding:7px 8px; border:1px solid var(--line); border-radius:4px; color:var(--ink); }
-  .btn { background:var(--accent); color:#fff; border:none; padding:8px 14px; border-radius:4px; cursor:pointer; font:inherit; }
-  .btn.alt { background:#e9edf3; color:var(--ink); }
-  .row { display:flex; gap:8px; flex-wrap:wrap; }
-  .msg { padding:8px 10px; border-radius:4px; margin-bottom:10px; }
-  .msg.ok { background:#e2f4e8; } .msg.err { background:#fde8e6; color:var(--err); }
-  a.link { color:var(--accent); cursor:pointer; text-decoration:none; }
-  .muted { color:var(--muted); }
+  th, td { text-align:start; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  th { color:var(--muted); font-weight:500; font-size:13px; }
+  td.actions { white-space:nowrap; }
+  td.actions a, td.actions button.link { margin-inline-end:12px; }
+  a.link, button.link { color:var(--info); cursor:pointer; text-decoration:none; background:none; border:none; font:inherit; padding:0; }
+  .status { display:inline-block; padding:2px 10px; border-radius:12px; font-size:12.5px; font-weight:500; }
+  .Working { background:var(--warnbg); color:var(--warn); } .Submitted { background:var(--infobg); color:var(--info); }
+  .Approved_ReadOnly { background:var(--okbg); color:var(--ok); } .None, .Other { background:#f0f2f5; color:var(--muted); }
+  .muted { color:var(--muted); } .small { font-size:13px; }
+  .msg { padding:10px 12px; border-radius:6px; margin-bottom:12px; } .msg.ok { background:var(--okbg); color:var(--ok); } .msg.err { background:var(--errbg); color:var(--err); }
+  dialog { border:none; border-radius:10px; padding:0; width:min(560px, 94vw); box-shadow:0 12px 40px rgba(0,0,0,.25); }
+  dialog::backdrop { background:rgba(20,35,55,.35); }
+  .dlg-h { padding:16px 20px; border-bottom:1px solid var(--line); font-weight:700; color:var(--navy); }
+  .dlg-b { padding:16px 20px; display:grid; gap:12px; }
+  .dlg-f { padding:12px 20px 18px; display:flex; gap:10px; justify-content:flex-end; }
+  .dlg-b label { display:grid; gap:4px; color:var(--muted); font-size:13px; }
+  .dlg-b input[type=text], .dlg-b select { font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:6px; color:var(--ink); }
+  .ltr { direction:ltr; unicode-bidi:plaintext; }
+  .icon { flex:none; }
+  @media (max-width:700px) { header { padding:0 14px; gap:10px } .welcome { font-size:15px } .searchrow { flex-direction:column; align-items:stretch } .pillbtn { width:100% } td.hide-s, th.hide-s { display:none } }
 </style>
 </head>
 <body>
-<header><h1 id="t-title"></h1><span id="who" class="muted" style="color:#dbe8f7"></span><a id="lang-switch" href="#"></a></header>
-<nav id="tabs"></nav>
-<main id="view"></main>
-<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+<header>
+  <div class="brand">
+    <img src="/dms/logo.png" alt="rh" height="30" onerror="this.nextElementSibling.style.display='';this.remove()"><svg style="display:none" direction="ltr" width="52" height="28" viewBox="0 0 52 28" aria-label="rh"><text x="0" y="23" font-family="Arial Black, Arial" font-weight="900" font-style="italic" font-size="26" fill="#1f4a72">rh</text><path d="M37 2h13l-4 10z" fill="#3db7b3"/></svg>
+    <span class="sep"></span>
+    <span class="welcome" id="t-welcome"></span>
+  </div>
+  <span class="spacer"></span>
+  <button class="hbtn" id="lang"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg><span id="lang-t"></span></button>
+  <span class="hbtn muted"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span id="who"></span></span>
+  <div class="menu"><button class="hbtn" id="menu-b" aria-label="menu"><svg width="6" height="22" viewBox="0 0 6 22" fill="#1f4a72"><circle cx="3" cy="3" r="2.4"/><circle cx="3" cy="11" r="2.4"/><circle cx="3" cy="19" r="2.4"/></svg></button>
+    <div class="menu-list" id="menu"></div></div>
+</header>
+
+<div class="band">
+  <section class="card">
+    <h2 id="t-search"></h2>
+    <div class="radios" id="scopes"></div>
+    <div class="searchrow">
+      <div class="searchbox"><input id="q" autocomplete="off"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5d6675" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg></div>
+      <button class="pillbtn" id="go"></button>
+    </div>
+    <button class="refresh" id="refresh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg><span id="t-refresh"></span></button>
+  </section>
+  <section class="card" id="view"></section>
+</div>
+
+<dialog id="dlg"><form method="dialog" id="dlg-form"><div class="dlg-h" id="dlg-h"></div><div class="dlg-b" id="dlg-b"></div><div class="dlg-f" id="dlg-f"></div></form></dialog>
+
 <script>
 const q = new URLSearchParams(location.search);
 const lang = (q.get('lang') || 'EN').toUpperCase() === 'HE' ? 'HE' : 'EN';
 document.documentElement.lang = lang.toLowerCase();
 document.documentElement.dir = lang === 'HE' ? 'rtl' : 'ltr';
 const T = {
-  EN: { title:'RH Document Management', browse:'Repository', mine:'My documents', register:'Start workflow', name:'Name', status:'Status', modified:'Modified',
-        notReg:'Not registered', open:'Open', download:'Download', start:'Start workflow', submit:'Submit for approval', docId:'Document ID', type:'Document type',
-        area:'Area', mode:'Control mode', titleF:'Title', file:'File', registerOnly:'Register only', registerSubmit:'Register and submit', up:'Up',
-        done:'Saved. Document', err:'Error', none:'Nothing here.', copy:'Copy path', copied:'Path copied', switchTo:'עברית', pickFile:'Pick a file in Repository and click Start workflow.',
-        Working:'Working', Submitted:'Submitted', Approved_ReadOnly:'Approved (read-only)', Other:'Other' },
-  HE: { title:'ניהול מסמכים RH', browse:'מאגר', mine:'המסמכים שלי', register:'שליחה לאישור', name:'שם', status:'סטטוס', modified:'עודכן',
-        notReg:'לא רשום', open:'פתיחה', download:'הורדה', start:'שליחה לאישור', submit:'הגשה לאישור', docId:'מזהה מסמך', type:'סוג מסמך',
-        area:'תחום', mode:'מצב בקרה', titleF:'כותרת', file:'קובץ', registerOnly:'רישום בלבד', registerSubmit:'רישום והגשה לאישור', up:'למעלה',
-        done:'נשמר. מסמך', err:'שגיאה', none:'אין פריטים.', copy:'העתקת נתיב', copied:'הנתיב הועתק', switchTo:'English', pickFile:'בחרו קובץ במאגר ולחצו שליחה לאישור.',
-        Working:'בעבודה', Submitted:'הוגש לאישור', Approved_ReadOnly:'מאושר - קריאה בלבד', Other:'אחר' } }[lang];
+  EN: { welcome:'RH - Documents Management System', search:'Search', all:'All', customer:'Customer', project:'Project', document:'Document ID', file:'File', description:'Description',
+        go:'Search', refresh:'Refresh', lang:'English', customers:'Customers', myDocs:'My documents', home:'Customers', noAccess:'No customers are available to you.',
+        name:'Name', status:'Status', modified:'Modified', actions:'', open:'Open', download:'Download', start:'Start workflow', submit:'Submit for approval',
+        upload:'Upload file', uploadTitle:'Save a file in this folder', chooseFile:'File from your computer', folder:'Folder', overwrite:'Replace a file with the same name',
+        ok:'OK', cancel:'Cancel', saved:'Saved to', notReg:'Not registered', none:'Nothing here.', results:'Results', type:'Document type', area:'Area', mode:'Control mode',
+        titleF:'Title', registerSubmit:'Register and submit', registerOnly:'Register only', registered:'Registered as', err:'Error', docId:'Document ID', path:'Location', copy:'Copy path', copied:'Copied',
+        newFolder:'New folder', rename:'Rename', del:'Delete', newName:'New name', folderName:'Folder name', confirmDel:'Move to the recycle folder?', recycled:'Moved to the recycle folder. IT can restore it.',
+        Working:'Working', Submitted:'Submitted', Approved_ReadOnly:'Approved (read-only)', Other:'Other', None:'Not registered', other:'עברית' },
+  HE: { welcome:'RH - מערכת ניהול מסמכים', search:'חיפוש', all:'הכל', customer:'לקוח', project:'פרויקט', document:'מזהה מסמך', file:'קובץ', description:'תיאור',
+        go:'חיפוש', refresh:'רענון', lang:'עברית', customers:'לקוחות', myDocs:'המסמכים שלי', home:'לקוחות', noAccess:'אין לקוחות זמינים עבורך.',
+        name:'שם', status:'סטטוס', modified:'עודכן', actions:'', open:'פתיחה', download:'הורדה', start:'שליחה לאישור', submit:'הגשה לאישור',
+        upload:'העלאת קובץ', uploadTitle:'שמירת קובץ בתיקייה זו', chooseFile:'קובץ מהמחשב', folder:'תיקייה', overwrite:'החלפת קובץ קיים באותו שם',
+        ok:'אישור', cancel:'ביטול', saved:'נשמר ב-', notReg:'לא רשום', none:'אין פריטים.', results:'תוצאות', type:'סוג מסמך', area:'תחום', mode:'מצב בקרה',
+        titleF:'כותרת', registerSubmit:'רישום והגשה לאישור', registerOnly:'רישום בלבד', registered:'נרשם כ-', err:'שגיאה', docId:'מזהה מסמך', path:'מיקום', copy:'העתקת נתיב', copied:'הועתק',
+        newFolder:'תיקייה חדשה', rename:'שינוי שם', del:'מחיקה', newName:'שם חדש', folderName:'שם התיקייה', confirmDel:'להעביר לתיקיית המחזור?', recycled:'הועבר לתיקיית המחזור. מחלקת IT יכולה לשחזר.',
+        Working:'בעבודה', Submitted:'הוגש לאישור', Approved_ReadOnly:'מאושר - קריאה בלבד', Other:'אחר', None:'לא רשום', other:'English' } }[lang];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-$('#t-title').textContent = T.title;
-$('#lang-switch').textContent = T.switchTo;
-$('#lang-switch').onclick = e => { e.preventDefault(); q.set('lang', lang === 'HE' ? 'EN' : 'HE'); location.search = q.toString(); };
+const when = s => s ? new Date(s).toLocaleString(lang === 'HE' ? 'he-IL' : 'en-GB', { dateStyle:'short', timeStyle:'short' }) : '';
+const ICON_FOLDER = '<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="#e9b949"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const ICON_FILE = '<svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7684" stroke-width="1.6"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>';
+const ICON_CUST = '<svg class="icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1f4a72" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h3M13 7h3M8 11h3M13 11h3M10 21v-4h4v4"/></svg>';
 
-let cfg, msal, account, state = { tab: q.get('path') ? 'register' : 'browse', folder: null, file: q.get('path') };
+let cfg, msal, account, state = { view:'customers', folder:null, root:null, scope:'all' };
 
+// ---------------------------------------------------------------- api (Windows sign-in by default: the browser sends the login)
 async function token() {
   if (cfg.authMode !== 'entra') return null;
-  const req = { scopes: [cfg.scope], account };
-  try { return (await msal.acquireTokenSilent(req)).accessToken; }
-  catch { await msal.acquireTokenRedirect(req); }
+  try { return (await msal.acquireTokenSilent({ scopes:[cfg.scope], account })).accessToken; }
+  catch { await msal.acquireTokenRedirect({ scopes:[cfg.scope], account }); }
 }
 async function api(path, opts = {}) {
   const t = await token();
-  const r = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: 'Bearer ' + t } : {}) } });
+  const headers = { ...(opts.body && !(opts.body instanceof FormData) ? { 'Content-Type':'application/json' } : {}), ...(t ? { Authorization:'Bearer ' + t } : {}) };
+  const r = await fetch(path, { credentials:'include', ...opts, headers });
   const body = r.headers.get('content-type')?.includes('json') ? await r.json() : null;
   if (!r.ok) throw new Error(typeof body?.detail === 'string' ? body.detail : (body?.detail?.message || r.statusText));
   return body;
 }
-const pill = d => d ? `<span class="pill ${esc(d.statusKey)}">${esc(T[d.statusKey] || d.lifecycleStatus)}</span> <span class="muted">${esc(d.documentId)}</span>` : `<span class="muted">${T.notReg}</span>`;
-const when = s => s ? new Date(s).toLocaleString(lang === 'HE' ? 'he-IL' : 'en-GB') : '';
 
-function tabs() {
-  $('#tabs').innerHTML = ['browse', 'mine', 'register'].map(k => `<button class="${state.tab === k ? 'on' : ''}" data-k="${k}">${T[k]}</button>`).join('');
-  $('#tabs').querySelectorAll('button').forEach(b => b.onclick = () => { state.tab = b.dataset.k; render(); });
+// ---------------------------------------------------------------- chrome
+$('#t-welcome').textContent = T.welcome; $('#t-search').textContent = T.search; $('#t-refresh').textContent = T.refresh;
+$('#go').textContent = T.go; $('#q').placeholder = T.description; $('#lang-t').textContent = T.lang;
+$('#lang').onclick = () => { q.set('lang', lang === 'HE' ? 'EN' : 'HE'); location.search = q.toString(); };
+$('#scopes').innerHTML = ['all','customer','project','document','file'].map(k =>
+  `<label><input type="radio" name="scope" value="${k}" ${k === 'all' ? 'checked' : ''}>${T[k]}</label>`).join('');
+$('#scopes').onchange = e => state.scope = e.target.value;
+$('#menu').innerHTML = `<button data-m="customers">${T.customers}</button><button data-m="mine">${T.myDocs}</button><button data-m="lang">${T.other}</button>`;
+$('#menu-b').onclick = e => { e.stopPropagation(); $('#menu').classList.toggle('open'); };
+document.onclick = () => $('#menu').classList.remove('open');
+$('#menu').onclick = e => { const m = e.target.dataset.m; if (m === 'lang') return $('#lang').click(); if (m) { state.view = m; render(); } };
+$('#go').onclick = () => { if ($('#q').value.trim().length >= 2) { state.view = 'search'; render(); } };
+$('#q').onkeydown = e => { if (e.key === 'Enter') $('#go').click(); };
+$('#refresh').onclick = () => render();
+
+const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${esc(d ? (T[d.statusKey] || d.lifecycleStatus) : T.None)}</span>${d ? ` <span class="muted small">${esc(d.documentId)}</span>` : ''}`;
+function fileActions(f) {
+  return `${f.officeUri ? `<a class="link" href="${esc(f.officeUri)}">${T.open}</a>` : ''}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button>`
+    + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button>` : '')
+                  : `<button type="button" class="link" data-st="${esc(f.path)}">${T.start}</button>`);
 }
+function wire(v) {
+  v.querySelectorAll('[data-f]').forEach(a => a.onclick = () => { state.view = 'browse'; state.folder = a.dataset.f; render(); });
+  v.querySelectorAll('[data-dl]').forEach(a => a.onclick = () => download(a.dataset.dl));
+  v.querySelectorAll('[data-st]').forEach(a => a.onclick = () => startWorkflow(a.dataset.st));
+  v.querySelectorAll('[data-sub]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try { await api(`/api/documents/${b.dataset.sub}/submit`, { method:'POST' }); render(); } catch (e) { b.disabled = false; alert(e.message); }
+  });
+  v.querySelectorAll('[data-cp]').forEach(a => a.onclick = async () => { await navigator.clipboard.writeText(a.dataset.cp); a.textContent = T.copied; });
+}
+
+// ---------------------------------------------------------------- views
 async function render() {
-  tabs();
   const v = $('#view');
-  v.innerHTML = '…';
-  try { await ({ browse, mine, register })[state.tab](v); }
+  v.innerHTML = '<span class="muted">…</span>';
+  try { await ({ customers, browse, search, mine })[state.view](v); wire(v); }
   catch (e) { v.innerHTML = `<div class="msg err">${T.err}: ${esc(e.message)}</div>`; }
 }
-async function browse(v) {
-  const r = await api('/api/browse' + (state.folder ? '?path=' + encodeURIComponent(state.folder) : ''));
-  state.folder = r.path;
-  v.innerHTML = `<div class="crumbs" dir="ltr">${esc(r.path)}</div>
-    ${r.parent ? `<p><a class="link" data-f="${esc(r.parent)}">⬑ ${T.up}</a></p>` : ''}
-    <table><tr><th>${T.name}</th><th>${T.status}</th><th>${T.modified}</th><th></th></tr>
-    ${r.folders.map(f => `<tr><td><a class="link" data-f="${esc(f.path)}">📁 ${esc(f.name)}</a></td><td></td><td>${when(f.modified)}</td><td></td></tr>`).join('')}
-    ${r.files.map(f => `<tr><td>${esc(f.name)}</td><td>${pill(f.document)}</td><td>${when(f.modified)}</td><td class="row">
-        ${f.officeUri ? `<a class="link" href="${esc(f.officeUri)}">${T.open}</a>` : ''}
-        <a class="link" data-dl="${esc(f.path)}">${T.download}</a>
-        <a class="link" data-cp="${esc(f.path)}">${T.copy}</a>
-        ${f.document ? '' : `<a class="link" data-st="${esc(f.path)}">${T.start}</a>`}</td></tr>`).join('')}
-    </table>${r.folders.length + r.files.length ? '' : `<p class="muted">${T.none}</p>`}`;
-  v.querySelectorAll('[data-f]').forEach(a => a.onclick = () => { state.folder = a.dataset.f; render(); });
-  v.querySelectorAll('[data-st]').forEach(a => a.onclick = () => { state.file = a.dataset.st; state.tab = 'register'; render(); });
-  v.querySelectorAll('[data-cp]').forEach(a => a.onclick = async () => { await navigator.clipboard.writeText(a.dataset.cp); a.textContent = T.copied; });
-  v.querySelectorAll('[data-dl]').forEach(a => a.onclick = () => download(a.dataset.dl));
+async function customers(v) {
+  const list = await api('/api/customers');
+  v.innerHTML = `<h2>${T.customers}</h2>` + (list.length
+    ? `<div class="grid">${list.map(c => `<button type="button" class="tile" data-f="${esc(c.path)}">${ICON_CUST}${esc(c.name)}</button>`).join('')}</div>`
+    : `<p class="muted">${T.noAccess}</p>`);
 }
-async function download(path) {
-  const t = await token();
-  const r = await fetch('/api/files/download?path=' + encodeURIComponent(path), { headers: t ? { Authorization: 'Bearer ' + t } : {} });
-  if (!r.ok) return alert(T.err);
-  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await r.blob()), download: path.split(/[\\/]/).pop() });
-  a.click();
+async function browse(v) {
+  const r = await api('/api/browse?path=' + encodeURIComponent(state.folder));
+  state.folder = r.path;
+  const parts = r.relative.split(/[\\/]/).filter(Boolean);
+  const sep = r.path.includes('\\') ? '\\' : '/';
+  const base = r.path.slice(0, r.path.length - r.relative.length).replace(/[\\/]$/, '');
+  const crumbs = parts.map((p, i) => i === 0 ? null : `<a data-f="${esc(base + sep + parts.slice(0, i + 1).join(sep))}">${esc(p)}</a>`).filter(Boolean);
+  v.innerHTML = `<div class="crumbs"><a data-home>${T.home}</a>${crumbs.map(c => ' › ' + c).join('')}</div>
+    <div class="toolbar"><span class="spacer"></span>${r.canWrite ? `<button type="button" class="pillbtn small light" id="mk">${T.newFolder}</button><button type="button" class="pillbtn small" id="up">${T.upload}</button>` : ''}</div>
+    <table><tr><th>${T.name}</th><th>${T.status}</th><th class="hide-s">${T.modified}</th><th></th></tr>
+    ${r.folders.filter(f => !['Submitted','Obsolete_ReadOnly','Working'].includes(f.name)).map(f => `<tr><td><a class="link" data-f="${esc(f.path)}" style="display:inline-flex;gap:8px;align-items:center">${ICON_FOLDER}${esc(f.name)}</a></td><td></td><td class="hide-s muted">${when(f.modified)}</td><td class="actions">${r.canWrite ? editActions(f) : ''}</td></tr>`).join('')}
+    ${r.files.map(f => `<tr><td><span style="display:inline-flex;gap:8px;align-items:center">${ICON_FILE}${esc(f.name)}</span></td><td>${statusTag(f.document)}</td><td class="hide-s muted">${when(f.modified)}</td><td class="actions">${fileActions(f)}${r.canWrite && !f.document && !f.readOnly ? editActions(f) : ''}</td></tr>`).join('')}
+    </table>${r.folders.length + r.files.length ? '' : `<p class="muted">${T.none}</p>`}`;
+  v.querySelector('[data-home]').onclick = () => { state.view = 'customers'; render(); };
+  if (r.canWrite) { v.querySelector('#up').onclick = () => uploadDialog(r.path); v.querySelector('#mk').onclick = () => newFolderDialog(r.path); }
+  v.querySelectorAll('[data-rn]').forEach(b => b.onclick = () => renameDialog(b.dataset.rn));
+  v.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteItem(b.dataset.del));
+}
+async function search(v) {
+  const text = $('#q').value.trim();
+  const r = await api(`/api/search?q=${encodeURIComponent(text)}&scope=${state.scope}`);
+  v.innerHTML = `<h2>${T.results} (${r.length})</h2><table><tr><th>${T.name}</th><th>${T.status}</th><th class="hide-s">${T.path}</th><th></th></tr>
+    ${r.map(x => x.kind === 'customer' || x.kind === 'folder'
+      ? `<tr><td><a class="link" data-f="${esc(x.path)}" style="display:inline-flex;gap:8px;align-items:center">${x.kind === 'customer' ? ICON_CUST : ICON_FOLDER}${esc(x.name)}</a></td><td class="muted small">${x.kind === 'customer' ? T.customer : ''}</td><td class="hide-s muted small ltr">${esc(x.path)}</td><td></td></tr>`
+      : `<tr><td><span style="display:inline-flex;gap:8px;align-items:center">${ICON_FILE}${esc(x.name)}</span></td><td>${statusTag(x.document)}</td><td class="hide-s muted small ltr">${esc(x.path)}</td><td class="actions">${x.path ? fileActions({ ...x, officeUri: x.officeUri }) : ''}</td></tr>`).join('')}
+    </table>${r.length ? '' : `<p class="muted">${T.none}</p>`}`;
 }
 async function mine(v) {
   const docs = await api('/api/documents?mine=true');
-  v.innerHTML = `<table><tr><th>${T.docId}</th><th>${T.titleF}</th><th>${T.status}</th><th>${T.file}</th><th></th></tr>
-    ${docs.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}</td><td>${pill(d)}</td>
-      <td class="muted">${esc(d.currentUncPath || d.workingUncPath)}</td>
-      <td>${d.statusKey === 'Working' ? `<button class="btn" data-sub="${d.id}">${T.submit}</button>` : ''}</td></tr>`).join('')}
+  v.innerHTML = `<h2>${T.myDocs}</h2><table><tr><th>${T.docId}</th><th>${T.titleF}</th><th>${T.status}</th><th class="hide-s">${T.path}</th><th></th></tr>
+    ${docs.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}</td><td>${statusTag(d)}</td>
+      <td class="hide-s muted small ltr">${esc(d.currentUncPath || d.workingUncPath)}</td>
+      <td class="actions">${d.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${d.id}">${T.submit}</button>` : ''}
+        <button type="button" class="link" data-cp="${esc(d.currentUncPath || d.workingUncPath)}">${T.copy}</button></td></tr>`).join('')}
     </table>${docs.length ? '' : `<p class="muted">${T.none}</p>`}`;
-  v.querySelectorAll('[data-sub]').forEach(b => b.onclick = async () => {
-    b.disabled = true;
-    try { await api(`/api/documents/${b.dataset.sub}/submit`, { method: 'POST' }); render(); }
-    catch (e) { b.disabled = false; alert(e.message); }
-  });
-}
-async function register(v) {
-  if (!state.file) { v.innerHTML = `<p class="muted">${T.pickFile}</p>`; return; }
-  const o = await api('/api/options');
-  const opt = a => a.map(x => `<option>${esc(x)}</option>`).join('');
-  const name = q.get('name') || state.file.split(/[\\/]/).pop();
-  v.innerHTML = `<div id="m"></div><form id="f">
-    <label>${T.file}<input name="path" dir="ltr" value="${esc(state.file)}" readonly></label>
-    <label>${T.titleF}<input name="title" value="${esc(name.replace(/\.[^.]+$/, ''))}" required></label>
-    <label>${T.type}<select name="documentType" required>${opt(o.DocumentType)}</select></label>
-    <label>${T.area}<select name="documentArea" required>${opt(o.DocumentArea)}</select></label>
-    <label>${T.mode}<select name="controlMode">${opt(o.ControlMode)}</select></label>
-    <div class="row"><button class="btn" name="go" value="submit">${T.registerSubmit}</button><button class="btn alt" name="go" value="save">${T.registerOnly}</button></div></form>`;
-  $('#f').onsubmit = async e => {
-    e.preventDefault();
-    const f = Object.fromEntries(new FormData(e.target));
-    f.submit = e.submitter?.value === 'submit';
-    try {
-      const d = await api('/api/documents', { method: 'POST', body: JSON.stringify(f) });
-      $('#m').innerHTML = `<div class="msg ok">${T.done} ${esc(d.documentId)} - ${esc(T[d.statusKey] || d.lifecycleStatus)}</div>`;
-      e.target.querySelectorAll('button').forEach(b => b.disabled = true);
-    } catch (x) { $('#m').innerHTML = `<div class="msg err">${T.err}: ${esc(x.message)}</div>`; }
-  };
 }
 
+// ---------------------------------------------------------------- dialogs
+function dialog(title, body, buttons) {
+  $('#dlg-h').textContent = title; $('#dlg-b').innerHTML = body;
+  $('#dlg-f').innerHTML = buttons.map(([v, label, cls]) => `<button class="pillbtn small ${cls || ''}" value="${v}">${label}</button>`).join('');
+  $('#dlg').showModal();
+  return new Promise(res => $('#dlg-form').onsubmit = e => { e.preventDefault(); res({ action: e.submitter?.value, form: e.target }); });
+}
+function note(html, cls) { const m = document.createElement('div'); m.className = 'msg ' + cls; m.innerHTML = html; $('#dlg-b').prepend(m); }
+async function uploadDialog(folder) {
+  let r = await dialog(T.uploadTitle, `<label>${T.folder}<input type="text" class="ltr" value="${esc(folder)}" readonly></label>
+      <label>${T.chooseFile}<input type="file" name="file" required></label>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="overwrite">${T.overwrite}</label>`,
+    [['cancel', T.cancel, 'light'], ['ok', T.ok]]);
+  while (r.action === 'ok') {
+    const fd = new FormData(r.form); fd.set('folder', folder); fd.set('overwrite', r.form.overwrite.checked ? 'true' : 'false');
+    try { const x = await api('/api/files/upload', { method:'POST', body:fd }); $('#dlg').close(); render(); return x; }
+    catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); r = await new Promise(res => $('#dlg-form').onsubmit = ev => { ev.preventDefault(); res({ action: ev.submitter?.value, form: ev.target }); }); }
+  }
+  $('#dlg').close();
+}
+async function startWorkflow(path, name) {
+  const o = await api('/api/options');
+  const opt = a => a.map(x => `<option>${esc(x)}</option>`).join('');
+  const file = name || path.split(/[\\/]/).pop();
+  let r = await dialog(T.start, `<label>${T.file}<input type="text" class="ltr" value="${esc(path)}" readonly></label>
+      <label>${T.titleF}<input type="text" name="title" value="${esc(file.replace(/\.[^.]+$/, ''))}" required></label>
+      <label>${T.type}<select name="documentType">${opt(o.DocumentType)}</select></label>
+      <label>${T.area}<select name="documentArea">${opt(o.DocumentArea)}</select></label>
+      <label>${T.mode}<select name="controlMode">${opt(o.ControlMode)}</select></label>`,
+    [['cancel', T.cancel, 'light'], ['save', T.registerOnly, 'light'], ['submit', T.registerSubmit]]);
+  while (r.action === 'save' || r.action === 'submit') {
+    const f = Object.fromEntries(new FormData(r.form)); f.path = path; f.submit = r.action === 'submit';
+    try {
+      const d = await api('/api/documents', { method:'POST', body:JSON.stringify(f) });
+      $('#dlg').close(); render();
+      return d;
+    } catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); r = await new Promise(res => $('#dlg-form').onsubmit = ev => { ev.preventDefault(); res({ action: ev.submitter?.value, form: ev.target }); }); }
+  }
+  $('#dlg').close();
+}
+const editActions = f => `<button type="button" class="link" data-rn="${esc(f.path)}">${T.rename}</button><button type="button" class="link" data-del="${esc(f.path)}" style="color:var(--err)">${T.del}</button>`;
+async function simpleDialog(title, label, value, url, body) {
+  let r = await dialog(title, `<label>${label}<input type="text" name="v" value="${esc(value)}" required></label>`, [['cancel', T.cancel, 'light'], ['ok', T.ok]]);
+  while (r.action === 'ok') {
+    try { await api(url, { method:'POST', body:JSON.stringify(body(r.form.v.value.trim())) }); $('#dlg').close(); render(); return; }
+    catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); r = await new Promise(res => $('#dlg-form').onsubmit = ev => { ev.preventDefault(); res({ action: ev.submitter?.value, form: ev.target }); }); }
+  }
+  $('#dlg').close();
+}
+const newFolderDialog = parent => simpleDialog(T.newFolder, T.folderName, '', '/api/folders', name => ({ parent, name }));
+const renameDialog = path => simpleDialog(T.rename, T.newName, path.split(/[\\/]/).pop(), '/api/items/rename', newName => ({ path, newName }));
+async function deleteItem(path) {
+  if (!confirm(`${path.split(/[\\/]/).pop()}\n${T.confirmDel}`)) return;
+  try { await api('/api/items/delete', { method:'POST', body:JSON.stringify({ path }) }); render(); }
+  catch (e) { alert(`${T.err}: ${e.message}`); }
+}
+async function download(path) {
+  const t = await token();
+  const r = await fetch('/api/files/download?path=' + encodeURIComponent(path), { credentials:'include', headers: t ? { Authorization:'Bearer ' + t } : {} });
+  if (!r.ok) return alert(T.err);
+  Object.assign(document.createElement('a'), { href: URL.createObjectURL(await r.blob()), download: path.split(/[\\/]/).pop() }).click();
+}
+
+// ---------------------------------------------------------------- start
 (async () => {
   cfg = await (await fetch('/api/client-config')).json();
-  if (cfg.authMode === 'entra') {
-    msal = new msalBrowser.PublicClientApplication({ auth: { clientId: cfg.clientId, authority: 'https://login.microsoftonline.com/' + cfg.tenantId, redirectUri: location.origin + location.pathname } });
+  if (cfg.authMode === 'entra') {   // only for access from outside the network
+    await new Promise((ok, fail) => document.head.appendChild(Object.assign(document.createElement('script'), { src:'https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js', onload:ok, onerror:fail })));
+    msal = new msalBrowser.PublicClientApplication({ auth: { clientId: cfg.clientId, authority:'https://login.microsoftonline.com/' + cfg.tenantId, redirectUri: location.origin + location.pathname } });
     await msal.initialize();
     const r = await msal.handleRedirectPromise();
     account = r?.account || msal.getAllAccounts()[0];
-    if (!account) return msal.loginRedirect({ scopes: [cfg.scope], state: location.search });
-    if (r?.state && !location.search) return location.replace(location.pathname + r.state);  // restore ?lang&path&name
+    if (!account) return msal.loginRedirect({ scopes:[cfg.scope], state: location.search });
+    if (r?.state && !location.search) return location.replace(location.pathname + r.state);
   }
-  try { $('#who').textContent = (await api('/api/me')).email; } catch {}
-  render();
+  try { const me = await api('/api/me'); $('#who').textContent = me.name || me.email; } catch (e) { $('#who').textContent = ''; }
+  await render();
+  if (q.get('path')) startWorkflow(q.get('path'), q.get('name'));   // opened from the Explorer right-click
 })();
 </script>
 </body>
