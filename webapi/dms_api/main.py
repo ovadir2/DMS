@@ -204,7 +204,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         without system and workflow folders."""
         folder = os.path.join(s.repository_root, *parts)
         try:
-            entries = [e for e in os.scandir(folder) if e.is_dir() and not e.name.startswith((".", "~$"))]
+            entries = [e for e in os.scandir(folder) if e.is_dir() and not files.is_hidden(e)]
         except OSError:
             return []
         rank = {n.lower(): i for i, n in enumerate(blueprint.order(parts))}

@@ -456,7 +456,8 @@ def test_file_service_moves_by_status(tmp_path):
     d = sp.create_document(title="Q", path=str(q / "Quote_DRAFT.xlsx"), document_type="x", document_area="y",
                            owner_email=USER, control_mode=None, document_id=None)
     sp.update(d["id"], {"LifecycleStatus": "הוגש לאישור"})
-    assert file_service.run_once(sp, s) == {"moved": 1, "failed": 0}
+    r = file_service.run_once(sp, s)
+    assert (r["moved"], r["failed"]) == (1, 0) and r["report"][0]["result"].startswith("MoveToSubmitted")
     sub = q / "Submitted" / "Quote_DRAFT.xlsx"
     assert sub.exists() and file_service.is_read_only(str(sub))
     assert sp.document(d["id"])["workingUncPath"] == str(q / "Quote_DRAFT.xlsx")      # Submitted record not touched
@@ -469,7 +470,8 @@ def test_file_service_moves_by_status(tmp_path):
     doc = sp.document(d["id"])
     assert cur.exists() and file_service.is_read_only(str(cur))
     assert doc["currentUncPath"] == str(cur) and len(doc["currentSHA256"]) == 64 and doc["workingUncPath"] == ""
-    assert file_service.run_once(sp, s) == {"moved": 0, "failed": 0}                  # idempotent
+    r = file_service.run_once(sp, s)
+    assert (r["moved"], r["failed"]) == (0, 0)                                          # idempotent
     events = [e["event"] for e in sp.audit_events()]
     assert events.count("פעולת קובץ הושלמה") == 3 and sp.audit_events()[0]["source"] == "שירות תהליכים"
     c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory"), sp))
@@ -575,3 +577,35 @@ def test_withdraw_and_resubmit(tmp_path):
     c.post(f"/api/documents/{d['id']}/submit")
     s.dev_user = "dana@rh.co.il"
     assert c.get("/api/approvals").json()[0]["stage"] == 1                             # a new cycle starts at stage 1
+
+
+def test_system_files_hidden(env):
+    c, _, q = env
+    (q / "Thumbs.db").write_text("x")
+    (q / "desktop.ini").write_text("x")
+    names = [f["name"] for f in c.get("/api/browse", params={"path": str(q)}).json()["files"]]
+    assert "Thumbs.db" not in names and "desktop.ini" not in names and "CRU 4 FCT Quote_Rev1.xlsx" in names
+    assert all(x["name"] != "Thumbs.db" for x in c.get("/api/search", params={"q": "thumbs"}).json())
+
+
+def test_file_service_report_and_old_layout(tmp_path):
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    old = q / "COM-QUO-00001_CRU4_FCT_Quote"                 # the old per-document layout
+    (old / "Submitted").mkdir(parents=True)
+    (old / "Submitted" / "COM-QUO-00001_Rev01_DRAFT.xlsx").write_text("v1")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory")
+    sp = MemorySharePoint(s)
+    a = sp.create_document(title="CRU", path=str(old / "Working" / "COM-QUO-00001_Rev01_DRAFT.xlsx"), document_type="x",
+                           document_area="y", owner_email=USER, control_mode=None, document_id="COM-QUO-00001")
+    b = sp.create_document(title="Out", path=r"\\OTHER\share\x.xlsx", document_type="x", document_area="y",
+                           owner_email=USER, control_mode=None, document_id=None)
+    sp.update(a["id"], {"LifecycleStatus": "מאושר - קריאה בלבד"})
+    sp.update(b["id"], {"LifecycleStatus": "הוגש לאישור"})
+    r = file_service.run_once(sp, s)
+    by = {x["documentId"]: x["result"] for x in r["report"]}
+    assert r["moved"] == 1 and (old / "Current_ReadOnly" / "COM-QUO-00001_Rev01.xlsx").exists()
+    assert by["COM-QUO-00001"].startswith("PromoteToCurrent") and "outside the repository root" in by["DMS-00002"]
+    assert file_service.run_once(sp, s)["report"][0]["result"].startswith("current:")

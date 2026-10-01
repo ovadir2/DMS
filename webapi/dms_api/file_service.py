@@ -60,13 +60,43 @@ def _under_root(root: str, path: str | None) -> bool:
     return p.startswith(r.rstrip("\\/") + os.sep)
 
 
+def to_root(root: str, path: str | None) -> str | None:
+    """The record's path expressed under the root. A record saved with a mapped drive (S:\\...) while the
+    root is a UNC path (or the other way round) is translated through the real path of both."""
+    if _under_root(root, path):
+        return path
+    if not path or ".." in path.replace("\\", "/").split("/"):
+        return None
+    try:
+        real_root, probe = os.path.realpath(root), path
+        while probe and not os.path.exists(probe) and os.path.dirname(probe) != probe:
+            probe = os.path.dirname(probe)
+        real_probe = os.path.realpath(probe)
+        if _under_root(real_root, real_probe) or os.path.normcase(real_probe) == os.path.normcase(real_root):
+            tail = os.path.relpath(path, probe)
+            return os.path.normpath(os.path.join(root, os.path.relpath(real_probe, real_root), tail))
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def run_once(sp, s: Settings) -> dict:
+    """One pass over the register. Returns the counts and, per record, what was done or why not."""
     c = s.choices
     rel = lambda p: os.path.relpath(p, s.repository_root) if p else p  # noqa: E731 - short paths in the audit
-    done, failed = 0, 0
+    done, failed, report = 0, 0, []
     for d in sp.documents(refresh=True):
-        status, working = d.get("lifecycleStatus"), d.get("workingUncPath")
-        if not working or status not in (c["Working"], c["Submitted"], c["Approved_ReadOnly"]) or not _under_root(s.repository_root, working):
+        status, raw = d.get("lifecycleStatus"), d.get("workingUncPath")
+        doc_id = d.get("documentId") or f"ID {d.get('id')}"
+        if status not in (c["Working"], c["Submitted"], c["Approved_ReadOnly"]):
+            continue
+        if not raw:
+            if status == c["Approved_ReadOnly"] and d.get("currentUncPath"):
+                report.append({"documentId": doc_id, "result": f"current: {d['currentUncPath']}"})
+            continue
+        working = to_root(s.repository_root, raw)
+        if not working:
+            report.append({"documentId": doc_id, "result": f"skipped - the path is outside the repository root {s.repository_root}: {raw}"})
             continue
         name, parent = os.path.basename(working), os.path.dirname(working)
         folder = os.path.dirname(parent) if os.path.basename(parent) in WORKFLOW_FOLDERS else parent
@@ -85,6 +115,7 @@ def run_once(sp, s: Settings) -> dict:
             elif status == c["Approved_ReadOnly"]:
                 source = next((p for p in (in_submitted, working) if os.path.isfile(p)), None)
                 if not source:
+                    report.append({"documentId": doc_id, "result": f"skipped - approved, but the file is not at {rel(working)} or {rel(in_submitted)}"})
                     continue
                 action = "PromoteToCurrent"
                 obsolete = None
@@ -101,21 +132,26 @@ def run_once(sp, s: Settings) -> dict:
                     values.update(CurrentRevision=d["draftRevision"], DraftRevision="")
                 sp.update(d["id"], values)
                 details = f"{action}: {rel(source)} -> {rel(target)}. SHA-256 {sha}" + (f". Previous revision -> {rel(obsolete)}" if obsolete else "")
+            if not details:
+                where = in_submitted if os.path.isfile(in_submitted) else working
+                report.append({"documentId": doc_id, "result": f"no change - {status}, file at {rel(where)}"})
             if details:
                 sp.audit(document_id=d.get("documentId") or f"ID {d['id']}", event=c["FileDone"], from_status=status,
                          to_status=status, actor="RH-DMS-Workflow-Service", details=details, source=c["WorkflowService"])
                 log.info("%s %s", d.get("documentId"), details)
+                report.append({"documentId": doc_id, "result": details})
                 done += 1
         except Exception as e:  # noqa: BLE001 - one record must not stop the others
             failed += 1
             msg = f"{action} failed for {name}: {e}"
             log.error("%s %s", d.get("documentId"), msg)
+            report.append({"documentId": doc_id, "result": msg})
             try:
                 sp.audit(document_id=d.get("documentId") or f"ID {d['id']}", event=c["FileFailed"], from_status=status,
                          to_status=status, actor="RH-DMS-Workflow-Service", details=msg, source=c["WorkflowService"])
             except Exception:  # noqa: BLE001
                 pass
-    return {"moved": done, "failed": failed}
+    return {"moved": done, "failed": failed, "report": report}
 
 
 def start(sp, s: Settings) -> threading.Thread:

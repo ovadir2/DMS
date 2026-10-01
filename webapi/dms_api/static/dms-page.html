@@ -230,7 +230,11 @@ function wire(v) {
   const all = v.querySelector('#wf-all'); if (all) all.onclick = () => { state.everyone = !state.everyone; render(); };
   const fs = v.querySelector('#fs-run'); if (fs) fs.onclick = async () => {
     fs.disabled = true;
-    try { const r = await api('/api/file-service/run', { method:'POST' }); alert(`${T.fsDone}: ${r.moved}` + (r.failed ? ` · ${T.err}: ${r.failed}` : '')); render(); }
+    try {
+      const r = await api('/api/file-service/run', { method:'POST' });
+      alert(`${T.fsDone}: ${r.moved}` + (r.failed ? ` · ${T.err}: ${r.failed}` : '') + '\n\n' + (r.report || []).map(x => `${x.documentId}: ${x.result}`).join('\n'));
+      render();
+    }
     catch (e) { fs.disabled = false; alert(e.message); }
   };
   v.querySelectorAll('[data-sf]').forEach(a => a.onclick = () => { state.wfFilter = a.dataset.sf || null; render(); });

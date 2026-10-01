@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterator
 from datetime import datetime, timezone
 
 from .config import WORKFLOW_FOLDERS
+from .files import is_hidden
 
 STOP = {"the", "a", "an", "of", "for", "to", "in", "on", "and", "or", "file", "files", "document", "find", "show", "me",
         "latest", "last", "new", "newest", "please", "where", "is", "my", "our", "את", "של", "על", "עם", "קובץ", "מסמך",
@@ -30,7 +31,7 @@ def walk_files(start: str, can_dir: Callable[[str], bool], max_files: int = 2000
         except OSError:
             continue
         for e in entries:
-            if e.name.startswith(("~$", ".")):
+            if is_hidden(e):
                 continue
             if e.is_dir():
                 if e.name not in (WORKFLOW_FOLDERS[1], WORKFLOW_FOLDERS[3]) and can_dir(e.path):
