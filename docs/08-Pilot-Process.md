@@ -48,6 +48,14 @@ flowchart TB
 5. **After a rejection** the status is **Rejected - back to you** and the file is back where it was saved, writable. Fix it and click **Submit for approval** again.
 6. **After the approval** the file is in `Current_ReadOnly` next to where it was saved, read-only, with status **Approved (read-only)**. The previous approved version is in `Obsolete_ReadOnly`.
 
+### A new revision of an approved document
+
+On the approved file (in `Current_ReadOnly`, or in **My workflows**) click **⟳ New revision**. Choose **a copy of the approved revision** (opened in Excel/Word to edit) or **a file from my computer**, and optionally **Submit for approval now**. The draft is saved next to the document as `<name>_Rev02_DRAFT.<ext>` (the number follows the current revision: Rev01 → Rev02 → Rev03), on the **same record**, so the Document ID and the full history stay together. While the new revision is in work, the approved Rev01 stays in `Current_ReadOnly`. When Rev02 is approved, Rev01 moves to `Obsolete_ReadOnly` and `..._Rev02.<ext>` becomes the current version.
+
+### A new document from a file on the PC
+
+In any folder you may write to: **＋ New document** → choose the file → type, area, control mode → **Register and submit** (or Register only). The file is saved in the folder and registered in one step.
+
 ### What the approver does
 
 **Pilot (on the page):** the header shows **Approvals** with the number waiting. The list shows each document, its owner, type, stage, who already approved and how long it waits, with Open, Download and ✦ AI to read it, and **Approve** (optional comment) / **Reject** (comment required). Stage 1: every mandatory approver must approve. Stage 2: the final approver. One rejection ends the cycle; the comment goes back to the owner in My workflows. A DMS super user can decide any stage (recorded as "super user") and see **All pending approvals**.
@@ -83,7 +91,7 @@ The Workflow Service never updates a record while it is Submitted, so the approv
 | DMS super user | `DMS_ADMINS` (pilot: roneno@rh.co.il) | Submit any document, decide any approval stage, **All workflows**, **All pending approvals**, Move files now |
 | IT / Document Control | `GG_DMS_ITAdmins`, `GG_DMS_DocumentControl` | Approver Matrix, restore from the recycle folder, the service and its logs |
 
-Always protected: the company structure (`$Root`, `02_Customers`, each customer folder), the workflow folders (managed by the DMS only), and every registered document (cannot be renamed or deleted from the page).
+Always protected: the company structure (`$Root`, `02_Customers`, each customer folder); the DMS workflow folders `Submitted`, `Current_ReadOnly`, `Obsolete_ReadOnly` and `Working` (read only on the page: nothing can be added, renamed or deleted in them, and a folder that holds them cannot be renamed or deleted); and every registered document (cannot be renamed or deleted from the page).
 
 ## 5. Pilot test (one super user runs it all)
 
@@ -126,9 +134,18 @@ Sign in as roneno@rh.co.il when the browser asks. His name shows with ★ (super
 
 **After the pilot**: restore the real approvers with the command `Set-DmsTestApprover.ps1` printed (`-Restore <backup file>`), and stop the page with Ctrl+C.
 
-## 6. Known limits of the pilot
+## 6. What is kept in SharePoint
+
+All the metadata is in SharePoint (`DocumentControl` site), which Microsoft 365 backs up and versions (list item version history, recycle bin):
+
+- **Document Register**: one record per document: ID, title, type, area, control mode, owner, status, current and draft revision, working and current paths, SHA-256 of the current version, last approval time.
+- **Control Audit**: every event, with who and when: registered, submitted, each approval or rejection (stage and comment), withdrawn, new revision, every file move by the Workflow Service, and every change made on the page in the repository (upload, new folder, rename, delete; CorrelationId `FS`).
+- **Approver Matrix**: who approves each document type.
+
+The files themselves stay on the file server (backed up by the file server backup, Veeam). Deleted items go to `04_Workflow_System\Recycle\<date>\<user>`.
+
+## 7. Known limits of the pilot
 
 - With approvals in Teams (DC-P1, production) the pending approvers are not recorded until a decision is made; on the page (pilot) My workflows shows who each document waits for. A step in DC-P1 that writes the pending approvers to Control Audit would close this for production.
 - Do not run DC-P1 and page approvals at the same time: with DC-P1 On, the same document would also be sent to Teams.
 - On a PC the page runs as the signed-in user, without AD checks. The AD checks (Windows sign-in through IIS) apply when it is installed on the server (`webapi/README.md`).
-- Registering a new version of an approved document from the page creates a new record; a "new revision" action on the approved record is the next step.
