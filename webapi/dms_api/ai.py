@@ -38,7 +38,7 @@ class OpenWebUI:
 
     @property
     def enabled(self) -> bool:
-        return bool(self.base and self.s.ai_token)
+        return bool(self.base)
 
     @property
     def model(self) -> str:
@@ -52,9 +52,14 @@ class OpenWebUI:
         return self.s.ai_model
 
     def _h(self) -> dict:
-        return {"Authorization": f"Bearer {self.s.ai_token}", "Accept": "application/json"}
+        h = {"Accept": "application/json"}
+        if self.s.ai_token:
+            h["Authorization"] = f"Bearer {self.s.ai_token}"
+        return h
 
     def _check(self, r: requests.Response, what: str) -> dict:
+        if r.status_code in (401, 403):
+            raise AiError(f"{what}: the RH AI asks for a service token (DMS_AI_TOKEN in the service .env)")
         if r.status_code >= 400:
             raise AiError(f"{what}: {r.status_code} {r.text[:200]}")
         return r.json()

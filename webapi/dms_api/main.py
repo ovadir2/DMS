@@ -774,7 +774,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """AI Insights: ask about one file (after the AD read check) or the company knowledge bases."""
         ai: OpenWebUI = app.state.ai
         if not ai.enabled:
-            raise HTTPException(503, "AI Insights is not connected to the RH AI (DMS_AI_TOKEN)")
+            raise HTTPException(503, "AI Insights is not configured (DMS_AI_URL)")
         path, context = None, ""
         if req.path:
             path = files.resolve(s.repository_root, req.path)
