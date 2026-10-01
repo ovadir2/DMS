@@ -62,6 +62,18 @@ In any folder you may write to: **＋ New document** → choose the file → typ
 
 **Production (DC-P1):** the same decisions arrive in **Teams (Approvals)** and by email.
 
+**Notifications (pilot):** at each step the page writes a row to the **DMS Notifications** list and the flow **DC-P2 Pilot Notifications** sends it by **email and Teams** (Flow bot), with a link that opens the page on Approvals or My workflows:
+
+| When | Who is told |
+| --- | --- |
+| Submitted (or resubmitted) | The stage 1 (mandatory) approvers |
+| Stage 1 complete | The final approver |
+| Approved | The owner |
+| Rejected | The owner, with the comment |
+| Withdrawn | The approvers who were waiting |
+
+Set up once: `.\scripts\New-DmsNotifyFlowPackage.ps1 -TenantName rhisrael -ClientId $C -DocControlSiteAlias DocumentControl-TEST` (creates the list and `scripts\out\DC-P2-PilotNotifications.zip`), then **My flows > Import > Import Package (Legacy)**, pick the SharePoint, Office 365 Outlook and Teams connections, and turn DC-P2 **On**. Every notification stays in the list (who was told what and when).
+
 Every decision is a Control Audit row (Approved / Rejected, stage, comment, who, when), and My workflows shows for each submitted document **who it is waiting for**.
 
 ### Where the file is at each status
@@ -141,6 +153,7 @@ All the metadata is in SharePoint (`DocumentControl` site), which Microsoft 365 
 - **Document Register**: one record per document: ID, title, type, area, control mode, owner, status, current and draft revision, working and current paths, SHA-256 of the current version, last approval time.
 - **Control Audit**: every event, with who and when: registered, submitted, each approval or rejection (stage and comment), withdrawn, new revision, every file move by the Workflow Service, and every change made on the page in the repository (upload, new folder, rename, delete; CorrelationId `FS`).
 - **Approver Matrix**: who approves each document type.
+- **DMS Notifications**: every email/Teams notification of the pilot (recipients, subject, message, link).
 
 The files themselves stay on the file server (backed up by the file server backup, Veeam). Deleted items go to `04_Workflow_System\Recycle\<date>\<user>`.
 

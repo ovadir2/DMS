@@ -56,6 +56,8 @@ class Settings:
     max_upload_mb: int = 500
     search_limit: int = 200
     approvals: str = "flow"                 # flow (DC-P1 in Teams) | page (approve on the DMS page; turn DC-P1 off)
+    notify: bool = True                     # page approvals: write DMS Notifications (email + Teams by DC-P2)
+    page_url: str = ""                      # the DMS page address used in notification links
     admins: list[str] = field(default_factory=list)   # DMS super users: submit any document, see all workflows
     sp_auth: str = "certificate"            # certificate (server) | interactive (pilot on a PC, your own sign-in)
     file_service_seconds: int = 0           # >0: run the Workflow Service file moves inside the web service
@@ -105,6 +107,8 @@ class Settings:
             sharepoint=e("DMS_SHAREPOINT", "online"),
             sp_auth=e("DMS_SP_AUTH", "certificate"),
             approvals=e("DMS_APPROVALS", "flow"),
+            notify=e("DMS_NOTIFY", "1") not in ("0", "false", "no"),
+            page_url=e("DMS_PAGE_URL", ""),
             admins=[a.strip().lower() for a in e("DMS_ADMINS", "").split(",") if a.strip()],
             file_service_seconds=int(e("DMS_FILE_SERVICE_SECONDS", "0")),
             ai_url=e("DMS_AI_URL", ""),

@@ -130,7 +130,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/client-config")
     def client_config():
-        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "fileService": s.file_service_seconds > 0,
+        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0,
                 "approvals": s.approvals,
                 "site": s.site_url if s.sharepoint != "memory" else "", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,
@@ -513,6 +513,35 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return {"stage": 1, "pending": pending1, "approved": sorted(stage1), "rule": True}
         return {"stage": 2, "pending": [rule["final"]] if rule["final"] else [], "approved": sorted(stage1), "rule": True}
 
+    def notify(kind: str, d: dict, to: list[str], comment: str = "") -> None:
+        """Pilot (page approvals): tell people by email and Teams through DMS Notifications + DC-P2."""
+        to = sorted({t for t in to if t})
+        if s.approvals != "page" or not s.notify or not to:
+            return
+        doc_id, title = d.get("documentId") or "", d.get("title") or ""
+        texts = {
+            "waiting": (f"{doc_id} {title} - waiting for your approval / ממתין לאישורך",
+                        "approvals", f"{doc_id} \"{title}\" is waiting for your approval. מסמך {doc_id} ממתין לאישורך."),
+            "approved": (f"{doc_id} {title} - approved / אושר", "workflows",
+                         f"{doc_id} \"{title}\" was approved. המסמך {doc_id} אושר."),
+            "rejected": (f"{doc_id} {title} - rejected / נדחה", "workflows",
+                         f"{doc_id} \"{title}\" was rejected: {comment}. המסמך {doc_id} נדחה: {comment}"),
+            "withdrawn": (f"{doc_id} {title} - withdrawn / נמשך", "approvals",
+                          f"{doc_id} \"{title}\" was withdrawn and no longer needs your approval. המסמך {doc_id} נמשך ואינו ממתין עוד לאישורך."),
+        }
+        subject, view, body = texts[kind]
+        base = s.page_url or "/dms/dms-page?lang=EN"
+        link = base + ("&" if "?" in base else "?") + f"view={view}"
+        try:
+            sp().notify(to=to, subject=subject, body=body, link=link, ref=doc_id)
+        except Exception as e:  # noqa: BLE001 - a notification must never block the workflow
+            logger.warning("notification not written (%s): %s", kind, e)
+
+    def notify_stage(d: dict) -> None:
+        """Tell the approvers of the current stage of a submitted document."""
+        st = approval_state(d, events_by_doc().get(d.get("documentId") or "", []), {})
+        notify("waiting", d, st["pending"])
+
     @app.get("/api/approvals")
     def approvals(everyone: bool = Query(False, description="Super users: every pending approval"), user: User = Depends(current_user)):
         """Documents waiting for this user's approval (DMS_APPROVALS=page)."""
@@ -570,6 +599,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                        to_status=c["Approved_ReadOnly"] if final else c["Submitted"], actor=user.email,
                        details=tag + (f": {req.comment.strip()}" if req.comment.strip() else ""))
         log(user, "approve" if req.approve else "reject", f"{doc_id} {tag}")
+        after = sp().document(item_id)
+        if not req.approve:
+            notify("rejected", after, [after.get("ownerEmail") or ""], req.comment.strip())
+        elif after.get("lifecycleStatus") == c["Approved_ReadOnly"]:
+            notify("approved", after, [after.get("ownerEmail") or ""])
+        elif st["stage"] == 1 and approval_state(after, events_by_doc().get(after.get("documentId") or "", []), {})["stage"] == 2:
+            notify_stage(after)                                 # stage 1 complete: the final approver
         d = with_key(sp().document(item_id))
         if d["statusKey"] == "Submitted":
             d.update(approval_state(d, events_by_doc().get(d.get("documentId") or "", []), {}))
@@ -783,7 +819,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         sp().update(item_id, {"LifecycleStatus": s.choices["Submitted"]})
         sp().audit(document_id=doc["documentId"], event=s.choices["SubmittedEvent"], from_status=s.choices["Working"],
                    to_status=s.choices["Submitted"], actor=user.email, details="Submitted from the DMS page")
-        return with_key(sp().document(item_id))
+        after = sp().document(item_id)
+        if s.approvals == "page":
+            notify_stage(after)
+        return with_key(after)
 
     @app.post("/api/documents/{item_id}/revise")
     def revise(item_id: int, file: UploadFile | None = File(None), submit: bool = Form(False),
@@ -843,7 +882,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "Only the document owner (or a DMS super user) can withdraw it")
         if doc.get("lifecycleStatus") != c["Submitted"]:
             raise HTTPException(409, "Only a submitted document can be withdrawn")
+        waiting = approval_state(doc, events_by_doc().get(doc.get("documentId") or "", []), {})["pending"] if s.approvals == "page" else []
         sp().update(item_id, {"LifecycleStatus": c["Working"]})
+        notify("withdrawn", doc, waiting)
         sp().audit(document_id=doc.get("documentId") or f"ID {item_id}", event=c["Cancelled"], from_status=c["Submitted"],
                    to_status=c["Working"], actor=user.email, details="Withdrawn from the DMS page")
         log(user, "withdraw", doc.get("documentId") or str(item_id))

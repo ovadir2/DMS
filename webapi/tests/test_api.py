@@ -716,3 +716,38 @@ def test_repository_changes_are_audited(tmp_path):
     rows = [(e["documentId"], e["details"].split(":")[0], e["actor"]) for e in reversed(sp.audit_events())]
     assert rows == [("FS", "upload", USER), ("FS", "new-folder", USER), ("FS", "rename", USER), ("FS", "delete", USER)]
     assert str(root) not in sp.audit_events()[0]["details"]                          # paths relative to the root
+
+
+def test_notifications_follow_the_approval(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Q.xlsx").write_text("x")
+    (q / "R.xlsx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 page_url="https://dms/dms/dms-page?lang=EN")
+
+    class Rules(MemorySharePoint):
+        def approver_rule(self, t):
+            return {"mandatory": ["dana@rh.co.il", "eli@rh.co.il"], "final": "boss@rh.co.il"}
+    sp = Rules(s)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Q.xlsx"), "documentType": "x", "documentArea": "y", "submit": True}).json()
+    n = sp.notifications
+    assert n[-1]["to"] == ["dana@rh.co.il", "eli@rh.co.il"] and "waiting" in n[-1]["subject"] and n[-1]["link"].endswith("view=approvals")
+    for who in ("dana@rh.co.il", "eli@rh.co.il"):
+        s.dev_user = who
+        c.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    assert n[-1]["to"] == ["boss@rh.co.il"] and len(n) == 2                       # stage 1 complete -> final approver only
+    s.dev_user = "boss@rh.co.il"
+    c.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    assert n[-1]["to"] == [USER] and "approved" in n[-1]["subject"]
+    s.dev_user = USER
+    e = c.post("/api/documents", json={"path": str(q / "R.xlsx"), "documentType": "x", "documentArea": "y", "submit": True}).json()
+    c.post(f"/api/documents/{e['id']}/withdraw")
+    assert "withdrawn" in n[-1]["subject"] and n[-1]["to"] == ["dana@rh.co.il", "eli@rh.co.il"]
+    c.post(f"/api/documents/{e['id']}/submit")
+    s.dev_user = "dana@rh.co.il"
+    c.post(f"/api/approvals/{e['id']}", json={"approve": False, "comment": "fix p.2"})
+    assert n[-1]["to"] == [USER] and "fix p.2" in n[-1]["body"]
