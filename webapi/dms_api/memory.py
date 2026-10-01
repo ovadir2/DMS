@@ -6,12 +6,20 @@ from datetime import datetime, timezone
 
 from .config import Settings
 
-CHOICES = {
-    "he": {"DocumentType": ["הצעת מחיר", "נוהל", "שרטוט", "דוח בדיקה", "הוראת עבודה"], "DocumentArea": ["מסחרי", "פיתוח", "ייצור", "איכות"],
-           "ControlMode": ["תהליך אישור רשות", "תהליך אישור חובה"]},
-    "en": {"DocumentType": ["Quotation", "Procedure", "Drawing", "Test report", "Work instruction"],
-           "DocumentArea": ["Commercial", "Development", "Manufacturing", "Quality"], "ControlMode": ["Workflow Optional", "Workflow Required"]},
+# The same choices Provision-DMS.ps1 creates on the sites (English key, Hebrew value)
+_PAIRS = {
+    "DocumentType": [("Company Profile", "פרופיל חברה"), ("Strategy", "אסטרטגיה"), ("Policy", "מדיניות"), ("Procedure", "נוהל"),
+                     ("Quotation", "הצעת מחיר"), ("Contract / NDA", "חוזה / NDA"), ("SOW", "SOW - הגדרת עבודה"),
+                     ("SRS", "SRS - דרישות מערכת"), ("PDR / CDR", "PDR / CDR - סקר תכן"), ("FAT / SAT / FDR", "FAT / SAT / FDR - בדיקות קבלה"),
+                     ("Work Instruction", "הוראת עבודה"), ("Test Procedure", "נוהל בדיקה"), ("PFMEA / Control Plan", "PFMEA / תוכנית בקרה"),
+                     ("ECO / ECN", "ECO / ECN - הודעת שינוי"), ("IT Procedure", "נוהל מערכות מידע"), ("Security Policy", "מדיניות אבטחת מידע")],
+    "DocumentArea": [("Management", "ניהול"), ("Commercial", "מסחרי"), ("Development", "פיתוח"), ("Manufacturing", "ייצור"),
+                     ("Test Engineering", "הנדסת בדיקות"), ("Quality", "איכות"), ("Changes", "שינויים"), ("IT", "מערכות מידע"),
+                     ("InfoSec", "אבטחת מידע")],
+    "ControlMode": [("Collaboration", "שיתופי ללא תהליך"), ("Workflow Optional", "תהליך אישור רשות"),
+                    ("Workflow Required", "תהליך אישור חובה"), ("Read-Only Record", "רשומה לקריאה בלבד")],
 }
+CHOICES = {lang: {f: [p[i] for p in pairs] for f, pairs in _PAIRS.items()} for i, lang in ((0, "en"), (1, "he"))}
 
 
 class MemorySharePoint:

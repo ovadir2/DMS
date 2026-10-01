@@ -62,8 +62,10 @@ def plan(source: str, target: str) -> list[dict]:
     return out
 
 
-def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: str, document_type: str,
-        document_area: str, control_mode: str | None, dry_run: bool, copy_missing: bool, update_links: bool) -> None:
+def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: str, document_type: str | None,
+        document_area: str | None, control_mode: str | None, dry_run: bool, copy_missing: bool, update_links: bool,
+        classify=None) -> None:
+    """document_type / document_area None: each file inherits them from its blueprint folder (classify)."""
     c = s.choices
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     job["stamp"] = stamp
@@ -80,7 +82,8 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
     L(f"DMS First loading {'(DRY RUN) ' if dry_run else ''}started by {actor}")
     L(f"  source: {source}")
     L(f"  target: {target}")
-    L(f"  document type: {document_type} | area: {document_area} | control mode: {control_mode or '-'}")
+    L(f"  document type: {document_type or 'from the blueprint folder'} | area: {document_area or 'from the blueprint folder'}"
+      f" | control mode: {control_mode or 'from the blueprint folder'}")
     L(f"  copy missing from source: {copy_missing} | update File Linker: {update_links} (configured: {bool(linker and linker.enabled)})")
     items = plan(source, target)
     L(f"  files found: {len(items)} (source and target trees, without workflow folders and system files)")
@@ -89,14 +92,22 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
                   for p in (d.get("currentUncPath"), d.get("workingUncPath")) if p}
     for it in items:
         row = {"source": it["source"], "target": it["current"], "documentId": "", "revision": "", "sha256": "",
-               "result": "", "fileLinker": ""}
+               "documentType": "", "documentArea": "", "result": "", "fileLinker": ""}
         L(f"[{job['done'] + 1}/{len(items)}] {it['relative']}")
         L(f"    source path: {it['source']} (exists: {os.path.isfile(it['source'])})")
         L(f"    in target:   {it['moved']} (exists: {os.path.isfile(it['moved'])})")
         try:
+            bp = classify(it["folder"]) if classify and not (document_type and document_area and control_mode) else {}
+            ftype, farea = document_type or bp.get("documentType"), document_area or bp.get("documentArea")
+            fmode = control_mode or bp.get("controlMode")
+            row.update(documentType=ftype or "", documentArea=farea or "")
+            L(f"    type: {ftype or '-'} | area: {farea or '-'} | control mode: {fmode or '-'}"
+              + (" (from the blueprint folder)" if bp else ""))
             if os.path.normcase(os.path.normpath(it["current"])) in registered:
                 row["result"] = "skipped - already loaded"
                 L(f"    skipped: already registered at {it['current']}")
+            elif not ftype or not farea:
+                raise ValueError("no document type or area: this folder does not set them in the blueprint; choose them for the run")
             elif dry_run:
                 where = "in the target" if os.path.isfile(it["moved"]) else ("copy from the source" if copy_missing else "MISSING in the target")
                 row["result"] = f"plan - {where} -> Current_ReadOnly"
@@ -125,8 +136,8 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
                 L(f"    SHA-256 {sha}")
                 rev = f"{files.parse_revision(os.path.basename(it['current']))[1] or 1:02d}"
                 title = os.path.splitext(os.path.basename(it["current"]))[0]
-                doc = sp.create_document(title=title, path=it["current"], document_type=document_type, document_area=document_area,
-                                         owner_email=actor, control_mode=control_mode, document_id=None)
+                doc = sp.create_document(title=title, path=it["current"], document_type=ftype, document_area=farea,
+                                         owner_email=actor, control_mode=fmode, document_id=None)
                 sp.update(doc["id"], {"LifecycleStatus": c["Approved_ReadOnly"], "CurrentUncPath": it["current"],
                                       "CurrentSHA256": sha, "CurrentRevision": rev, "WorkingUncPath": "", "DraftRevision": "",
                                       "LastApprovedUtc": datetime.now(timezone.utc).isoformat()})
@@ -215,7 +226,7 @@ def _write_report(s: Settings, job: dict) -> str | None:
         os.makedirs(folder, exist_ok=True)
         path = os.path.join(folder, f"FirstLoading_{job['stamp']}{'_dry-run' if job['dryRun'] else ''}.csv")
         with open(path, "w", newline="", encoding="utf-8-sig") as f:
-            w = csv.DictWriter(f, fieldnames=["source", "target", "documentId", "revision", "sha256", "result", "fileLinker"])
+            w = csv.DictWriter(f, fieldnames=["source", "target", "documentId", "revision", "sha256", "documentType", "documentArea", "result", "fileLinker"])
             w.writeheader()
             w.writerows(job["rows"])
         return path

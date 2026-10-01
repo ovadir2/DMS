@@ -46,8 +46,8 @@ class DeleteRequest(BaseModel):
 class RegisterRequest(BaseModel):
     path: str = Field(description="UNC path of the file, inside the repository root")
     title: str | None = Field(None, description="Defaults to the file name without the extension")
-    documentType: str
-    documentArea: str
+    documentType: str | None = Field(None, description="Defaults to the type of the blueprint folder")
+    documentArea: str | None = Field(None, description="Defaults to the area of the blueprint folder")
     controlMode: str | None = None
     documentId: str | None = Field(None, description="Defaults to <prefix>-<item id>, e.g. DMS-00012")
     submit: bool = Field(False, description="Also submit it for approval")
@@ -79,8 +79,8 @@ class ShareRequest(BaseModel):
 class FirstLoadRequest(BaseModel):
     source: str = Field(description="The old repository folder (any path the service can read)")
     target: str = Field(description="The folder under the repository root")
-    documentType: str
-    documentArea: str
+    documentType: str | None = Field(None, description="Empty: each file gets the type of its blueprint folder")
+    documentArea: str | None = Field(None, description="Empty: each file gets the area of its blueprint folder")
     controlMode: str | None = None
     dryRun: bool = True
     copyMissing: bool = True
@@ -203,6 +203,19 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.get("/api/options")
     def options(_: User = Depends(current_user)):
         return {f: sp().choices(f) for f in ("DocumentType", "DocumentArea", "ControlMode")}
+
+    def classify(folder: str) -> dict:
+        """Document type, area and control mode inherited from the blueprint folder, as the site's choice values."""
+        bp = blueprint.classify(rel_parts(folder))
+        typ = blueprint.choice(bp["type"], sp().choices("DocumentType"))
+        mode = blueprint.choice("Workflow Required", sp().choices("ControlMode")) if typ else None
+        return {"documentType": typ, "documentArea": blueprint.choice(bp["area"], sp().choices("DocumentArea")), "controlMode": mode}
+
+    @app.get("/api/classify")
+    def classify_folder(path: str, _: User = Depends(current_user)):
+        """What a file saved in this folder (or this file) inherits from the blueprint."""
+        full = files.resolve(s.repository_root, path)
+        return classify(full if os.path.isdir(full) else os.path.dirname(full))
 
     @app.get("/api/customers")
     def customers(q: str = "", user: User = Depends(current_user)):
@@ -856,9 +869,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if existing:
             raise HTTPException(409, {"message": "The file is already registered", "document": with_key(existing)})
         title = req.title or os.path.splitext(os.path.basename(path))[0]
-        doc = sp().create_document(title=title, path=path, document_type=req.documentType,
-                                   document_area=req.documentArea, owner_email=user.email,
-                                   control_mode=req.controlMode, document_id=req.documentId)
+        bp = classify(os.path.dirname(path))
+        document_type, document_area = req.documentType or bp["documentType"], req.documentArea or bp["documentArea"]
+        if not document_type or not document_area:
+            raise HTTPException(400, "Choose the document type and area (this folder does not set them)")
+        doc = sp().create_document(title=title, path=path, document_type=document_type,
+                                   document_area=document_area, owner_email=user.email,
+                                   control_mode=req.controlMode or bp["controlMode"], document_id=req.documentId)
         rev = files.parse_revision(os.path.basename(path))[1]
         sp().update(doc["id"], {"DraftRevision": f"{rev or 1:02d}"})
         sp().audit(document_id=doc["documentId"], event=s.choices["Created"], from_status="",
@@ -986,7 +1003,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if os.path.normcase(source) == os.path.normcase(target):
             raise HTTPException(400, "The source and the target must be different folders")
         job = first_load.start(sp(), s, app.state.linker, user.email, source=source, target=target,
-                               document_type=req.documentType, document_area=req.documentArea, control_mode=req.controlMode,
+                               document_type=req.documentType or None, document_area=req.documentArea or None,
+                               control_mode=req.controlMode or None, classify=classify,
                                dry_run=req.dryRun, copy_missing=req.copyMissing, update_links=req.updateLinks)
         log(user, "first-load", f"{'dry run ' if req.dryRun else ''}{source} -> {target}")
         return {k: job[k] for k in ("id", "state", "dryRun")}
