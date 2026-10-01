@@ -318,7 +318,7 @@ document.querySelector('.brand').onclick = () => {
 
 const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${esc(d ? (T[d.statusKey] || d.lifecycleStatus) : T.None)}</span>${d ? ` <span class="muted small">${esc(d.documentId)}</span>` : ''}`;
 function fileActions(f) {
-  return (aiOn ? `<button type="button" class="link ai" data-ai="${esc(f.path)}">✦ AI</button>` : '') + `${f.officeUri ? `<a class="link" href="${esc(f.officeUri)}">${T.open}</a>` : ''}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cp="${esc(f.path)}">🔗 ${T.copyLink}</button>`
+  return `${f.officeUri ? `<a class="link" href="${esc(f.officeUri)}">${T.open}</a>` : ''}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cp="${esc(f.path)}">🔗 ${T.copyLink}</button>`
     + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-drn="${f.document.id}" data-name="${esc(f.name)}">${T.rename}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
         + (f.document.statusKey === 'Approved_ReadOnly' && samePath(f.path, f.document.currentUncPath) ? `<button type="button" class="link" data-rev="${f.document.id}">⟳ ${T.newRev}</button><button type="button" class="link" data-share="${f.document.id}">✉ ${T.share}</button>` : '')
                   : (f.managed ? '' : `<button type="button" class="link" data-st="${esc(f.path)}">${T.start}</button>`));
@@ -498,7 +498,6 @@ async function mine(v) {
       <td class="hide-s muted small">${when(d.submittedUtc)}</td>
       <td class="hide-s small">${who(d.decision || d.lastEvent)}${d.decision && d.decision.details ? `<div class="muted">${esc(d.decision.details)}</div>` : ''}</td>
       <td class="actions">${state.everyone ? `<div class="muted small">${esc(d.ownerName || d.ownerEmail || '')}</div>` : ''}${['Working', 'Rejected'].includes(d.statusKey) ? `<button type="button" class="link" data-sub="${d.id}">${T.submit}</button><button type="button" class="link" data-drn="${d.id}" data-name="${esc((d.workingUncPath || '').split(/[\\/]/).pop())}">${T.rename}</button><button type="button" class="link" data-ddel="${d.id}" style="color:var(--err)">${T.del}</button>` : ''}
-        ${aiOn && (d.currentUncPath || d.workingUncPath) ? `<button type="button" class="link ai" data-ai="${esc(d.currentUncPath || d.workingUncPath)}">✦ AI</button>` : ''}
         ${d.currentUncPath ? `<button type="button" class="link" data-cp="${esc(d.currentUncPath)}">🔗 ${T.copy}</button>` : ''}
         ${d.workingUncPath ? `<button type="button" class="link" data-cp="${esc(d.workingUncPath)}">🔗 ${T.copyWorking}</button>` : ''}
         ${d.statusKey === 'Submitted' ? `<button type="button" class="link" data-wd="${d.id}" style="color:var(--err)">${T.withdraw}</button>` : ''}
@@ -522,7 +521,6 @@ async function approvalsView(v) {
       <td class="hide-s small muted">${when(d.submittedUtc)}${days(d.submittedUtc) !== null ? `<div>${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}</td>
       <td class="actions">${d.officeUri ? `<a class="link" href="${esc(d.officeUri)}">${T.open}</a>` : ''}
         ${d.file ? `<button type="button" class="link" data-dl="${esc(d.file)}">${T.download}</button>` : ''}
-        ${aiOn && d.file ? `<button type="button" class="link ai" data-ai="${esc(d.file)}">✦ AI</button>` : ''}
         <div style="margin-top:6px"><button type="button" class="pillbtn small" data-ok="${d.id}">✔ ${T.approve}${d.mine ? '' : ' (' + T.asSuper + ')'}</button>
         <button type="button" class="pillbtn small light" data-no="${d.id}" style="color:var(--err)">✖ ${T.reject}</button></div></td></tr>`).join('')}
     </table>` : `<p class="muted">${T.apNone}</p>`}`;
@@ -650,8 +648,7 @@ function suggestionHtml(x) {
     <div class="muted small ltr">${esc(loc)}</div>${x.reason ? `<div class="small sg-r">${esc(x.reason)}</div>` : ''}
     <div class="small sg-a">${x.officeUri ? `<a class="link" href="${esc(x.officeUri)}">${T.open}</a>` : ''}
       <button type="button" class="link" data-f="${esc(x.folder)}">${T.goFolder}</button>
-      <button type="button" class="link" data-dl="${esc(x.path)}">${T.download}</button>
-      ${aiOn ? `<button type="button" class="link ai" data-ai="${esc(x.path)}">✦ ${T.askAbout}</button>` : ''}</div></div>`;
+      <button type="button" class="link" data-dl="${esc(x.path)}">${T.download}</button></div></div>`;
 }
 const planText = p => [p.customer, p.project].filter(Boolean).join(lang === 'HE' ? ' ‹ ' : ' › ');
 async function smartResults(v, text) {

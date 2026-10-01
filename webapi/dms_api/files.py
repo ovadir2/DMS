@@ -63,13 +63,40 @@ def same_path(a: str | None, b: str | None) -> bool:
     return bool(a) and bool(b) and _norm(a) == _norm(b)
 
 
+LONG_PATH = 200          # Office cannot open longer paths (about 218 characters): use the short (8.3) path
+
+
+def short_path(path: str) -> str:
+    """The Windows short (8.3) form of a long path, e.g. \\\\srv\\Shares\\QUALIT~1\\..., so Office can open it.
+    The same path when it is short enough, when not on Windows, or when the volume has no 8.3 names."""
+    if os.name != "nt" or len(path) <= LONG_PATH:
+        return path
+    try:
+        import ctypes
+        ext = "\\\\?\\UNC\\" + path[2:] if path.startswith("\\\\") else "\\\\?\\" + path
+        buf = ctypes.create_unicode_buffer(32768)
+        n = ctypes.windll.kernel32.GetShortPathNameW(ext, buf, 32768)
+        if not n or n >= 32768:
+            return path
+        short = buf.value
+        if short.startswith("\\\\?\\UNC\\"):
+            short = "\\\\" + short[8:]
+        elif short.startswith("\\\\?\\"):
+            short = short[4:]
+        return short if len(short) < len(path) else path
+    except (OSError, AttributeError, ValueError):
+        return path
+
+
 def office_uri(path: str) -> str | None:
-    """ms-word/ms-excel/ms-powerpoint link that opens the file from the server in the desktop app."""
+    """ms-word/ms-excel/ms-powerpoint link that opens the file from the server in the desktop app
+    (a long path is given in its short 8.3 form)."""
     app = {".doc": "ms-word", ".docx": "ms-word", ".docm": "ms-word",
            ".xls": "ms-excel", ".xlsx": "ms-excel", ".xlsm": "ms-excel",
            ".ppt": "ms-powerpoint", ".pptx": "ms-powerpoint"}.get(os.path.splitext(path)[1].lower())
     if not app:
         return None
+    path = short_path(path)
     url = "file:" + path.replace("\\", "/") if path.startswith("\\\\") else "file:///" + path.replace("\\", "/").lstrip("/")
     return f"{app}:ofv|u|{url}"
 
