@@ -34,6 +34,7 @@ So the NTFS permissions on the file server (the `DL_FS_*` groups, docs/02 §3.2)
 | **My workflows** (header): every document the user owns or registered/submitted, with counts per status (Working, Submitted, Approved, Rejected - back to you), days waiting, the last decision with the approver's comment, and the full history | `GET /api/my-workflows` | The user's own workflows only. Built from the Document Register and Control Audit |
 | Submit (or resubmit after a rejection) | `POST /api/documents/{id}/submit` | Owner only |
 | **AI Insights** (header, or ✦ AI on a file): ask about a document (summary, key requirements, risks, dates) or the company knowledge | `GET /api/ai/status`, `POST /api/ai/ask` | See below |
+| **Find a file** (AI Insights panel, or **✦ Smart** in the search): describe the file in your own words ("the latest FCT report of the CRU4 project") and get a short list of suggestions, each with where it is, its DMS status, why it was suggested, and Open / Go to folder / Ask about it | `POST /api/ai/find` | Searches only folders the user may read (AD). Superseded revisions and the approval queue are skipped. Works without the AI too, by keywords |
 
 Protected:
 - The company structure (`$Root`, `02_Customers`, each customer folder) cannot be renamed or deleted. The depth is set with `DMS_PROTECTED_DEPTH`.
@@ -48,6 +49,7 @@ AI Insights connects to RH's on-prem LLM, the Open WebUI at `https://chat.ai.rh-
 
 - **About a file:** the service checks that the user may read the file (AD), uploads it to Open WebUI (once per version), and asks the question with the file attached. The DMS record (ID, type, status, revision, owner) is added as context.
 - **Company knowledge:** without a file, the question goes to the knowledge bases in `DMS_AI_KNOWLEDGE_IDS` (RAG), and the answer lists its sources.
+- **Find a file:** the AI turns the request into a search plan (keywords, customer, project, document kind, newest or not). The service searches only the folders the user may read and scores the matches by name, blueprint folder and date. The AI then picks the best ones and says why. The AI only ever sees the names of customers and files the user is allowed to see, never file contents, and never decides on access. Without AI Insights configured, the same search runs on the request's keywords.
 - Answers are in the page language (English or Hebrew). Documents go only to the on-prem LLM, and every question is written to the service log.
 
 Setup:

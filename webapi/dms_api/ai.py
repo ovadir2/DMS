@@ -8,7 +8,9 @@ Files are sent only after the user's AD read check, and only to the on-prem LLM.
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 import time
 
 import requests
@@ -102,3 +104,52 @@ class OpenWebUI:
             if name and name not in sources:
                 sources.append(name)
         return {"answer": answer, "sources": sources, "model": self.s.ai_model}
+
+    # ------------------------------------------------------------------ AI-assisted file finding
+    def _complete(self, system: str, user: str, timeout: int = 60) -> str:
+        body = {"model": self.s.ai_model, "stream": False,
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+        r = self.http.post(f"{self.base}/api/chat/completions", headers={**self._h(), "Content-Type": "application/json"},
+                           json=body, timeout=timeout)
+        try:
+            return self._check(r, "AI")["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as e:
+            raise AiError("Unexpected answer from the AI") from e
+
+    @staticmethod
+    def _json(text: str):
+        m = re.search(r"\{.*\}|\[.*\]", text, re.S)          # the model may wrap the JSON in prose or ``` fences
+        if not m:
+            raise AiError("The AI did not return JSON")
+        return json.loads(m.group(0))
+
+    def plan_search(self, question: str, customers: list[str], kinds: list[tuple[str, str]]) -> dict:
+        """Turn a free-text request into search terms. Only folder names the user may see are offered."""
+        system = ("You turn a request for a file in a company document repository into a JSON search plan. "
+                  "Reply with JSON only: {\"terms\": [keywords that may appear in the file or folder name, in the "
+                  "language of the names, 1-6 items], \"customer\": one of the customers or null, \"project\": a project "
+                  "name or code mentioned or null, \"kind\": one of the kinds or null, \"extensions\": [like \".xlsx\"] or [], "
+                  "\"latest\": true if the user wants the newest version}.\n"
+                  f"Customers: {', '.join(customers[:300])}\nKinds: {', '.join(f'{k} ({en})' for k, en in kinds)}")
+        plan = self._json(self._complete(system, question))
+        if not isinstance(plan, dict):
+            raise AiError("The AI returned an invalid plan")
+        return plan
+
+    def rank(self, question: str, candidates: list[dict], lang: str = "EN") -> list[dict]:
+        """Pick and explain the best candidates. The AI sees only names and paths the user may already see."""
+        listing = "\n".join(f"{i}. {c['relative']} | modified {c['modified'][:10]}"
+                             + (f" | DMS {c['documentId']} {c['status']}" if c.get("documentId") else "") for i, c in enumerate(candidates))
+        system = ("You help a user find files. From the numbered list, choose up to 8 files that best match the request, best first. "
+                  "Reply with JSON only: [{\"i\": number, \"reason\": short reason}]. "
+                  + ("Write the reasons in Hebrew." if lang == "HE" else "Write the reasons in English."))
+        picks = self._json(self._complete(system, f"Request: {question}\n\nFiles:\n{listing}"))
+        out = []
+        for p in picks if isinstance(picks, list) else []:
+            try:
+                i = int(p.get("i"))
+            except (TypeError, ValueError, AttributeError):
+                continue
+            if 0 <= i < len(candidates) and all(o["i"] != i for o in out):
+                out.append({"i": i, "reason": str(p.get("reason") or "")[:300]})
+        return out

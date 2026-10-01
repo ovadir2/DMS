@@ -373,3 +373,51 @@ def test_ai_insights(env, limited):
     assert c.post("/api/ai/ask", json={"question": "Summarize", "path": str(b)}).status_code == 403
     c.app.state.ai = type("Off", (), {"enabled": False})()
     assert c.post("/api/ai/ask", json={"question": "hi"}).status_code == 503
+
+
+def _tree_for_find(q):
+    cust = q.parents[1]
+    prj = cust / "Projects" / "PRJ-101_CRU4"
+    for d in ("Changes/ECO", "Test_Engineering/Test_Reports", "Development/Obsolete_ReadOnly"):
+        (prj / d).mkdir(parents=True)
+    (prj / "Changes" / "ECO" / "ECO-17 connector change.docx").write_text("x")
+    (prj / "Test_Engineering" / "Test_Reports" / "FCT report lot 3.pdf").write_text("x")
+    (prj / "Development" / "Obsolete_ReadOnly" / "FCT report lot 1.pdf").write_text("x")
+    secret = q.parents[2] / "Customer_B" / "Commercial"
+    secret.mkdir(parents=True)
+    (secret / "FCT quote Customer_B.xlsx").write_text("x")
+    return prj
+
+
+def test_find_without_ai_uses_keywords_and_ad(env, limited):
+    c, _, q = env
+    _tree_for_find(q)
+    r = c.post("/api/ai/find", json={"question": "FCT quote"}).json()
+    names = [x["name"] for x in r["suggestions"]]
+    assert r["usedAi"] is False and names[0] == "CRU 4 FCT Quote_Rev1.xlsx"
+    assert "FCT quote Customer_B.xlsx" not in names            # AD: Customer_B is not visible
+    assert "FCT report lot 1.pdf" not in names                  # superseded revisions are not offered
+    assert "FCT report lot 3.pdf" in names
+
+
+class PlanningAI(FakeAI):
+    def plan_search(self, question, customers, kinds):
+        self.seen_customers = customers
+        return {"terms": ["connector"], "customer": "Customer_A", "project": "PRJ-101", "kind": "eco", "extensions": [], "latest": True}
+
+    def rank(self, question, candidates, lang="EN"):
+        self.ranked = [c["relative"] for c in candidates]
+        return [{"i": 0, "reason": "ECO about the connector"}]
+
+
+def test_find_with_ai_plan_and_rank(env, limited):
+    c, _, q = env
+    _tree_for_find(q)
+    ai = PlanningAI()
+    c.app.state.ai = ai
+    r = c.post("/api/ai/find", json={"question": "the ECO about the connector in the CRU4 project", "lang": "EN"}).json()
+    assert r["usedAi"] and r["plan"] == {"terms": ["connector"], "customer": "Customer_A", "project": "PRJ-101_CRU4", "kind": "eco"}
+    assert ai.seen_customers == ["Customer_A"]                  # the AI only hears about allowed customers
+    assert all("Customer_B" not in p for p in ai.ranked)
+    assert [x["name"] for x in r["suggestions"]] == ["ECO-17 connector change.docx"]
+    assert r["suggestions"][0]["reason"] == "ECO about the connector"

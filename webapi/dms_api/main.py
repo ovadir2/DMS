@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -16,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from . import blueprint, files
+from . import blueprint, files, finder
 from .ai import AiError, OpenWebUI
 from .auth import current_user
 from .config import WORKFLOW_FOLDERS, Settings
@@ -54,6 +55,11 @@ class RegisterRequest(BaseModel):
 class AskRequest(BaseModel):
     question: str = Field(min_length=2, max_length=4000)
     path: str | None = Field(None, description="A repository file to ask about; without it the knowledge bases are used")
+    lang: str = "EN"
+
+
+class FindRequest(BaseModel):
+    question: str = Field(min_length=2, max_length=1000)
     lang: str = "EN"
 
 
@@ -413,6 +419,78 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.get("/api/ai/status")
     def ai_status(_: User = Depends(current_user)):
         return {"enabled": app.state.ai.enabled, "model": s.ai_model, "knowledge": bool(s.ai_knowledge_ids)}
+
+    @app.post("/api/ai/find")
+    def ai_find(req: FindRequest, user: User = Depends(current_user)):
+        """Find files from a free-text request, only among what the user may see. With AI Insights
+        configured, the AI makes the search plan and ranks the matches with a reason; without it,
+        the request's keywords are used."""
+        ai: OpenWebUI = app.state.ai
+        lang = "HE" if req.lang.upper() == "HE" else "EN"
+        cust_list = customers("", user)
+        plan, used_ai = None, False
+        if ai.enabled:
+            try:
+                plan = ai.plan_search(req.question, [c["name"] for c in cust_list], [(k, en) for k, en, _he, _t in blueprint.SAVE_GUIDE])
+                used_ai = True
+            except (AiError, requests.RequestException, ValueError):
+                plan = None
+        plan = plan or {}
+        terms = [str(t) for t in (plan.get("terms") or []) if str(t).strip()][:8] or finder.keywords(req.question)
+        q_low = req.question.lower()
+        cust = next((c for c in cust_list if str(plan.get("customer") or "").lower() == c["name"].lower()), None) \
+            or next((c for c in cust_list if c["name"].lower() in q_low), None)
+        start, project = cust["path"] if cust else customers_root(), None
+        if cust and plan.get("project"):
+            want = str(plan["project"]).lower()
+            project = next((p for p in projects(cust["path"], user) if want in p["name"].lower()), None)
+            if project:
+                start = project["path"]
+        kind = next((g for g in blueprint.SAVE_GUIDE if g[0] == plan.get("kind")), None)
+        kind_folder = kind[3][4:] if kind else None
+        if cust:
+            terms = [t for t in terms if t.lower() != cust["name"].lower()] or terms
+        idx = register_index()
+        found: list[tuple[float, str, float]] = []
+        for e in finder.walk_files(start, lambda p: user.can(p)):
+            rel = os.path.relpath(e.path, s.repository_root)
+            sc = finder.score(rel, e.name, terms, kind_folder, plan.get("extensions") or [])
+            if sc <= 0:
+                continue
+            mtime = e.stat().st_mtime
+            sc += finder.age_bonus(mtime) * (3 if plan.get("latest") else 1)
+            d = find_registered(e.path, idx)
+            if d and with_key(d)["statusKey"] == "Approved_ReadOnly":
+                sc += 0.5
+            found.append((sc, e.path, mtime))
+        found.sort(reverse=True)
+        cands = []
+        for sc, path, mtime in found[:60]:
+            if not user.can(path):
+                continue
+            d = find_registered(path, idx)
+            cands.append({"name": os.path.basename(path), "path": path, "relative": os.path.relpath(path, s.repository_root),
+                          "modified": datetime.fromtimestamp(mtime, timezone.utc).isoformat(), "score": round(sc, 2),
+                          "officeUri": files.office_uri(path), "document": with_key(d) if d else None,
+                          "documentId": d.get("documentId") if d else None, "status": d.get("lifecycleStatus") if d else None,
+                          "folder": os.path.dirname(path), "reason": ""})
+            if len(cands) >= 30:
+                break
+        suggestions = cands[:10]
+        if used_ai and cands:
+            try:
+                picks = ai.rank(req.question, cands, lang)
+                if picks:
+                    suggestions = [{**cands[p["i"]], "reason": p["reason"]} for p in picks]
+            except (AiError, requests.RequestException, ValueError):
+                pass
+        log(user, "ai-find", f"{req.question[:120]!r} -> {len(suggestions)}")
+        for x in suggestions:
+            x.pop("documentId", None)
+            x.pop("status", None)
+        return {"usedAi": used_ai, "plan": {"terms": terms, "customer": cust["name"] if cust else None,
+                                            "project": project["name"] if project else None, "kind": kind[0] if kind else None},
+                "suggestions": suggestions}
 
     @app.post("/api/ai/ask")
     def ai_ask(req: AskRequest, user: User = Depends(current_user)):
