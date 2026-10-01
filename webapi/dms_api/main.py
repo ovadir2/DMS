@@ -535,6 +535,19 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             out.setdefault(e["documentId"] or "", []).append(e)
         return out
 
+    def file_back(d: dict, status: str) -> None:
+        """Withdrawn or rejected: the file returns to its place now (not at the next file service run),
+        so it can be edited and submitted again under the same name."""
+        from .file_service import return_to_working
+        try:
+            details = return_to_working(s.repository_root, d.get("workingUncPath"))
+        except OSError as e:
+            logger.warning("file not returned to Working for %s: %s", d.get("documentId"), e)
+            return
+        if details:
+            sp().audit(document_id=d.get("documentId") or f"ID {d.get('id')}", event=s.choices["FileDone"], from_status=status,
+                       to_status=status, actor="RH-DMS-Workflow-Service", details=details, source=s.choices["WorkflowService"])
+
     def rule_for(document_type: str) -> dict | None:
         """The Approver Matrix rule; a type without an active rule is approved by the super users (pilot)."""
         rule = sp().approver_rule(document_type)
@@ -639,6 +652,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             sp().update(item_id, {"LifecycleStatus": c["Working"]})
             sp().audit(document_id=doc_id, event=c["RejectedEvent"], from_status=c["Submitted"], to_status=c["Working"],
                        actor=user.email, details=f"{tag}: {req.comment.strip()}")
+            file_back(d, c["Working"])
         else:
             if st["stage"] == 2:
                 final = True
@@ -892,6 +906,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "Only the document owner (or a DMS super user) can submit it")
         if doc.get("lifecycleStatus") != s.choices["Working"]:
             raise HTTPException(409, f"Only a document in {s.choices['Working']} can be submitted")
+        file_back(doc, s.choices["Working"])                    # still in Submitted from an earlier cycle
         if not doc.get("workingUncPath") or not os.path.isfile(files.resolve(s.repository_root, doc["workingUncPath"])):
             raise HTTPException(409, "The working file was not found on the file server")
         sp().update(item_id, {"LifecycleStatus": s.choices["Submitted"]})
@@ -1032,6 +1047,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         notify("withdrawn", doc, waiting)
         sp().audit(document_id=doc.get("documentId") or f"ID {item_id}", event=c["Cancelled"], from_status=c["Submitted"],
                    to_status=c["Working"], actor=user.email, details="Withdrawn from the DMS page")
+        file_back(doc, c["Working"])
         log(user, "withdraw", doc.get("documentId") or str(item_id))
         return with_key(sp().document(item_id))
 

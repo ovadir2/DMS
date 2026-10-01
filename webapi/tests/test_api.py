@@ -986,3 +986,43 @@ def test_first_loading_takes_the_type_from_each_folder(tmp_path):
     j = _wait(c, c.post("/api/first-load", json={"source": str(old), "target": str(target), "dryRun": False}).json()["id"])
     assert sorted((r["documentType"], r["result"]) for r in j["rows"]) == [("הצעת מחיר", "loaded"), ("חוזה / NDA", "loaded")]
     assert sorted(d["documentType"] for d in sp.documents()) == ["הצעת מחיר", "חוזה / NDA"]
+
+
+def test_withdraw_returns_the_file_with_its_name_and_it_can_be_submitted_again(tmp_path):
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("v1")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "submit": True}).json()
+    file_service.run_once(sp, s)
+    assert (q / "Submitted" / "Quote.xlsx").is_file() and not (q / "Quote.xlsx").exists()
+    assert c.post(f"/api/documents/{d['id']}/withdraw").json()["statusKey"] == "Working"
+    assert (q / "Quote.xlsx").read_text() == "v1" and not (q / "Submitted" / "Quote.xlsx").exists()   # back now
+    (q / "Quote.xlsx").write_text("v2")
+    (q / "Submitted").mkdir(exist_ok=True)
+    (q / "Submitted" / "Quote.xlsx").write_text("stale")                       # a leftover copy
+    assert c.post(f"/api/documents/{d['id']}/submit").json()["statusKey"] == "Submitted"
+    file_service.run_once(sp, s)
+    assert sorted(p.name for p in (q / "Submitted").iterdir()) == ["Quote.xlsx"]  # same name, no timestamp
+    assert (q / "Submitted" / "Quote.xlsx").read_text() == "v2"
+
+
+def test_withdraw_finds_a_file_renamed_with_a_timestamp(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    (q / "Submitted").mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "submit": True}).json()
+    (q / "Quote.xlsx").rename(q / "Submitted" / "Quote_20261001101500.xlsx")   # what older versions did
+    c.post(f"/api/documents/{d['id']}/withdraw")
+    assert (q / "Quote.xlsx").is_file() and list((q / "Submitted").iterdir()) == []
+    assert c.post(f"/api/documents/{d['id']}/submit").status_code == 200
