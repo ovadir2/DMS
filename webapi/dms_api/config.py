@@ -77,6 +77,10 @@ class Settings:
     ai_model: str = ""                      # model id as listed in Open WebUI (empty: the first model offered)
     ai_knowledge_ids: list[str] = field(default_factory=list)   # knowledge bases for general questions
     ai_max_file_mb: int = 25
+    rag_url: str = ""                       # AI Insights RAG tools (n8n webhook), e.g. https://aiportal.ai.rh-global.com/webhook/tools
+    rag_tools: list[str] = field(default_factory=list)          # tools offered on the page, e.g. qms
+    rag_token: str = ""                     # optional bearer token of the webhook
+    rag_body: str = '{"tool": "{tool}", "chatInput": "{question}", "question": "{question}", "sessionId": "{session}", "lang": "{lang}", "user": "{user}"}'
     protected_depth: int = 2                # 02_Customers\Customer_A and above cannot be renamed or deleted
 
     @property
@@ -136,4 +140,8 @@ class Settings:
             ai_model=e("DMS_AI_MODEL", ""),
             ai_knowledge_ids=[k.strip() for k in e("DMS_AI_KNOWLEDGE_IDS", "").split(",") if k.strip()],
             ai_max_file_mb=int(e("DMS_AI_MAX_FILE_MB", "25")),
+            rag_url=e("DMS_RAG_URL", "https://aiportal.ai.rh-global.com/webhook/tools"),
+            rag_tools=[k.strip() for k in e("DMS_RAG_TOOLS", "qms").split(",") if k.strip()],
+            rag_token=e("DMS_RAG_TOKEN", ""),
+            rag_body=e("DMS_RAG_BODY", Settings.rag_body),
         )

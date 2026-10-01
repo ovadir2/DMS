@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from . import blueprint, files, finder
 from .ai import AiError, OpenWebUI
+from .rag import RagError, RagTools
 from .auth import current_user
 from .config import WORKFLOW_FOLDERS, Settings
 from .security import User
@@ -55,6 +56,12 @@ class RegisterRequest(BaseModel):
 class AskRequest(BaseModel):
     question: str = Field(min_length=2, max_length=4000)
     path: str | None = Field(None, description="A repository file to ask about; without it the knowledge bases are used")
+    lang: str = "EN"
+
+
+class RagRequest(BaseModel):
+    question: str = Field(min_length=2, max_length=4000)
+    tool: str = "qms"
     lang: str = "EN"
 
 
@@ -104,6 +111,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         from . import file_service
         file_service.start(app.state.sp, s)
     app.state.ai = ai or OpenWebUI(s)
+    app.state.rag = RagTools(s)
     from .filelinker import FileLinker
     app.state.linker = FileLinker(s)
     if s.allowed_origins:
@@ -430,7 +438,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return None
 
     FILE_OPS = {"upload", "new-folder", "rename", "delete"}
-    AI_OPS = {"ai-ask", "ai-find", "ai-chat"}      # AI Insights questions, CorrelationId AI
+    AI_OPS = {"ai-ask", "ai-find", "ai-chat", "ai-rag"}      # AI Insights questions, CorrelationId AI
 
     def log(user: User, action: str, detail: str) -> None:
         """Service log; repository changes (upload, new folder, rename, delete) also go to Control Audit
@@ -686,7 +694,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/ai/status")
     def ai_status(_: User = Depends(current_user)):
-        return {"enabled": app.state.ai.enabled, "model": s.ai_model, "knowledge": bool(s.ai_knowledge_ids), "url": s.ai_url.rstrip("/")}
+        return {"enabled": app.state.ai.enabled, "model": s.ai_model, "knowledge": bool(s.ai_knowledge_ids), "url": s.ai_url.rstrip("/"),
+                "rag": [{"tool": t, "page": app.state.rag.page(t)} for t in s.rag_tools] if app.state.rag.enabled else []}
 
     @app.post("/api/ai/find")
     def ai_find(req: FindRequest, user: User = Depends(current_user)):
@@ -784,6 +793,21 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         except requests.RequestException as e:
             raise HTTPException(502, f"The AI service did not answer: {type(e).__name__}") from None
         log(user, "ai-ask", f"{path or 'knowledge'}: {req.question[:1000]!r} (model {result.get('model')}) -> {result['answer'][:2000]!r}")
+        return result
+
+    @app.post("/api/ai/rag")
+    def ai_rag(req: RagRequest, user: User = Depends(current_user)):
+        """AI Insights: a question to an RH RAG tool on the AI portal (e.g. QMS)."""
+        rag: RagTools = app.state.rag
+        if not rag.enabled:
+            raise HTTPException(503, "The RAG tools are not configured (DMS_RAG_URL, DMS_RAG_TOOLS)")
+        try:
+            result = rag.ask(req.tool, req.question, lang="HE" if req.lang.upper() == "HE" else "EN", user=user.email)
+        except RagError as e:
+            raise HTTPException(502, str(e)) from None
+        except requests.RequestException as e:
+            raise HTTPException(502, f"The RAG tool did not answer: {type(e).__name__}") from None
+        log(user, "ai-rag", f"{req.tool}: {req.question[:1000]!r} -> {result['answer'][:2000]!r}")
         return result
 
     @app.post("/api/ai/chat-log", status_code=204)
