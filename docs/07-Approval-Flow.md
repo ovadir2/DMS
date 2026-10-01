@@ -2,6 +2,8 @@
 
 How a document moves from submission to an approved, read-only record in the pilot flow **DC-P1 Pilot Approval** (`scripts/New-DmsPilotFlowPackage.ps1`).
 
+The whole pilot process, from saving the file on the DMS page to the approved version in `Current_ReadOnly`, with the pilot test, is in [08 - Pilot Process](08-Pilot-Process.md).
+
 Presentation: [`presentations/DMS-Approval-Flow.pptx`](presentations/DMS-Approval-Flow.pptx) (Hebrew, 3 editable slides: title, swimlane flow, principles). The same diagram as a web page: [`presentations/DMS-Approval-Flow.html`](presentations/DMS-Approval-Flow.html) (open it in a browser).
 
 ## Flow
@@ -40,3 +42,4 @@ flowchart TB
 
 - Full design of the approval cycle: [04 - Power Automate](04-Power-Automate.md), DC-03, DC-04 and DC-05.
 - Building the flows with Copilot: [06 - Copilot Prompts](06-Copilot-Prompts.md).
+- The process end to end, with the DMS page and the file moves: [08 - Pilot Process](08-Pilot-Process.md).
