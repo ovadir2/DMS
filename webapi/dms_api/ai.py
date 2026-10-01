@@ -13,6 +13,8 @@ import json
 import os
 import re
 
+import logging
+
 import requests
 
 from . import doc_text
@@ -24,7 +26,8 @@ SYSTEM = {
     "HE": "אתה AI Insights במערכת ניהול המסמכים של RH. ענה בעברית, בקצרה ובדיוק, "
           "רק על סמך המסמך או הידע המצורפים. אם התשובה לא נמצאת שם, אמור זאת.",
 }
-CHUNK_FIELDS = ("content", "text", "token", "response", "answer", "output", "message")
+log = logging.getLogger("dms_api.ai")
+CHUNK_FIELDS = ("content", "delta", "text", "token", "chunk", "response", "answer", "output", "message", "data", "result")
 
 
 class AiError(Exception):
@@ -89,37 +92,53 @@ class OpenWebUI:
             raise AiError(f"AI: {r.status_code} {r.text[:200]}")
         answer = self.parse(r.text)
         if not answer.strip():
-            raise AiError("AI: the RH AI sent an empty answer")
+            raw = (r.text or "").strip()
+            log.warning("RH AI answer not read (%s): %r", r.headers.get("content-type") if hasattr(r, "headers") else "", raw[:2000])
+            raise AiError("AI: the RH AI sent an empty answer" if not raw else
+                          f"AI: the DMS could not read the RH AI answer. It starts with: {raw[:300]}")
         return answer.strip()
 
     @staticmethod
     def parse(text: str) -> str:
-        """One JSON answer, a stream of 'data: {...}' / JSON lines, or plain text."""
-        def piece(obj) -> str:
+        """One JSON answer, a stream of 'data: {...}' / JSON lines (any common chunk shape), or plain text."""
+        def piece(obj, depth=0) -> str:
             if isinstance(obj, str):
                 return obj
-            if not isinstance(obj, dict):
+            if depth > 3 or not isinstance(obj, dict):
+                return ""
+            if str(obj.get("type") or obj.get("event") or "").lower() in ("start", "end", "done", "meta", "metadata", "sources", "ping", "usage"):
                 return ""
             ch = (obj.get("choices") or [None])[0]
             if isinstance(ch, dict):
-                part = (ch.get("delta") or {}).get("content") or (ch.get("message") or {}).get("content") or ch.get("text")
-                return part or ""
-            if isinstance(obj.get("message"), dict):
-                return obj["message"].get("content") or ""
-            return next((obj[k] for k in CHUNK_FIELDS if isinstance(obj.get(k), str)), "")
+                return (ch.get("delta") or {}).get("content") or (ch.get("message") or {}).get("content") or ch.get("text") or ""
+            for k in CHUNK_FIELDS:
+                v = obj.get(k)
+                if isinstance(v, str):
+                    return v
+                if isinstance(v, (dict, list)):
+                    got = "".join(piece(x, depth + 1) for x in (v if isinstance(v, list) else [v]))
+                    if got:
+                        return got
+            return ""
         body = (text or "").strip()
         try:
             whole = json.loads(body)
-            return piece(whole) or body if isinstance(whole, dict) else body   # a JSON answer that is not a chunk
+            if isinstance(whole, dict):
+                return piece(whole) or body                     # a JSON answer that is not a chunk: keep it
+            if isinstance(whole, list) and whole and all(isinstance(x, dict) for x in whole):
+                return "".join(piece(x) for x in whole) or body
+            return body if not isinstance(whole, str) else whole
         except ValueError:
             pass
         lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
-        if lines and all(ln.startswith(("data:", "{", "event:", "id:", ":")) for ln in lines):
+        if lines and (any(ln.startswith("data:") for ln in lines) or all(ln.startswith("{") for ln in lines)):
             out = []
             for ln in lines:
                 if ln.startswith("data:"):
                     ln = ln[5:].strip()
-                if not ln or ln == "[DONE]" or ln.startswith(("event:", "id:", ":")):
+                elif ln.startswith(("event:", "id:", "retry:", ":")):
+                    continue
+                if not ln or ln == "[DONE]":
                     continue
                 try:
                     out.append(piece(json.loads(ln)))
