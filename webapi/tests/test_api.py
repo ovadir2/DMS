@@ -944,3 +944,45 @@ def test_type_without_matrix_rule_goes_to_the_super_user(tmp_path):
     assert [x["documentId"] for x in a] == ["DMS-00001"] and a[0]["pending"] == [USER]
     r = c.post(f"/api/approvals/{d['id']}", json={"approve": True, "comment": "pilot"}).json()
     assert r["statusKey"] == "Approved_ReadOnly"
+
+
+def test_type_and_area_inherited_from_the_blueprint_folder(tmp_path):
+    from dms_api import blueprint
+    from dms_api.memory import MemorySharePoint
+    assert blueprint.classify(["01_Management", "Company_Profile"]) == {"area": "Management", "type": "Company Profile"}
+    assert blueprint.classify(["02_Customers", "Customer_A", "Projects", "PRJ-1", "Development", "02_SOW", "Working"]) == \
+        {"area": "Development", "type": "SOW"}
+    assert blueprint.classify(["02_Customers", "Customer_A", "Commercial", "Quotations", "Old 2019"])["type"] == "Quotation"
+    assert blueprint.classify(["02_Customers", "Customer_A", "Projects", "PRJ-1", "Quality", "NCR"]) == {"area": "Quality", "type": None}
+    root = tmp_path / "Root"
+    cp = root / "01_Management" / "Company_Profile"
+    cp.mkdir(parents=True)
+    (cp / "Profile.docx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
+    c = TestClient(create_app(s, MemorySharePoint(s)))
+    assert c.get("/api/classify", params={"path": str(cp)}).json() == \
+        {"documentType": "פרופיל חברה", "documentArea": "ניהול", "controlMode": "תהליך אישור חובה"}
+    d = c.post("/api/documents", json={"path": str(cp / "Profile.docx")}).json()
+    assert (d["documentType"], d["documentArea"]) == ("פרופיל חברה", "ניהול")
+    other = root / "01_Management" / "Templates"
+    other.mkdir()
+    (other / "T.docx").write_text("x")
+    assert c.post("/api/documents", json={"path": str(other / "T.docx")}).status_code == 400   # the folder sets no type
+
+
+def test_first_loading_takes_the_type_from_each_folder(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    old = tmp_path / "Old"
+    (old / "Quotations").mkdir(parents=True)
+    (old / "Quotations" / "Q1.xlsx").write_text("q")
+    (old / "NDA").mkdir()
+    (old / "NDA" / "N1.pdf").write_text("n")
+    root = tmp_path / "Root"
+    target = root / "02_Customers" / "Customer_A" / "Commercial"
+    target.mkdir(parents=True)
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    j = _wait(c, c.post("/api/first-load", json={"source": str(old), "target": str(target), "dryRun": False}).json()["id"])
+    assert sorted((r["documentType"], r["result"]) for r in j["rows"]) == [("הצעת מחיר", "loaded"), ("חוזה / NDA", "loaded")]
+    assert sorted(d["documentType"] for d in sp.documents()) == ["הצעת מחיר", "חוזה / NDA"]

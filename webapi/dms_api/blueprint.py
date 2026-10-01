@@ -177,3 +177,83 @@ SAVE_GUIDE = [
     ("eco", "Engineering change (ECO)", "הוראת שינוי הנדסי (ECO)", "{p}/Changes/ECO"),
     ("released", "Released revision", "גרסה משוחררת", "{p}/Released/Current"),
 ]
+
+
+# Document type and area inherited from the blueprint folder (English keys of the SharePoint choices;
+# LABELS gives the Hebrew value used on a Hebrew site). The deepest matching folder wins.
+_P = "02_Customers/*/Projects/*"
+CLASSIFY = {
+    "01_Management": ("Management", None),
+    "01_Management/Company_Profile": ("Management", "Company Profile"),
+    "01_Management/Strategy": ("Management", "Strategy"),
+    "01_Management/Quality_System": ("Quality", "Procedure"),
+    "01_Management/Engineering_Standards": ("Development", "Procedure"),
+    "01_Management/Development_Standards": ("Development", "Procedure"),
+    "01_Management/Manufacturing_Standards": ("Manufacturing", "Procedure"),
+    "01_Management/Project_Management": ("Management", "Procedure"),
+    "01_Management/HR": ("Management", "Policy"),
+    "01_Management/IT": ("IT", "IT Procedure"),
+    "02_Customers/*": ("Commercial", None),
+    "02_Customers/*/Commercial/RFQ": ("Commercial", "Quotation"),
+    "02_Customers/*/Commercial/Quotations": ("Commercial", "Quotation"),
+    "02_Customers/*/Commercial/Contracts": ("Commercial", "Contract / NDA"),
+    "02_Customers/*/Commercial/NDA": ("Commercial", "Contract / NDA"),
+    _P: ("Development", None),
+    f"{_P}/Development/01_Quotation": ("Commercial", "Quotation"),
+    f"{_P}/Development/02_SOW": ("Development", "SOW"),
+    f"{_P}/Development/03_SRS": ("Development", "SRS"),
+    f"{_P}/Development/04_PDR": ("Development", "PDR / CDR"),
+    f"{_P}/Development/05_CDR": ("Development", "PDR / CDR"),
+    f"{_P}/Development/07_FAT": ("Development", "FAT / SAT / FDR"),
+    f"{_P}/Development/08_SAT": ("Development", "FAT / SAT / FDR"),
+    f"{_P}/Development/09_FDR": ("Development", "FAT / SAT / FDR"),
+    f"{_P}/Manufacturing": ("Manufacturing", None),
+    f"{_P}/Manufacturing/Work_Instructions": ("Manufacturing", "Work Instruction"),
+    f"{_P}/Production": ("Manufacturing", None),
+    f"{_P}/Test_Engineering": ("Test Engineering", None),
+    f"{_P}/Test_Engineering/Test_Procedures": ("Test Engineering", "Test Procedure"),
+    f"{_P}/Quality": ("Quality", None),
+    f"{_P}/Quality/PFMEA": ("Quality", "PFMEA / Control Plan"),
+    f"{_P}/Quality/Control_Plan": ("Quality", "PFMEA / Control Plan"),
+    f"{_P}/Changes": ("Changes", None),
+    f"{_P}/Changes/ECO": ("Changes", "ECO / ECN"),
+    f"{_P}/Changes/ECN": ("Changes", "ECO / ECN"),
+}
+LABELS = {
+    "Management": "ניהול", "Commercial": "מסחרי", "Development": "פיתוח", "Manufacturing": "ייצור",
+    "Test Engineering": "הנדסת בדיקות", "Quality": "איכות", "Changes": "שינויים", "IT": "מערכות מידע",
+    "Company Profile": "פרופיל חברה", "Strategy": "אסטרטגיה", "Policy": "מדיניות", "Procedure": "נוהל",
+    "Quotation": "הצעת מחיר", "Contract / NDA": "חוזה / NDA", "SOW": "SOW - הגדרת עבודה", "SRS": "SRS - דרישות מערכת",
+    "PDR / CDR": "PDR / CDR - סקר תכן", "FAT / SAT / FDR": "FAT / SAT / FDR - בדיקות קבלה",
+    "Work Instruction": "הוראת עבודה", "Test Procedure": "נוהל בדיקה", "PFMEA / Control Plan": "PFMEA / תוכנית בקרה",
+    "ECO / ECN": "ECO / ECN - הודעת שינוי", "IT Procedure": "נוהל מערכות מידע",
+    "Workflow Required": "תהליך אישור חובה",
+}
+
+
+def classify(parts: list[str]) -> dict:
+    """{'area', 'type'} (English keys or None) for a folder (parts relative to the root). Customer and
+    project names and the DMS workflow folders do not count."""
+    from .config import WORKFLOW_FOLDERS
+    parts = [p for p in parts if p not in WORKFLOW_FOLDERS]
+    norm = list(parts)
+    if len(norm) > 1 and norm[0].lower() == "02_customers":
+        norm[1] = "*"
+        if len(norm) > 3 and norm[2].lower() == "projects":
+            norm[3] = "*"
+    keys = {k.lower(): v for k, v in CLASSIFY.items()}
+    for n in range(len(norm), 0, -1):
+        hit = keys.get("/".join(norm[:n]).lower())
+        if hit:
+            return {"area": hit[0], "type": hit[1]}
+    return {"area": None, "type": None}
+
+
+def choice(key: str | None, values: list[str]) -> str | None:
+    """The site's value of a choice: the English key or its Hebrew label, whichever the site uses."""
+    if not key:
+        return None
+    for v in (key, LABELS.get(key)):
+        if v and v in values:
+            return v
+    return None
