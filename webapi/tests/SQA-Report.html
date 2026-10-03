@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RH DMS Pilot SQA Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; summary first, then a feature/test matrix per area, then open live checks. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #17202b; --muted: #5b6676; --line: #dde2e9;
+  --accent: #1f4e79; --pass: #1d7a46; --pass-bg: #e3f3ea; --ui: #2b5ea8; --ui-bg: #e5eefb;
+  --live: #9a5b00; --live-bg: #fbf0dc; --gap: #a3352f; --gap-bg: #f9e5e3;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161c; --surface: #1a2029; --fg: #e4e8ee; --muted: #9aa5b4; --line: #2d3541;
+  --accent: #8cb8e6; --pass: #6fd29b; --pass-bg: #173326; --ui: #8fb5f0; --ui-bg: #1b2a44;
+  --live: #f0bd6a; --live-bg: #3a2b12; --gap: #f0948d; --gap-bg: #3d1f1d; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161c; --surface: #1a2029; --fg: #e4e8ee; --muted: #9aa5b4; --line: #2d3541;
+  --accent: #8cb8e6; --pass: #6fd29b; --pass-bg: #173326; --ui: #8fb5f0; --ui-bg: #1b2a44;
+  --live: #f0bd6a; --live-bg: #3a2b12; --gap: #f0948d; --gap-bg: #3d1f1d; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 64px; display: grid; gap: 28px; }
+header { display: grid; gap: 6px; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-size: 30px; line-height: 1.2; margin: 0; text-wrap: balance; }
+h2 { font-size: 19px; margin: 0; text-wrap: balance; }
+.meta { color: var(--muted); font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.meta b { color: var(--fg); font-weight: 500; }
+code, .mono { font-family: var(--mono); font-size: 12.5px; }
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 2px; }
+.stat .n { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .l { color: var(--muted); font-size: 13px; }
+.stat.pass .n { color: var(--pass); } .stat.ui .n { color: var(--ui); } .stat.live .n { color: var(--live); } .stat.gap .n { color: var(--gap); }
+.verdict { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pass); border-radius: 8px; padding: 14px 18px; display: grid; gap: 6px; }
+.verdict p { margin: 0; max-width: 80ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--muted); align-items: center; }
+section { display: grid; gap: 10px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.sec-head .count { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; min-width: 820px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: var(--bg); }
+td.id { font: 500 12.5px var(--mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+td.feat { font-weight: 500; width: 26%; }
+td.tests { width: 34%; }
+td.tests code { display: block; color: var(--fg); word-break: break-word; }
+td.tests .how { color: var(--muted); font-size: 13px; }
+td.res { white-space: nowrap; width: 1%; }
+td.note { color: var(--muted); font-size: 13.5px; }
+.chip { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.chip.pass { color: var(--pass); background: var(--pass-bg); }
+.chip.ui { color: var(--ui); background: var(--ui-bg); }
+.chip.live { color: var(--live); background: var(--live-bg); }
+.chip.gap { color: var(--gap); background: var(--gap-bg); }
+ol.live { margin: 0; padding-left: 22px; display: grid; gap: 8px; max-width: 90ch; }
+ol.live li span { color: var(--muted); }
+footer { color: var(--muted); font-size: 13px; }
+@media (max-width: 520px) { h1 { font-size: 24px; } .wrap { padding-inline: 16px; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Software Quality Assurance · Pilot</div>
+  <h1>RH Documents Management System - SQA Report</h1>
+  <div class="meta">
+    <span>Date <b>03/10/2026</b></span>
+    <span>Build <b class="mono">6931a3d</b> (main, ovadir2/DMS)</span>
+    <span>Scope <b>all features delivered 24/09 - 03/10/2026</b></span>
+    <span>Environment <b>DocumentControl-TEST, LargeFileExchange-TEST</b></span>
+  </div>
+</header>
+
+<div class="summary">
+  <div class="stat"><span class="n">84</span><span class="l">automated test cases (pytest)</span></div>
+  <div class="stat pass"><span class="n">84 / 0</span><span class="l">passed / failed on build 6931a3d</span></div>
+  <div class="stat ui"><span class="n">9</span><span class="l">features checked in the browser (Playwright, test server)</span></div>
+  <div class="stat live"><span class="n">9</span><span class="l">items still to confirm in the live environment</span></div>
+  <div class="stat gap"><span class="n">3</span><span class="l">known test gaps</span></div>
+</div>
+
+<div class="verdict">
+  <h2>Verdict</h2>
+  <p>All 84 automated tests pass on the current build. Every feature delivered so far has at least one automated test or a browser check on the test server. The pilot can continue on DocumentControl-TEST. Before going live, the 9 live items below need a check on the real SharePoint, Exchange site, file server and Power Automate. Most of them depend on tenant permissions and external services that the automated tests replace with stand-ins.</p>
+</div>
+
+<div class="legend">
+  <span class="chip pass">Pass</span> automated test passed
+  <span class="chip ui">Pass - browser</span> checked in Chromium on the test server (memory register)
+  <span class="chip live">Live check open</span> works against stand-ins, not yet confirmed on the real service
+  <span class="chip gap">Gap</span> no automated test
+</div>
+
+<section>
+  <div class="sec-head"><h2>1. Repository and files</h2><span class="count">13 features</span></div>
+  <div class="tbl"><table>
+    <tr><th>#</th><th>Feature</th><th>Verified by</th><th>Result</th><th>Notes</th></tr>
+    <tr><td class="id">1.1</td><td class="feat">Browse folders, show the DMS status of each file</td><td class="tests"><code>test_browse_marks_registration</code><code>test_system_files_hidden</code><code>test_root_hides_system_folders_and_areas</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">System files (desktop.ini, ~$ temp files) are hidden.</td></tr>
+    <tr><td class="id">1.2</td><td class="feat">Paths outside the repository are refused; Windows and UNC paths</td><td class="tests"><code>test_paths_outside_root_are_refused</code><code>test_candidate_paths_windows_style</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">1.3</td><td class="feat">Customers and folders follow AD permissions</td><td class="tests"><code>test_customers_follow_ad</code><code>test_customers_all_for_full_access</code><code>test_actions_need_ad_write</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Write actions need AD write on the folder.</td></tr>
+    <tr><td class="id">1.4</td><td class="feat">Upload a file; refused in workflow folders and for bad names</td><td class="tests"><code>test_upload_saves_into_the_folder</code><code>test_upload_refuses_workflow_folders_and_bad_names</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">1.5</td><td class="feat">New folder, rename, delete to the recycle folder</td><td class="tests"><code>test_new_folder_rename_delete</code><code>test_controlled_files_are_protected</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">"Delete" moves to 04_Workflow_System\Recycle, never erases.</td></tr>
+    <tr><td class="id">1.6</td><td class="feat">Blueprint skeleton: labels, order, protected skeleton folders</td><td class="tests"><code>test_blueprint_labels_order_and_context</code><code>test_skeleton_is_protected_content_is_not</code><code>test_levels_cascade</code><code>test_save_guide</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">1.7</td><td class="feat">Path finder, including folders that do not exist yet</td><td class="tests"><code>test_path_finder</code><code>test_path_finder_through_missing_folders</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">1.8</td><td class="feat">Workflow folders (Submitted, Current_ReadOnly, Obsolete_ReadOnly) cannot be changed by users</td><td class="tests"><code>test_workflow_folders_are_untouchable</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">1.9</td><td class="feat">Repository changes (upload, rename, delete) written to Control Audit</td><td class="tests"><code>test_repository_changes_are_audited</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">1.10</td><td class="feat">Open link uses the short 8.3 path for paths over 200 characters</td><td class="tests"><code>test_open_link_uses_the_short_path_only_when_long</code></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">8.3 names come from Windows; confirm a long path opens in Office on a PC.</td></tr>
+    <tr><td class="id">1.11</td><td class="feat">Copy link: folder, file and working path</td><td class="tests"><span class="how">Browser check on the test server</span></td><td class="res"><span class="chip ui">Pass - browser</span></td><td class="note"></td></tr>
+    <tr><td class="id">1.12</td><td class="feat">Responsive layout (phone, tablet, laptop, wide)</td><td class="tests"><span class="how">Browser screenshots at 4 widths, Hebrew and English</span></td><td class="res"><span class="chip ui">Pass - browser</span></td><td class="note"></td></tr>
+    <tr><td class="id">1.13</td><td class="feat">RH logo returns to the home screen without a page reload</td><td class="tests"><span class="how">Browser check on the test server</span></td><td class="res"><span class="chip ui">Pass - browser</span></td><td class="note"></td></tr>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>2. Search</h2><span class="count">3 features</span></div>
+  <div class="tbl"><table>
+    <tr><th>#</th><th>Feature</th><th>Verified by</th><th>Result</th><th>Notes</th></tr>
+    <tr><td class="id">2.1</td><td class="feat">Main search over the whole repository: folders, file names, Document IDs, several words in any order</td><td class="tests"><code>test_search</code><code>test_search_project_with_full_access</code><code>test_main_search_covers_folders_file_names_and_document_ids</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Results limited to what the user may see (AD).</td></tr>
+    <tr><td class="id">2.2</td><td class="feat">Suggestions while typing (typeahead)</td><td class="tests"><span class="how">Browser check on the test server</span></td><td class="res"><span class="chip ui">Pass - browser</span></td><td class="note">UI only; the endpoint it calls is covered by 2.1.</td></tr>
+    <tr><td class="id">2.3</td><td class="feat">Find a file by description (keywords, or AI plan and ranking)</td><td class="tests"><code>test_find_without_ai_uses_keywords_and_ad</code><code>test_find_with_ai_plan_and_rank</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">The separate "Find a file" tab was removed; the main search covers it.</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>3. Document register and workflow</h2><span class="count">11 features</span></div>
+  <div class="tbl"><table>
+    <tr><th>#</th><th>Feature</th><th>Verified by</th><th>Result</th><th>Notes</th></tr>
+    <tr><td class="id">3.1</td><td class="feat">Register a file and submit it for approval</td><td class="tests"><code>test_register_and_submit</code><code>test_submit_rules</code><code>test_file_moved_to_submitted_still_matches</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">3.2</td><td class="feat">Document type, area and control mode inherited from the blueprint folder</td><td class="tests"><code>test_type_and_area_inherited_from_the_blueprint_folder</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Preselected and marked in the dialogs.</td></tr>
+    <tr><td class="id">3.3</td><td class="feat">My workflows: status chips, waiting for, last action, history</td><td class="tests"><code>test_my_workflows</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">3.4</td><td class="feat">Rev column in My workflows and Approvals</td><td class="tests"><span class="how">Browser check on the test server</span></td><td class="res"><span class="chip ui">Pass - browser</span></td><td class="note">Shows the draft revision and "Current approved" under it.</td></tr>
+    <tr><td class="id">3.5</td><td class="feat">Withdraw or reject returns the file at once with its original name; submit again</td><td class="tests"><code>test_withdraw_and_resubmit</code><code>test_withdraw_returns_the_file_with_its_name_and_it_can_be_submitted_again</code><code>test_withdraw_finds_a_file_renamed_with_a_timestamp</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">3.6</td><td class="feat">Delete a document in Working</td><td class="tests"><code>test_delete_a_working_document</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">For a new-revision draft the approved revision stays current.</td></tr>
+    <tr><td class="id">3.7</td><td class="feat">Rename a document in Working</td><td class="tests"><code>test_rename_a_working_document</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">3.8</td><td class="feat">New revision from the approved copy or from an uploaded file</td><td class="tests"><code>test_new_revision_from_the_approved_copy</code><code>test_new_revision_from_an_uploaded_file</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">3.9</td><td class="feat">File service moves files by status (Current_ReadOnly, Obsolete_ReadOnly); "Move files now" report</td><td class="tests"><code>test_file_service_moves_by_status</code><code>test_file_service_report_and_old_layout</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">3.10</td><td class="feat">First loading of the old repository: copy, register, File Linker, full log attached in SharePoint</td><td class="tests"><code>test_first_loading</code><code>test_first_loading_writes_a_full_log</code><code>test_first_loading_takes_the_type_from_each_folder</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Summary row in Control Audit with the .log and .csv attached.</td></tr>
+    <tr><td class="id">3.11</td><td class="feat">Playground mode (memory register, no SharePoint)</td><td class="tests"><code>test_playground_memory_mode</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>4. Approvals</h2><span class="count">8 features</span></div>
+  <div class="tbl"><table>
+    <tr><th>#</th><th>Feature</th><th>Verified by</th><th>Result</th><th>Notes</th></tr>
+    <tr><td class="id">4.1</td><td class="feat">Two-stage approval on the page (mandatory, then final)</td><td class="tests"><code>test_page_approvals_two_stages</code><code>test_page_approvals_reject_and_waiting_for</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">4.2</td><td class="feat">Super users see all pending approvals and may decide any stage</td><td class="tests"><code>test_super_user</code><code>test_super_user_can_decide_any_stage</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">4.3</td><td class="feat">Document type without an Approver Matrix rule goes to the super users</td><td class="tests"><code>test_type_without_matrix_rule_goes_to_the_super_user</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">4.4</td><td class="feat">Teams approvals mode (DC-P1) still works when chosen</td><td class="tests"><code>test_flow_mode_keeps_teams</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">The pilot uses page approvals; DC-P1 is Off.</td></tr>
+    <tr><td class="id">4.5</td><td class="feat">Choose approvers myself at start workflow: all RH M365 users, multi-select with typeahead</td><td class="tests"><code>test_start_workflow_with_chosen_approvers</code><code>test_people_list_for_choosing_approvers</code><code>test_directory_people_from_sharepoint_people_search</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">People come from SharePoint people search, with the site users as fallback.</td></tr>
+    <tr><td class="id">4.6</td><td class="feat">Chosen approvers remembered after reject or withdraw</td><td class="tests"><code>test_submit_again_remembers_the_chosen_approvers</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">4.7</td><td class="feat">Delegate an approval for 3 working days (Sunday to Thursday), auto-expiry; Delegations list and Control Audit</td><td class="tests"><code>test_delegate_an_approval</code><code>test_expired_delegation_returns_to_the_approver</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Dates written as noon UTC, so SharePoint shows the right day in Israel.</td></tr>
+    <tr><td class="id">4.8</td><td class="feat">Approval Decisions list (החלטות מאשרים): one row per approve, reject and delegation</td><td class="tests"><code>test_delegate_an_approval</code><span class="how">The decision rows are checked inside this test.</span></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">Confirm the Hebrew choice values (אושר, נדחה, הואצל) on the real list.</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>5. Notifications</h2><span class="count">4 features</span></div>
+  <div class="tbl"><table>
+    <tr><th>#</th><th>Feature</th><th>Verified by</th><th>Result</th><th>Notes</th></tr>
+    <tr><td class="id">5.1</td><td class="feat">Notifications only to the right people (approvers of the stage, owner on decision)</td><td class="tests"><code>test_notifications_follow_the_approval</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">5.2</td><td class="feat">Notification log and "Send me a test notification"</td><td class="tests"><code>test_notification_log_and_test_notification</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">5.3</td><td class="feat">Notifications in the language the user chose on the page</td><td class="tests"><code>test_notifications_in_the_users_page_language</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">5.4</td><td class="feat">Email and Teams delivery by Power Automate (DC-P2 Pilot Notifications)</td><td class="tests"><span class="how">Not automatable here</span></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">Flow imported and turned On; confirm an email and a Teams message arrive for a test row.</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>6. SharePoint trace</h2><span class="count">4 features</span></div>
+  <div class="tbl"><table>
+    <tr><th>#</th><th>Feature</th><th>Verified by</th><th>Result</th><th>Notes</th></tr>
+    <tr><td class="id">6.1</td><td class="feat">Document Register and Control Audit writes (payloads, Hebrew choice values)</td><td class="tests"><code>test_create_document_payloads</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Confirmed live: Document Register rows appear on DocumentControl-TEST.</td></tr>
+    <tr><td class="id">6.2</td><td class="feat">SharePoint check page for super users: lists, items, write permission, last errors, notification status</td><td class="tests"><code>test_sharepoint_check_for_super_users</code><code>test_list_info_reads_the_add_permission</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Used live to find the missing DmsNotifications list.</td></tr>
+    <tr><td class="id">6.3</td><td class="feat">AI questions written to Control Audit</td><td class="tests"><code>test_ai_questions_are_kept_in_control_audit</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Correlation ID "AI".</td></tr>
+    <tr><td class="id">6.4</td><td class="feat">Health check and the page itself</td><td class="tests"><code>test_page_and_health</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>7. AI Insights</h2><span class="count">6 features</span></div>
+  <div class="tbl"><table>
+    <tr><th>#</th><th>Feature</th><th>Verified by</th><th>Result</th><th>Notes</th></tr>
+    <tr><td class="id">7.1</td><td class="feat">Answers from the RH AI chat inside the panel (same request as the chat page, no token)</td><td class="tests"><code>test_request_is_the_chat_page_request</code><code>test_ai_insights</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">7.2</td><td class="feat">Read streamed, plain and other answer formats; clear error when unreadable</td><td class="tests"><code>test_streamed_and_plain_answers</code><code>test_more_stream_shapes_and_an_unreadable_answer</code><code>test_plan_and_rank_parse_wrapped_json</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">7.3</td><td class="feat">Ask about a file: upload it once and attach it, or send its text</td><td class="tests"><code>test_file_is_uploaded_once_and_attached_like_the_page</code><code>test_question_about_a_file_sends_its_text</code><code>test_xlsx_and_pptx_text</code><code>test_refusal_and_unreadable_file</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Word, PowerPoint, Excel, PDF and text files.</td></tr>
+    <tr><td class="id">7.4</td><td class="feat">Answer in the language of the question</td><td class="tests"><code>test_answer_in_the_language_of_the_question</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">7.5</td><td class="feat">QMS knowledge tab (RAG on the AI portal), audited</td><td class="tests"><code>test_rag_tool_answers_and_is_audited</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">7.6</td><td class="feat">Answers from the live RH AI and QMS services</td><td class="tests"><span class="how">Automated tests use a stand-in built from the cURL requests you supplied</span></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">Ask one question with a file attached and one QMS question on the PC.</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>8. Sharing with customers</h2><span class="count">10 features</span></div>
+  <div class="tbl"><table>
+    <tr><th>#</th><th>Feature</th><th>Verified by</th><th>Result</th><th>Notes</th></tr>
+    <tr><td class="id">8.1</td><td class="feat">Share an approved document only; owner or super user; Control Audit row per file</td><td class="tests"><code>test_share_with_customer</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">A document back in Working cannot be shared.</td></tr>
+    <tr><td class="id">8.2</td><td class="feat">Files go straight to Outbound/&lt;Customer&gt; on the Large File Exchange site; the folder is shared view only, no anonymous link</td><td class="tests"><code>test_share_payloads</code></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">Confirm the external invitation arrives and opens the folder.</td></tr>
+    <tr><td class="id">8.3</td><td class="feat">Customer from the file's folder (preselected) or any customer folder; several files in one share</td><td class="tests"><code>test_share_several_files_outside_customers</code><span class="how">Browser check of the Share dialog</span></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">8.4</td><td class="feat">An existing Exchange folder is accepted whatever the site language (Hebrew "already exists")</td><td class="tests"><code>test_share_payloads</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Fix for the error reported on 03/10.</td></tr>
+    <tr><td class="id">8.5</td><td class="feat">OneDrive shortcut DMS_&lt;Customer&gt; inside "DMS Shortcuts"; OneDrive setup requested when missing</td><td class="tests"><code>test_onedrive_shortcut_payload</code><code>test_onedrive_not_set_up_is_requested</code></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">Needs Graph Files.ReadWrite.All (delegated, admin consent) on the Entra app.</td></tr>
+    <tr><td class="id">8.6</td><td class="feat">Shares expire 30 days after the last share; empty customer folder removed with the access</td><td class="tests"><code>test_shares_expire_after_30_days</code><code>test_expire_outbound_requests</code></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">First real expiry from 02/11/2026; watch Control Audit for "Share expired".</td></tr>
+    <tr><td class="id">8.7</td><td class="feat">Shared status in My workflows with the "until" date</td><td class="tests"><span class="how">Browser check on the test server</span></td><td class="res"><span class="chip ui">Pass - browser</span></td><td class="note"></td></tr>
+    <tr><td class="id">8.8</td><td class="feat">Share log per customer (Shared\DMS-Shared-Log.csv), appended by every share and expiry, read-only attribute</td><td class="tests"><code>test_share_with_customer</code><code>test_shares_expire_after_30_days</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">8.9</td><td class="feat">Customer Shared folder read only on the page: open, download, copy path only; no rename, delete, upload or workflow</td><td class="tests"><code>test_share_with_customer</code><span class="how">Browser check of the Shared folder</span></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Also refused by the server, not only hidden.</td></tr>
+    <tr><td class="id">8.10</td><td class="feat">Windows permissions on the share log (Read for users, Modify only for the DMS account)</td><td class="tests"><span class="how">Runs only on Windows (icacls); tests run on Linux</span></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">Delete the 522-HP log once so it is created again with the permissions.</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>9. Sign-in and access</h2><span class="count">2 features</span></div>
+  <div class="tbl"><table>
+    <tr><th>#</th><th>Feature</th><th>Verified by</th><th>Result</th><th>Notes</th></tr>
+    <tr><td class="id">9.1</td><td class="feat">Sign-in required outside dev mode; Entra ID token accepted</td><td class="tests"><code>test_auth_required_outside_dev</code><code>test_entra_token</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
+    <tr><td class="id">9.2</td><td class="feat">Page language Hebrew and English (RTL)</td><td class="tests"><span class="how">Browser screenshots in both languages</span></td><td class="res"><span class="chip ui">Pass - browser</span></td><td class="note"></td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2>Live checks still open</h2>
+  <ol class="live">
+    <li>Power Automate DC-P2 sends the email and the Teams message for a DMS Notifications row. <span>(5.4)</span></li>
+    <li>Approval Decisions rows show אושר, נדחה and הואצל on the real list. <span>(4.8)</span></li>
+    <li>The customer receives the Exchange invitation and can open Outbound/&lt;Customer&gt;. <span>(8.2)</span></li>
+    <li>The Entra app has Graph Files.ReadWrite.All; the shortcut appears in OneDrive › DMS Shortcuts. <span>(8.5)</span></li>
+    <li>The first expiry removes the file on the Exchange site and writes the audit and log rows. <span>(8.6)</span></li>
+    <li>The share log gets Read-only permissions on the file server (icacls). <span>(8.10)</span></li>
+    <li>RH AI chat and QMS answer from the PC, with and without an attached file. <span>(7.6)</span></li>
+    <li>A file with a path over 200 characters opens in Office from the Open link. <span>(1.10)</span></li>
+    <li>The OneDrive setup request works for a user who never opened OneDrive. <span>(8.5)</span></li>
+  </ol>
+</section>
+
+<section>
+  <h2>Known test gaps</h2>
+  <div class="tbl"><table>
+    <tr><th>Item</th><th>Status</th><th>Risk and follow-up</th></tr>
+    <tr><td>Repointing a OneDrive shortcut after the customer folder was removed and created again</td><td class="res"><span class="chip gap">Gap</span></td><td class="note">Low. Code path runs only after an expiry; add a unit test.</td></tr>
+    <tr><td>Rev column, shared status line, typeahead (page code only)</td><td class="res"><span class="chip gap">Gap</span></td><td class="note">Low. Checked in the browser; no automated UI tests in the suite.</td></tr>
+    <tr><td>Hourly expiry loop timing (the loop itself, not the sweep)</td><td class="res"><span class="chip gap">Gap</span></td><td class="note">Low. The sweep is tested; the loop starts on DMS start and logs "Share expiry started".</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2>Test environment</h2>
+  <div class="tbl"><table>
+    <tr><th>Level</th><th>Tool</th><th>Setup</th></tr>
+    <tr><td>Automated unit and API tests</td><td><code>pytest</code>, FastAPI TestClient</td><td class="note">webapi/tests (test_api.py 74, test_ai.py 9, test_sharepoint.py 1). SharePoint, Graph, AI services and notifications replaced by in-memory stand-ins; HTTP payloads checked against the REST and Graph formats.</td></tr>
+    <tr><td>Browser checks</td><td>Playwright, Chromium</td><td class="note">DMS web API on a local test server, memory register, demo repository copy, dev user roneno@rh.co.il as super user.</td></tr>
+    <tr><td>Live pilot</td><td>DocumentControl-TEST, LargeFileExchange-TEST</td><td class="note">Run on the pilot PC (C:\dms) with interactive SharePoint sign-in.</td></tr>
+  </table></div>
+</section>
+
+<footer>Generated from the repository test suite and the pilot change log. Re-run: <code>cd webapi && py -m pytest -q</code></footer>
+</div>
+</body>
+</html>
