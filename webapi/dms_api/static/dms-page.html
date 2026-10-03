@@ -356,10 +356,7 @@ function wire(v) {
   };
   v.querySelectorAll('[data-sf]').forEach(a => a.onclick = () => { state.wfFilter = a.dataset.sf || null; render(); });
   v.querySelectorAll('[data-st]').forEach(a => a.onclick = () => startWorkflow(a.dataset.st));
-  v.querySelectorAll('[data-sub]').forEach(b => b.onclick = async () => {
-    b.disabled = true;
-    try { await api(`/api/documents/${b.dataset.sub}/submit`, { method:'POST' }); refreshApprovals(); render(); } catch (e) { b.disabled = false; alert(e.message); }
-  });
+  v.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => submitDialog(b.dataset.sub));
   v.querySelectorAll('[data-cp]').forEach(a => a.onclick = async () => { await copyText(a.dataset.cp); a.textContent = T.copied; });
   v.querySelectorAll('[data-drn]').forEach(b => b.onclick = () =>
     simpleDialog(T.rename, T.newName, b.dataset.name, `/api/documents/${b.dataset.drn}/rename`, newName => ({ newName })));
@@ -871,7 +868,25 @@ const AP_FIELD = () => `<div class="apsel"><div class="muted small" id="ap-matri
     <div id="ap-pick" hidden><div class="chips" id="ap-chips" style="margin:4px 0"></div>
       <input type="text" id="ap-q" placeholder="${esc(T.apSearch)}" autocomplete="off">
       <div class="ap-list" id="ap-list"></div></div></div>`;
-function wireApprovers(box) {
+// Submit again (after a rejection or a withdraw): the approvers chosen last time are preselected
+async function submitDialog(id) {
+  let info;
+  try { info = await api(`/api/documents/${id}/approvers`); } catch (e) { return alert(e.message); }
+  const opened = dialog(T.submit, `<input type="hidden" name="documentType" value="${esc(info.documentType)}">${AP_FIELD()}`,
+    [['cancel', T.cancel, 'light'], ['ok', T.submit]]);
+  const picked = wireApprovers($('#dlg-b'), info.chosen);
+  let r = await opened;
+  while (r.action === 'ok') {
+    const ap = picked();
+    if (ap && !ap.length) { note(T.apNone, 'err'); r = await again(); continue; }
+    try {
+      await api(`/api/documents/${id}/submit`, { method:'POST', body:JSON.stringify({ approvers: ap === null ? [] : ap }) });
+      $('#dlg').close(); refreshApprovals(); render(); return;
+    } catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); r = await again(); }
+  }
+  $('#dlg').close();
+}
+function wireApprovers(box, initial = []) {
   const chosen = new Map(), q = box.querySelector('#ap-q'), listEl = box.querySelector('#ap-list'), typeSel = box.querySelector('[name=documentType]');
   let base = null, found = [], timer, seq = 0;
   const short = e => e.split('@')[0];
@@ -921,6 +936,10 @@ function wireApprovers(box) {
     }, 300);
   };
   q.onkeydown = e => { if (e.key === 'Enter') e.preventDefault(); };
+  if (initial.length) {                                   // the approvers chosen last time
+    initial.forEach(e => chosen.set(e, { email: e, name: short(e), title: '' }));
+    const on = box.querySelector('#ap-on'); on.checked = true; on.onchange({ target: on });
+  }
   return () => box.querySelector('#ap-on').checked ? [...chosen.keys()] : null;
 }
 async function startWorkflow(path, name) {

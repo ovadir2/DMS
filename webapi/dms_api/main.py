@@ -41,7 +41,8 @@ class RenameRequest(BaseModel):
 
 
 class SubmitRequest(BaseModel):
-    approvers: list[str] | None = Field(None, description="Chosen approvers (emails); all must approve. Empty: the Approver Matrix")
+    approvers: list[str] | None = Field(None, description="Chosen approvers (emails); all must approve. [] = the Approver Matrix; "
+                                                          "omitted = the approvers chosen at the last submission (if any)")
 
 
 class DocRenameRequest(BaseModel):
@@ -1042,10 +1043,24 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return submit(doc["id"], SubmitRequest(approvers=req.approvers), user)
         return with_key(doc)
 
+    def last_chosen(doc_id: str) -> list[str]:
+        """The approvers chosen at the document's last submission (empty: it went by the Approver Matrix)."""
+        last = next((e for e in events_by_doc().get(doc_id or "", []) if e["event"] == s.choices["SubmittedEvent"]), None)
+        return chosen_approvers(last)
+
+    @app.get("/api/documents/{item_id}/approvers")
+    def doc_approvers(item_id: int, _: User = Depends(current_user)):
+        """For a new submission: the approvers chosen last time, and the document type (for the Matrix)."""
+        d = sp().document(item_id)
+        return {"chosen": last_chosen(d.get("documentId") or ""), "documentType": d.get("documentType") or ""}
+
     @app.post("/api/documents/{item_id}/submit")
     def submit(item_id: int, req: SubmitRequest | None = None, user: User = Depends(current_user)):
-        approvers = clean_approvers(req.approvers if req else None)
         doc = sp().document(item_id)
+        if req is None or req.approvers is None:                # not said: the same approvers as last time
+            approvers = last_chosen(doc.get("documentId") or "")
+        else:
+            approvers = clean_approvers(req.approvers)
         if (doc.get("ownerEmail") or "").lower() != user.email and not is_admin(user):
             raise HTTPException(403, "Only the document owner (or a DMS super user) can submit it")
         if doc.get("lifecycleStatus") != s.choices["Working"]:
