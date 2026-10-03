@@ -1367,3 +1367,44 @@ def test_onedrive_not_set_up_is_requested():
     with pytest.raises(SharePointError, match="not set up yet"):
         sp.onedrive_shortcut("Outbound/C", "DMS_C", "roneno@rh.co.il")
     assert sess.calls[-1] == ("POST", "https://rhisrael.sharepoint.com/_api/SP.UserProfiles.ProfileLoader.GetProfileLoader/GetUserProfile/CreatePersonalSiteEnque(false)")
+
+
+def test_shares_expire_after_30_days(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from dms_api import exchange_expiry
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    assert s.ex_days == 30
+    c.post(f"/api/documents/{d['id']}/share", json={"email": "x@cust.com"})
+    assert exchange_expiry.run_once(sp, s) == []                                   # shared today: kept
+    sp.shares[0]["utc"] = (datetime.now(timezone.utc) - timedelta(days=31)).isoformat()
+    r = exchange_expiry.run_once(sp, s)
+    assert r[0]["file"] == "CRU 4 FCT Quote_Rev1.xlsx" and r[0]["folderRemoved"] and not sp.shares
+    ev = sp.audit_events()[0]
+    assert ev["documentId"] == "DMS-00001" and "Share expired after 30 days" in ev["details"] and "no access" in ev["details"]
+
+
+def test_expire_outbound_requests():
+    from datetime import datetime, timezone
+    from tests.test_sharepoint import Resp
+    from dms_api.sharepoint import SharePoint
+
+    class Sess:
+        def __init__(self):
+            self.calls = []
+
+        def request(self, method, url, json=None, data=None, headers=None, timeout=None):
+            self.calls.append((method, url))
+            if url.endswith("Outbound')/Folders?$select=Name,ServerRelativeUrl,ItemCount"):
+                return Resp({"value": [{"Name": "A", "ServerRelativeUrl": "/sites/LFE/TemporaryUploads/Outbound/A"}]})
+            if "/Outbound/A')/Files" in url:
+                return Resp({"value": [{"Name": "old.pdf", "ServerRelativeUrl": "/sites/LFE/TemporaryUploads/Outbound/A/old.pdf", "TimeLastModified": "2026-08-01T10:00:00Z"},
+                                       {"Name": "new.pdf", "ServerRelativeUrl": "/sites/LFE/TemporaryUploads/Outbound/A/new.pdf", "TimeLastModified": "2026-10-01T10:00:00Z"}]})
+            return Resp({"value": []})
+    s = Settings(site_url="https://rhisrael.sharepoint.com/sites/DocumentControl-TEST", ex_site_url="https://rhisrael.sharepoint.com/sites/LFE")
+    sess = Sess()
+    sp = SharePoint(s, sess)
+    sp._access_token = lambda: "t"
+    r = sp.expire_outbound(30, now=datetime(2026, 10, 3, tzinfo=timezone.utc))
+    assert [x["file"] for x in r] == ["old.pdf"] and not r[0]["folderRemoved"]       # new.pdf keeps the folder
+    recycled = [u for m, u in sess.calls if u.endswith("/recycle()")]
+    assert len(recycled) == 1 and "old.pdf" in recycled[0]

@@ -326,6 +326,37 @@ class SharePoint:
                 out["shortcutError"] = str(e)[:300]
         return out
 
+    def expire_outbound(self, days: int, now: datetime | None = None) -> list[dict]:
+        """Shares older than `days`: every file in <library>/<ex_folder>/<Customer>/ last uploaded (shared) more
+        than `days` ago goes to the Exchange site recycle bin; a customer folder left empty goes too, and with it
+        the customer's access. Returns what was removed."""
+        ex = self.s.ex_site_url.rstrip("/")
+        q = lambda p: quote(p.replace("'", "''"), safe="/")  # noqa: E731
+        base = f"{urlparse(ex).path.rstrip('/')}/{self.s.ex_library}/{self.s.ex_folder}"
+        limit = (now or datetime.now(timezone.utc)).timestamp() - days * 86400
+        try:
+            folders = self._call("GET", f"{ex}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(base)}')/Folders"
+                                        "?$select=Name,ServerRelativeUrl,ItemCount").get("value", [])
+        except SharePointError as e:
+            if " 404" in str(e):
+                return []
+            raise
+        removed = []
+        for f in folders:
+            files = self._call("GET", f"{ex}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(f['ServerRelativeUrl'])}')/Files"
+                                      "?$select=Name,ServerRelativeUrl,TimeLastModified").get("value", [])
+            old = [x for x in files if datetime.fromisoformat(x["TimeLastModified"].replace("Z", "+00:00")).timestamp() < limit]
+            for x in old:
+                self._call("POST", f"{ex}/_api/web/GetFileByServerRelativePath(DecodedUrl='{q(x['ServerRelativeUrl'])}')/recycle()")
+                removed.append({"customer": f["Name"], "file": x["Name"], "sharedUtc": x["TimeLastModified"], "folderRemoved": False})
+            subfolders = self._call("GET", f"{ex}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(f['ServerRelativeUrl'])}')/Folders"
+                                           "?$select=Name").get("value", [])
+            if files and len(old) == len(files) and not subfolders:
+                self._call("POST", f"{ex}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(f['ServerRelativeUrl'])}')/recycle()")
+                if removed:
+                    removed[-1]["folderRemoved"] = True
+        return removed
+
     # ------------------------------------------------------------------ OneDrive shortcut (Microsoft Graph)
     GRAPH = "https://graph.microsoft.com/v1.0"
 
@@ -394,13 +425,19 @@ class SharePoint:
                 if "409" not in str(e) and "nameAlreadyExists" not in str(e):
                     raise
             parent = f"root:/{quote(self.s.ex_shortcut_folder)}:"
+        body = {"name": name, "remoteItem": {"id": item["id"], "parentReference": {"driveId": drive["id"]}},
+                "@microsoft.graph.conflictBehavior": "fail"}
         try:
-            self._graph("POST", f"{me}/{parent}/children", json={
-                "name": name, "remoteItem": {"id": item["id"], "parentReference": {"driveId": drive["id"]}},
-                "@microsoft.graph.conflictBehavior": "fail"})
+            self._graph("POST", f"{me}/{parent}/children", json=body)
         except SharePointError as e:
             if "409" not in str(e) and "nameAlreadyExists" not in str(e):
                 raise
+            # already there: keep it, unless it points to an older folder (removed after expiry and created again)
+            path = f"{self.s.ex_shortcut_folder}/{name}" if self.s.ex_shortcut_folder else name
+            old = self._graph("GET", f"{me}/root:/{quote(path)}?$select=id,remoteItem")
+            if (old.get("remoteItem") or {}).get("id") not in (None, item["id"]):
+                self._graph("DELETE", f"{me}/items/{old['id']}")
+                self._graph("POST", f"{me}/{parent}/children", json=body)
         return f"{self.s.ex_shortcut_folder}/{name}" if self.s.ex_shortcut_folder else name
 
     def setup_onedrive(self) -> None:
