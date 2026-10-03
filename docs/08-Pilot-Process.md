@@ -170,7 +170,7 @@ Before you start: DC-P1 **Off**, DC-P2 **On** (notifications), roneno is the app
 | 22 | Gmail edssrom@gmail.com | An invitation from SharePoint; opening it asks for a one-time code (or a Microsoft account) and shows the file **view only** |
 | 23 | Try to share a document that is not approved | Refused: only approved documents |
 | **H** | **Finding and follow-up** | |
-| 24 | Search **✦ Smart** "test quote"; AI Insights → Find a file "latest test quote of Customer_A" | The document is suggested with its status; Go to folder opens it |
+| 24 | Type "test quote" in the search box (suggestions while typing), then Enter; AI Insights → Ask, and 📚 QMS "נהלי שינוע" | The document is suggested with its status and opens its folder; the answers appear in the panel (QMS with its sources) |
 | 25 | My workflows (counts, history) and **All workflows** | Every step above is in the history, with who and when |
 | 26 | Explorer right-click on a file → **Start workflow** (`Install-DmsExplorerMenu.ps1 -AppUrl 'http://localhost:8080/dms/dms-page?lang=EN'`) | The page opens with the Start workflow form for that file |
 
