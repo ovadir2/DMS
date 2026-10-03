@@ -770,6 +770,12 @@ def test_share_with_customer(tmp_path):
     assert r.json()["customer"] == "Customer_A" and sp.shortcuts[0]["name"] == "DMS_Customer_A"
     ev = sp.audit_events()[0]
     assert ev["event"] == "שינוי הרשאות" and "edssrom@gmail.com" in ev["details"] and "customer Customer_A" in ev["details"]
+    log = tmp_path / "Root" / "02_Customers" / "Customer_A" / "Shared" / "DMS-Shared-Log.csv"
+    assert r.json()["log"].replace("\\", "/") == "02_Customers/Customer_A/Shared/DMS-Shared-Log.csv"
+    c.post(f"/api/documents/{d['id']}/share", json={"email": "other@cust.com"})          # appended, header once
+    rows = log.read_text(encoding="utf-8-sig").splitlines()
+    assert rows[0].startswith("Date (UTC),Action,Shared by") and len(rows) == 3
+    assert "edssrom@gmail.com" in rows[1] and "other@cust.com" in rows[2] and USER in rows[2] and "DMS-00001" in rows[2]
     info = c.get(f"/api/documents/{d['id']}/share-info").json()
     assert info["customer"] == "Customer_A" and "Customer_A" in info["customers"]
     assert c.post(f"/api/documents/{d['id']}/share", json={"email": "not-an-email"}).status_code == 422
@@ -1389,6 +1395,8 @@ def test_shares_expire_after_30_days(tmp_path):
     assert r[0]["file"] == "CRU 4 FCT Quote_Rev1.xlsx" and r[0]["folderRemoved"] and not sp.shares
     ev = sp.audit_events()[0]
     assert ev["documentId"] == "DMS-00001" and "Share expired after 30 days" in ev["details"] and "no access" in ev["details"]
+    last = (tmp_path / "Root" / "02_Customers" / "Customer_A" / "Shared" / "DMS-Shared-Log.csv").read_text(encoding="utf-8-sig").splitlines()[-1]
+    assert "Expired" in last and "CRU 4 FCT Quote_Rev1.xlsx" in last
 
 
 def test_expire_outbound_requests():
