@@ -786,6 +786,14 @@ def test_share_with_customer(tmp_path):
     assert c.post("/api/items/delete", json={"path": str(shared)}).status_code == 403   # nor its folder
     assert c.post("/api/documents", json={"path": str(log), "documentType": "x", "documentArea": "y"}).status_code == 403
     assert log.exists()
+    (shared / "sent.pdf").write_text("x")
+    b = c.get("/api/browse", params={"path": str(shared)}).json()
+    sent = next(x for x in b["files"] if x["name"] == "sent.pdf")
+    assert b["noWorkflow"] and not b["canWrite"] and sent["noWorkflow"] and sent["system"]
+    assert c.post("/api/items/rename", json={"path": str(shared / "sent.pdf"), "newName": "y.pdf"}).status_code == 403
+    assert c.post("/api/items/delete", json={"path": str(shared / "sent.pdf")}).status_code == 403
+    assert c.post("/api/folders", json={"parent": str(shared), "name": "sub"}).status_code == 403
+    assert c.post("/api/documents", json={"path": str(shared / "sent.pdf"), "documentType": "x", "documentArea": "y"}).status_code == 403
     info = c.get(f"/api/documents/{d['id']}/share-info").json()
     assert info["customer"] == "Customer_A" and "Customer_A" in info["customers"]
     assert c.post(f"/api/documents/{d['id']}/share", json={"email": "not-an-email"}).status_code == 422
