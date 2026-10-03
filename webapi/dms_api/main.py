@@ -82,6 +82,12 @@ class DecisionRequest(BaseModel):
     comment: str = Field("", max_length=1000)
 
 
+class DelegateRequest(BaseModel):
+    to: str = Field(description="The person who approves instead (email)")
+    on_behalf: str | None = Field(None, alias="from", description="Super users: the waiting approver being replaced")
+    comment: str = Field("", max_length=1000)
+
+
 class ShareRequest(BaseModel):
     email: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     message: str = Field("", max_length=2000)
@@ -264,8 +270,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """Super users: the DMS lists in SharePoint (exists, items, may this account add), and the last errors."""
         if not is_admin(user):
             raise HTTPException(403, "Only a DMS super user can run the SharePoint check")
-        from .sharepoint import AUDIT, MATRIX, NOTIFY, REGISTER
-        lists = [sp().list_info(rel) for rel in (REGISTER, AUDIT, MATRIX, NOTIFY)]
+        from .sharepoint import AUDIT, DELEGATIONS, MATRIX, NOTIFY, REGISTER
+        lists = [sp().list_info(rel) for rel in (REGISTER, AUDIT, MATRIX, NOTIFY, DELEGATIONS)]
         return {"site": s.site_url if s.sharepoint != "memory" else "memory (playground)", "account": user.email,
                 "auth": s.sp_auth, "lists": lists, "errors": list(app.state.sp_errors),
                 "notifications": {"on": s.approvals == "page" and s.notify, "approvals": s.approvals, "notify": s.notify,
@@ -681,6 +687,28 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             sp().audit(document_id=d.get("documentId") or f"ID {d.get('id')}", event=s.choices["FileDone"], from_status=status,
                        to_status=status, actor="RH-DMS-Workflow-Service", details=details, source=s.choices["WorkflowService"])
 
+    DELEGATED = "Delegated: "
+
+    def delegations(cycle: list[dict]) -> dict[str, str]:
+        """'who -> instead of whom' from the Control Audit rows of the current cycle (oldest first)."""
+        out: dict[str, str] = {}
+        for e in reversed(cycle):
+            details = e.get("details") or ""
+            if e["event"] == s.choices["PermissionChanged"] and details.startswith(DELEGATED):
+                pair = details[len(DELEGATED):].split(":")[0]
+                if " -> " in pair:
+                    a, b = (x.strip().lower() for x in pair.split(" -> ", 1))
+                    if a and b:
+                        out[a] = b.split()[0]                   # "(by …)" after the address is a note
+        return out
+
+    def _follow(delegated: dict[str, str], person: str) -> str:
+        seen = set()
+        while person in delegated and person not in seen:     # a delegate may delegate again
+            seen.add(person)
+            person = delegated[person]
+        return person
+
     CHOSEN = "Approvers (chosen): "
 
     def chosen_approvers(submitted: dict | None) -> list[str]:
@@ -728,11 +756,17 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             rule = rules[t]
         if not rule:
             return {"stage": None, "pending": [], "approved": [], "rule": False}
+        delegated = delegations(cycle)
+        if delegated:                                           # a delegate approves instead, in this cycle
+            sub = lambda p: _follow(delegated, p)  # noqa: E731
+            rule = {**rule, "mandatory": list(dict.fromkeys(sub(m) for m in rule["mandatory"])),
+                    "final": sub(rule["final"]) if rule.get("final") else rule.get("final")}
         approvals = [e for e in cycle if e["event"] == c["ApprovedEvent"]]
         stage1 = {e["actor"] for e in approvals if (e.get("details") or "").startswith("Stage 1")}
         su = any((e.get("details") or "").startswith("Stage 1 (super user)") for e in approvals)
         pending1 = [] if su else [m for m in rule["mandatory"] if m not in stage1]
-        extra = {"chosen": bool(rule.get("chosen")), "final": rule.get("final")}
+        extra = {"chosen": bool(rule.get("chosen")), "final": rule.get("final"),
+                 "delegated": [{"from": a, "to": b} for a, b in delegated.items()]}
         if pending1:
             return {"stage": 1, "pending": pending1, "approved": sorted(stage1), "rule": True, **extra}
         return {"stage": 2, "pending": [rule["final"]] if rule["final"] else [], "approved": sorted(stage1), "rule": True, **extra}
@@ -841,6 +875,43 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         d = with_key(sp().document(item_id))
         if d["statusKey"] == "Submitted":
             d.update(approval_state(d, events_by_doc().get(d.get("documentId") or "", []), {}))
+        return d
+
+    @app.post("/api/approvals/{item_id}/delegate")
+    def delegate(item_id: int, req: DelegateRequest, user: User = Depends(current_user)):
+        """Pass a waiting approval to someone else for this cycle (the approver, or a super user for any waiting approver)."""
+        c = s.choices
+        if s.approvals != "page":
+            raise HTTPException(409, "Approvals are done in Teams (DC-P1)")
+        d = sp().document(item_id)
+        if d.get("lifecycleStatus") != c["Submitted"]:
+            raise HTTPException(409, "The document is not waiting for approval")
+        st = approval_state(d, events_by_doc().get(d.get("documentId") or "", []), {})
+        frm = (req.on_behalf or user.email).strip().lower()
+        if frm != user.email and not is_admin(user):
+            raise HTTPException(403, "You can only delegate your own approval")
+        if frm not in st["pending"]:
+            raise HTTPException(409, f"{frm} is not waiting to approve this document")
+        to = clean_approvers([req.to])[0] if req.to else ""
+        if not to or to == frm:
+            raise HTTPException(400, "Choose another person")
+        if to in st["pending"]:
+            raise HTTPException(409, f"{to} is already an approver of this stage")
+        doc_id = d.get("documentId") or f"ID {item_id}"
+        details = f"{DELEGATED}{frm} -> {to}" + (f": {req.comment.strip()}" if req.comment.strip() else "") \
+            + (f" (by {user.email})" if user.email != frm else "")
+        sp().audit(document_id=doc_id, event=c["PermissionChanged"], from_status=c["Submitted"], to_status=c["Submitted"],
+                   actor=user.email, details=details)
+        log(user, "delegate", f"{doc_id}: {frm} -> {to}")
+        try:                                                    # the Delegations list keeps the log too
+            sp().log_delegation(title=f"{doc_id}: {frm} -> {to}", delegator=frm, delegate=to, approved_by=user.email,
+                                reason=f"{doc_id} {d.get('title') or ''}" + (f": {req.comment.strip()}" if req.comment.strip() else ""))
+        except Exception as e:  # noqa: BLE001 - the delegation itself is done (Control Audit)
+            logger.warning("delegation not logged in the Delegations list: %s", e)
+            sp_error("Delegations row", e)
+        notify("waiting", d, [to])
+        d = with_key(sp().document(item_id))
+        d.update(approval_state(d, events_by_doc().get(d.get("documentId") or "", []), {}))
         return d
 
     @app.get("/api/my-workflows")

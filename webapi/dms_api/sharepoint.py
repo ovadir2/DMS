@@ -21,6 +21,7 @@ REGISTER = "Lists/DocumentRegister"
 AUDIT = "Lists/ControlAudit"
 MATRIX = "Lists/ApproverMatrix"
 NOTIFY = "Lists/DmsNotifications"
+DELEGATIONS = "Lists/Delegations"
 REGISTER_FIELDS = ("Id", "Title", "DocumentId", "DocumentType", "DocumentArea", "ControlMode", "LifecycleStatus",
                    "WorkingUncPath", "CurrentUncPath", "CurrentSHA256", "CurrentRevision", "LastApprovedUtc",
                    "DraftRevision", "Modified", "Created")
@@ -229,6 +230,16 @@ class SharePoint:
             if email and not u.get("IsHiddenInUI") and all(o["email"] != email for o in out):
                 out.append({"email": email, "name": u.get("Title") or email, "title": ""})
         return sorted(out, key=lambda p: p["name"].lower())
+
+    def log_delegation(self, *, title: str, delegator: str, delegate: str, approved_by: str, reason: str) -> None:
+        """One row in the Delegations list (provisioned by Provision-DMS.ps1): who passed an approval to whom."""
+        r = self._call("GET", f"{self._list(DELEGATIONS)}/fields/getbyinternalnameortitle('DelegationStatus')?$select=Choices")
+        active = next((v for v in (r.get("Choices") or []) if v in ("Active", "פעיל")), "Active")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+        self._call("POST", f"{self._list(DELEGATIONS)}/items", json={
+            "Title": title[:255], "DelegatorId": self._user_id(delegator), "DelegateToId": self._user_id(delegate),
+            "ValidFrom": today, "ValidTo": today, "DelegationReason": reason, "DelegationStatus": active,
+            "DelegationApprovedById": self._user_id(approved_by)})
 
     def list_info(self, rel: str) -> dict:
         """Does the list exist, how many items, and may the signed-in account add items (read only, writes nothing)."""

@@ -79,6 +79,10 @@ class MemorySharePoint:
     def site_people(self) -> list[dict]:
         return self.people("@")
 
+    def log_delegation(self, *, title, delegator, delegate, approved_by, reason) -> None:
+        self.delegations = getattr(self, "delegations", []) + [
+            {"title": title, "delegator": delegator, "delegate": delegate, "approvedBy": approved_by, "reason": reason}]
+
     def list_info(self, rel: str) -> dict:
         n = {"Lists/DocumentRegister": len(self.items), "Lists/ControlAudit": len(self.audits),
              "Lists/DmsNotifications": len(self.notifications)}.get(rel, 0)
