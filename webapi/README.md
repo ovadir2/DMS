@@ -112,7 +112,7 @@ Two ways to run the DMS. **A** is the pilot on one PC (what runs today). **B** i
    Check: the lists appear in Site contents.
 3. **Notifications flow:** Power Automate › My flows › Import › Import package (legacy) › the zip from step 2 › connect SharePoint, Outlook and Teams › Import. Open **DC-P2 Pilot Notifications** › **Turn on**. Keep only one copy. Turn **DC-P1 Off** (the pilot approves on the page).
    Check: the flow shows *On*.
-4. **Folder tree** (test share only): `..\scripts\New-DmsFileServerTree.ps1 -Root $Root -Customers 'Customer_A'` creates the blueprint folders.
+4. **Folder tree:** list the customers and their projects in a CSV (columns `Customer,Project`, one row per project; see `scripts\customers.example.csv`), then `..\scripts\New-DmsFileServerTree.ps1 -Root $Root -CustomersCsv .\customers.csv -WhatIf` and again without `-WhatIf`. Each customer gets Customer_Profile, Commercial (RFQ, Quotations, Contracts, NDA), Projects, Shared and Archive; each project the full blueprint tree (about 115 folders). Existing folders are kept. Later customers and projects can be added on the DMS page: **New folder** under `02_Customers` or under a customer's `Projects` creates the same blueprint folders.
 5. **Start the DMS**
    ```powershell
    cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C
@@ -161,6 +161,7 @@ The server must be joined to the domain, reach `$Root`, and have outbound HTTPS 
    ```
    Optional: `DMS_EX_DAYS` (30), `DMS_SHARED_LOG`, `DMS_EX_SHORTCUT`, `DMS_DELEGATION_DAYS` (3), `DMS_WEEKEND` (fri,sat), the AI and File Linker keys.
 6. **SharePoint lists and flows** on the production site: as in A2 and A3, with the production site alias.
+   **Folder tree** on the production `$Root`: as in A4, adding `-ApplyAcl` (and `-CreateAdGroups -GroupOU <OU>` the first time) for the NTFS permissions per customer.
 7. **IIS site:** new site on `C:\DMS\webapi`, HTTPS binding with the company certificate, app pool *No Managed Code*, identity = the gMSA. `web.config` is already in the folder (Windows Authentication on, Anonymous off). If IIS reports a locked `authentication` section, set the same in IIS Manager.
 8. **Logo (optional):** `dms_api\static\logo.png`.
 9. **Smoke test:**

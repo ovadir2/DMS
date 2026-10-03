@@ -1442,3 +1442,19 @@ def test_expire_outbound_requests():
     assert [x["file"] for x in r] == ["old.pdf"] and not r[0]["folderRemoved"]       # new.pdf keeps the folder
     recycled = [u for m, u in sess.calls if u.endswith("/recycle()")]
     assert len(recycled) == 1 and "old.pdf" in recycled[0]
+
+
+def test_new_customer_and_project_get_the_blueprint_folders(tmp_path):
+    root = tmp_path / "Root"
+    (root / "02_Customers").mkdir(parents=True)
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])))
+    r = c.post("/api/folders", json={"parent": str(root / "02_Customers"), "name": "Elbit"})
+    assert r.status_code == 201, r.text
+    cust = root / "02_Customers" / "Elbit"
+    assert (cust / "Commercial" / "Quotations").is_dir() and (cust / "Shared").is_dir() and (cust / "Projects").is_dir()
+    r = c.post("/api/folders", json={"parent": str(cust / "Projects"), "name": "PRJ-200_Radar"})
+    prj = cust / "Projects" / "PRJ-200_Radar"
+    assert r.json()["blueprintFolders"] > 100
+    assert (prj / "Test_Engineering" / "ATEFiles" / "FCT" / "07_FAT").is_dir() and (prj / "Released" / "Current").is_dir()
+    sub = c.post("/api/folders", json={"parent": str(prj / "Engineering"), "name": "Extra"}).json()
+    assert sub["blueprintFolders"] == 0                                              # deeper folders: just the folder
