@@ -66,6 +66,13 @@ class MemorySharePoint:
         self.shares = getattr(self, "shares", []) + [{"email": email, "url": url, "subject": subject, "message": message}]
         return {"url": url}
 
+    def people(self, q: str) -> list[dict]:
+        """Playground: the super users, you and a few sample colleagues."""
+        pool = list(dict.fromkeys([*(self.s.admins or []), *([self.s.dev_user] if self.s.dev_user else []),
+                                   "dana.levi@rh.co.il", "avi.cohen@rh.co.il", "quality.manager@rh.co.il"]))
+        q = q.lower()
+        return [{"email": e, "name": e.split("@")[0].replace(".", " ").title(), "title": ""} for e in pool if q in e.lower()]
+
     def list_info(self, rel: str) -> dict:
         n = {"Lists/DocumentRegister": len(self.items), "Lists/ControlAudit": len(self.audits),
              "Lists/DmsNotifications": len(self.notifications)}.get(rel, 0)

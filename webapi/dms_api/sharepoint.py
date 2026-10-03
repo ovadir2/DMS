@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import time
-from json import dumps as json_dumps
+from json import dumps as json_dumps, loads as json_loads
 from datetime import datetime, timezone
 from urllib.parse import quote, urlparse
 
@@ -176,6 +176,21 @@ class SharePoint:
         mandatory = [(u.get("EMail") or "").lower() for u in (r.get("MandatoryApprovers") or []) if u.get("EMail")]
         final = ((r.get("FinalApprover") or {}).get("EMail") or "").lower() or None
         return {"mandatory": mandatory, "final": final}
+
+    def people(self, q: str) -> list[dict]:
+        """Users in the directory matching q (SharePoint people picker): [{email, name}]."""
+        r = self._call("POST", f"{self.s.site_url}/_api/SP.UI.ApplicationPages.ClientPeoplePickerWebServiceInterface.clientPeoplePickerSearchUser",
+                       json={"queryParams": {"QueryString": q, "MaximumEntitySuggestions": 12, "AllowEmailAddresses": False,
+                                             "AllowMultipleEntities": True, "PrincipalSource": 15, "PrincipalType": 1}})
+        raw = r.get("value") if isinstance(r, dict) else None
+        raw = raw if raw is not None else ((r.get("d") or {}).get("ClientPeoplePickerSearchUser") if isinstance(r, dict) else "[]")
+        out = []
+        for e in json_loads(raw or "[]"):
+            data = e.get("EntityData") or {}
+            email = (data.get("Email") or "").lower()
+            if email and all(o["email"] != email for o in out):
+                out.append({"email": email, "name": e.get("DisplayText") or email, "title": data.get("Title") or data.get("Department") or ""})
+        return out
 
     def list_info(self, rel: str) -> dict:
         """Does the list exist, how many items, and may the signed-in account add items (read only, writes nothing)."""
