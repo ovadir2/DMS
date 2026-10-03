@@ -1186,3 +1186,23 @@ def test_notification_log_and_test_notification(tmp_path):
     assert n["on"] and n["last"][0]["to"] == ["avi@rh.co.il"] and n["last"][0]["result"] == "written to DMS Notifications"
     assert c.post("/api/diagnostics/notify-test").json() == {"to": USER}
     assert sp.notifications[-1]["to"] == [USER]
+
+
+def test_submit_again_remembers_the_chosen_approvers(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "submit": True, "approvers": ["avi@rh.co.il", "eli@rh.co.il"]}).json()
+    c.post(f"/api/documents/{d['id']}/withdraw")
+    assert c.get(f"/api/documents/{d['id']}/approvers").json()["chosen"] == ["avi@rh.co.il", "eli@rh.co.il"]
+    c.post(f"/api/documents/{d['id']}/submit")                                         # nothing said: the same people
+    assert sp.audit_events()[0]["details"].endswith("Approvers (chosen): avi@rh.co.il; eli@rh.co.il")
+    c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "fix"})
+    c.post(f"/api/documents/{d['id']}/submit", json={"approvers": []})                 # back to the Approver Matrix
+    assert sp.audit_events()[0]["details"] == "Submitted from the DMS page"
+    assert c.get(f"/api/documents/{d['id']}/approvers").json()["chosen"] == []
