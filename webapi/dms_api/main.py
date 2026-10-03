@@ -243,6 +243,23 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """People in the company directory, for choosing approvers (SharePoint people picker)."""
         return sp().people(q)
 
+    @app.get("/api/people/list")
+    def people_list(_: User = Depends(current_user)):
+        """The list to choose approvers from: all RH Microsoft 365 users (people search); if the directory
+        cannot be read, the people of the DocumentControl site. The DMS super users are always in it."""
+        try:
+            people = sp().directory_people()
+        except Exception as e:  # noqa: BLE001 - fall back to the site's people
+            logger.warning("directory people not read: %s", e)
+            sp_error("Company directory (people search)", e)
+            people = []
+        if not people:
+            people = sp().site_people()
+        out = {p["email"]: p for p in people}
+        for a in s.admins:
+            out.setdefault(a, {"email": a, "name": a.split("@")[0], "title": ""})
+        return sorted(out.values(), key=lambda p: p["name"].lower())
+
     @app.get("/api/approver-rule")
     def approver_rule_view(documentType: str, _: User = Depends(current_user)):
         """Who the Approver Matrix sends this document type to (the default when nobody is chosen)."""

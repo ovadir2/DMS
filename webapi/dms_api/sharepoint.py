@@ -192,6 +192,44 @@ class SharePoint:
                 out.append({"email": email, "name": e.get("DisplayText") or email, "title": data.get("Title") or data.get("Department") or ""})
         return out
 
+    PEOPLE_SOURCE = "b09a7990-05ea-4af9-81ef-edfab16c4e31"     # SharePoint search: Local People Results
+
+    def directory_people(self, max_people: int = 5000) -> list[dict]:
+        """All RH Microsoft 365 users with a mailbox (the company directory, through SharePoint people search).
+        Cached for an hour."""
+        cached = getattr(self, "_people_cache", None)
+        if cached and cached[1] > time.time():
+            return cached[0]
+        out: dict[str, dict] = {}
+        start = 0
+        while start < max_people:
+            url = (f"{self.s.site_url}/_api/search/query?querytext='*'&sourceid='{self.PEOPLE_SOURCE}'"
+                   f"&selectproperties='PreferredName,WorkEmail,JobTitle,Department'&rowlimit=500&startrow={start}&trimduplicates=false")
+            res = (self._call("GET", url).get("PrimaryQueryResult") or {}).get("RelevantResults") or {}
+            rows = ((res.get("Table") or {}).get("Rows")) or []
+            for row in rows:
+                cells = {c.get("Key"): c.get("Value") for c in row.get("Cells") or []}
+                email = (cells.get("WorkEmail") or "").lower()
+                if email and email not in out:
+                    out[email] = {"email": email, "name": cells.get("PreferredName") or email,
+                                  "title": " · ".join(x for x in (cells.get("JobTitle"), cells.get("Department")) if x)}
+            start += len(rows)
+            if not rows or start >= int(res.get("TotalRows") or 0):
+                break
+        people = sorted(out.values(), key=lambda p: p["name"].lower())
+        self._people_cache = (people, time.time() + 3600)
+        return people
+
+    def site_people(self) -> list[dict]:
+        """The people (with an email) of the DocumentControl site: the default list to choose approvers from."""
+        url = f"{self.s.site_url}/_api/web/siteusers?$select=Email,Title,PrincipalType,IsHiddenInUI&$filter=PrincipalType eq 1&$top=1000"
+        out = []
+        for u in self._call("GET", url).get("value", []):
+            email = (u.get("Email") or "").lower()
+            if email and not u.get("IsHiddenInUI") and all(o["email"] != email for o in out):
+                out.append({"email": email, "name": u.get("Title") or email, "title": ""})
+        return sorted(out, key=lambda p: p["name"].lower())
+
     def list_info(self, rel: str) -> dict:
         """Does the list exist, how many items, and may the signed-in account add items (read only, writes nothing)."""
         try:
