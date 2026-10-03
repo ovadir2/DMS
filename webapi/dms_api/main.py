@@ -165,6 +165,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     from collections import deque
     app.state.sp_errors = deque(maxlen=30)               # the last SharePoint errors, for the SharePoint check
+    app.state.notify_log = deque(maxlen=20)              # the last notifications (written, skipped, failed)
 
     def sp_error(what: str, e: Exception) -> None:
         app.state.sp_errors.appendleft({"utc": datetime.now(timezone.utc).isoformat(timespec="seconds"), "what": what, "error": str(e)[:400]})
@@ -236,7 +237,22 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         from .sharepoint import AUDIT, MATRIX, NOTIFY, REGISTER
         lists = [sp().list_info(rel) for rel in (REGISTER, AUDIT, MATRIX, NOTIFY)]
         return {"site": s.site_url if s.sharepoint != "memory" else "memory (playground)", "account": user.email,
-                "auth": s.sp_auth, "lists": lists, "errors": list(app.state.sp_errors)}
+                "auth": s.sp_auth, "lists": lists, "errors": list(app.state.sp_errors),
+                "notifications": {"on": s.approvals == "page" and s.notify, "approvals": s.approvals, "notify": s.notify,
+                                  "pageUrl": s.page_url, "last": list(app.state.notify_log)}}
+
+    @app.post("/api/diagnostics/notify-test")
+    def notify_test(user: User = Depends(current_user)):
+        """Super users: write one test row to DMS Notifications, addressed to themselves (the DC-P2 flow sends it)."""
+        if not is_admin(user):
+            raise HTTPException(403, "Only a DMS super user can send a test notification")
+        base = s.page_url or "/dms/dms-page?lang=EN"
+        sp().notify(to=[user.email], subject="DMS test notification / הודעת בדיקה",
+                    body="This is a test of the DMS notifications (DMS Notifications list + DC-P2 flow). זוהי הודעת בדיקה.",
+                    link=base, ref="TEST")
+        app.state.notify_log.appendleft({"utc": datetime.now(timezone.utc).isoformat(timespec="seconds"), "kind": "test",
+                                         "doc": "TEST", "to": [user.email], "result": "written to DMS Notifications"})
+        return {"to": user.email}
 
     @app.get("/api/people")
     def people(q: str = Query(..., min_length=2), _: User = Depends(current_user)):
@@ -696,9 +712,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def notify(kind: str, d: dict, to: list[str], comment: str = "") -> None:
         """Pilot (page approvals): tell people by email and Teams through DMS Notifications + DC-P2."""
         to = sorted({t for t in to if t})
-        if s.approvals != "page" or not s.notify or not to:
-            return
         doc_id, title = d.get("documentId") or "", d.get("title") or ""
+        entry = {"utc": datetime.now(timezone.utc).isoformat(timespec="seconds"), "kind": kind, "doc": doc_id, "to": to}
+        app.state.notify_log.appendleft(entry)
+        if s.approvals != "page" or not s.notify or not to:
+            entry["result"] = ("skipped - approvals are in Teams (DMS_APPROVALS=flow)" if s.approvals != "page" else
+                               "skipped - notifications are off (DMS_NOTIFY=0)" if not s.notify else "skipped - nobody to notify")
+            return
         texts = {
             "waiting": (f"{doc_id} {title} - waiting for your approval / ממתין לאישורך",
                         "approvals", f"{doc_id} \"{title}\" is waiting for your approval. מסמך {doc_id} ממתין לאישורך."),
@@ -714,9 +734,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         link = base + ("&" if "?" in base else "?") + f"view={view}"
         try:
             sp().notify(to=to, subject=subject, body=body, link=link, ref=doc_id)
+            entry["result"] = "written to DMS Notifications"
         except Exception as e:  # noqa: BLE001 - a notification must never block the workflow
             logger.warning("notification not written (%s): %s", kind, e)
             sp_error(f"DMS Notifications row ({kind})", e)
+            entry["result"] = f"failed - {str(e)[:200]}"
 
     def notify_stage(d: dict) -> None:
         """Tell the approvers of the current stage of a submitted document."""
