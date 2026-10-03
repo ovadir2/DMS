@@ -452,6 +452,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return len(p) == 2 + len(parts) and p[0].lower() == s.customers_folder.lower()
         return os.path.isdir(full) and any(os.path.isfile(os.path.join(full, *parts[i:])) for i in range(len(parts)))
 
+    def in_shared_folder(full: str) -> bool:
+        """Inside a customer's Shared folder (02_Customers\\<c>\\Shared): copies already sent, not workflowed."""
+        if not s.shared_log or "/" not in s.shared_log.replace("\\", "/"):
+            return False
+        shared = s.shared_log.replace("\\", "/").split("/")[0].lower()
+        p = rel_parts(full)
+        return len(p) >= 3 and p[0].lower() == s.customers_folder.lower() and p[2].lower() == shared
+
     @app.get("/api/browse")
     def browse(path: str | None = None, user: User = Depends(current_user)):
         try:
@@ -475,8 +483,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         for f in result["files"]:
             d = find_registered(f["path"], idx)
             f["document"] = with_key(d) if d else None
-            if holds_share_log(f["path"]):
-                f.update(readOnly=True, system=True)
+            if holds_share_log(f["path"]) or in_shared_folder(f["path"]):
+                f.update(readOnly=True, system=True, noWorkflow=True)   # open (view), download, copy path only
+        if in_shared_folder(os.path.join(result["path"], "x")):
+            result.update(noWorkflow=True, canWrite=False, sharedNote=True)
         return result
 
     @app.get("/api/areas")
@@ -587,8 +597,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "Workflow folders are managed by the DMS")
         if not user.can(target_dir, "write"):
             raise HTTPException(403, "You do not have permission to save files in this folder")
-        if holds_share_log(os.path.join(target_dir, os.path.basename(file.filename or ""))):
-            raise HTTPException(403, "The customer's share log is kept by the DMS")
+        if in_shared_folder(os.path.join(target_dir, "x")):
+            raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only)")
         try:
             path = files.save_upload(s.repository_root, target_dir, file.filename or "", file.file,
                                      s.max_upload_mb * 1024 * 1024, overwrite)
@@ -632,6 +642,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         parent = files.resolve(s.repository_root, req.parent)
         if files.in_workflow_folder(s.repository_root, parent):
             raise HTTPException(403, "Workflow folders are managed by the DMS")
+        if in_shared_folder(os.path.join(parent, "x")):
+            raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only)")
         if not user.can(parent, "write"):
             raise HTTPException(403, "You do not have permission to create folders here")
         try:
@@ -650,8 +662,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "You do not have permission to rename this item")
         if os.path.exists(full):
             files.check_editable(s.repository_root, full, s.protected_depth)   # workflow folders first: clearest reason
-        if holds_share_log(full):
-            raise HTTPException(403, "The customer's share log is kept by the DMS and cannot be renamed")
+        if holds_share_log(full) or in_shared_folder(full):
+            raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only) and cannot be renamed")
         if blueprint.describe(rel_parts(full)) is not None:
             raise HTTPException(403, "This folder is part of the company skeleton (blueprint) and cannot be renamed. Its content can.")
         d = registered_inside(full)
@@ -676,8 +688,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "You do not have permission to delete this item")
         if os.path.exists(full):
             files.check_editable(s.repository_root, full, s.protected_depth)
-        if holds_share_log(full):
-            raise HTTPException(403, "The customer's share log is kept by the DMS and cannot be deleted")
+        if holds_share_log(full) or in_shared_folder(full):
+            raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only) and cannot be deleted")
         if blueprint.describe(rel_parts(full)) is not None:
             raise HTTPException(403, "This folder is part of the company skeleton (blueprint) and cannot be deleted. Its content can.")
         d = registered_inside(full)
@@ -1189,6 +1201,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, "The file is already in a workflow folder")
         if holds_share_log(path):
             raise HTTPException(403, "The customer's share log is kept by the DMS and is not a controlled document")
+        if in_shared_folder(path):
+            raise HTTPException(403, "Files in the customer's Shared folder are not workflowed (they are copies already sent)")
         existing = find_registered(path, register_index())
         if existing:
             raise HTTPException(409, {"message": "The file is already registered", "document": with_key(existing)})
