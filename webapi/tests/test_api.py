@@ -43,6 +43,10 @@ class FakeSharePoint:
     def audit(self, **kw):
         self.audits.append({**kw, "utc": f"2026-10-01T10:{len(self.audits):02d}:00Z"})
 
+    def log_delegation(self, **kw):
+        self.delegations = getattr(self, "delegations", []) + [
+            {"title": kw["title"], "delegator": kw["delegator"], "delegate": kw["delegate"], "approvedBy": kw["approved_by"], "reason": kw["reason"]}]
+
     def audit_events(self, refresh=False):
         return [{"documentId": a["document_id"], "event": a["event"], "fromStatus": a["from_status"], "toStatus": a["to_status"],
                  "actor": a["actor"], "utc": a["utc"], "source": "ידני", "details": a["details"]} for a in reversed(self.audits)]
@@ -1104,7 +1108,7 @@ def test_sharepoint_check_for_super_users(tmp_path):
     s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
     c = TestClient(create_app(s, MemorySharePoint(s)))
     r = c.get("/api/diagnostics/sharepoint").json()
-    assert [l["list"] for l in r["lists"]] == ["Lists/DocumentRegister", "Lists/ControlAudit", "Lists/ApproverMatrix", "Lists/DmsNotifications"]
+    assert [l["list"] for l in r["lists"]] == ["Lists/DocumentRegister", "Lists/ControlAudit", "Lists/ApproverMatrix", "Lists/DmsNotifications", "Lists/Delegations"]
     assert all(l["canAdd"] for l in r["lists"]) and r["errors"] == []
     s.admins = []
     assert c.get("/api/diagnostics/sharepoint").status_code == 403
@@ -1226,3 +1230,30 @@ def test_notifications_in_the_users_page_language(tmp_path):
     c.post("/api/documents", json={"path": str(q / "B.xlsx"), "submit": True, "approvers": ["avi@rh.co.il"]})
     n = sp.notifications[-1]
     assert n["subject"].endswith("waiting for your approval") and "ממתין" not in n["body"] and n["link"].endswith("lang=EN&view=approvals")
+
+
+def test_delegate_an_approval(tmp_path):
+    rule = {"mandatory": ["dana@rh.co.il"], "final": "boss@rh.co.il"}
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, approvals="page", admins=[])
+    sp = RuleSP(s, rule)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "documentType": "x", "documentArea": "y", "submit": True}).json()
+    assert c.post(f"/api/approvals/{d['id']}/delegate", json={"to": "avi@rh.co.il"}).status_code == 409   # not my approval
+    s.dev_user = "dana@rh.co.il"
+    r = c.post(f"/api/approvals/{d['id']}/delegate", json={"to": "Avi@rh.co.il", "comment": "on vacation"}).json()
+    assert r["pending"] == ["avi@rh.co.il"] and r["delegated"] == [{"from": "dana@rh.co.il", "to": "avi@rh.co.il"}]
+    assert sp.audit_events()[0]["details"] == "Delegated: dana@rh.co.il -> avi@rh.co.il: on vacation"
+    assert sp.delegations[-1] == {"title": "DMS-00001: dana@rh.co.il -> avi@rh.co.il", "delegator": "dana@rh.co.il",
+                                  "delegate": "avi@rh.co.il", "approvedBy": "dana@rh.co.il", "reason": "DMS-00001 Quote: on vacation"}
+    assert c.get("/api/approvals").json() == []                                         # no longer Dana's
+    s.dev_user = "avi@rh.co.il"
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["stage"] == 2
+    s.dev_user, s.admins = USER, [USER]                                                  # a super user, for the final approver
+    r = c.post(f"/api/approvals/{d['id']}/delegate", json={"to": "eli@rh.co.il", "from": "boss@rh.co.il"}).json()
+    assert r["pending"] == ["eli@rh.co.il"] and "(by " in sp.audit_events()[0]["details"]
+    s.dev_user = "eli@rh.co.il"
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["statusKey"] == "Approved_ReadOnly"
