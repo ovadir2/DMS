@@ -73,6 +73,12 @@ class MemorySharePoint:
         q = q.lower()
         return [{"email": e, "name": e.split("@")[0].replace(".", " ").title(), "title": ""} for e in pool if q in e.lower()]
 
+    def directory_people(self) -> list[dict]:
+        return self.people("@")
+
+    def site_people(self) -> list[dict]:
+        return self.people("@")
+
     def list_info(self, rel: str) -> dict:
         n = {"Lists/DocumentRegister": len(self.items), "Lists/ControlAudit": len(self.audits),
              "Lists/DmsNotifications": len(self.notifications)}.get(rel, 0)

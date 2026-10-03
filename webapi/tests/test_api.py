@@ -1143,3 +1143,30 @@ def test_start_workflow_with_chosen_approvers(tmp_path):
     assert c.post("/api/documents", json={"path": str(q / "New.xlsx"), "documentType": "x", "documentArea": "y", "submit": True, "approvers": ["not-an-email"]}).status_code == 400
     assert len(sp.documents()) == 1                                                      # nothing registered
     assert c.get("/api/approver-rule", params={"documentType": "הצעת מחיר"}).json()["final"] == "boss@rh.co.il"
+
+
+def test_people_list_for_choosing_approvers(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    root.mkdir()
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=["boss@rh.co.il"])
+    c = TestClient(create_app(s, MemorySharePoint(s)))
+    emails = [p["email"] for p in c.get("/api/people/list").json()]
+    assert "boss@rh.co.il" in emails and USER in emails and len(emails) == len(set(emails))
+
+
+def test_directory_people_from_sharepoint_people_search():
+    from dms_api.sharepoint import SharePoint
+    sp = SharePoint.__new__(SharePoint)
+    sp.s = Settings(site_url="https://rhisrael.sharepoint.com/sites/DocumentControl-TEST")
+    cell = lambda **kv: {"Cells": [{"Key": k, "Value": v} for k, v in kv.items()]}  # noqa: E731
+    pages = [{"PrimaryQueryResult": {"RelevantResults": {"TotalRows": 3, "Table": {"Rows": [
+        cell(PreferredName="Dana Levi", WorkEmail="Dana.Levi@rh.co.il", JobTitle="QA", Department="Quality"),
+        cell(PreferredName="No Mail", WorkEmail=None),
+        cell(PreferredName="Avi Cohen", WorkEmail="avi@rh.co.il", JobTitle=None, Department=None)]}}}}]
+    calls = []
+    sp._call = lambda m, url: (calls.append(url), pages.pop(0))[1]
+    people = sp.directory_people()
+    assert [p["email"] for p in people] == ["avi@rh.co.il", "dana.levi@rh.co.il"] and people[1]["title"] == "QA · Quality"
+    assert "sourceid='b09a7990-05ea-4af9-81ef-edfab16c4e31'" in calls[0]
+    assert sp.directory_people() is people                                             # cached
