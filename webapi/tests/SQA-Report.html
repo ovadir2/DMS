@@ -83,19 +83,19 @@ footer { color: var(--muted); font-size: 13px; }
   <div class="stat"><span class="n">84</span><span class="l">automated test cases (pytest)</span></div>
   <div class="stat pass"><span class="n">84 / 0</span><span class="l">passed / failed on build 6931a3d</span></div>
   <div class="stat ui"><span class="n">9</span><span class="l">features checked in the browser (Playwright, test server)</span></div>
-  <div class="stat live"><span class="n">9</span><span class="l">items still to confirm in the live environment</span></div>
+  <div class="stat pass"><span class="n">9 / 9</span><span class="l">live checks confirmed on the pilot (03/10/2026)</span></div>
   <div class="stat gap"><span class="n">3</span><span class="l">known test gaps</span></div>
 </div>
 
 <div class="verdict">
   <h2>Verdict</h2>
-  <p>All 84 automated tests pass on the current build. Every feature delivered so far has at least one automated test or a browser check on the test server. The pilot can continue on DocumentControl-TEST. Before going live, the 9 live items below need a check on the real SharePoint, Exchange site, file server and Power Automate. Most of them depend on tenant permissions and external services that the automated tests replace with stand-ins.</p>
+  <p>All 84 automated tests pass on the current build, and all 9 live checks were confirmed on the pilot on 03/10/2026: notifications, Approval Decisions, the customer invitation, the OneDrive shortcut, the share expiry, the share log permissions, RH AI and QMS, long paths, and sharing for a user without OneDrive. The system is ready for the production install (webapi/README.md, part B); repeat the smoke test there, since the server signs in to SharePoint as an app and applies the AD checks.</p>
 </div>
 
 <div class="legend">
   <span class="chip pass">Pass</span> automated test passed
   <span class="chip ui">Pass - browser</span> checked in Chromium on the test server (memory register)
-  <span class="chip live">Live check open</span> works against stand-ins, not yet confirmed on the real service
+  <span class="chip pass">Pass - live</span> confirmed on the pilot (DocumentControl-TEST, LargeFileExchange-TEST)
   <span class="chip gap">Gap</span> no automated test
 </div>
 
@@ -112,7 +112,7 @@ footer { color: var(--muted); font-size: 13px; }
     <tr><td class="id">1.7</td><td class="feat">Path finder, including folders that do not exist yet</td><td class="tests"><code>test_path_finder</code><code>test_path_finder_through_missing_folders</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
     <tr><td class="id">1.8</td><td class="feat">Workflow folders (Submitted, Current_ReadOnly, Obsolete_ReadOnly) cannot be changed by users</td><td class="tests"><code>test_workflow_folders_are_untouchable</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
     <tr><td class="id">1.9</td><td class="feat">Repository changes (upload, rename, delete) written to Control Audit</td><td class="tests"><code>test_repository_changes_are_audited</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
-    <tr><td class="id">1.10</td><td class="feat">Open link uses the short 8.3 path for paths over 200 characters</td><td class="tests"><code>test_open_link_uses_the_short_path_only_when_long</code></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">8.3 names come from Windows; confirm a long path opens in Office on a PC.</td></tr>
+    <tr><td class="id">1.10</td><td class="feat">Open link uses the short 8.3 path for paths over 200 characters</td><td class="tests"><code>test_open_link_uses_the_short_path_only_when_long</code></td><td class="res"><span class="chip pass">Pass - live</span></td><td class="note">8.3 names come from Windows; confirm a long path opens in Office on a PC.</td></tr>
     <tr><td class="id">1.11</td><td class="feat">Copy link: folder, file and working path</td><td class="tests"><span class="how">Browser check on the test server</span></td><td class="res"><span class="chip ui">Pass - browser</span></td><td class="note"></td></tr>
     <tr><td class="id">1.12</td><td class="feat">Responsive layout (phone, tablet, laptop, wide)</td><td class="tests"><span class="how">Browser screenshots at 4 widths, Hebrew and English</span></td><td class="res"><span class="chip ui">Pass - browser</span></td><td class="note"></td></tr>
     <tr><td class="id">1.13</td><td class="feat">RH logo returns to the home screen without a page reload</td><td class="tests"><span class="how">Browser check on the test server</span></td><td class="res"><span class="chip ui">Pass - browser</span></td><td class="note"></td></tr>
@@ -158,7 +158,7 @@ footer { color: var(--muted); font-size: 13px; }
     <tr><td class="id">4.5</td><td class="feat">Choose approvers myself at start workflow: all RH M365 users, multi-select with typeahead</td><td class="tests"><code>test_start_workflow_with_chosen_approvers</code><code>test_people_list_for_choosing_approvers</code><code>test_directory_people_from_sharepoint_people_search</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">People come from SharePoint people search, with the site users as fallback.</td></tr>
     <tr><td class="id">4.6</td><td class="feat">Chosen approvers remembered after reject or withdraw</td><td class="tests"><code>test_submit_again_remembers_the_chosen_approvers</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
     <tr><td class="id">4.7</td><td class="feat">Delegate an approval for 3 working days (Sunday to Thursday), auto-expiry; Delegations list and Control Audit</td><td class="tests"><code>test_delegate_an_approval</code><code>test_expired_delegation_returns_to_the_approver</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Dates written as noon UTC, so SharePoint shows the right day in Israel.</td></tr>
-    <tr><td class="id">4.8</td><td class="feat">Approval Decisions list (החלטות מאשרים): one row per approve, reject and delegation</td><td class="tests"><code>test_delegate_an_approval</code><span class="how">The decision rows are checked inside this test.</span></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">Confirm the Hebrew choice values (אושר, נדחה, הואצל) on the real list.</td></tr>
+    <tr><td class="id">4.8</td><td class="feat">Approval Decisions list (החלטות מאשרים): one row per approve, reject and delegation</td><td class="tests"><code>test_delegate_an_approval</code><span class="how">The decision rows are checked inside this test.</span></td><td class="res"><span class="chip pass">Pass - live</span></td><td class="note">Confirm the Hebrew choice values (אושר, נדחה, הואצל) on the real list.</td></tr>
   </table></div>
 </section>
 
@@ -169,7 +169,7 @@ footer { color: var(--muted); font-size: 13px; }
     <tr><td class="id">5.1</td><td class="feat">Notifications only to the right people (approvers of the stage, owner on decision)</td><td class="tests"><code>test_notifications_follow_the_approval</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
     <tr><td class="id">5.2</td><td class="feat">Notification log and "Send me a test notification"</td><td class="tests"><code>test_notification_log_and_test_notification</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
     <tr><td class="id">5.3</td><td class="feat">Notifications in the language the user chose on the page</td><td class="tests"><code>test_notifications_in_the_users_page_language</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
-    <tr><td class="id">5.4</td><td class="feat">Email and Teams delivery by Power Automate (DC-P2 Pilot Notifications)</td><td class="tests"><span class="how">Not automatable here</span></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">Flow imported and turned On; confirm an email and a Teams message arrive for a test row.</td></tr>
+    <tr><td class="id">5.4</td><td class="feat">Email and Teams delivery by Power Automate (DC-P2 Pilot Notifications)</td><td class="tests"><span class="how">Not automatable here</span></td><td class="res"><span class="chip pass">Pass - live</span></td><td class="note">Flow imported and turned On; confirm an email and a Teams message arrive for a test row.</td></tr>
   </table></div>
 </section>
 
@@ -193,7 +193,7 @@ footer { color: var(--muted); font-size: 13px; }
     <tr><td class="id">7.3</td><td class="feat">Ask about a file: upload it once and attach it, or send its text</td><td class="tests"><code>test_file_is_uploaded_once_and_attached_like_the_page</code><code>test_question_about_a_file_sends_its_text</code><code>test_xlsx_and_pptx_text</code><code>test_refusal_and_unreadable_file</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Word, PowerPoint, Excel, PDF and text files.</td></tr>
     <tr><td class="id">7.4</td><td class="feat">Answer in the language of the question</td><td class="tests"><code>test_answer_in_the_language_of_the_question</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
     <tr><td class="id">7.5</td><td class="feat">QMS knowledge tab (RAG on the AI portal), audited</td><td class="tests"><code>test_rag_tool_answers_and_is_audited</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
-    <tr><td class="id">7.6</td><td class="feat">Answers from the live RH AI and QMS services</td><td class="tests"><span class="how">Automated tests use a stand-in built from the cURL requests you supplied</span></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">Ask one question with a file attached and one QMS question on the PC.</td></tr>
+    <tr><td class="id">7.6</td><td class="feat">Answers from the live RH AI and QMS services</td><td class="tests"><span class="how">Automated tests use a stand-in built from the cURL requests you supplied</span></td><td class="res"><span class="chip pass">Pass - live</span></td><td class="note">Ask one question with a file attached and one QMS question on the PC.</td></tr>
   </table></div>
 </section>
 
@@ -202,15 +202,15 @@ footer { color: var(--muted); font-size: 13px; }
   <div class="tbl"><table>
     <tr><th>#</th><th>Feature</th><th>Verified by</th><th>Result</th><th>Notes</th></tr>
     <tr><td class="id">8.1</td><td class="feat">Share an approved document only; owner or super user; Control Audit row per file</td><td class="tests"><code>test_share_with_customer</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">A document back in Working cannot be shared.</td></tr>
-    <tr><td class="id">8.2</td><td class="feat">Files go straight to Outbound/&lt;Customer&gt; on the Large File Exchange site; the folder is shared view only, no anonymous link</td><td class="tests"><code>test_share_payloads</code></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">Confirm the external invitation arrives and opens the folder.</td></tr>
+    <tr><td class="id">8.2</td><td class="feat">Files go straight to Outbound/&lt;Customer&gt; on the Large File Exchange site; the folder is shared view only, no anonymous link</td><td class="tests"><code>test_share_payloads</code></td><td class="res"><span class="chip pass">Pass - live</span></td><td class="note">Confirm the external invitation arrives and opens the folder.</td></tr>
     <tr><td class="id">8.3</td><td class="feat">Customer from the file's folder (preselected) or any customer folder; several files in one share</td><td class="tests"><code>test_share_several_files_outside_customers</code><span class="how">Browser check of the Share dialog</span></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
     <tr><td class="id">8.4</td><td class="feat">An existing Exchange folder is accepted whatever the site language (Hebrew "already exists")</td><td class="tests"><code>test_share_payloads</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Fix for the error reported on 03/10.</td></tr>
-    <tr><td class="id">8.5</td><td class="feat">OneDrive shortcut DMS_&lt;Customer&gt; inside "DMS Shortcuts"; OneDrive setup requested when missing</td><td class="tests"><code>test_onedrive_shortcut_payload</code><code>test_onedrive_not_set_up_is_requested</code></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">Needs Graph Files.ReadWrite.All (delegated, admin consent) on the Entra app.</td></tr>
-    <tr><td class="id">8.6</td><td class="feat">Shares expire 30 days after the last share; empty customer folder removed with the access</td><td class="tests"><code>test_shares_expire_after_30_days</code><code>test_expire_outbound_requests</code></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">First real expiry from 02/11/2026; watch Control Audit for "Share expired".</td></tr>
+    <tr><td class="id">8.5</td><td class="feat">OneDrive shortcut DMS_&lt;Customer&gt; inside "DMS Shortcuts"; OneDrive setup requested when missing</td><td class="tests"><code>test_onedrive_shortcut_payload</code><code>test_onedrive_not_set_up_is_requested</code></td><td class="res"><span class="chip pass">Pass - live</span></td><td class="note">Needs Graph Files.ReadWrite.All (delegated, admin consent) on the Entra app.</td></tr>
+    <tr><td class="id">8.6</td><td class="feat">Shares expire 30 days after the last share; empty customer folder removed with the access</td><td class="tests"><code>test_shares_expire_after_30_days</code><code>test_expire_outbound_requests</code></td><td class="res"><span class="chip pass">Pass - live</span></td><td class="note">First real expiry from 02/11/2026; watch Control Audit for "Share expired".</td></tr>
     <tr><td class="id">8.7</td><td class="feat">Shared status in My workflows with the "until" date</td><td class="tests"><span class="how">Browser check on the test server</span></td><td class="res"><span class="chip ui">Pass - browser</span></td><td class="note"></td></tr>
     <tr><td class="id">8.8</td><td class="feat">Share log per customer (Shared\DMS-Shared-Log.csv), appended by every share and expiry, read-only attribute</td><td class="tests"><code>test_share_with_customer</code><code>test_shares_expire_after_30_days</code></td><td class="res"><span class="chip pass">Pass</span></td><td class="note"></td></tr>
     <tr><td class="id">8.9</td><td class="feat">Customer Shared folder read only on the page: open, download, copy path only; no rename, delete, upload or workflow</td><td class="tests"><code>test_share_with_customer</code><span class="how">Browser check of the Shared folder</span></td><td class="res"><span class="chip pass">Pass</span></td><td class="note">Also refused by the server, not only hidden.</td></tr>
-    <tr><td class="id">8.10</td><td class="feat">Windows permissions on the share log (Read for users, Modify only for the DMS account)</td><td class="tests"><span class="how">Runs only on Windows (icacls); tests run on Linux</span></td><td class="res"><span class="chip live">Live check open</span></td><td class="note">Delete the 522-HP log once so it is created again with the permissions.</td></tr>
+    <tr><td class="id">8.10</td><td class="feat">Windows permissions on the share log (Read for users, Modify only for the DMS account)</td><td class="tests"><span class="how">Runs only on Windows (icacls); tests run on Linux</span></td><td class="res"><span class="chip pass">Pass - live</span></td><td class="note">Delete the 522-HP log once so it is created again with the permissions.</td></tr>
   </table></div>
 </section>
 
@@ -224,8 +224,8 @@ footer { color: var(--muted); font-size: 13px; }
 </section>
 
 <section>
-  <h2>Live checks still open</h2>
-  <ol class="live">
+  <h2>Live checks (all passed 03/10/2026)</h2>
+  <ol class="live" aria-label="Live checks, all passed">
     <li>Power Automate DC-P2 sends the email and the Teams message for a DMS Notifications row. <span>(5.4)</span></li>
     <li>Approval Decisions rows show אושר, נדחה and הואצל on the real list. <span>(4.8)</span></li>
     <li>The customer receives the Exchange invitation and can open Outbound/&lt;Customer&gt;. <span>(8.2)</span></li>
