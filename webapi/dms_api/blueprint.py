@@ -143,6 +143,17 @@ def describe(parts: list[str]) -> dict | None:
     return {"en": en, "he": he, "hintEn": hint[0], "hintHe": hint[1], "kind": kind}
 
 
+def leaves(tree: dict, prefix: tuple = ()) -> list[tuple]:
+    """Every folder path (as name tuples) of a blueprint subtree, parents before children; "*" is skipped."""
+    out = []
+    for name, v in tree.items():
+        if name == "*":
+            continue
+        out.append(prefix + (name,))
+        out += leaves(v[2], prefix + (name,))
+    return out
+
+
 def order(parts: list[str]) -> list[str]:
     """Blueprint order of the expected subfolders of a folder (empty when not in the blueprint)."""
     node = _node(parts)

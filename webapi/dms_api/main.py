@@ -652,8 +652,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, "A folder with this name already exists") from None
         except FileNotFoundError:
             raise HTTPException(404, "Folder not found") from None
-        log(user, "new-folder", path)
-        return {"name": os.path.basename(path), "path": path}
+        # a new customer or a new project gets its blueprint folders at once (Appendix A)
+        parts, sub = rel_parts(path), []
+        if len(parts) == 2 and parts[0].lower() == s.customers_folder.lower():
+            sub = blueprint.leaves(blueprint.CUSTOMER)
+        elif len(parts) == 4 and parts[0].lower() == s.customers_folder.lower() and parts[2].lower() == "projects":
+            sub = blueprint.leaves(blueprint.PROJECT)
+        for rel in sub:
+            os.makedirs(os.path.join(path, *rel), exist_ok=True)
+        log(user, "new-folder", f"{path}" + (f" (+{len(sub)} blueprint folders)" if sub else ""))
+        return {"name": os.path.basename(path), "path": path, "blueprintFolders": len(sub)}
 
     @app.post("/api/items/rename")
     def rename(req: RenameRequest, user: User = Depends(current_user)):

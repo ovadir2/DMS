@@ -27,6 +27,15 @@
 .PARAMETER Customers
     Customer folder names to create under 02_Customers (optionally with -Projects).
 
+.PARAMETER Projects
+    Project folder names created under Projects of every customer in -Customers.
+
+.PARAMETER CustomersCsv
+    A CSV with the columns Customer and Project: one row per project (a customer without projects
+    gets one row with an empty Project). Each customer gets the full customer tree and each of its
+    projects the full project tree (Appendix A, the same tree the DMS page shows). Can be combined
+    with -Customers / -Projects. UTF-8 (Hebrew names are fine).
+
 .PARAMETER ApplyAcl
     Break inheritance and apply the NTFS permissions from docs/02 §3.2. Run on the file server
     (or with admin rights on the share) as a member of GG_DMS_ITAdmins. The groups must exist
@@ -39,6 +48,11 @@
 .EXAMPLE
     # Pilot: tree only, on a test folder
     .\New-DmsFileServerTree.ps1 -Root 'D:\Corporate_Data_TEST' -Customers 'Customer_A'
+
+.EXAMPLE
+    # Real customers and their projects from a CSV (Customer,Project); dry run first
+    .\New-DmsFileServerTree.ps1 -Root '\\FILE-SERVER\Corporate_Data' -CustomersCsv .\customers.csv -WhatIf
+    .\New-DmsFileServerTree.ps1 -Root '\\FILE-SERVER\Corporate_Data' -CustomersCsv .\customers.csv
 
 .EXAMPLE
     # Folder for one document, with permissions
@@ -68,6 +82,7 @@ param(
 
     [string[]] $Customers = @(),
     [string[]] $Projects = @(),
+    [string] $CustomersCsv,
 
     # Document mode
     [ValidatePattern('^[A-Z]{2,3}-[A-Z]{2,3}-\d{5}$')] [string] $DocumentId,
@@ -131,6 +146,29 @@ function Grant-DmsAcl {
     Set-Acl -LiteralPath $Path -AclObject $acl
     Write-Ok "ACL $Path"
 }
+
+# ------------------------------------------------------------------ customers and their projects
+# $CustomerProjects: customer -> list of projects (from -Customers/-Projects and -CustomersCsv)
+$CustomerProjects = [ordered]@{}
+foreach ($c in $Customers) { $CustomerProjects[$c] = @($Projects) }
+if ($CustomersCsv) {
+    if (-not (Test-Path -LiteralPath $CustomersCsv)) { throw "CSV not found: $CustomersCsv" }
+    $rows = @(Import-Csv -LiteralPath $CustomersCsv -Encoding UTF8)
+    if ($rows.Count -and -not ($rows[0].PSObject.Properties.Name -contains 'Customer')) { throw 'The CSV needs a Customer column (and optionally Project).' }
+    foreach ($r in $rows) {
+        $c = "$($r.Customer)".Trim()
+        if (-not $c) { continue }
+        if (-not $CustomerProjects.Contains($c)) { $CustomerProjects[$c] = @() }
+        $p = if ($r.PSObject.Properties.Name -contains 'Project') { "$($r.Project)".Trim() } else { '' }
+        if ($p -and $CustomerProjects[$c] -notcontains $p) { $CustomerProjects[$c] = @($CustomerProjects[$c]) + $p }
+    }
+}
+$bad = [regex]'[\\/:*?"<>|]'
+foreach ($c in $CustomerProjects.Keys) {
+    if ($bad.IsMatch($c)) { throw "Customer name '$c' has a character Windows does not allow in folder names" }
+    foreach ($p in $CustomerProjects[$c]) { if ($bad.IsMatch($p)) { throw "Project name '$p' ($c) has a character Windows does not allow" } }
+}
+$Customers = @($CustomerProjects.Keys)
 
 # ------------------------------------------------------------------ AD groups
 if ($CreateAdGroups) {
@@ -242,12 +280,12 @@ Write-Step 'Management areas (blueprint Appendix A)'
 foreach ($m in $ManagementFolders) { Add-DmsFolder (Join-Path (Join-Path $Root '01_Management') $m) }
 
 if ($Customers) {
-    Write-Step 'Customer folders (blueprint Appendix A)'
+    Write-Step "Customer folders (blueprint Appendix A): $($Customers.Count) customers, $(@($CustomerProjects.Values | ForEach-Object { $_ }).Count) projects"
     foreach ($c in $Customers) {
         $cRoot = Join-Path (Join-Path $Root '02_Customers') $c
         foreach ($s in 'Customer_Profile', 'Projects', 'Shared', 'Archive') { Add-DmsFolder (Join-Path $cRoot $s) }
         foreach ($s in 'RFQ', 'Quotations', 'Contracts', 'NDA') { Add-DmsFolder (Join-Path (Join-Path $cRoot 'Commercial') $s) }
-        foreach ($p in $Projects) {
+        foreach ($p in $CustomerProjects[$c]) {
             $pRoot = Join-Path (Join-Path $cRoot 'Projects') $p
             foreach ($rel in $ProjectTree) { Add-DmsFolder (Join-Path $pRoot $rel) }
         }
