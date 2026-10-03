@@ -144,6 +144,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     app = FastAPI(title="RH DMS Web API", version="1.1")
     app.state.settings = s
+    own_register = sharepoint is None                            # False in the tests (they pass their own)
     if sharepoint is None and s.sharepoint == "memory":
         from .memory import MemorySharePoint
         sharepoint = MemorySharePoint(s)
@@ -157,6 +158,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     if s.file_service_seconds > 0:
         from . import file_service
         file_service.start(app.state.sp, s)
+    if own_register:
+        from . import exchange_expiry
+        exchange_expiry.start(app.state.sp, s)
     app.state.ai = ai or OpenWebUI(s)
     app.state.rag = RagTools(s)
     from .filelinker import FileLinker
@@ -220,7 +224,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/client-config")
     def client_config():
-        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0,
+        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "shareDays": s.ex_days,
                 "approvals": s.approvals, "fileLinker": bool(s.fl_check_url and s.fl_update_url),
                 "site": s.site_url if s.sharepoint != "memory" else "", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,
@@ -1304,7 +1308,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         others = [{"id": x["id"], "documentId": x.get("documentId"), "title": x.get("title"), "revision": x.get("currentRevision"),
                    "customer": customer_of_path(x.get("currentUncPath") or "")} for x in mine]
         return {"customer": customer_of_path(current), "customers": customer_names(user), "revision": rev,
-                "folder": s.ex_folder, "shortcut": s.ex_shortcut, "others": others}
+                "folder": s.ex_folder, "shortcut": s.ex_shortcut, "days": s.ex_days, "others": others}
 
     @app.post("/api/documents/{item_id}/share")
     def share(item_id: int, req: ShareRequest, user: User = Depends(current_user)):
@@ -1343,7 +1347,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             logger.warning("OneDrive shortcut DMS_%s: %s", customer, r["shortcutError"])
         return {"url": r["folderUrl"], "urls": r["urls"], "email": email, "customer": customer, "revision": docs[0][2],
                 "documents": [{"documentId": d.get("documentId"), "revision": rev} for d, _, rev in docs],
-                "shortcut": r.get("shortcut"), "shortcutError": r.get("shortcutError")}
+                "shortcut": r.get("shortcut"), "shortcutError": r.get("shortcutError"), "days": s.ex_days}
 
     # ------------------------------------------------------------------ DMS First loading (super users)
     @app.post("/api/first-load", status_code=202)

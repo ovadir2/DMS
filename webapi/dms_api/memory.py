@@ -63,10 +63,22 @@ class MemorySharePoint:
 
     def share_with_guest(self, *, local_paths, folder, email, subject, message, shortcut_for=None, shortcut_name=None) -> dict:
         urls = [f"memory://{self.s.ex_library}/{folder}/{p.replace(chr(92), '/').rsplit('/', 1)[-1]}" for p in local_paths]
-        self.shares = getattr(self, "shares", []) + [{"email": email, "url": u, "subject": subject, "message": message} for u in urls]
+        now = datetime.now(timezone.utc).isoformat()
+        self.shares = [x for x in getattr(self, "shares", []) if x["url"] not in urls] + [
+            {"email": email, "url": u, "subject": subject, "message": message, "utc": now} for u in urls]
         if shortcut_name:
             self.shortcuts = getattr(self, "shortcuts", []) + [{"name": shortcut_name, "folder": folder, "user": shortcut_for}]
         return {"urls": urls, "url": urls[0], "folderUrl": f"memory://{self.s.ex_library}/{folder}", "shortcut": f"{self.s.ex_shortcut_folder}/{shortcut_name}" if shortcut_name and self.s.ex_shortcut_folder else shortcut_name, "shortcutError": None}
+
+    def expire_outbound(self, days: int, now=None) -> list[dict]:
+        limit = (now or datetime.now(timezone.utc)).timestamp() - days * 86400
+        old = [x for x in getattr(self, "shares", []) if datetime.fromisoformat(x["utc"]).timestamp() < limit]
+        self.shares = [x for x in getattr(self, "shares", []) if x not in old]
+        left = {x["url"].rsplit("/", 2)[-2] for x in self.shares}
+        out = [{"customer": x["url"].rsplit("/", 2)[-2], "file": x["url"].rsplit("/", 1)[-1], "sharedUtc": x["utc"], "folderRemoved": False} for x in old]
+        for c in {o["customer"] for o in out} - left:
+            [o for o in out if o["customer"] == c][-1]["folderRemoved"] = True
+        return out
 
     def people(self, q: str) -> list[dict]:
         """Playground: the super users, you and a few sample colleagues."""

@@ -59,6 +59,7 @@ class Settings:
     ex_site_url: str = ""                   # Large File Exchange site, for sharing approved files with customers
     ex_library: str = "TemporaryUploads"
     ex_folder: str = "Outbound"
+    ex_days: int = 30                       # shared files are removed from the Exchange site N days after their last share (0: never)
     ex_shortcut: bool = True                # add a OneDrive shortcut DMS_<Customer> to the customer folder
     ex_shortcut_folder: str = "DMS Shortcuts"  # the OneDrive folder that holds the shortcuts (created if missing)
     fl_check_url: str = ""                  # File Linker WebAPI#1 (is a path registered?), {path} in the URL
@@ -131,6 +132,7 @@ class Settings:
             ex_site_url=e("DMS_EX_SITE_URL", "").rstrip("/"),
             ex_library=e("DMS_EX_LIBRARY", "TemporaryUploads"),
             ex_folder=e("DMS_EX_FOLDER", "Outbound"),
+            ex_days=int(e("DMS_EX_DAYS", "30")),
             ex_shortcut=e("DMS_EX_SHORTCUT", "true").lower() not in ("0", "false", "no", "off"),
             ex_shortcut_folder=e("DMS_EX_SHORTCUT_FOLDER", "DMS Shortcuts").strip("/\\ "),
             fl_check_url=e("DMS_FL_CHECK_URL", ""),
