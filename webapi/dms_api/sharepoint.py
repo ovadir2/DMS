@@ -22,6 +22,8 @@ AUDIT = "Lists/ControlAudit"
 MATRIX = "Lists/ApproverMatrix"
 NOTIFY = "Lists/DmsNotifications"
 DELEGATIONS = "Lists/Delegations"
+DECISIONS = "Lists/ApprovalDecisions"
+DECISION_HE = {"Approved": "אושר", "Rejected": "נדחה", "Delegated": "הואצל", "Mandatory": "חובה", "Final": "מאשר סופי"}
 REGISTER_FIELDS = ("Id", "Title", "DocumentId", "DocumentType", "DocumentArea", "ControlMode", "LifecycleStatus",
                    "WorkingUncPath", "CurrentUncPath", "CurrentSHA256", "CurrentRevision", "LastApprovedUtc",
                    "DraftRevision", "Modified", "Created")
@@ -241,6 +243,27 @@ class SharePoint:
             "Title": title[:255], "DelegatorId": self._user_id(delegator), "DelegateToId": self._user_id(delegate),
             "ValidFrom": day(valid_from), "ValidTo": day(valid_to), "DelegationReason": reason, "DelegationStatus": active,
             "DelegationApprovedById": self._user_id(approved_by)})
+
+    def _list_choice(self, rel: str, field: str, key: str) -> str:
+        """The value of a choice as the list stores it (English key or Hebrew label)."""
+        cache = self.__dict__.setdefault("_choice_cache", {})
+        if (rel, field) not in cache:
+            r = self._call("GET", f"{self._list(rel)}/fields/getbyinternalnameortitle('{field}')?$select=Choices")
+            cache[(rel, field)] = list(r.get("Choices") or [])
+        values = cache[(rel, field)]
+        return next((v for v in (key, DECISION_HE.get(key)) if v in values), key)
+
+    def log_decision(self, *, workflow_id: str, document_id: str, revision: str, approver: str, role: str, stage: int,
+                     decision: str, comment: str, delegated_from: str | None = None) -> None:
+        """One row in Approval Decisions (provisioned by Provision-DMS.ps1) for each decision on the page."""
+        values = {"Title": f"{document_id} {decision} {approver}"[:255], "WorkflowId": workflow_id[:40], "DocumentId": document_id[:40],
+                  "Revision": (revision or "01")[:20], "ApproverId": self._user_id(approver),
+                  "ApproverRole": self._list_choice(DECISIONS, "ApproverRole", role), "ApprovalStage": stage,
+                  "Decision": self._list_choice(DECISIONS, "Decision", decision), "DecisionComment": comment,
+                  "DecisionUtc": datetime.now(timezone.utc).isoformat(), "ApprovalRef": "DMS page"}
+        if delegated_from:
+            values["DelegatedFromId"] = self._user_id(delegated_from)
+        self._call("POST", f"{self._list(DECISIONS)}/items", json=values)
 
     def list_info(self, rel: str) -> dict:
         """Does the list exist, how many items, and may the signed-in account add items (read only, writes nothing)."""

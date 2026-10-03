@@ -43,6 +43,9 @@ class FakeSharePoint:
     def audit(self, **kw):
         self.audits.append({**kw, "utc": f"2026-10-01T10:{len(self.audits):02d}:00Z"})
 
+    def log_decision(self, **kw):
+        self.decisions = getattr(self, "decisions", []) + [kw]
+
     def log_delegation(self, **kw):
         self.delegations = getattr(self, "delegations", []) + [
             {"title": kw["title"], "delegator": kw["delegator"], "delegate": kw["delegate"], "approvedBy": kw["approved_by"],
@@ -1109,7 +1112,7 @@ def test_sharepoint_check_for_super_users(tmp_path):
     s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
     c = TestClient(create_app(s, MemorySharePoint(s)))
     r = c.get("/api/diagnostics/sharepoint").json()
-    assert [l["list"] for l in r["lists"]] == ["Lists/DocumentRegister", "Lists/ControlAudit", "Lists/ApproverMatrix", "Lists/DmsNotifications", "Lists/Delegations"]
+    assert [l["list"] for l in r["lists"]] == ["Lists/DocumentRegister", "Lists/ControlAudit", "Lists/ApproverMatrix", "Lists/DmsNotifications", "Lists/ApprovalDecisions", "Lists/Delegations"]
     assert all(l["canAdd"] for l in r["lists"]) and r["errors"] == []
     s.admins = []
     assert c.get("/api/diagnostics/sharepoint").status_code == 403
@@ -1264,6 +1267,10 @@ def test_delegate_an_approval(tmp_path):
     assert r["pending"] == ["eli@rh.co.il"] and "(by " in sp.audit_events()[0]["details"]
     s.dev_user = "eli@rh.co.il"
     assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["statusKey"] == "Approved_ReadOnly"
+    rows = [(x["decision"], x["approver"], x["stage"], x["role"], x.get("delegated_from")) for x in sp.decisions]
+    assert rows == [("Delegated", "dana@rh.co.il", 1, "Mandatory", None), ("Approved", "avi@rh.co.il", 1, "Mandatory", "dana@rh.co.il"),
+                    ("Delegated", "boss@rh.co.il", 2, "Final", None), ("Approved", "eli@rh.co.il", 2, "Final", "boss@rh.co.il")]
+    assert sp.decisions[0]["workflow_id"].startswith("DMS-00001-") and sp.decisions[0]["revision"] == "01"
 
 
 def test_expired_delegation_returns_to_the_approver(tmp_path):

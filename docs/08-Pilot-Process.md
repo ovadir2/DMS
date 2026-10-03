@@ -205,6 +205,7 @@ All the metadata is in SharePoint (`DocumentControl` site), which Microsoft 365 
 - **Approver Matrix**: who approves each document type. When starting a workflow the user may instead choose the approvers ("Choose the approvers myself", people from the directory): all of them must approve, in one stage, and the choice is kept in the Control Audit 'submitted' row (`Approvers (chosen): ...`).
 - **DMS Notifications**: every email/Teams notification of the pilot (recipients, subject, message, link).
 - **Delegations**: every delegated approval (Approvals ← Delegate): delegator, delegate, date, reason (document and note), who did it. Control Audit also gets a 'שינוי הרשאות' row `Delegated: a -> b`.
+- **Approval Decisions** (החלטות מאשרים): one row per decision on the page (Approved / Rejected) and per delegation (Delegated): workflow, document, revision, approver, role (Mandatory / Final), stage, comment, time, and Delegated from when a delegate decided. Decisions made before this version are not back-filled.
 
 The files themselves stay on the file server (backed up by the file server backup, Veeam). Deleted items go to `04_Workflow_System\Recycle\<date>\<user>`.
 

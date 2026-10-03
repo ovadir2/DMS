@@ -84,6 +84,9 @@ class MemorySharePoint:
             {"title": title, "delegator": delegator, "delegate": delegate, "approvedBy": approved_by, "reason": reason,
              "validFrom": valid_from, "validTo": valid_to}]
 
+    def log_decision(self, **kw) -> None:
+        self.decisions = getattr(self, "decisions", []) + [kw]
+
     def list_info(self, rel: str) -> dict:
         n = {"Lists/DocumentRegister": len(self.items), "Lists/ControlAudit": len(self.audits),
              "Lists/DmsNotifications": len(self.notifications)}.get(rel, 0)
