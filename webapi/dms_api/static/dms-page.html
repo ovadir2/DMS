@@ -864,8 +864,8 @@ async function shareDialog(id) {
   const others = info.others.slice().sort((a, b) => (custOf(b) === custOf(info)) - (custOf(a) === custOf(info)) || String(a.title).localeCompare(String(b.title)));
   let r = await dialog(`${T.shareTitle}: ${d.documentId} - ${d.title}`,
     `<p class="muted small" style="margin:0">${esc(T.shareNote.replace('{folder}', info.folder))}${info.days ? ' ' + esc(T.shareDays.replace('{n}', info.days)) : ''}${info.shortcut ? ' ' + esc(T.shareShortcut.replace('{name}', 'DMS_' + (info.customer || '<' + T.shareCustomer + '>'))) : ''}</p>
-     ${info.customer ? `<label>${T.shareCustomer}<input type="text" value="${esc(info.customer)} (${T.shareFromFolder})" disabled></label>`
-       : `<label>${T.shareCustomer}<select name="customer" required><option value="">${T.choose}</option>${info.customers.map(c => `<option>${esc(c)}</option>`).join('')}</select></label>`}
+     <label>${T.shareCustomer}<select name="customer" required><option value="">${T.choose}</option>${info.customers.map(c =>
+       `<option value="${esc(c)}" ${c === info.customer ? 'selected' : ''}>${esc(c)}${c === info.customer ? ' ✓ ' + T.shareFromFolder : ''}</option>`).join('')}</select></label>
      <label>${T.shareEmail}<input type="text" class="ltr" name="email" placeholder="name@company.com" required></label>
      <label>${T.shareMsg}<input type="text" name="message"></label>
      ${others.length ? `<div class="small" style="margin-top:8px">${T.shareMore}</div><input type="text" id="sh-q" placeholder="${esc(T.shareFilter)}">
@@ -878,7 +878,7 @@ async function shareDialog(id) {
     try {
       const ids = [...document.querySelectorAll('#sh-list input:checked')].map(c => +c.value);
       const x = await api(`/api/documents/${id}/share`, { method:'POST', body:JSON.stringify({ email: r.form.email.value.trim(), message: r.form.message.value,
-        customer: info.customer || r.form.customer.value, documentIds: ids }) });
+        customer: r.form.customer.value, documentIds: ids }) });
       $('#dlg').close();
       alert(`${T.shared} ${x.email} - ${x.customer} (${x.documents.length} ${T.shareFiles})\n${x.url}` + (x.days ? `\n${T.shareDays.replace('{n}', x.days)}` : '') +
         (x.shortcut ? `\n${T.shareShortcut.replace('{name}', x.shortcut)}` : '') + (x.shortcutError ? `\n${T.shortcutFail}: ${x.shortcutError}` : ''));

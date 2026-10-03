@@ -60,7 +60,7 @@ In any folder you may write to: **＋ New document** → choose the file → typ
 ### Sharing an approved document with a customer
 
 On the approved file (or in My workflows): **✉ Share with customer** → the customer's email → Share.
-- **Customer:** taken from the file's folder (`02_Customers\<Customer>`, the folder name as is). A file outside the customer folders (e.g. a procedure) asks you to choose one of the customer folders.
+- **Customer:** a list of all the customer folders (`02_Customers\<Customer>`, names as is). The customer of the file's own folder is preselected (✓), and you can choose any other; a file outside the customer folders (e.g. a procedure) asks you to choose.
 - **Where:** the approved files are copied straight into the customer folder on the **Large File Exchange** site, `TemporaryUploads/Outbound/<Customer>/` (no folder per file), and SharePoint sends the customer a personal invitation to that folder, view only (B2B guest, no anonymous link).
 - **Many files:** tick more approved documents in the dialog (filter by name, ID or customer); they all go to the same folder. Every later share adds to it, so the customer sees all the files shared with them in one place.
 - **30 days:** each file stays on the Exchange site 30 days after its last share (`DMS_EX_DAYS`, 0 = never). Then the DMS (an hourly check) moves it to the Exchange site recycle bin; when the customer folder is left empty it is removed too, and with it the customer's access. Sharing the file again starts the 30 days over. Each removal is a Control Audit row (`Share expired after 30 days: ...`). If the folder is created again later, the OneDrive shortcut is pointed to the new folder.
