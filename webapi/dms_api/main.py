@@ -103,6 +103,26 @@ class FindRequest(BaseModel):
     lang: str = "EN"
 
 
+from contextvars import ContextVar
+
+PAGE_LANG: ContextVar[str] = ContextVar("PAGE_LANG", default="EN")   # the language the user chose on the page
+
+NOTIFY_TEXT = {
+    "EN": {"waiting": ("{id} {title} - waiting for your approval", "approvals", '{id} "{title}" is waiting for your approval.'),
+           "approved": ("{id} {title} - approved", "workflows", '{id} "{title}" was approved.'),
+           "rejected": ("{id} {title} - rejected", "workflows", '{id} "{title}" was rejected: {comment}'),
+           "withdrawn": ("{id} {title} - withdrawn", "approvals", '{id} "{title}" was withdrawn and no longer needs your approval.'),
+           "test": ("DMS test notification", "", "This is a test of the DMS notifications (DMS Notifications list + DC-P2 flow)."),
+           "open": "Open in the DMS"},
+    "HE": {"waiting": ("{id} {title} - ממתין לאישורך", "approvals", 'המסמך {id} "{title}" ממתין לאישורך.'),
+           "approved": ("{id} {title} - אושר", "workflows", 'המסמך {id} "{title}" אושר.'),
+           "rejected": ("{id} {title} - נדחה", "workflows", 'המסמך {id} "{title}" נדחה: {comment}'),
+           "withdrawn": ("{id} {title} - נמשך", "approvals", 'המסמך {id} "{title}" נמשך ואינו ממתין עוד לאישורך.'),
+           "test": ("הודעת בדיקה מה-DMS", "", "זוהי הודעת בדיקה של התראות ה-DMS (רשימת DMS Notifications וזרימת DC-P2)."),
+           "open": "פתיחה ב-DMS"},
+}
+
+
 def answer_lang(question: str, page_lang: str) -> str:
     """Answer in the language of the question (a Hebrew question gets a Hebrew answer on the English page too)."""
     if any("\u0590" <= ch <= "\u05ff" for ch in question):
@@ -133,6 +153,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     app.state.rag = RagTools(s)
     from .filelinker import FileLinker
     app.state.linker = FileLinker(s)
+    @app.middleware("http")
+    async def page_language(request: Request, call_next):
+        """The page sends its language (X-DMS-Lang); notifications are written in it."""
+        token = PAGE_LANG.set("HE" if (request.headers.get("x-dms-lang") or "").upper() == "HE" else "EN")
+        try:
+            return await call_next(request)
+        finally:
+            PAGE_LANG.reset(token)
+
     if s.allowed_origins:
         app.add_middleware(CORSMiddleware, allow_origins=s.allowed_origins, allow_credentials=True,
                            allow_methods=["*"], allow_headers=["*"])
@@ -247,10 +276,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """Super users: write one test row to DMS Notifications, addressed to themselves (the DC-P2 flow sends it)."""
         if not is_admin(user):
             raise HTTPException(403, "Only a DMS super user can send a test notification")
-        base = s.page_url or "/dms/dms-page?lang=EN"
-        sp().notify(to=[user.email], subject="DMS test notification / הודעת בדיקה",
-                    body="This is a test of the DMS notifications (DMS Notifications list + DC-P2 flow). זוהי הודעת בדיקה.",
-                    link=base, ref="TEST")
+        subject, body, link = notify_text("test", "TEST", "")
+        sp().notify(to=[user.email], subject=subject, body=body, link=link, ref="TEST")
         app.state.notify_log.appendleft({"utc": datetime.now(timezone.utc).isoformat(timespec="seconds"), "kind": "test",
                                          "doc": "TEST", "to": [user.email], "result": "written to DMS Notifications"})
         return {"to": user.email}
@@ -710,6 +737,18 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return {"stage": 1, "pending": pending1, "approved": sorted(stage1), "rule": True, **extra}
         return {"stage": 2, "pending": [rule["final"]] if rule["final"] else [], "approved": sorted(stage1), "rule": True, **extra}
 
+    def notify_text(kind: str, doc_id: str, title: str, comment: str = "") -> tuple[str, str, str]:
+        """Subject, body and link of a notification, in the language the user chose on the page."""
+        lang = PAGE_LANG.get()
+        subject, view, body = NOTIFY_TEXT[lang][kind]
+        fill = {"id": doc_id, "title": title, "comment": comment}
+        base = re.sub(r"([?&])lang=[A-Za-z]+&?", r"\1", s.page_url or "/dms/dms-page").rstrip("?&")
+        link = base + ("&" if "?" in base else "?") + f"lang={lang}" + (f"&view={view}" if view else "")
+        body = body.format(**fill)
+        if lang == "HE":                                        # right to left in Outlook and Teams
+            body = f'<div dir="rtl" style="text-align:right">{body}</div>'
+        return subject.format(**fill), body, link
+
     def notify(kind: str, d: dict, to: list[str], comment: str = "") -> None:
         """Pilot (page approvals): tell people by email and Teams through DMS Notifications + DC-P2."""
         to = sorted({t for t in to if t})
@@ -720,19 +759,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             entry["result"] = ("skipped - approvals are in Teams (DMS_APPROVALS=flow)" if s.approvals != "page" else
                                "skipped - notifications are off (DMS_NOTIFY=0)" if not s.notify else "skipped - nobody to notify")
             return
-        texts = {
-            "waiting": (f"{doc_id} {title} - waiting for your approval / ממתין לאישורך",
-                        "approvals", f"{doc_id} \"{title}\" is waiting for your approval. מסמך {doc_id} ממתין לאישורך."),
-            "approved": (f"{doc_id} {title} - approved / אושר", "workflows",
-                         f"{doc_id} \"{title}\" was approved. המסמך {doc_id} אושר."),
-            "rejected": (f"{doc_id} {title} - rejected / נדחה", "workflows",
-                         f"{doc_id} \"{title}\" was rejected: {comment}. המסמך {doc_id} נדחה: {comment}"),
-            "withdrawn": (f"{doc_id} {title} - withdrawn / נמשך", "approvals",
-                          f"{doc_id} \"{title}\" was withdrawn and no longer needs your approval. המסמך {doc_id} נמשך ואינו ממתין עוד לאישורך."),
-        }
-        subject, view, body = texts[kind]
-        base = s.page_url or "/dms/dms-page?lang=EN"
-        link = base + ("&" if "?" in base else "?") + f"view={view}"
+        subject, body, link = notify_text(kind, doc_id, title, comment)
         try:
             sp().notify(to=to, subject=subject, body=body, link=link, ref=doc_id)
             entry["result"] = "written to DMS Notifications"

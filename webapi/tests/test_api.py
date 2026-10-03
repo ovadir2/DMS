@@ -1206,3 +1206,23 @@ def test_submit_again_remembers_the_chosen_approvers(tmp_path):
     c.post(f"/api/documents/{d['id']}/submit", json={"approvers": []})                 # back to the Approver Matrix
     assert sp.audit_events()[0]["details"] == "Submitted from the DMS page"
     assert c.get(f"/api/documents/{d['id']}/approvers").json()["chosen"] == []
+
+
+def test_notifications_in_the_users_page_language(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "A.xlsx").write_text("x")
+    (q / "B.xlsx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page", admins=[USER],
+                 page_url="https://dms.rh.co.il/dms/dms-page?lang=EN")
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    c.post("/api/documents", json={"path": str(q / "A.xlsx"), "submit": True, "approvers": ["avi@rh.co.il"]}, headers={"X-DMS-Lang": "HE"})
+    n = sp.notifications[-1]
+    assert n["subject"].endswith("ממתין לאישורך") and 'dir="rtl"' in n["body"] and "waiting" not in n["body"]
+    assert n["link"] == "https://dms.rh.co.il/dms/dms-page?lang=HE&view=approvals"
+    c.post("/api/documents", json={"path": str(q / "B.xlsx"), "submit": True, "approvers": ["avi@rh.co.il"]})
+    n = sp.notifications[-1]
+    assert n["subject"].endswith("waiting for your approval") and "ממתין" not in n["body"] and n["link"].endswith("lang=EN&view=approvals")
