@@ -43,9 +43,10 @@ flowchart TB
 
 1. **Find the place.** On the DMS page choose the customer. The **Location** lists follow the blueprint tree: choosing a folder fills the next list with its subfolders, only the ones AD allows (for example Customer_A › Projects › PRJ-101 › Test engineering › Test reports). Or use **What are you saving?**: pick the kind (Quotation, RFQ, SOW, ECO, test report...) and, when needed, the project, and the page goes to the right folder. Or open **🧭 Path finder** (folder toolbar or menu): build the path level by level from the blueprint tree, including blueprint folders that do not exist yet (marked *new*), then **Go there**, **Create and go**, **Upload here** or **Copy path**.
 2. **Save the file.** **Upload file** saves it from the PC into the open folder. The user can also create folders, rename and delete (to the recycle folder) where they have write permission.
-3. **Start workflow.** On the file: **Start workflow** → document type, area, control mode → **Register and submit**. From Explorer: right-click → **Start workflow** opens the same form.
+3. **Start workflow.** On the file: **Start workflow**. Document type, area and control mode are preselected from the blueprint folder (✓ "blueprint folder"); change them if needed. The dialog shows who the **Approver Matrix** sends it to; or tick **Choose the approvers myself** and select people from the list of all RH Microsoft 365 users (filter, or type a name to search the whole company): all of them must approve, in one stage. Then **Register and submit**. From Explorer: right-click → **Start workflow** opens the same form.
+   A document still in Working can be **renamed** (the register follows) or **deleted** (the file to the recycle folder, the record kept as Archived).
 4. **Follow it.** **My workflows** shows every document the user registered or submitted: counts per status, days waiting, the last decision with the approver's comment, and the full history.
-5. **After a rejection** the status is **Rejected - back to you** and the file is back where it was saved, writable. Fix it and click **Submit for approval** again.
+5. **After a rejection, or a withdraw** (My workflows → Withdraw), the status is **Rejected - back to you** / Working and the file is back where it was saved, at once and under its own name, writable. Fix it and click **Submit**: the dialog preselects the approvers chosen last time (keep, change, or untick for the Approver Matrix).
 6. **After the approval** the file is in `Current_ReadOnly` next to where it was saved, read-only, with status **Approved (read-only)**. The previous approved version is in `Obsolete_ReadOnly`.
 
 ### A new revision of an approved document
@@ -64,9 +65,13 @@ On the approved file (or in My workflows): **✉ Share with customer** → the c
 
 **Pilot (on the page):** the header shows **Approvals** with the number waiting. The list shows each document, its owner, type, stage, who already approved and how long it waits, with Open, Download and ✦ AI to read it, and **Approve** (optional comment) / **Reject** (comment required). Stage 1: every mandatory approver must approve. Stage 2: the final approver. One rejection ends the cycle; the comment goes back to the owner in My workflows. A DMS super user can decide any stage (recorded as "super user") and see **All pending approvals**.
 
+**Delegate:** in Approvals, **⇄ Delegate** passes the approval to someone else (from the RH users, with a note) for **3 working days** (Sunday to Thursday; `DMS_DELEGATION_DAYS`, `DMS_WEEKEND`). The delegate sees it in Approvals and is notified; after the last day it returns to the original approver. A super user can delegate for any waiting approver (**On behalf of**). Each delegation is a row in the **Delegations** list (delegator, delegate, from, to, reason, who) and a Control Audit row `Delegated: a -> b (until dd/mm/yyyy)`.
+
+A document type with no Approver Matrix rule goes to the DMS super users.
+
 **Production (DC-P1):** the same decisions arrive in **Teams (Approvals)** and by email.
 
-**Notifications (pilot):** at each step the page writes a row to the **DMS Notifications** list and the flow **DC-P2 Pilot Notifications** sends it by **email and Teams** (Flow bot), with a link that opens the page on Approvals or My workflows:
+**Notifications (pilot):** at each step the page writes a row to the **DMS Notifications** list and the flow **DC-P2 Pilot Notifications** sends it by **email and Teams** (Flow bot), only to the people in the row (never the whole company), in the **language the user chose on the page** (Hebrew right to left, or English), with a link that opens the page in that language on Approvals or My workflows:
 
 | When | Who is told |
 | --- | --- |
@@ -75,8 +80,9 @@ On the approved file (or in My workflows): **✉ Share with customer** → the c
 | Approved | The owner |
 | Rejected | The owner, with the comment |
 | Withdrawn | The approvers who were waiting |
+| Delegated | The delegate |
 
-Set up once: `.\scripts\New-DmsNotifyFlowPackage.ps1 -TenantName rhisrael -ClientId $C -DocControlSiteAlias DocumentControl-TEST` (creates the list and `scripts\out\DC-P2-PilotNotifications.zip`), then **My flows > Import > Import Package (Legacy)**, pick the SharePoint, Office 365 Outlook and Teams connections, and turn DC-P2 **On**. Every notification stays in the list (who was told what and when).
+Set up once: `.\scripts\New-DmsNotifyFlowPackage.ps1 -TenantName rhisrael -ClientId $C -DocControlSiteAlias DocumentControl-TEST` (creates the list and `scripts\out\DC-P2-PilotNotifications.zip`), then **My flows > Import > Import Package (Legacy)**, pick the SharePoint, Office 365 Outlook and Teams connections (Standard connectors, no Premium license), Import, then **Open flow → Turn on** (imported flows start Off; keep one copy only). Turn **DC-P1 Off** while approvals are on the page. Every notification stays in the list (who was told what and when). Check it from the page: ⋮ → **🩺 SharePoint check** shows whether notifications are on, the last ones with their recipients and result, and **✉ Send me a test notification**; a row written but no email or Teams means the flow (On? run history?).
 
 Every decision is a Control Audit row (Approved / Rejected, stage, comment, who, when), and My workflows shows for each submitted document **who it is waiting for**.
 
@@ -94,9 +100,9 @@ The Workflow Service never updates a record while it is Submitted, so the approv
 
 ## 3. Finding files
 
-- **Search** (top of the page): All, Customer, Project, Document ID, File, or **✦ Smart**.
-- **AI Insights → Find a file**: describe the file in your own words ("the latest FCT report of the CRU4 project"). The AI turns it into a search plan; the service searches only the folders the user may read; the AI ranks the matches and says why. The AI sees only names the user is allowed to see, never decides on access.
-- **AI Insights → Ask** (or ✦ AI on a file): summary, key requirements, risks, dates. The file goes only to the on-prem LLM, after the AD read check.
+- **Search** (one box, top of the page, the whole repository): while typing it suggests customers, folders, documents (Document ID and status) and file names; ↓↑ + Enter opens the folder, Enter alone shows all results. Several words in any order; an exact Document ID first. Smart suggestions describe the file in your own words ("the latest FCT report of the CRU4 project"): the RH AI makes the search plan and ranks the matches, seeing only names the user may see.
+- **AI Insights → Ask**: questions to the RH AI chat, also about a file (the file is attached after the AD read check, only to the on-prem AI). **📚 QMS**: questions to the QMS knowledge (RAG), with the procedures as sources.
+- **🔗 Copy link** copies the path of a folder or a file; **Open** opens Office files from the server (long paths through their short 8.3 form).
 
 ## 4. Roles and permissions
 
@@ -104,7 +110,7 @@ The Workflow Service never updates a record while it is Submitted, so the approv
 | --- | --- | --- |
 | User | Every employee (Windows login, no login screen) | See and work only where AD allows; save, rename, delete in folders they may write; register and submit their documents; My workflows |
 | Approver | From the Approver Matrix, per document type | Approve or reject on the page (pilot) or in Teams (production) |
-| DMS super user | `DMS_ADMINS` (pilot: roneno@rh.co.il) | Submit any document, decide any approval stage, **All workflows**, **All pending approvals**, Move files now |
+| DMS super user | `DMS_ADMINS` (pilot: roneno@rh.co.il) | Submit any document, decide any approval stage, delegate for any approver, **All workflows**, **All pending approvals** (the default view), Move files now, DMS First loading, 🩺 SharePoint check |
 | IT / Document Control | `GG_DMS_ITAdmins`, `GG_DMS_DocumentControl` | Approver Matrix, restore from the recycle folder, the service and its logs |
 
 The blueprint is the **skeleton**; everything inside it is **content** (files and folders with their own names, at any depth). Always protected: the skeleton (`$Root`, `02_Customers`, each customer and project folder, and every blueprint folder such as `Commercial`, `Quotations`, `01_Management\Quality_System` - they cannot be renamed or deleted from the page, their content can); the DMS workflow folders `Submitted`, `Current_ReadOnly`, `Obsolete_ReadOnly` and `Working` (read only on the page: nothing can be added, renamed or deleted in them, and a folder that holds them cannot be renamed or deleted); and every registered document (cannot be renamed or deleted from the page).
@@ -207,3 +213,10 @@ The files themselves stay on the file server (backed up by the file server backu
 - With approvals in Teams (DC-P1, production) the pending approvers are not recorded until a decision is made; on the page (pilot) My workflows shows who each document waits for. A step in DC-P1 that writes the pending approvers to Control Audit would close this for production.
 - Do not run DC-P1 and page approvals at the same time: with DC-P1 On, the same document would also be sent to Teams.
 - On a PC the page runs as the signed-in user, without AD checks. The AD checks (Windows sign-in through IIS) apply when it is installed on the server (`webapi/README.md`).
+- The **Delegations** list keeps the status Active after a delegation's last day; the DMS stops applying it on that day.
+- **Open** for long paths needs 8.3 short names on the file server volume (`fsutil 8dot3name query E:`).
+- Notifications written while the DC-P2 flow was Off are not sent later.
+
+## 8. Useful links
+
+Import `docs/RH-DMS-Bookmarks.html` into Chrome (Ctrl+Shift+O → ⋮ → Import bookmarks): the DMS page, the DocumentControl-TEST lists (Document Register, Control Audit, Approver Matrix, DMS Notifications), site permissions, Large File Exchange, Power Automate, Entra app registrations, the RH AI and QMS, and this repository.

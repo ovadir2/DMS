@@ -47,23 +47,27 @@ So the NTFS permissions on the file server (the `DL_FS_*` groups, docs/02 §3.2)
 | **＋ New document**: a file from the PC saved into the open folder and registered (and submitted) in one step | `POST /api/files/upload` + `POST /api/documents` | Write permission in the folder |
 | Workflow folders (`Submitted`, `Current_ReadOnly`, `Obsolete_ReadOnly`, `Working`) | | Read only on the page: no upload, new folder, rename or delete in them, and a folder holding them cannot be renamed or deleted |
 | **⇪ DMS First loading** (super users, ⋮ menu): load documents approved in the old repository - source + target folder, dry run, then each file into `Current_ReadOnly`, registered as Approved, File Linker link moved (WebAPI#1 check, WebAPI#2 replace), CSV report | `POST /api/first-load`, `GET /api/first-load/{id}` | Target under the root and not a workflow folder; repeatable (loaded files are skipped). File Linker in `.env` (`DMS_FL_*`) |
-| **Search** (one box): smart file suggestions plus matching customers, project folders and Document IDs | `POST /api/ai/find`, `GET /api/search?scope=quick` | Only what AD allows |
+| **Search** (one box, the whole repository: 01_Management, 02_Customers ...): while typing, up to 10 suggestions (customers, folders, documents with ID and status, file names); Enter or 🔎 shows the full results: smart suggestions plus folders, documents and files with their path. Several words match in any order; an exact Document ID comes first | `GET /api/search?q=&scope=quick&limit=`, `POST /api/ai/find` | Only what AD allows; system folders (`03_`, `04_Workflow_System`, `05_`) are never searched |
 | **🧭 Path finder** (folder toolbar or menu): build a path level by level from the blueprint tree, with the blueprint folders that do not exist yet marked *new*; then Go there, Create and go, Upload here or Copy path | `GET /api/pathfinder?path=`, `POST /api/pathfinder/create?path=` | Existing folders only where AD allows; new folders only where the blueprint expects them and the user may write. Customers and projects are offered only when they exist |
 | **What are you saving?** Pick a document kind (quotation, RFQ, SOW, ECO, test report ...) and, when needed, a project. The page goes to the blueprint folder and opens the upload window | `GET /api/guide`, `GET /api/guide/target`, `POST /api/guide/create` | A missing blueprint folder is created only with the user's consent and write permission |
 | Pick a customer | `GET /api/customers` | Only customers whose folder the user may open |
 | Open folders | `GET /api/browse?path=` | Only items the user may read, each file with its DMS status |
-| Search: All, Customer, Project, Document ID, File | `GET /api/search?q=&scope=` | Same filter |
 | Upload file into the open folder | `POST /api/files/upload` | Needs write permission there. Saved to a temporary name, then renamed. Replacing needs the "replace" option |
 | New folder | `POST /api/folders` | Needs write permission |
 | Rename | `POST /api/items/rename` | Needs write permission. Not for controlled documents |
 | Delete | `POST /api/items/delete` | Needs write permission. Moves the item to `04_Workflow_System\Recycle\<date>\<user>\...` so IT can restore it. Not for controlled documents |
-| Open (Excel/Word from the server), Download | `GET /api/files/download` | Read permission |
-| Start workflow (register and submit) | `POST /api/documents` | As before |
+| **Rename / Delete a document in Working** (folder view, My workflows) | `POST /api/documents/{id}/rename`, `POST /api/documents/{id}/delete` | Owner or super user, Working only. Rename: the register follows (working path, title, `_RevNN` draft revision). Delete: the file to the recycle folder, the record stays as Archived (hidden); a new revision draft is deleted and the approved revision stays current. Both in Control Audit |
+| Open (Excel/Word from the server), Download | `GET /api/files/download` | Read permission. A path over 200 characters opens through its Windows short (8.3) form |
+| **🔗 Copy link** (folder toolbar, each file; My workflows: current and working path) | | Copies the full path (also on http intranet addresses) |
+| Start workflow (register and submit) | `POST /api/documents` | Type, area and control mode are preselected from the blueprint folder (`GET /api/classify`). **Choose the approvers myself**: a checkbox list of all RH Microsoft 365 users (filter, and typing searches the whole directory); all of them must approve, in one stage. Default: the Approver Matrix, shown in the dialog |
 | **My workflows** (header): every document the user owns or registered/submitted, with counts per status (Working, Submitted, Approved, Rejected - back to you), days waiting, the last decision with the approver's comment, and the full history | `GET /api/my-workflows` | The user's own workflows only. Built from the Document Register and Control Audit |
-| Submit (or resubmit after a rejection) | `POST /api/documents/{id}/submit` | Owner only |
-| **Approvals** (header, pilot `DMS_APPROVALS=page`): documents waiting for the user's approval, with stage, who approved, days waiting; Approve / Reject with comment | `GET /api/approvals`, `POST /api/approvals/{id}` | Only the pending approvers of the current stage (Approver Matrix), or a super user. Each decision is a Control Audit row |
-| **AI Insights** (header, or ✦ AI on a file): ask about a document (summary, key requirements, risks, dates) or the company knowledge | `GET /api/ai/status`, `POST /api/ai/ask` | See below |
-| **Find a file** (AI Insights panel, or **✦ Smart** in the search): describe the file in your own words ("the latest FCT report of the CRU4 project") and get a short list of suggestions, each with where it is, its DMS status, why it was suggested, and Open / Go to folder / Ask about it | `POST /api/ai/find` | Searches only folders the user may read (AD). Superseded revisions and the approval queue are skipped. Works without the AI too, by keywords |
+| Submit (or resubmit after a rejection or a withdraw) | `POST /api/documents/{id}/submit` | Owner or super user. The dialog preselects the approvers chosen last time (`GET /api/documents/{id}/approvers`); untick to go back to the Approver Matrix |
+| Withdraw | `POST /api/documents/{id}/withdraw` | The file returns from `Submitted` to its place at once, under its own name |
+| **Approvals** (header, pilot `DMS_APPROVALS=page`): documents waiting for the user's approval, with stage, who approved, days waiting; Approve / Reject with comment | `GET /api/approvals`, `POST /api/approvals/{id}` | Only the pending approvers of the current stage (Approver Matrix or chosen approvers), or a super user, who sees every pending approval by default. A type with no Matrix rule goes to the super users. Each decision is a Control Audit row |
+| **⇄ Delegate** (Approvals): someone else approves instead, chosen from the RH users, with a note | `POST /api/approvals/{id}/delegate` | The approver, or a super user for any waiting approver. Valid `DMS_DELEGATION_DAYS` working days (default 3, weekend `DMS_WEEKEND=fri,sat`), then it returns to the approver. Logged in the Delegations list and in Control Audit; the delegate is notified |
+| **AI Insights** (header): **Ask** the RH AI, or **📚 QMS** (the QMS RAG of the AI portal) | `POST /api/ai/ask`, `POST /api/ai/rag` | See below |
+| **🩺 SharePoint check** (super users, ⋮ menu): each DMS list (exists, items, may this account add), notifications status, the last notifications, **Send me a test notification**, the last SharePoint errors | `GET /api/diagnostics/sharepoint`, `POST /api/diagnostics/notify-test` | Read only, except the test row |
+| The **RH logo** / system name | | Back to a fresh home screen |
 
 Protected:
 - The company structure (`$Root`, `02_Customers`, each customer folder) cannot be renamed or deleted. The depth is set with `DMS_PROTECTED_DEPTH`.
@@ -72,19 +76,15 @@ Protected:
 
 Every action is written to the service log, and registration and submission also to Control Audit. The full API is at `/docs`.
 
-## AI Insights (RH on-prem RAG LLM)
+## AI Insights (RH on-prem AI)
 
-AI Insights connects to RH's on-prem LLM, the Open WebUI at `https://chat.ai.rh-global.com`, through its API, with a service token (`DMS_AI_*` in `.env`). Without these settings, AI Insights stays hidden.
+The panel has two tabs. Answers appear in the panel, in the language of the question (a Hebrew question gets a Hebrew answer). Every question and answer is written to Control Audit (CorrelationId `AI`).
 
-- **About a file:** the service checks that the user may read the file (AD), uploads it to Open WebUI (once per version), and asks the question with the file attached. The DMS record (ID, type, status, revision, owner) is added as context.
-- **Company knowledge:** without a file, the question goes to the knowledge bases in `DMS_AI_KNOWLEDGE_IDS` (RAG), and the answer lists its sources.
-- **Find a file:** the AI turns the request into a search plan (keywords, customer, project, document kind, newest or not). The service searches only the folders the user may read and scores the matches by name, blueprint folder and date. The AI then picks the best ones and says why. The AI only ever sees the names of customers and files the user is allowed to see, never file contents, and never decides on access. Without AI Insights configured, the same search runs on the request's keywords.
-- Answers are in the page language (English or Hebrew). Documents go only to the on-prem LLM, and every question is written to the service log.
+- **Ask** - the RH AI chat (`https://chat.ai.rh-global.com`). The DMS sends what the chat page sends: `POST <DMS_AI_URL><DMS_AI_PATH>` (default `/stream`) with `{"model": "org-chat", "messages": [...]}`; the answer is read from JSON, from streamed `data:` lines or from plain text. A question about a file (the quick questions: summary, requirements, risks, dates) first checks that the user may read it (AD), uploads it like the chat's 📎 (`POST /upload`, once per file version) and attaches its id; if the upload fails, the file's text (Word, Excel, PowerPoint, PDF, text; up to `DMS_AI_MAX_CHARS`) goes with the question.
+- **📚 QMS** - the QMS RAG tool of the AI portal: `POST https://aiportal.ai.rh-global.com/webhook/qms-chat` with `{question, sessionId, history}`; the answer comes with its sources (procedure, section, file). Follow-up questions keep the last turns. More tools: `DMS_RAG_TOOLS=qms,...` (each `<tool>-chat`).
+- **Smart search** (the main search box) uses the RH AI to turn a request into a search plan and to rank the matches; the AI sees only names the user may see, never file contents, and never decides on access. Without the AI, the same search runs on keywords.
 
-Setup:
-1. In Open WebUI, create a service user for the DMS and get its token (Settings > Account; enable API keys in Admin > Settings if needed).
-2. Pick the model id (`GET /api/models`) and, optionally, the knowledge base ids (Workspace > Knowledge).
-3. The DMS server must reach `chat.ai.rh-global.com` over HTTPS.
+Settings (`.env`, on-prem, no token): `DMS_AI_URL`, `DMS_AI_PATH`, `DMS_AI_UPLOAD_PATH`, `DMS_AI_MODEL`, `DMS_AI_MAX_CHARS`; `DMS_RAG_URL`, `DMS_RAG_TOOLS`. `DMS_AI_TOKEN` / `DMS_RAG_TOKEN` only if the portal ever asks for sign-in (a service token, never a personal one).
 
 ## Install on a Windows server (IIS)
 
