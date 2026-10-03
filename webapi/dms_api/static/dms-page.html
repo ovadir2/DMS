@@ -497,8 +497,8 @@ async function mine(v) {
       ${cfg.fileService ? `<button type="button" class="pillbtn small light" id="fs-run">${T.fsRun}</button>` : ''}</div>
     <div class="chips"><button type="button" class="chip ${state.wfFilter ? '' : 'on'}" data-sf="">${T.all} <b>${r.items.length}</b></button>
       ${keys.map(k => `<button type="button" class="chip ${k} ${state.wfFilter === k ? 'on' : ''}" data-sf="${k}">${T[k]} <b>${r.summary[k]}</b></button>`).join('')}</div>
-    <table><tr><th>${T.docId}</th><th>${T.titleF}</th><th>${T.status}</th><th class="hide-s">${T.submitted}</th><th class="hide-s">${T.lastAction}</th><th></th></tr>
-    ${items.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}</td>
+    <table><tr><th>${T.docId}</th><th>${T.titleF}</th><th>Rev</th><th>${T.status}</th><th class="hide-s">${T.submitted}</th><th class="hide-s">${T.lastAction}</th><th></th></tr>
+    ${items.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}</td><td class="small">${revOf(d)}</td>
       <td><span class="status ${esc(d.statusKey)}">${esc(T[d.statusKey] || d.lifecycleStatus)}</span>
         ${d.statusKey === 'Submitted' && days(d.submittedUtc) !== null ? `<div class="muted small">${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}
         ${d.statusKey === 'Submitted' && d.pending && d.pending.length ? `<div class="small">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')} (${T.stage} ${d.stage})</div>` : ''}</td>
@@ -511,17 +511,18 @@ async function mine(v) {
         ${d.statusKey === 'Approved_ReadOnly' ? `<button type="button" class="link" data-rev="${d.id}">⟳ ${T.newRev}</button><button type="button" class="link" data-share="${d.id}">✉ ${T.share}</button>` : ''}
         <button type="button" class="link" data-hist="${d.id}">${T.history}</button>
 </td></tr>
-      <tr id="h-${d.id}" hidden><td colspan="6"><ol class="timeline">${d.history.map(e => `<li><b>${esc(evName(e.event))}</b> <span class="muted">${when(e.utc)} · ${esc(e.actor)}${e.source ? ' · ' + esc(e.source) : ''}</span>${e.details ? `<div class="small">${esc(e.details)}</div>` : ''}</li>`).join('')}</ol></td></tr>`).join('')}
+      <tr id="h-${d.id}" hidden><td colspan="7"><ol class="timeline">${d.history.map(e => `<li><b>${esc(evName(e.event))}</b> <span class="muted">${when(e.utc)} · ${esc(e.actor)}${e.source ? ' · ' + esc(e.source) : ''}</span>${e.details ? `<div class="small">${esc(e.details)}</div>` : ''}</li>`).join('')}</ol></td></tr>`).join('')}
     </table>${items.length ? '' : `<p class="muted">${T.none}</p>`}`;
 }
 
+const revOf = d => { const r = d.draftRevision || d.currentRevision || '01'; return `Rev ${esc(r)}${d.draftRevision && d.currentRevision && d.draftRevision !== d.currentRevision ? `<div class="muted small">${T.revCurrent}: ${esc(d.currentRevision)}</div>` : ''}`; };
 async function approvalsView(v) {
   const list = await api('/api/approvals' + (state.apAll ? '?everyone=true' : ''));
   const days = u => u ? Math.max(0, Math.floor((Date.now() - new Date(u)) / 864e5)) : null;
   v.innerHTML = `<div class="toolbar"><h2 style="margin:0">${state.apAll ? T.apAll : T.apTitle}</h2><span class="spacer"></span>
       ${me.admin ? `<button type="button" class="pillbtn small light" id="ap-all">${state.apAll ? T.apTitle : T.apAll}</button>` : ''}</div>
-    ${list.length ? `<table><tr><th>${T.docId}</th><th>${T.titleF}</th><th class="hide-s">${T.owner}</th><th>${T.stage}</th><th class="hide-s">${T.submitted}</th><th></th></tr>
-    ${list.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}<div class="muted small">${esc(d.documentType || '')}</div></td>
+    ${list.length ? `<table><tr><th>${T.docId}</th><th>${T.titleF}</th><th>Rev</th><th class="hide-s">${T.owner}</th><th>${T.stage}</th><th class="hide-s">${T.submitted}</th><th></th></tr>
+    ${list.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}<div class="muted small">${esc(d.documentType || '')}</div></td><td class="small">${revOf(d)}</td>
       <td class="hide-s small">${esc((d.ownerName || d.ownerEmail || '').split('@')[0])}</td>
       <td class="small">${d.stage === 1 ? T.stage1 : T.stage2}${d.approved.length ? `<div class="muted">${T.approvedBy}: ${d.approved.map(a => esc(a.split('@')[0])).join(', ')}</div>` : ''}
         ${!d.mine ? `<div class="muted">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')}</div>` : ''}</td>
