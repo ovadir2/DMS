@@ -10,7 +10,7 @@ Everything else stays as it is: SharePoint keeps the records, the approval flow 
 cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root
 ```
 
-It opens `http://localhost:8080/dms/dms-page?lang=EN` on your real folders, with a temporary in-memory register instead of SharePoint and no AD checks (you are the only user). Approve or reject in **My workflows** (the yellow test buttons) instead of Teams. Uploads, renames and deletes are real changes in `-Root`, so use the test share. Add `-Lang HE` for Hebrew, and `-AiUrl https://chat.ai.rh-global.com -AiToken <token> -AiModel <model>` to try AI Insights against the on-prem LLM. Without them, Find a file works by keywords.
+It opens `http://localhost:8080/dms/dms-page?lang=EN` on your real folders, with a temporary in-memory register instead of SharePoint and no AD checks (you are the only user). Approve or reject in **My workflows** (the yellow test buttons) instead of Teams. Uploads, renames and deletes are real changes in `-Root`, so use the test share. Add `-Lang HE` for Hebrew. AI Insights uses the RH AI (`chat.ai.rh-global.com`) and the QMS tool by default, when the PC can reach them; otherwise the search works by keywords.
 
 ## Live pilot on your PC (real SharePoint, real approvals)
 
