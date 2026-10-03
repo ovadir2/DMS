@@ -86,21 +86,94 @@ The panel has two tabs. Answers appear in the panel, in the language of the ques
 
 Settings (`.env`, on-prem, no token): `DMS_AI_URL`, `DMS_AI_PATH`, `DMS_AI_UPLOAD_PATH`, `DMS_AI_MODEL`, `DMS_AI_MAX_CHARS`; `DMS_RAG_URL`, `DMS_RAG_TOOLS`. `DMS_AI_TOKEN` / `DMS_RAG_TOKEN` only if the portal ever asks for sign-in (a service token, never a personal one).
 
-## Install on a Windows server (IIS)
+## Installation guide (step by step)
 
-The server must be joined to the domain, reach `$Root`, and have outbound HTTPS to Microsoft 365.
+Two ways to run the DMS. **A** is the pilot on one PC (what runs today). **B** is the production install on a Windows server for all users. Do the steps in order; each ends with a check.
 
-1. Install Python 3.11+, the IIS **Windows Authentication** feature, and the **HttpPlatformHandler** module.
-2. Copy this `webapi` folder to `C:\DMS\webapi`, then in PowerShell:
+### Before you start (both)
+
+| What | Who | Notes |
+|---|---|---|
+| Git and Python 3.11+ (`py` launcher) on the PC or server | IT | `py --version` |
+| PnP PowerShell 2.x and an Entra app for PnP (`$C`, its Client ID) | M365 admin | Used by the scripts in `scripts\` |
+| The repository share `$Root` (e.g. `\\FILE-SERVER\Corporate_Data_TEST`) | IT | The DMS account needs **Modify** on it |
+| SharePoint sites `DocumentControl-TEST` and `LargeFileExchange-TEST` | M365 admin | Created by step 2 below if missing |
+| Power Automate, Standard license | each flow owner | DC-P2 uses Standard connectors only |
+
+### A. Pilot on a PC (live, your own sign-in)
+
+1. **Get the code**
    ```powershell
-   cd C:\DMS\webapi; py -m venv .venv; .\.venv\Scripts\pip install -r requirements.txt; Copy-Item .env.example .env; notepad .env
+   git clone https://github.com/ovadir2/DMS.git C:\dms
+   cd C:\dms\webapi; py -m venv .venv; .\.venv\Scripts\pip install -r requirements.txt
    ```
-3. **SharePoint access** for the service (app-only, no user passwords): an app with `Sites.Selected` and write on the DocumentControl site, and a certificate. The `RH-DMS-Workflow-Service` app can be reused. Export the certificate with its private key as PEM to `DMS_CERT_PATH`.
-4. IIS: create a site on `C:\DMS\webapi` with an HTTPS binding. Run its app pool as a gMSA with Modify on `$Root`. If IIS reports a locked `authentication` section, set **Windows Authentication = Enabled** and **Anonymous = Disabled** in IIS Manager instead of in `web.config`.
-5. Put the company logo at `dms_api\static\logo.png` (optional, a drawn "rh" is used without it).
-6. Open `https://<server>/api/health` (`rootReachable` must be `true`), then `https://<server>/dms/dms-page?lang=EN` (or `HE`).
+   Check: `.\.venv\Scripts\python -c "import dms_api"` prints nothing.
+2. **SharePoint lists** (once per site): `..\scripts\Provision-DMS.ps1 -TenantName rhisrael -ClientId $C -OwnerUpn <you> -Language he` creates Document Register, Control Audit, Approver Matrix, Approval Decisions and Delegations with their views. Then `..\scripts\New-DmsNotifyFlowPackage.ps1 -TenantName rhisrael -ClientId $C -DocControlSiteAlias DocumentControl-TEST` creates **DMS Notifications** and the DC-P2 flow package.
+   Check: the lists appear in Site contents.
+3. **Notifications flow:** Power Automate › My flows › Import › Import package (legacy) › the zip from step 2 › connect SharePoint, Outlook and Teams › Import. Open **DC-P2 Pilot Notifications** › **Turn on**. Keep only one copy. Turn **DC-P1 Off** (the pilot approves on the page).
+   Check: the flow shows *On*.
+4. **Folder tree** (test share only): `..\scripts\New-DmsFileServerTree.ps1 -Root $Root -Customers 'Customer_A'` creates the blueprint folders.
+5. **Start the DMS**
+   ```powershell
+   cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C
+   ```
+   A browser window asks you to sign in to SharePoint once (cached in `%LOCALAPPDATA%\DMS`). The page opens at `http://localhost:8080/dms/dms-page`.
+   Check: `http://localhost:8080/api/health` shows `"rootReachable": true`; ⋮ › **SharePoint check** shows every list with ✓.
+6. **Test notification:** SharePoint check › **Send me a test notification**. An email and a Teams message arrive within a few minutes (else open the flow's Run history).
+7. **Customer sharing (optional):** set `DMS_EX_SITE_URL` (the Start script does it from `-ExchangeSite`). For the OneDrive shortcut, add the Microsoft Graph delegated permission **Files.ReadWrite.All** to the Entra app `$C` and grant admin consent.
+   Check: share an approved test file with your own external address; the invitation arrives and `02_Customers\<Customer>\Shared\DMS-Shared-Log.csv` gets a row.
+8. **Bookmarks for users:** Chrome › Bookmarks › Import › `docs\RH-DMS-Bookmarks.html`.
 
-To run it without IIS (testing): set `DMS_AUTH_MODE=dev` and `DMS_DEV_USER`, then `.\.venv\Scripts\python -m uvicorn dms_api.main:app --port 8080`. In dev mode there are no AD checks.
+**Update the pilot:** `cd C:\dms; git pull`, then stop the DMS (Ctrl+C) and start it again (step 5). A change in the page only needs Ctrl+F5 in the browser.
+
+### B. Production on a Windows server (IIS, all users)
+
+The server must be joined to the domain, reach `$Root`, and have outbound HTTPS to Microsoft 365 and to the RH AI portal.
+
+1. **Server features:** install Python 3.11+ (all users), IIS with **Windows Authentication**, and the **HttpPlatformHandler** module.
+   Check: IIS Manager shows *Windows Authentication* under Authentication.
+2. **Code and packages**
+   ```powershell
+   git clone https://github.com/ovadir2/DMS.git C:\DMS
+   cd C:\DMS\webapi; py -m venv .venv; .\.venv\Scripts\pip install -r requirements.txt
+   mkdir logs; Copy-Item .env.example .env
+   ```
+3. **Service account:** create a gMSA (e.g. `RH\gmsa-dms$`), install it on the server, and give it **Modify** on `$Root`. It does all reading and writing; users keep their own NTFS rights, checked per request.
+4. **Entra app (app-only, no passwords):** reuse `RH-DMS-Workflow-Service` or create an app with a certificate.
+   - SharePoint: **Sites.Selected** with *write* on `DocumentControl` and on `LargeFileExchange`.
+   - Microsoft Graph (for the OneDrive shortcut): **Files.ReadWrite.All** application permission, admin consent. Without it sharing still works and the shortcut is skipped.
+   - Export the certificate with its private key as PEM to `C:\DMS\webapi\cert.pem` (readable by the gMSA only).
+5. **Settings:** edit `C:\DMS\webapi\.env` (all keys are explained in `.env.example`). The minimum:
+   ```ini
+   DMS_REPOSITORY_ROOT=\\FILE-SERVER\Corporate_Data
+   DMS_SITE_URL=https://rhisrael.sharepoint.com/sites/DocumentControl
+   DMS_TENANT_ID=<tenant id>
+   DMS_CLIENT_ID=<app id>
+   DMS_CERT_PATH=C:\DMS\webapi\cert.pem
+   DMS_CERT_THUMBPRINT=<thumbprint>
+   DMS_SP_AUTH=certificate
+   DMS_AUTH_MODE=windows
+   DMS_APPROVALS=page            # or flow: approvals in Teams with DC-P1 On
+   DMS_FILE_SERVICE_SECONDS=60   # file moves inside the service; do not also run Invoke-DmsWorkflowService.ps1
+   DMS_PAGE_URL=https://<server>/dms/dms-page
+   DMS_ADMINS=<super user emails, comma separated>
+   DMS_EX_SITE_URL=https://rhisrael.sharepoint.com/sites/LargeFileExchange
+   ```
+   Optional: `DMS_EX_DAYS` (30), `DMS_SHARED_LOG`, `DMS_EX_SHORTCUT`, `DMS_DELEGATION_DAYS` (3), `DMS_WEEKEND` (fri,sat), the AI and File Linker keys.
+6. **SharePoint lists and flows** on the production site: as in A2 and A3, with the production site alias.
+7. **IIS site:** new site on `C:\DMS\webapi`, HTTPS binding with the company certificate, app pool *No Managed Code*, identity = the gMSA. `web.config` is already in the folder (Windows Authentication on, Anonymous off). If IIS reports a locked `authentication` section, set the same in IIS Manager.
+8. **Logo (optional):** `dms_api\static\logo.png`.
+9. **Smoke test:**
+   - `https://<server>/api/health`: `"rootReachable": true`.
+   - `https://<server>/dms/dms-page?lang=HE` opens without a login screen and shows your name.
+   - A user without access to a customer folder does not see that customer (AD check).
+   - A super user: ⋮ › **SharePoint check**, all ✓, and a test notification arrives.
+   - Register and submit a test file, approve it, and see it move to `Current_ReadOnly` within a minute.
+10. **Link it** (next section) and run the user training (`docs\presentations\DMS-Approval-Flow.pptx`).
+
+**Update production:** `cd C:\DMS; git pull; webapi\.venv\Scripts\pip install -r webapi\requirements.txt`, then recycle the app pool. **Roll back:** `git checkout <previous commit>` and recycle.
+
+**Testing without IIS:** set `DMS_AUTH_MODE=dev` and `DMS_DEV_USER`, then `.\.venv\Scripts\python -m uvicorn dms_api.main:app --port 8080`. In dev mode there are no AD checks.
 
 ## Link it
 
