@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -39,6 +40,10 @@ class RenameRequest(BaseModel):
     newName: str
 
 
+class SubmitRequest(BaseModel):
+    approvers: list[str] | None = Field(None, description="Chosen approvers (emails); all must approve. Empty: the Approver Matrix")
+
+
 class DocRenameRequest(BaseModel):
     newName: str = Field(min_length=1, max_length=200)
 
@@ -55,6 +60,7 @@ class RegisterRequest(BaseModel):
     controlMode: str | None = None
     documentId: str | None = Field(None, description="Defaults to <prefix>-<item id>, e.g. DMS-00012")
     submit: bool = Field(False, description="Also submit it for approval")
+    approvers: list[str] | None = Field(None, description="Chosen approvers (emails); all must approve. Empty: the Approver Matrix")
 
 
 class AskRequest(BaseModel):
@@ -231,6 +237,17 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         lists = [sp().list_info(rel) for rel in (REGISTER, AUDIT, MATRIX, NOTIFY)]
         return {"site": s.site_url if s.sharepoint != "memory" else "memory (playground)", "account": user.email,
                 "auth": s.sp_auth, "lists": lists, "errors": list(app.state.sp_errors)}
+
+    @app.get("/api/people")
+    def people(q: str = Query(..., min_length=2), _: User = Depends(current_user)):
+        """People in the company directory, for choosing approvers (SharePoint people picker)."""
+        return sp().people(q)
+
+    @app.get("/api/approver-rule")
+    def approver_rule_view(documentType: str, _: User = Depends(current_user)):
+        """Who the Approver Matrix sends this document type to (the default when nobody is chosen)."""
+        r = rule_for(documentType)
+        return {"mandatory": (r or {}).get("mandatory", []), "final": (r or {}).get("final"), "fallback": bool((r or {}).get("fallback"))}
 
     @app.get("/api/me")
     def me(user: User = Depends(current_user)):
@@ -603,6 +620,26 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             sp().audit(document_id=d.get("documentId") or f"ID {d.get('id')}", event=s.choices["FileDone"], from_status=status,
                        to_status=status, actor="RH-DMS-Workflow-Service", details=details, source=s.choices["WorkflowService"])
 
+    CHOSEN = "Approvers (chosen): "
+
+    def chosen_approvers(submitted: dict | None) -> list[str]:
+        """The approvers chosen at submission, kept in the Control Audit 'submitted' row."""
+        details = (submitted or {}).get("details") or ""
+        if CHOSEN not in details:
+            return []
+        part = details.split(CHOSEN, 1)[1].split("\n")[0]
+        return [x.strip().lower() for x in part.split(";") if "@" in x]
+
+    def clean_approvers(emails: list[str] | None) -> list[str]:
+        out = []
+        for e in emails or []:
+            e = (e or "").strip().lower()
+            if not re.fullmatch(r"[^@\s;]+@[^@\s;]+\.[^@\s;]+", e):
+                raise HTTPException(400, f"Not an email address: {e!r}")
+            if e not in out:
+                out.append(e)
+        return out[:20]
+
     def rule_for(document_type: str) -> dict | None:
         """The Approver Matrix rule; a type without an active rule is approved by the super users (pilot)."""
         rule = sp().approver_rule(document_type)
@@ -614,24 +651,30 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """Where a submitted document stands, by the DC-P1 rules: stage 1 = every mandatory approver,
         stage 2 = the final approver. Decisions of the current cycle are the audit rows after the last submission."""
         c = s.choices
-        cycle = []
+        cycle, submitted = [], None
         for e in events:                                        # newest first
             if e["event"] in (c["SubmittedEvent"], c["RejectedEvent"], c["Cancelled"]):
+                submitted = e if e["event"] == c["SubmittedEvent"] else None
                 break
             cycle.append(e)
+        chosen = chosen_approvers(submitted)
         t = d.get("documentType") or ""
-        if t not in rules:
-            rules[t] = rule_for(t)
-        rule = rules[t]
+        if chosen:                                              # chosen at submission: all of them, one stage
+            rule = {"mandatory": chosen, "final": None, "chosen": True}
+        else:
+            if t not in rules:
+                rules[t] = rule_for(t)
+            rule = rules[t]
         if not rule:
             return {"stage": None, "pending": [], "approved": [], "rule": False}
         approvals = [e for e in cycle if e["event"] == c["ApprovedEvent"]]
         stage1 = {e["actor"] for e in approvals if (e.get("details") or "").startswith("Stage 1")}
         su = any((e.get("details") or "").startswith("Stage 1 (super user)") for e in approvals)
         pending1 = [] if su else [m for m in rule["mandatory"] if m not in stage1]
+        extra = {"chosen": bool(rule.get("chosen")), "final": rule.get("final")}
         if pending1:
-            return {"stage": 1, "pending": pending1, "approved": sorted(stage1), "rule": True}
-        return {"stage": 2, "pending": [rule["final"]] if rule["final"] else [], "approved": sorted(stage1), "rule": True}
+            return {"stage": 1, "pending": pending1, "approved": sorted(stage1), "rule": True, **extra}
+        return {"stage": 2, "pending": [rule["final"]] if rule["final"] else [], "approved": sorted(stage1), "rule": True, **extra}
 
     def notify(kind: str, d: dict, to: list[str], comment: str = "") -> None:
         """Pilot (page approvals): tell people by email and Teams through DMS Notifications + DC-P2."""
@@ -714,7 +757,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 final = True
             else:                                               # stage 1 ends when nobody is left; then the final approver
                 left = [] if su else [p for p in st["pending"] if p != user.email]
-                final = not left and not (rule_for(d.get("documentType") or "") or {}).get("final")
+                final = not left and not st.get("final")
             if final:
                 sp().update(item_id, {"LifecycleStatus": c["Approved_ReadOnly"], "LastApprovedUtc": datetime.now(timezone.utc).isoformat()})
             sp().audit(document_id=doc_id, event=c["ApprovedEvent"], from_status=c["Submitted"],
@@ -932,6 +975,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.post("/api/documents", status_code=201)
     def register(req: RegisterRequest, user: User = Depends(current_user)):
+        clean_approvers(req.approvers)                          # a wrong address stops it before anything is created
         path = files.resolve(s.repository_root, req.path)
         if not os.path.isfile(path):
             raise HTTPException(404, "File not found")
@@ -956,11 +1000,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                    to_status=s.choices["Working"], actor=user.email,
                    details=f"Registered from the DMS page: {os.path.relpath(path, s.repository_root)}")
         if req.submit:
-            return submit(doc["id"], user)
+            return submit(doc["id"], SubmitRequest(approvers=req.approvers), user)
         return with_key(doc)
 
     @app.post("/api/documents/{item_id}/submit")
-    def submit(item_id: int, user: User = Depends(current_user)):
+    def submit(item_id: int, req: SubmitRequest | None = None, user: User = Depends(current_user)):
+        approvers = clean_approvers(req.approvers if req else None)
         doc = sp().document(item_id)
         if (doc.get("ownerEmail") or "").lower() != user.email and not is_admin(user):
             raise HTTPException(403, "Only the document owner (or a DMS super user) can submit it")
@@ -971,7 +1016,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, "The working file was not found on the file server")
         sp().update(item_id, {"LifecycleStatus": s.choices["Submitted"]})
         sp().audit(document_id=doc["documentId"], event=s.choices["SubmittedEvent"], from_status=s.choices["Working"],
-                   to_status=s.choices["Submitted"], actor=user.email, details="Submitted from the DMS page")
+                   to_status=s.choices["Submitted"], actor=user.email,
+                   details="Submitted from the DMS page" + (f". {CHOSEN}{'; '.join(approvers)}" if approvers else ""))
         after = sp().document(item_id)
         if s.approvals == "page":
             notify_stage(after)
@@ -1022,7 +1068,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                    details=f"New revision {new_rev:02d} from {how}: {os.path.relpath(target, s.repository_root)}")
         log(user, "revise", f"{d.get('documentId')} -> {target}")
         if submit:
-            return {**submit_doc(item_id, user), "draft": target, "officeUri": files.office_uri(target)}
+            return {**submit_doc(item_id, None, user), "draft": target, "officeUri": files.office_uri(target)}
         return {**with_key(sp().document(item_id)), "draft": target, "officeUri": files.office_uri(target)}
 
     @app.post("/api/documents/{item_id}/share")

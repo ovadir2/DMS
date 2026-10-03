@@ -1117,3 +1117,29 @@ def test_list_info_reads_the_add_permission():
     sp._call = lambda m, url: {"Title": "Control Audit", "ItemCount": 0, "EffectiveBasePermissions": {"High": "0", "Low": "1"}}
     assert sp.list_info("Lists/ControlAudit") == {"list": "Lists/ControlAudit", "exists": True, "title": "Control Audit", "items": 0,
                                                  "canRead": True, "canAdd": False, "canEdit": False}
+
+
+def test_start_workflow_with_chosen_approvers(tmp_path):
+    rule = {"mandatory": ["dana@rh.co.il"], "final": "boss@rh.co.il"}
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, approvals="page", admins=[])
+    sp = RuleSP(s, rule)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "documentType": "הצעת מחיר", "documentArea": "מסחרי",
+                                       "submit": True, "approvers": ["Avi@rh.co.il", "eli@rh.co.il", "avi@rh.co.il"]}).json()
+    assert sp.audit_events()[0]["details"] == "Submitted from the DMS page. Approvers (chosen): avi@rh.co.il; eli@rh.co.il"
+    s.dev_user = "dana@rh.co.il"
+    assert c.get("/api/approvals").json() == []                                       # the matrix approver is not asked
+    s.dev_user = "avi@rh.co.il"
+    a = c.get("/api/approvals").json()
+    assert a[0]["pending"] == ["avi@rh.co.il", "eli@rh.co.il"] and a[0]["chosen"]
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["statusKey"] == "Submitted"
+    s.dev_user = "eli@rh.co.il"
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["statusKey"] == "Approved_ReadOnly"   # no final stage
+    (q / "New.xlsx").write_text("x")
+    assert c.post("/api/documents", json={"path": str(q / "New.xlsx"), "documentType": "x", "documentArea": "y", "submit": True, "approvers": ["not-an-email"]}).status_code == 400
+    assert len(sp.documents()) == 1                                                      # nothing registered
+    assert c.get("/api/approver-rule", params={"documentType": "הצעת מחיר"}).json()["final"] == "boss@rh.co.il"
