@@ -177,6 +177,16 @@ class SharePoint:
         final = ((r.get("FinalApprover") or {}).get("EMail") or "").lower() or None
         return {"mandatory": mandatory, "final": final}
 
+    def list_info(self, rel: str) -> dict:
+        """Does the list exist, how many items, and may the signed-in account add items (read only, writes nothing)."""
+        try:
+            r = self._call("GET", f"{self._list(rel)}?$select=Title,ItemCount,EffectiveBasePermissions")
+        except SharePointError as e:
+            return {"list": rel, "exists": False, "error": str(e)[:300]}
+        low = int((r.get("EffectiveBasePermissions") or {}).get("Low") or 0)
+        return {"list": rel, "exists": True, "title": r.get("Title"), "items": r.get("ItemCount"),
+                "canRead": bool(low & 0x1), "canAdd": bool(low & 0x2), "canEdit": bool(low & 0x4)}
+
     def notify(self, *, to: list[str], subject: str, body: str, link: str, ref: str) -> None:
         """A row in DMS Notifications; the DC-P2 flow sends it by email and Teams."""
         self._call("POST", f"{self._list(NOTIFY)}/items", json={

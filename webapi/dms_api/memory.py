@@ -66,6 +66,11 @@ class MemorySharePoint:
         self.shares = getattr(self, "shares", []) + [{"email": email, "url": url, "subject": subject, "message": message}]
         return {"url": url}
 
+    def list_info(self, rel: str) -> dict:
+        n = {"Lists/DocumentRegister": len(self.items), "Lists/ControlAudit": len(self.audits),
+             "Lists/DmsNotifications": len(self.notifications)}.get(rel, 0)
+        return {"list": rel, "exists": True, "title": rel.split("/")[-1], "items": n, "canRead": True, "canAdd": True, "canEdit": True}
+
     def notify(self, *, to, subject, body, link, ref) -> None:
         self.notifications.append({"to": list(to), "subject": subject, "body": body, "link": link, "ref": ref})
 
