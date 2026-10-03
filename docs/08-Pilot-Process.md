@@ -61,6 +61,8 @@ In any folder you may write to: **＋ New document** → choose the file → typ
 
 On the approved file (or in My workflows): **✉ Share with customer** → the customer's email → Share. The approved revision is copied to the **Large File Exchange** site (`TemporaryUploads/Outbound/<DocumentId>_RevNN/`) and SharePoint sends the customer a personal invitation, view only (B2B guest, no anonymous link). The DocumentControl site is never shared. Only approved documents can be shared, by the owner or a super user; each share is a Control Audit row (שינוי הרשאות). The Exchange site must allow external guests: SharePoint admin center › Sites › LargeFileExchange-TEST › Sharing = *New and existing guests*, and if allowed guest domains are set, add the customer's domain (for the test, gmail.com).
 
+**Shared status:** in My workflows, under the status, "✉ Shared with: email (Rev NN, date)" lists every customer the document was shared with. The same is in History, in Control Audit, and on the Exchange site (the file → Manage access).
+
 ### What the approver does
 
 **Pilot (on the page):** the header shows **Approvals** with the number waiting. The list shows each document, its owner, type, stage, who already approved and how long it waits, with Open, Download and ✦ AI to read it, and **Approve** (optional comment) / **Reject** (comment required). Stage 1: every mandatory approver must approve. Stage 2: the final approver. One rejection ends the cycle; the comment goes back to the owner in My workflows. A DMS super user can decide any stage (recorded as "super user") and see **All pending approvals**.
