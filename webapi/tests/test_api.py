@@ -776,6 +776,8 @@ def test_share_with_customer(tmp_path):
     rows = log.read_text(encoding="utf-8-sig").splitlines()
     assert rows[0].startswith("Date (UTC),Action,Shared by") and len(rows) == 3
     assert "edssrom@gmail.com" in rows[1] and "other@cust.com" in rows[2] and USER in rows[2] and "DMS-00001" in rows[2]
+    import os, stat as st
+    assert not os.stat(log).st_mode & st.S_IWRITE                                     # read only between appends
     info = c.get(f"/api/documents/{d['id']}/share-info").json()
     assert info["customer"] == "Customer_A" and "Customer_A" in info["customers"]
     assert c.post(f"/api/documents/{d['id']}/share", json={"email": "not-an-email"}).status_code == 422
