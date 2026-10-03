@@ -1170,3 +1170,19 @@ def test_directory_people_from_sharepoint_people_search():
     assert [p["email"] for p in people] == ["avi@rh.co.il", "dana.levi@rh.co.il"] and people[1]["title"] == "QA · Quality"
     assert "sourceid='b09a7990-05ea-4af9-81ef-edfab16c4e31'" in calls[0]
     assert sp.directory_people() is people                                             # cached
+
+
+def test_notification_log_and_test_notification(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "submit": True, "approvers": ["avi@rh.co.il"]})
+    n = c.get("/api/diagnostics/sharepoint").json()["notifications"]
+    assert n["on"] and n["last"][0]["to"] == ["avi@rh.co.il"] and n["last"][0]["result"] == "written to DMS Notifications"
+    assert c.post("/api/diagnostics/notify-test").json() == {"to": USER}
+    assert sp.notifications[-1]["to"] == [USER]
