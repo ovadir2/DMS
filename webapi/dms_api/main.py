@@ -1300,8 +1300,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/documents/{item_id}/share-info")
     def share_info(item_id: int, user: User = Depends(current_user)):
-        """For the Share dialog: the customer from the file's folder (02_Customers\\<name>), else the list of
-        customer folders to choose from, and the other approved documents the user may add."""
+        """For the Share dialog: the customer from the file's folder (02_Customers\\<name>, preselected), the
+        customer folders to choose from (any of them), and the other approved documents the user may add."""
         d, current, rev = shareable(item_id, user)
         mine = [x for x in sp().documents() if x.get("lifecycleStatus") == s.choices["Approved_ReadOnly"] and x["id"] != item_id
                 and ((x.get("ownerEmail") or "").lower() == user.email or is_admin(user))]
@@ -1321,12 +1321,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if s.sharepoint != "memory" and not s.ex_site_url:
             raise HTTPException(409, "Sharing with customers is not configured (DMS_EX_SITE_URL)")
         docs = [shareable(i, user) for i in dict.fromkeys([item_id, *req.documentIds])]
-        customer = customer_of_path(docs[0][1])
+        names = {n.lower(): n for n in customer_names(user)}
+        if (req.customer or "").strip():                       # chosen in the dialog (default: the file's customer folder)
+            customer = names.get(req.customer.strip().lower())
+        else:
+            customer = customer_of_path(docs[0][1])
         if not customer:
-            names = {n.lower(): n for n in customer_names(user)}
-            customer = names.get((req.customer or "").strip().lower())
-            if not customer:
-                raise HTTPException(400, "Choose the customer (a folder under " + s.customers_folder + ")")
+            raise HTTPException(400, "Choose the customer (a folder under " + s.customers_folder + ")")
         names = [os.path.basename(p) for _, p, _ in docs]
         if len({n.lower() for n in names}) != len(names):
             raise HTTPException(409, "Two of the files have the same name; share them separately")

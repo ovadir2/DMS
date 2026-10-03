@@ -833,6 +833,9 @@ def test_share_several_files_outside_customers(tmp_path):
     assert r.status_code == 200, r.text
     assert r.json()["customer"] == "Customer_A" and len(r.json()["documents"]) == 2
     assert {u["url"].rsplit("/", 2)[-2] for u in sp.shares} == {"Customer_A"}
+    (tmp_path / "Root" / "02_Customers" / "Elbit").mkdir()
+    r = c.post(f"/api/documents/{d['id']}/share", json={"email": "y@elbit.com", "customer": "Elbit"})  # another customer
+    assert r.status_code == 200 and r.json()["customer"] == "Elbit" and "Outbound/Elbit/" in sp.shares[-1]["url"]
 
 
 class FakeLinker:
