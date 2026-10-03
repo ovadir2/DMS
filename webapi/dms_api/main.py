@@ -270,8 +270,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """Super users: the DMS lists in SharePoint (exists, items, may this account add), and the last errors."""
         if not is_admin(user):
             raise HTTPException(403, "Only a DMS super user can run the SharePoint check")
-        from .sharepoint import AUDIT, DELEGATIONS, MATRIX, NOTIFY, REGISTER
-        lists = [sp().list_info(rel) for rel in (REGISTER, AUDIT, MATRIX, NOTIFY, DELEGATIONS)]
+        from .sharepoint import AUDIT, DECISIONS, DELEGATIONS, MATRIX, NOTIFY, REGISTER
+        lists = [sp().list_info(rel) for rel in (REGISTER, AUDIT, MATRIX, NOTIFY, DECISIONS, DELEGATIONS)]
         return {"site": s.site_url if s.sharepoint != "memory" else "memory (playground)", "account": user.email,
                 "auth": s.sp_auth, "lists": lists, "errors": list(app.state.sp_errors),
                 "notifications": {"on": s.approvals == "page" and s.notify, "approvals": s.approvals, "notify": s.notify,
@@ -788,6 +788,21 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return {"stage": 1, "pending": pending1, "approved": sorted(stage1), "rule": True, **extra}
         return {"stage": 2, "pending": [rule["final"]] if rule["final"] else [], "approved": sorted(stage1), "rule": True, **extra}
 
+    def decision_row(d: dict, approver: str, stage: int, decision: str, comment: str, delegated_from: str | None = None,
+                     final: bool = False) -> None:
+        """Approval Decisions: one row per decision on the page (the production flow DC-P1 writes the same list)."""
+        doc_id = d.get("documentId") or f"ID {d.get('id')}"
+        submitted = next((e for e in events_by_doc().get(doc_id, []) if e["event"] == s.choices["SubmittedEvent"]), None)
+        stamp = re.sub(r"[^0-9T]", "", (submitted or {}).get("utc") or "")[:13]
+        try:
+            sp().log_decision(workflow_id=f"{doc_id}-{stamp}" if stamp else doc_id, document_id=doc_id,
+                              revision=d.get("draftRevision") or d.get("currentRevision") or "01", approver=approver,
+                              role="Final" if final else "Mandatory", stage=stage, decision=decision, comment=comment,
+                              delegated_from=delegated_from)
+        except Exception as e:  # noqa: BLE001 - the decision itself is done (Control Audit)
+            logger.warning("decision not logged in Approval Decisions: %s", e)
+            sp_error("Approval Decisions row", e)
+
     def notify_text(kind: str, doc_id: str, title: str, comment: str = "") -> tuple[str, str, str]:
         """Subject, body and link of a notification, in the language the user chose on the page."""
         lang = PAGE_LANG.get()
@@ -882,6 +897,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                        to_status=c["Approved_ReadOnly"] if final else c["Submitted"], actor=user.email,
                        details=tag + (f": {req.comment.strip()}" if req.comment.strip() else ""))
         log(user, "approve" if req.approve else "reject", f"{doc_id} {tag}")
+        original = next((x["from"] for x in st.get("delegated") or [] if x["to"] == user.email), None)
+        decision_row(d, user.email, st["stage"] or 1, "Approved" if req.approve else "Rejected", req.comment.strip(),
+                     delegated_from=original, final=st["stage"] == 2)
         after = sp().document(item_id)
         if not req.approve:
             notify("rejected", after, [after.get("ownerEmail") or ""], req.comment.strip())
@@ -922,6 +940,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         sp().audit(document_id=doc_id, event=c["PermissionChanged"], from_status=c["Submitted"], to_status=c["Submitted"],
                    actor=user.email, details=details)
         log(user, "delegate", f"{doc_id}: {frm} -> {to}")
+        decision_row(d, frm, st["stage"] or 1, "Delegated", f"-> {to}" + (f": {req.comment.strip()}" if req.comment.strip() else ""),
+                     final=st["stage"] == 2)
         try:                                                    # the Delegations list keeps the log too
             today = datetime.now().date()
             sp().log_delegation(title=f"{doc_id}: {frm} -> {to}", delegator=frm, delegate=to, approved_by=user.email,
