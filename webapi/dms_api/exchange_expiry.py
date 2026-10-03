@@ -35,6 +35,15 @@ def run_once(sp, s: Settings) -> list[dict]:
         except Exception as e:  # noqa: BLE001
             log.warning("audit of the expired share failed: %s", e)
         log.info("%s %s", doc_id, details)
+    from . import shared_log
+    for customer in {r["customer"] for r in removed}:
+        try:
+            shared_log.append(s, customer, [{"Action": "Expired - removed from the Exchange site" + (" (folder removed, no access)" if r["folderRemoved"] else ""),
+                                             "Shared by": "RH-DMS-Workflow-Service", "Document ID": by_name.get(r["file"].lower()) or "",
+                                             "File": r["file"], "Available until": "expired"}
+                                            for r in removed if r["customer"] == customer])
+        except OSError as e:
+            log.warning("Share log of %s: %s", customer, e)
     return removed
 
 

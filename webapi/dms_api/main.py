@@ -1344,11 +1344,24 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                        to_status=c["Approved_ReadOnly"], actor=user.email,
                        details=f"Shared revision {rev} with {email} (customer {customer}, view only, Large File Exchange): {url}")
             log(user, "share", f"{doc_id} Rev{rev} -> {email} ({customer})")
+        from . import shared_log
+        until = (datetime.now(timezone.utc) + timedelta(days=s.ex_days)).strftime("%Y-%m-%d") if s.ex_days > 0 else ""
+        log_error = None
+        try:
+            shared_log.append(s, customer, [{"Action": "Shared", "Shared by": user.email, "Shared with": email,
+                                             "Document ID": d.get("documentId"), "Title": d.get("title"), "Revision": rev,
+                                             "File": os.path.basename(p), "Exchange link": url, "Available until": until}
+                                            for (d, p, rev), url in zip(docs, r["urls"])])
+        except OSError as e:
+            log_error = str(e)
+            logger.warning("Share log of %s: %s", customer, e)
         if r.get("shortcutError"):
             logger.warning("OneDrive shortcut DMS_%s: %s", customer, r["shortcutError"])
         return {"url": r["folderUrl"], "urls": r["urls"], "email": email, "customer": customer, "revision": docs[0][2],
                 "documents": [{"documentId": d.get("documentId"), "revision": rev} for d, _, rev in docs],
-                "shortcut": r.get("shortcut"), "shortcutError": r.get("shortcutError"), "days": s.ex_days}
+                "shortcut": r.get("shortcut"), "shortcutError": r.get("shortcutError"), "days": s.ex_days,
+                "log": os.path.relpath(shared_log.path_for(s, customer), s.repository_root) if s.shared_log and not log_error else None,
+                "logError": log_error}
 
     # ------------------------------------------------------------------ DMS First loading (super users)
     @app.post("/api/first-load", status_code=202)
