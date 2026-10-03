@@ -778,6 +778,14 @@ def test_share_with_customer(tmp_path):
     assert "edssrom@gmail.com" in rows[1] and "other@cust.com" in rows[2] and USER in rows[2] and "DMS-00001" in rows[2]
     import os, stat as st
     assert not os.stat(log).st_mode & st.S_IWRITE                                     # read only between appends
+    shared = log.parent
+    f = next(x for x in c.get("/api/browse", params={"path": str(shared)}).json()["files"] if x["name"] == log.name)
+    assert f["system"] and f["readOnly"]                                             # no rename / delete / workflow on the page
+    assert c.post("/api/items/rename", json={"path": str(log), "newName": "x.csv"}).status_code == 403
+    assert c.post("/api/items/delete", json={"path": str(log)}).status_code == 403
+    assert c.post("/api/items/delete", json={"path": str(shared)}).status_code == 403   # nor its folder
+    assert c.post("/api/documents", json={"path": str(log), "documentType": "x", "documentArea": "y"}).status_code == 403
+    assert log.exists()
     info = c.get(f"/api/documents/{d['id']}/share-info").json()
     assert info["customer"] == "Customer_A" and "Customer_A" in info["customers"]
     assert c.post(f"/api/documents/{d['id']}/share", json={"email": "not-an-email"}).status_code == 422

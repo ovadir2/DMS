@@ -331,7 +331,7 @@ function fileActions(f) {
   return `${f.officeUri ? `<a class="link" href="${esc(f.officeUri)}">${T.open}</a>` : ''}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cp="${esc(f.path)}">🔗 ${T.copyLink}</button>`
     + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-drn="${f.document.id}" data-name="${esc(f.name)}">${T.rename}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
         + (f.document.statusKey === 'Approved_ReadOnly' && samePath(f.path, f.document.currentUncPath) ? `<button type="button" class="link" data-rev="${f.document.id}">⟳ ${T.newRev}</button><button type="button" class="link" data-share="${f.document.id}">✉ ${T.share}</button>` : '')
-                  : (f.managed ? '' : `<button type="button" class="link" data-st="${esc(f.path)}">${T.start}</button>`));
+                  : (f.managed || f.system ? '' : `<button type="button" class="link" data-st="${esc(f.path)}">${T.start}</button>`));
 }
 const samePath = (a, b) => !!a && !!b && a.replace(/\//g, '\\').toLowerCase() === b.replace(/\//g, '\\').toLowerCase();
 function wire(v) {
