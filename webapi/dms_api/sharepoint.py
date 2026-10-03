@@ -296,8 +296,9 @@ class SharePoint:
             current = f"{current}/{part}"
             try:
                 self._call("POST", f"{ex}/_api/web/folders/AddUsingPath(DecodedUrl='{q(current)}')")
-            except SharePointError as e:
-                if "exist" not in str(e).lower():
+            except SharePointError:
+                # already there (the message is in the site's language, e.g. Hebrew): check, do not parse it
+                if not self._folder_exists(ex, current):
                     raise
         urls = []
         for local_path in local_paths:
@@ -356,6 +357,14 @@ class SharePoint:
                 if removed:
                     removed[-1]["folderRemoved"] = True
         return removed
+
+    def _folder_exists(self, web: str, server_relative: str) -> bool:
+        try:
+            r = self._call("GET", f"{web}/_api/web/GetFolderByServerRelativePath(DecodedUrl='"
+                                  f"{quote(server_relative.replace(chr(39), chr(39) * 2), safe='/')}')?$select=Exists")
+            return bool(r.get("Exists"))
+        except SharePointError:
+            return False
 
     # ------------------------------------------------------------------ OneDrive shortcut (Microsoft Graph)
     GRAPH = "https://graph.microsoft.com/v1.0"
