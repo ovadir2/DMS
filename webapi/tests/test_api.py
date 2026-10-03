@@ -792,6 +792,11 @@ def test_share_payloads():
                 return Resp({"ServerRelativeUrl": "/sites/LargeFileExchange-TEST/TemporaryUploads/Outbound/DMS-1_Rev01/Q.xlsx"})
             if url.endswith("SP.Web.ShareObject"):
                 return Resp({"StatusCode": 0, "ErrorMessage": None})
+            if "folders/AddUsingPath" in url and url.endswith("/Outbound')"):     # exists; message in Hebrew
+                return Resp({"odata.error": {"code": "-2130575257, Microsoft.SharePoint.SPException",
+                                             "message": {"lang": "he-IL", "value": "קובץ או תיקיה בשם Outbound קיימים כבר"}}}, status=400)
+            if url.endswith("?$select=Exists"):
+                return Resp({"Exists": True})
             return Resp({})
     import tempfile, os
     f = os.path.join(tempfile.mkdtemp(), "Q.xlsx")
@@ -808,7 +813,7 @@ def test_share_payloads():
     assert share["url"] == r["folderUrl"]                                         # the customer folder is shared
     assert share["roleValue"] == "role:1073741826" and share["sendEmail"] is True and share["includeAnonymousLinkInEmail"] is False
     assert j.loads(share["peoplePickerInput"])[0]["Key"] == "edssrom@gmail.com"
-    assert sess.calls[2][3] == b"x"                                                # the file bytes were uploaded
+    assert [c[3] for c in sess.calls if "Files/AddUsingPath" in c[1]] == [b"x"]       # the file bytes were uploaded
 
 
 def test_share_several_files_outside_customers(tmp_path):
