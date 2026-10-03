@@ -81,6 +81,8 @@ class Settings:
     ai_max_chars: int = 60000               # document text sent with a question about a file
     ai_knowledge_ids: list[str] = field(default_factory=list)   # knowledge bases for general questions
     ai_max_file_mb: int = 25
+    delegation_days: int = 3                # a delegation is valid this many working days after today
+    weekend: list[int] = field(default_factory=lambda: [4, 5])   # Friday, Saturday (Python weekday numbers)
     rag_url: str = ""                       # AI Insights RAG tools (n8n), e.g. https://aiportal.ai.rh-global.com/webhook
     rag_tools: list[str] = field(default_factory=list)          # tools offered on the page, e.g. qms
     rag_token: str = ""                     # optional bearer token of the webhook
@@ -147,6 +149,9 @@ class Settings:
             ai_max_chars=int(e("DMS_AI_MAX_CHARS", "60000")),
             ai_knowledge_ids=[k.strip() for k in e("DMS_AI_KNOWLEDGE_IDS", "").split(",") if k.strip()],
             ai_max_file_mb=int(e("DMS_AI_MAX_FILE_MB", "25")),
+            delegation_days=int(e("DMS_DELEGATION_DAYS", "3")),
+            weekend=[["mon", "tue", "wed", "thu", "fri", "sat", "sun"].index(d.strip().lower()[:3])
+                     for d in e("DMS_WEEKEND", "fri,sat").split(",") if d.strip()],
             rag_url=e("DMS_RAG_URL", "https://aiportal.ai.rh-global.com/webhook"),
             rag_tools=[k.strip() for k in e("DMS_RAG_TOOLS", "qms").split(",") if k.strip()],
             rag_token=e("DMS_RAG_TOKEN", ""),

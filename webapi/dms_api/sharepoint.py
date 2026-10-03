@@ -231,14 +231,15 @@ class SharePoint:
                 out.append({"email": email, "name": u.get("Title") or email, "title": ""})
         return sorted(out, key=lambda p: p["name"].lower())
 
-    def log_delegation(self, *, title: str, delegator: str, delegate: str, approved_by: str, reason: str) -> None:
+    def log_delegation(self, *, title: str, delegator: str, delegate: str, approved_by: str, reason: str,
+                       valid_from: str, valid_to: str) -> None:
         """One row in the Delegations list (provisioned by Provision-DMS.ps1): who passed an approval to whom."""
         r = self._call("GET", f"{self._list(DELEGATIONS)}/fields/getbyinternalnameortitle('DelegationStatus')?$select=Choices")
         active = next((v for v in (r.get("Choices") or []) if v in ("Active", "פעיל")), "Active")
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+        day = lambda d: f"{d}T12:00:00Z"  # noqa: E731 - noon UTC keeps the same date in any site time zone
         self._call("POST", f"{self._list(DELEGATIONS)}/items", json={
             "Title": title[:255], "DelegatorId": self._user_id(delegator), "DelegateToId": self._user_id(delegate),
-            "ValidFrom": today, "ValidTo": today, "DelegationReason": reason, "DelegationStatus": active,
+            "ValidFrom": day(valid_from), "ValidTo": day(valid_to), "DelegationReason": reason, "DelegationStatus": active,
             "DelegationApprovedById": self._user_id(approved_by)})
 
     def list_info(self, rel: str) -> dict:

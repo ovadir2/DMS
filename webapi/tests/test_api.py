@@ -45,7 +45,8 @@ class FakeSharePoint:
 
     def log_delegation(self, **kw):
         self.delegations = getattr(self, "delegations", []) + [
-            {"title": kw["title"], "delegator": kw["delegator"], "delegate": kw["delegate"], "approvedBy": kw["approved_by"], "reason": kw["reason"]}]
+            {"title": kw["title"], "delegator": kw["delegator"], "delegate": kw["delegate"], "approvedBy": kw["approved_by"],
+             "reason": kw["reason"], "validFrom": kw["valid_from"], "validTo": kw["valid_to"]}]
 
     def audit_events(self, refresh=False):
         return [{"documentId": a["document_id"], "event": a["event"], "fromStatus": a["from_status"], "toStatus": a["to_status"],
@@ -1246,9 +1247,15 @@ def test_delegate_an_approval(tmp_path):
     s.dev_user = "dana@rh.co.il"
     r = c.post(f"/api/approvals/{d['id']}/delegate", json={"to": "Avi@rh.co.il", "comment": "on vacation"}).json()
     assert r["pending"] == ["avi@rh.co.il"] and r["delegated"] == [{"from": "dana@rh.co.il", "to": "avi@rh.co.il"}]
-    assert sp.audit_events()[0]["details"] == "Delegated: dana@rh.co.il -> avi@rh.co.il: on vacation"
-    assert sp.delegations[-1] == {"title": "DMS-00001: dana@rh.co.il -> avi@rh.co.il", "delegator": "dana@rh.co.il",
-                                  "delegate": "avi@rh.co.il", "approvedBy": "dana@rh.co.il", "reason": "DMS-00001 Quote: on vacation"}
+    det = sp.audit_events()[0]["details"]
+    assert det.startswith("Delegated: dana@rh.co.il -> avi@rh.co.il (until ") and det.endswith("): on vacation")
+    row = sp.delegations[-1]
+    assert (row["delegator"], row["delegate"], row["approvedBy"], row["reason"]) == \
+        ("dana@rh.co.il", "avi@rh.co.il", "dana@rh.co.il", "DMS-00001 Quote: on vacation")
+    from datetime import date as _d
+    f, u = _d.fromisoformat(row["validFrom"]), _d.fromisoformat(row["validTo"])
+    workdays = sum(1 for i in range(1, (u - f).days + 1) if _d.fromordinal(f.toordinal() + i).weekday() not in (4, 5))
+    assert workdays == 3 and u.weekday() not in (4, 5)
     assert c.get("/api/approvals").json() == []                                         # no longer Dana's
     s.dev_user = "avi@rh.co.il"
     assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["stage"] == 2
@@ -1257,3 +1264,19 @@ def test_delegate_an_approval(tmp_path):
     assert r["pending"] == ["eli@rh.co.il"] and "(by " in sp.audit_events()[0]["details"]
     s.dev_user = "eli@rh.co.il"
     assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["statusKey"] == "Approved_ReadOnly"
+
+
+def test_expired_delegation_returns_to_the_approver(tmp_path):
+    rule = {"mandatory": ["dana@rh.co.il"], "final": None}
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, approvals="page", admins=[])
+    sp = RuleSP(s, rule)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "documentType": "x", "documentArea": "y", "submit": True}).json()
+    s.dev_user = "dana@rh.co.il"
+    assert c.post(f"/api/approvals/{d['id']}/delegate", json={"to": "avi@rh.co.il"}).json()["pending"] == ["avi@rh.co.il"]
+    sp.audits[-1]["utc"] = "2026-01-01T09:00:00Z"                                       # delegated long ago
+    assert [x["id"] for x in c.get("/api/approvals").json()] == [d["id"]]               # back with Dana

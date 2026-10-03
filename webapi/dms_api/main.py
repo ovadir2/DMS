@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -222,7 +222,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 "approvals": s.approvals, "fileLinker": bool(s.fl_check_url and s.fl_update_url),
                 "site": s.site_url if s.sharepoint != "memory" else "", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,
-                "repositoryRoot": s.repository_root}
+                "repositoryRoot": s.repository_root, "delegationDays": s.delegation_days}
 
     @app.get("/", include_in_schema=False)
     def root():
@@ -689,11 +689,28 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     DELEGATED = "Delegated: "
 
+    def valid_to(start: date) -> date:
+        """The last day of a delegation: start + DMS_DELEGATION_DAYS working days (the weekend not counted)."""
+        d, left = start, s.delegation_days
+        while left > 0:
+            d += timedelta(days=1)
+            if d.weekday() not in s.weekend:
+                left -= 1
+        return d
+
     def delegations(cycle: list[dict]) -> dict[str, str]:
-        """'who -> instead of whom' from the Control Audit rows of the current cycle (oldest first)."""
+        """'who -> instead of whom' from the Control Audit rows of the current cycle (oldest first). A delegation
+        past its last day no longer counts: the approval returns to the original approver."""
         out: dict[str, str] = {}
+        today = datetime.now().date()
         for e in reversed(cycle):
             details = e.get("details") or ""
+            try:
+                started = datetime.fromisoformat((e.get("utc") or "").replace("Z", "+00:00")).astimezone().date()
+            except ValueError:
+                started = today
+            if valid_to(started) < today:
+                continue
             if e["event"] == s.choices["PermissionChanged"] and details.startswith(DELEGATED):
                 pair = details[len(DELEGATED):].split(":")[0]
                 if " -> " in pair:
@@ -898,14 +915,18 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if to in st["pending"]:
             raise HTTPException(409, f"{to} is already an approver of this stage")
         doc_id = d.get("documentId") or f"ID {item_id}"
-        details = f"{DELEGATED}{frm} -> {to}" + (f": {req.comment.strip()}" if req.comment.strip() else "") \
+        until = valid_to(datetime.now().date())
+        details = f"{DELEGATED}{frm} -> {to}" + f" (until {until:%d/%m/%Y})" \
+            + (f": {req.comment.strip()}" if req.comment.strip() else "") \
             + (f" (by {user.email})" if user.email != frm else "")
         sp().audit(document_id=doc_id, event=c["PermissionChanged"], from_status=c["Submitted"], to_status=c["Submitted"],
                    actor=user.email, details=details)
         log(user, "delegate", f"{doc_id}: {frm} -> {to}")
         try:                                                    # the Delegations list keeps the log too
+            today = datetime.now().date()
             sp().log_delegation(title=f"{doc_id}: {frm} -> {to}", delegator=frm, delegate=to, approved_by=user.email,
-                                reason=f"{doc_id} {d.get('title') or ''}" + (f": {req.comment.strip()}" if req.comment.strip() else ""))
+                                reason=f"{doc_id} {d.get('title') or ''}" + (f": {req.comment.strip()}" if req.comment.strip() else ""),
+                                valid_from=today.isoformat(), valid_to=valid_to(today).isoformat())
         except Exception as e:  # noqa: BLE001 - the delegation itself is done (Control Audit)
             logger.warning("delegation not logged in the Delegations list: %s", e)
             sp_error("Delegations row", e)
