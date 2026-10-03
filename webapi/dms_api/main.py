@@ -91,6 +91,8 @@ class DelegateRequest(BaseModel):
 class ShareRequest(BaseModel):
     email: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     message: str = Field("", max_length=2000)
+    customer: str | None = Field(None, max_length=200)  # only when the file is not under a customer folder
+    documentIds: list[int] = Field(default_factory=list, max_length=50)  # more approved documents, same customer folder
 
 
 class FirstLoadRequest(BaseModel):
@@ -1264,37 +1266,84 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return {**submit_doc(item_id, None, user), "draft": target, "officeUri": files.office_uri(target)}
         return {**with_key(sp().document(item_id)), "draft": target, "officeUri": files.office_uri(target)}
 
+    def shareable(item_id: int, user: User) -> tuple[dict, str, str]:
+        """An approved document the user may share: (record, approved file, revision), else HTTP error."""
+        from .file_service import to_root
+        d = sp().document(item_id)
+        if d.get("lifecycleStatus") != s.choices["Approved_ReadOnly"]:
+            raise HTTPException(409, f"{d.get('documentId') or item_id}: only an approved document can be shared with a customer")
+        if (d.get("ownerEmail") or "").lower() != user.email and not is_admin(user):
+            raise HTTPException(403, f"{d.get('documentId')}: only the document owner (or a DMS super user) can share it")
+        current = to_root(s.repository_root, d.get("currentUncPath"))
+        if not current or not os.path.isfile(current):
+            raise HTTPException(409, f"{d.get('documentId')}: the approved file was not found on the file server")
+        if not user.can(current):
+            raise HTTPException(403, f"{d.get('documentId')}: you do not have access to this document")
+        rev = str(d.get("currentRevision") or files.parse_revision(os.path.basename(current))[1] or 1).zfill(2)
+        return d, current, rev
+
+    def customer_names(user: User) -> list[str]:
+        try:
+            return [f["name"] for f in files.list_folder(s.repository_root, customers_root(), user.can)["folders"]]
+        except (FileNotFoundError, PermissionError):
+            return []
+
+    def customer_of_path(path: str) -> str | None:
+        from .file_service import _under_root, to_root
+        full = to_root(s.repository_root, path)
+        c = context_of(rel_parts(full))["customer"] if full and _under_root(s.repository_root, full) else None
+        return c["name"] if c else None
+
+    @app.get("/api/documents/{item_id}/share-info")
+    def share_info(item_id: int, user: User = Depends(current_user)):
+        """For the Share dialog: the customer from the file's folder (02_Customers\\<name>), else the list of
+        customer folders to choose from, and the other approved documents the user may add."""
+        d, current, rev = shareable(item_id, user)
+        mine = [x for x in sp().documents() if x.get("lifecycleStatus") == s.choices["Approved_ReadOnly"] and x["id"] != item_id
+                and ((x.get("ownerEmail") or "").lower() == user.email or is_admin(user))]
+        others = [{"id": x["id"], "documentId": x.get("documentId"), "title": x.get("title"), "revision": x.get("currentRevision"),
+                   "customer": customer_of_path(x.get("currentUncPath") or "")} for x in mine]
+        return {"customer": customer_of_path(current), "customers": customer_names(user), "revision": rev,
+                "folder": s.ex_folder, "shortcut": s.ex_shortcut, "others": others}
+
     @app.post("/api/documents/{item_id}/share")
     def share(item_id: int, req: ShareRequest, user: User = Depends(current_user)):
-        """Share the approved revision with a customer: a copy goes to the Large File Exchange site
-        (<library>/Outbound/<DocumentId>_RevNN/) and SharePoint invites the person (view only, B2B guest).
-        Only approved documents, by the owner or a DMS super user; written to Control Audit."""
-        from .file_service import to_root
+        """Share approved revisions with a customer: the files are copied straight into the customer folder on the
+        Large File Exchange site (<library>/Outbound/<Customer>/, the name of the folder under 02_Customers) and
+        SharePoint invites the person to that folder (view only, B2B guest). More documents can go in the same
+        share; every later share adds to the same folder. A OneDrive shortcut DMS_<Customer> is added for the
+        user. Only approved documents, by the owner or a DMS super user; one Control Audit row per document."""
         c = s.choices
         if s.sharepoint != "memory" and not s.ex_site_url:
             raise HTTPException(409, "Sharing with customers is not configured (DMS_EX_SITE_URL)")
-        d = sp().document(item_id)
-        if d.get("lifecycleStatus") != c["Approved_ReadOnly"]:
-            raise HTTPException(409, "Only an approved document can be shared with a customer")
-        if (d.get("ownerEmail") or "").lower() != user.email and not is_admin(user):
-            raise HTTPException(403, "Only the document owner (or a DMS super user) can share it")
-        current = to_root(s.repository_root, d.get("currentUncPath"))
-        if not current or not os.path.isfile(current):
-            raise HTTPException(409, "The approved file was not found on the file server")
-        if not user.can(current):
-            raise HTTPException(403, "You do not have access to this document")
-        rev = str(d.get("currentRevision") or files.parse_revision(os.path.basename(current))[1] or 1).zfill(2)
-        doc_id = d.get("documentId") or f"ID {item_id}"
+        docs = [shareable(i, user) for i in dict.fromkeys([item_id, *req.documentIds])]
+        customer = customer_of_path(docs[0][1])
+        if not customer:
+            names = {n.lower(): n for n in customer_names(user)}
+            customer = names.get((req.customer or "").strip().lower())
+            if not customer:
+                raise HTTPException(400, "Choose the customer (a folder under " + s.customers_folder + ")")
+        names = [os.path.basename(p) for _, p, _ in docs]
+        if len({n.lower() for n in names}) != len(names):
+            raise HTTPException(409, "Two of the files have the same name; share them separately")
         email = req.email.strip().lower()
-        message = req.message.strip() or (f"RH shares with you {d.get('title')} (revision {rev}). "
-                                          f"The link is personal and opens the file for viewing.")
-        r = sp().share_with_guest(local_path=current, folder=f"{s.ex_folder}/{doc_id}_Rev{rev}", email=email,
-                                  subject=f"RH - {d.get('title')} (Rev {rev})", message=message)
-        sp().audit(document_id=doc_id, event=c["PermissionChanged"], from_status=c["Approved_ReadOnly"],
-                   to_status=c["Approved_ReadOnly"], actor=user.email,
-                   details=f"Shared revision {rev} with {email} (view only, Large File Exchange): {r['url']}")
-        log(user, "share", f"{doc_id} Rev{rev} -> {email}")
-        return {"url": r["url"], "email": email, "revision": rev, "documentId": doc_id}
+        titles = ", ".join(f"{d.get('title')} (Rev {rev})" for d, _, rev in docs)
+        message = req.message.strip() or (f"RH shares with you: {titles}. The link is personal and opens the "
+                                          f"{customer} folder for viewing.")
+        r = sp().share_with_guest(local_paths=[p for _, p, _ in docs], folder=f"{s.ex_folder}/{customer}", email=email,
+                                  subject=f"RH - {customer}: {titles}"[:250], message=message,
+                                  shortcut_for=user.email, shortcut_name=f"DMS_{customer}" if s.ex_shortcut else None)
+        for (d, _, rev), url in zip(docs, r["urls"]):
+            doc_id = d.get("documentId") or f"ID {d['id']}"
+            sp().audit(document_id=doc_id, event=c["PermissionChanged"], from_status=c["Approved_ReadOnly"],
+                       to_status=c["Approved_ReadOnly"], actor=user.email,
+                       details=f"Shared revision {rev} with {email} (customer {customer}, view only, Large File Exchange): {url}")
+            log(user, "share", f"{doc_id} Rev{rev} -> {email} ({customer})")
+        if r.get("shortcutError"):
+            logger.warning("OneDrive shortcut DMS_%s: %s", customer, r["shortcutError"])
+        return {"url": r["folderUrl"], "urls": r["urls"], "email": email, "customer": customer, "revision": docs[0][2],
+                "documents": [{"documentId": d.get("documentId"), "revision": rev} for d, _, rev in docs],
+                "shortcut": r.get("shortcut"), "shortcutError": r.get("shortcutError")}
 
     # ------------------------------------------------------------------ DMS First loading (super users)
     @app.post("/api/first-load", status_code=202)

@@ -766,9 +766,12 @@ def test_share_with_customer(tmp_path):
     r = c.post(f"/api/documents/{d['id']}/share", json={"email": "Edssrom@gmail.com"})
     assert r.status_code == 200, r.text
     assert r.json()["revision"] == "01" and sp.shares[0]["email"] == "edssrom@gmail.com"
-    assert "Outbound/DMS-00001_Rev01/CRU 4 FCT Quote_Rev1.xlsx" in sp.shares[0]["url"]
+    assert "Outbound/Customer_A/CRU 4 FCT Quote_Rev1.xlsx" in sp.shares[0]["url"]      # straight in the customer folder
+    assert r.json()["customer"] == "Customer_A" and sp.shortcuts[0]["name"] == "DMS_Customer_A"
     ev = sp.audit_events()[0]
-    assert ev["event"] == "שינוי הרשאות" and "edssrom@gmail.com" in ev["details"]
+    assert ev["event"] == "שינוי הרשאות" and "edssrom@gmail.com" in ev["details"] and "customer Customer_A" in ev["details"]
+    info = c.get(f"/api/documents/{d['id']}/share-info").json()
+    assert info["customer"] == "Customer_A" and "Customer_A" in info["customers"]
     assert c.post(f"/api/documents/{d['id']}/share", json={"email": "not-an-email"}).status_code == 422
     c.post(f"/api/documents/{d['id']}/revise")                                     # in work again: not shareable
     assert c.post(f"/api/documents/{d['id']}/share", json={"email": "edssrom@gmail.com"}).status_code == 409
@@ -798,12 +801,33 @@ def test_share_payloads():
     sess = Sess()
     sp = SharePoint(s, sess)
     sp._access_token = lambda: "t"
-    r = sp.share_with_guest(local_path=f, folder="Outbound/DMS-1_Rev01", email="edssrom@gmail.com", subject="S", message="M")
+    r = sp.share_with_guest(local_paths=[f], folder="Outbound/Customer A", email="edssrom@gmail.com", subject="S", message="M")
     assert r["url"] == "https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST/TemporaryUploads/Outbound/DMS-1_Rev01/Q.xlsx"
+    assert r["folderUrl"] == "https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST/TemporaryUploads/Outbound/Customer%20A"
     share = sess.calls[-1][2]
+    assert share["url"] == r["folderUrl"]                                         # the customer folder is shared
     assert share["roleValue"] == "role:1073741826" and share["sendEmail"] is True and share["includeAnonymousLinkInEmail"] is False
     assert j.loads(share["peoplePickerInput"])[0]["Key"] == "edssrom@gmail.com"
     assert sess.calls[2][3] == b"x"                                                # the file bytes were uploaded
+
+
+def test_share_several_files_outside_customers(tmp_path):
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    other = tmp_path / "Root" / "01_Company" / "QA"
+    other.mkdir(parents=True)
+    (other / "QP-2.1.docx").write_text("qp")
+    e = c.post("/api/documents", json={"path": str(other / "QP-2.1.docx"), "documentType": "נוהל", "documentArea": "איכות",
+                                       "submit": True}).json()
+    for _ in range(2):
+        c.post(f"/api/approvals/{e['id']}", json={"approve": True})
+    fs.run_once(sp, s)
+    assert c.get(f"/api/documents/{e['id']}/share-info").json()["customer"] is None
+    assert c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com"}).status_code == 400   # customer needed
+    assert c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "Nobody"}).status_code == 400
+    r = c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "customer_a", "documentIds": [d["id"]]})
+    assert r.status_code == 200, r.text
+    assert r.json()["customer"] == "Customer_A" and len(r.json()["documents"]) == 2
+    assert {u["url"].rsplit("/", 2)[-2] for u in sp.shares} == {"Customer_A"}
 
 
 class FakeLinker:
@@ -1287,3 +1311,59 @@ def test_expired_delegation_returns_to_the_approver(tmp_path):
     assert c.post(f"/api/approvals/{d['id']}/delegate", json={"to": "avi@rh.co.il"}).json()["pending"] == ["avi@rh.co.il"]
     sp.audits[-1]["utc"] = "2026-01-01T09:00:00Z"                                       # delegated long ago
     assert [x["id"] for x in c.get("/api/approvals").json()] == [d["id"]]               # back with Dana
+
+
+def test_onedrive_shortcut_payload():
+    from tests.test_sharepoint import Resp
+    from dms_api.sharepoint import SharePoint
+
+    class Sess:
+        def __init__(self):
+            self.calls = []
+
+        def request(self, method, url, json=None, data=None, headers=None, timeout=None):
+            self.calls.append((method, url, json))
+            if url.endswith("/drives?$select=id,name,webUrl"):
+                return Resp({"value": [{"id": "d0", "name": "Documents", "webUrl": "https://x/sites/LFE/Shared Documents"},
+                                       {"id": "d1", "name": "TemporaryUploads", "webUrl": "https://x/sites/LFE/TemporaryUploads"}]})
+            if "root:/Outbound/Customer%20A" in url:
+                return Resp({"id": "f1"})
+            return Resp({})
+    s = Settings(site_url="https://rhisrael.sharepoint.com/sites/DocumentControl-TEST", sp_auth="certificate",
+                 ex_site_url="https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST")
+    sess = Sess()
+    sp = SharePoint(s, sess)
+    sp._graph_token = lambda: "g"
+    assert sp.onedrive_shortcut("Outbound/Customer A", "DMS_Customer A", "roneno@rh.co.il") == "DMS Shortcuts/DMS_Customer A"
+    method, url, body = sess.calls[-2]                                             # the shortcuts folder
+    assert url.endswith("/users/roneno%40rh.co.il/drive/root/children") and body["name"] == "DMS Shortcuts" and "folder" in body
+    method, url, body = sess.calls[-1]
+    assert method == "POST" and url.endswith("/users/roneno%40rh.co.il/drive/root:/DMS%20Shortcuts:/children")
+    assert body["name"] == "DMS_Customer A" and body["remoteItem"] == {"id": "f1", "parentReference": {"driveId": "d1"}}
+
+
+def test_onedrive_not_set_up_is_requested():
+    import pytest
+    from tests.test_sharepoint import Resp
+    from dms_api.sharepoint import SharePoint, SharePointError
+
+    class Sess:
+        def __init__(self):
+            self.calls = []
+
+        def request(self, method, url, json=None, data=None, headers=None, timeout=None):
+            self.calls.append((method, url))
+            if url.endswith("/drives?$select=id,name,webUrl"):
+                return Resp({"value": [{"id": "d1", "name": "TemporaryUploads", "webUrl": "https://x/TemporaryUploads"}]})
+            if url.endswith("/me/drive?$select=id"):
+                return Resp({"error": {"code": "itemNotFound", "message": "mysite not found"}}, status=404)
+            return Resp({"id": "f1"})
+    s = Settings(site_url="https://rhisrael.sharepoint.com/sites/DocumentControl-TEST", sp_auth="interactive",
+                 ex_site_url="https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST")
+    sess = Sess()
+    sp = SharePoint(s, sess)
+    sp._graph_token = lambda: "g"
+    sp._access_token = lambda: "t"
+    with pytest.raises(SharePointError, match="not set up yet"):
+        sp.onedrive_shortcut("Outbound/C", "DMS_C", "roneno@rh.co.il")
+    assert sess.calls[-1] == ("POST", "https://rhisrael.sharepoint.com/_api/SP.UserProfiles.ProfileLoader.GetProfileLoader/GetUserProfile/CreatePersonalSiteEnque(false)")

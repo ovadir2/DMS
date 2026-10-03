@@ -281,9 +281,13 @@ class SharePoint:
             "Title": subject[:255], "NotifyTo": "; ".join(to), "MessageBody": body, "LinkUrl": link[:255], "RefId": ref})
 
     # ------------------------------------------------------------------ share with a customer (Large File Exchange site)
-    def share_with_guest(self, *, local_path: str, folder: str, email: str, subject: str, message: str) -> dict:
-        """Copy the file to the Exchange site library (<library>/<folder>/) and share it with one external
-        person: view only, a specific-people invitation sent by SharePoint (B2B guest, no anonymous link)."""
+    def share_with_guest(self, *, local_paths: list[str], folder: str, email: str, subject: str, message: str,
+                         shortcut_for: str | None = None, shortcut_name: str | None = None) -> dict:
+        """Copy the files straight into the customer folder on the Exchange site (<library>/<folder>/, e.g.
+        Outbound/Customer_A) and share that folder with one external person: view only, a specific-people
+        invitation sent by SharePoint (B2B guest, no anonymous link). The customer sees every file ever shared
+        into the folder. Then, if asked, a OneDrive shortcut (shortcut_name) to the folder is added to the
+        sharing user's OneDrive (Microsoft Graph; a failure there does not undo the share)."""
         ex = self.s.ex_site_url.rstrip("/")
         ex_path = urlparse(ex).path.rstrip("/")
         q = lambda p: quote(p.replace("'", "''"), safe="/")  # noqa: E731
@@ -295,23 +299,117 @@ class SharePoint:
             except SharePointError as e:
                 if "exist" not in str(e).lower():
                     raise
-        name = os.path.basename(local_path)
-        with open(local_path, "rb") as f:
-            up = self._call("POST", f"{ex}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(current)}')"
-                                    f"/Files/AddUsingPath(DecodedUrl='{q(name)}',Overwrite=true)", data=f.read())
-        url = self.host + (up.get("ServerRelativeUrl") or f"{current}/{name}")
+        urls = []
+        for local_path in local_paths:
+            name = os.path.basename(local_path)
+            with open(local_path, "rb") as f:
+                up = self._call("POST", f"{ex}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(current)}')"
+                                        f"/Files/AddUsingPath(DecodedUrl='{q(name)}',Overwrite=true)", data=f.read())
+            urls.append(self.host + (up.get("ServerRelativeUrl") or f"{current}/{name}"))
+        folder_url = self.host + quote(current, safe="/")
         person = {"Key": email, "DisplayText": email, "IsResolved": True, "Description": email, "EntityType": "",
                   "EntityData": {"SPUserID": email, "Email": email, "IsBlocked": "False", "PrincipalType": "UNVALIDATED_EMAIL_ADDRESS",
                                  "AccountName": email, "SIPAddress": email},
                   "MultipleMatches": [], "ProviderName": "", "ProviderDisplayName": ""}
         r = self._call("POST", f"{ex}/_api/SP.Web.ShareObject", json={
-            "url": url, "peoplePickerInput": json_dumps([person]), "roleValue": "role:1073741826", "groupId": 0,
+            "url": folder_url, "peoplePickerInput": json_dumps([person]), "roleValue": "role:1073741826", "groupId": 0,
             "propagateAcl": False, "sendEmail": True, "includeAnonymousLinkInEmail": False,
             "emailSubject": subject, "emailBody": message, "useSimplifiedRoles": True})
         if r.get("StatusCode") not in (None, 0) or r.get("ErrorMessage"):
             raise SharePointError(f"Sharing refused: {r.get('ErrorMessage') or r.get('StatusCode')} "
                                   "(check external sharing on the Exchange site and its allowed guest domains)")
-        return {"url": url}
+        out = {"urls": urls, "url": urls[0] if urls else folder_url, "folderUrl": folder_url, "shortcut": None, "shortcutError": None}
+        if shortcut_name:
+            try:
+                out["shortcut"] = self.onedrive_shortcut(folder, shortcut_name, shortcut_for)
+            except Exception as e:  # noqa: BLE001 - the share itself succeeded
+                out["shortcutError"] = str(e)[:300]
+        return out
+
+    # ------------------------------------------------------------------ OneDrive shortcut (Microsoft Graph)
+    GRAPH = "https://graph.microsoft.com/v1.0"
+
+    def _graph_token(self) -> str:
+        if getattr(self, "_gtoken", None) and self._gtoken[1] > time.time() + 60:
+            return self._gtoken[0]
+        if self.s.sp_auth == "interactive":
+            self._access_token()  # the sign-in (and the token cache) of the SharePoint calls
+            scopes = ["https://graph.microsoft.com/Files.ReadWrite.All"]
+            accounts = self._public.get_accounts()
+            r = self._public.acquire_token_silent(scopes, account=accounts[0]) if accounts else None
+            if not r or "access_token" not in r:
+                r = self._public.acquire_token_interactive(scopes, prompt="select_account")
+            if self._msal_cache.has_state_changed:
+                with open(self._cache_file, "w", encoding="utf-8") as f:
+                    f.write(self._msal_cache.serialize())
+        else:
+            import msal
+            with open(self.s.cert_path, encoding="utf-8") as f:
+                key = f.read()
+            r = msal.ConfidentialClientApplication(
+                self.s.client_id, authority=f"https://login.microsoftonline.com/{self.s.tenant_id}",
+                client_credential={"private_key": key, "thumbprint": self.s.cert_thumbprint}
+            ).acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+        if "access_token" not in r:
+            raise SharePointError(f"Microsoft Graph token: {r.get('error_description') or r.get('error')} "
+                                  "(the Entra app needs Graph Files.ReadWrite.All)")
+        self._gtoken = (r["access_token"], time.time() + int(r.get("expires_in", 3600)))
+        return self._gtoken[0]
+
+    def _graph(self, method: str, path: str, json: dict | None = None) -> dict:
+        r = self.http.request(method, f"{self.GRAPH}/{path.lstrip('/')}", json=json, timeout=30,
+                              headers={"Authorization": f"Bearer {self._graph_token()}", "Accept": "application/json"})
+        if r.status_code >= 400:
+            raise SharePointError(f"Graph {method} {path.split('?')[0]} -> {r.status_code}: {r.text[:300]}")
+        return r.json() if r.content else {}
+
+    def onedrive_shortcut(self, folder: str, name: str, user_email: str | None) -> str:
+        """'Add shortcut to My files': a shortcut named `name`, inside the OneDrive folder DMS_EX_SHORTCUT_FOLDER
+        (created if missing), to the folder <library>/<folder> on the Exchange site. A user whose OneDrive was
+        never set up gets it set up (it takes a few minutes; the shortcut is added on the next share).
+        Already there -> kept. Returns where the shortcut is."""
+        u = urlparse(self.s.ex_site_url)
+        drives = self._graph("GET", f"sites/{u.netloc}:{u.path.rstrip('/')}:/drives?$select=id,name,webUrl").get("value", [])
+        lib = self.s.ex_library.lower()
+        drive = next((d for d in drives if (d.get("webUrl") or "").rstrip("/").rsplit("/", 1)[-1].lower() == lib
+                      or (d.get("name") or "").lower() == lib), None)
+        if not drive:
+            raise SharePointError(f"The library {self.s.ex_library} was not found on the Exchange site")
+        item = self._graph("GET", f"drives/{drive['id']}/root:/{quote(folder.strip('/'))}?$select=id")
+        me = "me/drive" if self.s.sp_auth == "interactive" or not user_email else f"users/{quote(user_email)}/drive"
+        try:
+            self._graph("GET", f"{me}?$select=id")
+        except SharePointError as e:
+            if " 404" not in str(e) and "mysite" not in str(e).lower() and "ResourceNotFound" not in str(e):
+                raise
+            self.setup_onedrive()
+            raise SharePointError("Your OneDrive is not set up yet. Its setup was requested now (it takes a few minutes); "
+                                  "the shortcut is added on the next share") from None
+        parent = "root"
+        if self.s.ex_shortcut_folder:
+            try:
+                self._graph("POST", f"{me}/root/children", json={
+                    "name": self.s.ex_shortcut_folder, "folder": {}, "@microsoft.graph.conflictBehavior": "fail"})
+            except SharePointError as e:
+                if "409" not in str(e) and "nameAlreadyExists" not in str(e):
+                    raise
+            parent = f"root:/{quote(self.s.ex_shortcut_folder)}:"
+        try:
+            self._graph("POST", f"{me}/{parent}/children", json={
+                "name": name, "remoteItem": {"id": item["id"], "parentReference": {"driveId": drive["id"]}},
+                "@microsoft.graph.conflictBehavior": "fail"})
+        except SharePointError as e:
+            if "409" not in str(e) and "nameAlreadyExists" not in str(e):
+                raise
+        return f"{self.s.ex_shortcut_folder}/{name}" if self.s.ex_shortcut_folder else name
+
+    def setup_onedrive(self) -> None:
+        """Ask SharePoint to create the signed-in user's OneDrive (it is ready a few minutes later). App-only
+        sign-in cannot do this for someone else: then an admin runs Request-SPOPersonalSite -UserEmails <email>."""
+        if self.s.sp_auth != "interactive":
+            raise SharePointError("The user has no OneDrive yet. A SharePoint admin sets it up: "
+                                  "Request-SPOPersonalSite -UserEmails <email> (or the user opens OneDrive once)")
+        self._call("POST", f"{self.host}/_api/SP.UserProfiles.ProfileLoader.GetProfileLoader/GetUserProfile/CreatePersonalSiteEnque(false)")
 
     # ------------------------------------------------------------------ audit
     def audit_events(self, refresh: bool = False) -> list[dict]:
