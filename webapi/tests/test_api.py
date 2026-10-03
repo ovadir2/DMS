@@ -1095,3 +1095,25 @@ def test_open_link_uses_the_short_path_only_when_long():
     short = r"\\srv\Shares\02_Customers\A\Quote.xlsx"
     assert files.office_uri(short) == "ms-excel:ofv|u|file://srv/Shares/02_Customers/A/Quote.xlsx"
     assert files.short_path("\\\\srv\\" + "x" * 300 + ".docx").endswith(".docx")        # unchanged off Windows
+
+
+def test_sharepoint_check_for_super_users(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    root.mkdir()
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
+    c = TestClient(create_app(s, MemorySharePoint(s)))
+    r = c.get("/api/diagnostics/sharepoint").json()
+    assert [l["list"] for l in r["lists"]] == ["Lists/DocumentRegister", "Lists/ControlAudit", "Lists/ApproverMatrix", "Lists/DmsNotifications"]
+    assert all(l["canAdd"] for l in r["lists"]) and r["errors"] == []
+    s.admins = []
+    assert c.get("/api/diagnostics/sharepoint").status_code == 403
+
+
+def test_list_info_reads_the_add_permission():
+    from dms_api.sharepoint import SharePoint
+    sp = SharePoint.__new__(SharePoint)
+    sp._list = lambda rel: rel
+    sp._call = lambda m, url: {"Title": "Control Audit", "ItemCount": 0, "EffectiveBasePermissions": {"High": "0", "Low": "1"}}
+    assert sp.list_info("Lists/ControlAudit") == {"list": "Lists/ControlAudit", "exists": True, "title": "Control Audit", "items": 0,
+                                                 "canRead": True, "canAdd": False, "canEdit": False}

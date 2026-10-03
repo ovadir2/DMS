@@ -157,8 +157,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     async def _path(_: Request, e: files.PathNotAllowed):
         return JSONResponse({"detail": f"Path is outside the controlled repository: {e}"}, status_code=403)
 
+    from collections import deque
+    app.state.sp_errors = deque(maxlen=30)               # the last SharePoint errors, for the SharePoint check
+
+    def sp_error(what: str, e: Exception) -> None:
+        app.state.sp_errors.appendleft({"utc": datetime.now(timezone.utc).isoformat(timespec="seconds"), "what": what, "error": str(e)[:400]})
+
     @app.exception_handler(SharePointError)
-    async def _sp(_: Request, e: SharePointError):
+    async def _sp(request: Request, e: SharePointError):
+        sp_error(f"{request.method} {request.url.path}", e)
         return JSONResponse({"detail": f"SharePoint: {e}"}, status_code=502)
 
     # ------------------------------------------------------------------ public
@@ -214,6 +221,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     def is_admin(user: User) -> bool:
         return user.email in s.admins
+
+    @app.get("/api/diagnostics/sharepoint")
+    def sp_check(user: User = Depends(current_user)):
+        """Super users: the DMS lists in SharePoint (exists, items, may this account add), and the last errors."""
+        if not is_admin(user):
+            raise HTTPException(403, "Only a DMS super user can run the SharePoint check")
+        from .sharepoint import AUDIT, MATRIX, NOTIFY, REGISTER
+        lists = [sp().list_info(rel) for rel in (REGISTER, AUDIT, MATRIX, NOTIFY)]
+        return {"site": s.site_url if s.sharepoint != "memory" else "memory (playground)", "account": user.email,
+                "auth": s.sp_auth, "lists": lists, "errors": list(app.state.sp_errors)}
 
     @app.get("/api/me")
     def me(user: User = Depends(current_user)):
@@ -503,6 +520,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                            to_status="", actor=user.email, details=f"{action}: {short}")
             except Exception as e:  # noqa: BLE001 - the change itself is done; do not fail the request
                 logger.warning("audit row not written for %s: %s", action, e)
+                sp_error(f"Control Audit row ({action})", e)
 
     @app.post("/api/folders", status_code=201)
     def new_folder(req: NewFolderRequest, user: User = Depends(current_user)):
@@ -638,6 +656,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             sp().notify(to=to, subject=subject, body=body, link=link, ref=doc_id)
         except Exception as e:  # noqa: BLE001 - a notification must never block the workflow
             logger.warning("notification not written (%s): %s", kind, e)
+            sp_error(f"DMS Notifications row ({kind})", e)
 
     def notify_stage(d: dict) -> None:
         """Tell the approvers of the current stage of a submitted document."""
