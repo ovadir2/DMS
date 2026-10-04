@@ -187,7 +187,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return app.state.sp
 
     def with_key(d: dict) -> dict:
-        return {**d, "statusKey": status_key.get(d.get("lifecycleStatus") or "", "Other")}
+        return {**d, "statusKey": status_key.get(d.get("lifecycleStatus") or "", "Other"),
+                "noWorkflow": bool(d.get("controlMode")) and d.get("controlMode") == blueprint.choice("Collaboration", sp().choices("ControlMode"))}
 
     def register_index() -> dict[str, dict]:
         idx: dict[str, dict] = {}
@@ -489,7 +490,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         for f in result["files"]:
             d = find_registered(f["path"], idx)
             f["document"] = with_key(d) if d else None
-            if not d and noworkflow.is_marked(s.repository_root, f["path"], nw):
+            if noworkflow.is_marked(s.repository_root, f["path"], nw):
                 f["noWorkflow"] = True
             if holds_share_log(f["path"]) or in_shared_folder(f["path"]):
                 f.update(readOnly=True, system=True, noWorkflow=True)   # open (view), download, copy path only
@@ -607,9 +608,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "You do not have permission to save files in this folder")
         if in_shared_folder(os.path.join(target_dir, "x")):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only)")
+        from . import noworkflow
         if noWorkflow:                                             # straight to Current_ReadOnly: never over a controlled document
             there = os.path.join(target_dir, "Current_ReadOnly", os.path.basename((file.filename or "").replace("\\", "/")))
-            if os.path.exists(there) and find_registered(there, register_index()):
+            if os.path.exists(there) and find_registered(there, register_index()) and not noworkflow.is_marked(s.repository_root, there):
                 raise HTTPException(409, "A controlled document with this name is in Current_ReadOnly: use New revision")
         try:
             path = files.save_upload(s.repository_root, target_dir, file.filename or "", file.file,
@@ -618,12 +620,18 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, "A file with this name already exists in the folder") from None
         except (ValueError, PermissionError) as e:
             raise HTTPException(400, str(e)) from None
-        from . import noworkflow
+        traced = None
         if noWorkflow:
             noworkflow.mark(s.repository_root, path)               # released as is, read only: no Start workflow for it
+            try:                                                   # traced in SharePoint: Document Register + Control Audit
+                noworkflow.release(sp(), s, path, user.email, "Save file (no workflow) on the DMS page", classify)
+            except Exception as e:  # noqa: BLE001 - the file is saved; the trace error is reported
+                traced = str(e)
+                logger.warning("no-workflow trace failed for %s: %r", path, e)
         log(user, "upload", path + (" (no workflow)" if noWorkflow else ""))
         d = find_registered(path, register_index())
-        return {"name": os.path.basename(path), "path": path, "document": with_key(d) if d else None}
+        return {"name": os.path.basename(path), "path": path, "document": with_key(d) if d else None,
+                **({"traceError": traced} if traced else {})}
 
     def registered_inside(path: str) -> dict | None:
         """A registered document at this path or below it (a folder holding controlled files)."""
@@ -1321,6 +1329,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         d = sp().document(item_id)
         if d.get("lifecycleStatus") != c["Approved_ReadOnly"]:
             raise HTTPException(409, "Only an approved document can get a new revision")
+        if with_key(d)["noWorkflow"]:
+            raise HTTPException(409, f"{d.get('documentId')}: saved without workflow - save the new file again (Save file (no workflow))")
         current = to_root(s.repository_root, d.get("currentUncPath"))
         if not current or not os.path.isfile(current):
             raise HTTPException(409, "The approved file was not found on the file server")

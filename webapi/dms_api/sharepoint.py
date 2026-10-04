@@ -146,9 +146,12 @@ class SharePoint:
 
     def create_document(self, *, title: str, path: str, document_type: str, document_area: str,
                         owner_email: str, control_mode: str | None, document_id: str | None) -> dict:
-        values = {"Title": title, "DocumentId": document_id or "NEW", "DocumentType": document_type,
-                  "DocumentArea": document_area, "LifecycleStatus": self.s.choices["Working"],
+        values = {"Title": title, "DocumentId": document_id or "NEW", "LifecycleStatus": self.s.choices["Working"],
                   "WorkingUncPath": path, "DocumentOwnerId": self._user_id(owner_email)}
+        if document_type:
+            values["DocumentType"] = document_type
+        if document_area:
+            values["DocumentArea"] = document_area
         if control_mode:
             values["ControlMode"] = control_mode
         item = self._call("POST", f"{self._list(REGISTER)}/items", json=values)

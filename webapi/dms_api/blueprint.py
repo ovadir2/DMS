@@ -243,6 +243,7 @@ LABELS = {
     "Work Instruction": "הוראת עבודה", "Test Procedure": "נוהל בדיקה", "PFMEA / Control Plan": "PFMEA / תוכנית בקרה",
     "ECO / ECN": "ECO / ECN - הודעת שינוי", "IT Procedure": "נוהל מערכות מידע",
     "Workflow Required": "תהליך אישור חובה",
+    "Collaboration": "שיתופי ללא תהליך",
 }
 
 

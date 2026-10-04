@@ -91,7 +91,7 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
       f" | control mode: {control_mode or 'from the blueprint folder'}")
     L(f"  copy missing from source: {copy_missing} | update File Linker: {update_links} (configured: {bool(linker and linker.enabled)})")
     approver = (approver or s.first_load_approver or actor).lower()
-    L(f"  mode: {'save - released by the DMS to Current_ReadOnly (no workflow, not registered)' if mode == 'save' else f'DMS approval simulated - approver {approver}'}")
+    L(f"  mode: {'save - approved by DMS: Current_ReadOnly, registered as Collaboration (no workflow)' if mode == 'save' else f'DMS approval simulated - approver {approver}'}")
     items = plan(source, target)
     L(f"  files found: {len(items)} (source and target trees, without workflow folders and system files)")
     job.update(total=len(items), done=0, rows=[])
@@ -105,7 +105,7 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
         L(f"    in target:   {it['moved']} (exists: {os.path.isfile(it['moved'])})")
         if mode == "save":
             try:
-                _save_only(it, row, L, dry_run, copy_missing, update_links, linker, s, sp, actor)
+                _save_only(it, row, L, dry_run, copy_missing, update_links, linker, s, sp, actor, classify)
             except Exception as e:  # noqa: BLE001 - one file must not stop the others
                 row["result"] = f"error - {e}"
                 L(f"    ERROR: {e!r}")
@@ -265,13 +265,11 @@ def _approve_like_the_dms(sp, s: Settings, it: dict, working: str, ftype, farea,
     return doc, sha, rev, title
 
 
-DMS_APPROVER = "DMS"
-
-
 def _save_only(it: dict, row: dict, L, dry_run: bool, copy_missing: bool, update_links: bool, linker,
-               s: Settings, sp, actor: str) -> None:
+               s: Settings, sp, actor: str, classify=None) -> None:
     """Mode save: released as a formal approval, approved by the DMS itself - the file goes to Current_ReadOnly
-    in its folder, read only, with a Control Audit row (SHA-256); not registered, no workflow."""
+    in its folder, read only, registered in the Document Register (Approved by DMS, control mode Collaboration)
+    with a Control Audit row (SHA-256); no workflow. The owner (who ran it) can share it with a customer."""
     from .file_service import _move, _set_read_only
     from . import noworkflow
     there, done = os.path.isfile(it["moved"]), os.path.isfile(it["current"])
@@ -297,13 +295,11 @@ def _save_only(it: dict, row: dict, L, dry_run: bool, copy_missing: bool, update
         raise FileNotFoundError("the file is not in the target folder (copy from the source is off)")
     _set_read_only(cur, True)
     noworkflow.mark(s.repository_root, cur)
-    sha = _sha256(cur)
-    c = s.choices
-    sp.audit(document_id="", event=c["ApprovedEvent"], from_status="", to_status=c["Approved_ReadOnly"], actor=DMS_APPROVER,
-             details=f"Approved by DMS (First loading by {actor}, no workflow, not registered): {it['source']} -> "
-                     f"{os.path.relpath(cur, s.repository_root)} [file SHA-256 {sha}]", source=c["WorkflowService"])
-    row.update(result="released - approved by DMS", sha256=sha, target=cur)
-    L(f"    released (approved by DMS, no workflow): {cur}, read-only, SHA-256 {sha}")
+    doc = noworkflow.release(sp, s, cur, actor, f"First loading save only, from {it['source']}", classify)
+    row.update(result="released - approved by DMS", sha256=doc.get("currentSHA256") or _sha256(cur), target=cur,
+               documentId=doc.get("documentId") or "", revision=doc.get("currentRevision") or "",
+               documentType=doc.get("documentType") or "", documentArea=doc.get("documentArea") or "")
+    L(f"    released (approved by DMS, no workflow): {cur}, read-only, registered {doc.get('documentId')} (Collaboration)")
     it = {**it, "moved": cur}
     if update_links and linker is not None and linker.enabled and os.path.normcase(it["source"]) != os.path.normcase(it["moved"]):
         try:

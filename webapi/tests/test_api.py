@@ -1530,9 +1530,11 @@ def test_first_loading_save_only(tmp_path):
     assert {r["result"] for r in j["rows"]} == {"released - approved by DMS"}
     line, notes = target / "Photos" / "Current_ReadOnly" / "line.jpg", target / "Current_ReadOnly" / "notes.txt"
     assert line.exists() and notes.exists() and files.is_read_only(str(notes))
-    assert not (target / "notes.txt").exists() and not sp.items                          # no workflow, not registered
+    assert not (target / "notes.txt").exists()
+    docs = sp.documents()                                                                # traced in the Document Register
+    assert len(docs) == 2 and all(d["lifecycleStatus"] == s.choices["Approved_ReadOnly"] and d["controlMode"] == sp.choices("ControlMode")[0] for d in docs)
     rows = [a for a in sp.audits if a["actor"] == "DMS"]
-    assert len(rows) == 2 and all("[file SHA-256 " in a["details"] for a in rows)
+    assert len(rows) == 2 and all("[file SHA-256 " in a["details"] and a["documentId"] for a in rows)
     assert linker.replaced == [(str(old / "notes.txt"), str(notes))]
     again = _wait(c, c.post("/api/first-load", json=body).json()["id"])
     assert {r["result"] for r in again["rows"]} == {"skipped - already released"}
@@ -1557,3 +1559,9 @@ def test_saved_without_workflow_has_no_start_workflow(tmp_path):
     assert r.status_code == 201, r.text
     assert (cur / "notes.docx").read_bytes() == b"z" and files.is_read_only(str(cur / "notes.docx"))
     assert c.post("/api/files/upload", data={"folder": str(q), "noWorkflow": "true"}, files={"file": ("notes.docx", b"w")}).status_code == 409
+    sp = c.app.state.sp
+    d = next(d for d in sp.documents() if d["currentUncPath"] == str(cur / "notes.docx"))     # traced in SharePoint
+    assert c.app.state.sp.choices("ControlMode")[0] == d["controlMode"] and d["lifecycleStatus"] == c.app.state.sp.s.choices["Approved_ReadOnly"] and d["ownerEmail"] == USER
+    assert len([a for a in sp.audits if a["documentId"] == d["documentId"] and a["actor"] == "DMS"]) == 2   # saved, then saved again
+    assert c.get(f"/api/documents/{d['id']}/share-info").json()["customer"] == "Customer_A"           # can be shared
+    assert c.post(f"/api/documents/{d['id']}/revise").status_code == 409                               # no workflow, no revision
