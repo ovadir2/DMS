@@ -932,6 +932,10 @@ def test_first_loading(tmp_path):
     assert linker.replaced == [(str(old / "Spec_Rev3.pdf"), str(cur))] and by["Spec_Rev3.pdf"]["fileLinker"] == "updated"
     assert any("DMS First loading" in e["details"] for e in sp.audit_events())
     assert j["report"] and os.path.isfile(j["report"])
+    did = docs["Spec_Rev3"]["documentId"]
+    trail = [(e["event"], e["actor"]) for e in reversed(sp.audit_events()) if e["documentId"] == did][:3]
+    assert trail == [("נוצר", USER), ("הוגש", USER), ("אושר", "dms_approval@rh.co.il")]   # the DMS approval, simulated
+    assert any(x["approver"] == "dms_approval@rh.co.il" and x["role"] == "Final" for x in sp.decisions)
     again = _wait(c, c.post("/api/first-load", json={**body, "dryRun": False}).json()["id"])
     assert all(r["result"] == "skipped - already loaded" for r in again["rows"])
     assert file_service.run_once(sp, s)["moved"] == 0                                   # the file service leaves them alone
@@ -1500,3 +1504,26 @@ def test_blueprint_folder_list_matches_the_tree_script_file():
     f = pathlib.Path(__file__).resolve().parents[2] / "scripts" / "blueprint-folders.txt"
     lines = [x.strip() for x in f.read_text(encoding="utf-8-sig").splitlines() if x.strip()]
     assert lines == blueprint.folder_list()          # regenerate: py -m dms_api.blueprint > ..\scripts\blueprint-folders.txt
+
+
+def test_first_loading_save_only(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    old = tmp_path / "OldRepo" / "Misc"
+    (old / "Photos").mkdir(parents=True)
+    (old / "Photos" / "line.jpg").write_text("img")
+    (old / "notes.txt").write_text("n")
+    target = tmp_path / "Root" / "02_Customers" / "Customer_A" / "Manufacturing"
+    target.mkdir(parents=True)
+    s = Settings(repository_root=str(tmp_path / "Root"), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    linker = FakeLinker({str(old / "notes.txt")})
+    c.app.state.linker = linker
+    body = {"source": str(old), "target": str(target), "mode": "save", "dryRun": False}
+    j = _wait(c, c.post("/api/first-load", json=body).json()["id"])
+    assert {r["result"] for r in j["rows"]} == {"saved"}
+    assert (target / "Photos" / "line.jpg").exists() and (target / "notes.txt").exists()
+    assert not (target / "Current_ReadOnly").exists() and not sp.items                    # no workflow, not registered
+    assert linker.replaced == [(str(old / "notes.txt"), str(target / "notes.txt"))]
+    again = _wait(c, c.post("/api/first-load", json=body).json()["id"])
+    assert {r["result"] for r in again["rows"]} == {"skipped - already in the target"}

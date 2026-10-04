@@ -104,6 +104,9 @@ class FirstLoadRequest(BaseModel):
     dryRun: bool = True
     copyMissing: bool = True
     updateLinks: bool = True
+    mode: str = Field("approve", pattern="^(approve|save)$",
+                      description="approve: DMS approval simulated, into Current_ReadOnly; save: the files only, no workflow")
+    approver: str | None = Field(None, description="approve: recorded as the approver (default DMS_FIRST_LOAD_APPROVER)")
 
 
 class FindRequest(BaseModel):
@@ -224,7 +227,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/client-config")
     def client_config():
-        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "shareDays": s.ex_days, "customersFolder": s.customers_folder,
+        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "firstLoadApprover": s.first_load_approver, "shareDays": s.ex_days, "customersFolder": s.customers_folder,
                 "approvals": s.approvals, "fileLinker": bool(s.fl_check_url and s.fl_update_url),
                 "site": s.site_url if s.sharepoint != "memory" else "", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,
@@ -1452,8 +1455,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         job = first_load.start(sp(), s, app.state.linker, user.email, source=source, target=target,
                                document_type=req.documentType or None, document_area=req.documentArea or None,
                                control_mode=req.controlMode or None, classify=classify,
-                               dry_run=req.dryRun, copy_missing=req.copyMissing, update_links=req.updateLinks)
-        log(user, "first-load", f"{'dry run ' if req.dryRun else ''}{source} -> {target}")
+                               dry_run=req.dryRun, copy_missing=req.copyMissing, update_links=req.updateLinks,
+                               mode=req.mode, approver=(req.approver or s.first_load_approver).strip().lower())
+        log(user, "first-load", f"{'dry run ' if req.dryRun else ''}{req.mode} {source} -> {target}")
         return {k: job[k] for k in ("id", "state", "dryRun")}
 
     @app.get("/api/first-load/{job_id}")

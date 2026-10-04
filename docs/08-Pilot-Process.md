@@ -233,3 +233,5 @@ The files themselves stay on the file server (backed up by the file server backu
 ## 8. Useful links
 
 Import `docs/RH-DMS-Bookmarks.html` into Chrome (Ctrl+Shift+O → ⋮ → Import bookmarks): the DMS page, the DocumentControl-TEST lists (Document Register, Control Audit, Approver Matrix, DMS Notifications), site permissions, Large File Exchange, Power Automate, Entra app registrations, the RH AI and QMS, and this repository.
+
+**First loading modes** (⋮ › DMS First loading, super users): **DMS approval (simulated)** releases each file in `Current_ReadOnly`, registers it as Approved, and writes Created + Submitted (by the runner) + Approved (by the approver, default `dms_approval@rh.co.il`, `DMS_FIRST_LOAD_APPROVER`) to Control Audit and a Final / Approved row to Approval Decisions. **Save only** copies the files as they are into the same folders under the target, with no registration and no workflow. Both modes move the File Linker links to the new path; run a dry run first.

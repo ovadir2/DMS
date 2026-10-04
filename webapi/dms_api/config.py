@@ -60,6 +60,7 @@ class Settings:
     ex_library: str = "TemporaryUploads"
     ex_folder: str = "Outbound"
     shared_log: str = "Shared/DMS-Shared-Log.csv"  # per customer folder: every share appended (empty: off)
+    first_load_approver: str = "dms_approval@rh.co.il"  # First loading "DMS approval": recorded as the approver
     submitted_editable: bool = True        # during approval the owner and the approvers may edit (remarks) the submitted file
     ex_days: int = 30                       # shared files are removed from the Exchange site N days after their last share (0: never)
     ex_shortcut: bool = True                # add a OneDrive shortcut DMS_<Customer> to the customer folder
@@ -135,6 +136,7 @@ class Settings:
             ex_library=e("DMS_EX_LIBRARY", "TemporaryUploads"),
             ex_folder=e("DMS_EX_FOLDER", "Outbound"),
             ex_days=int(e("DMS_EX_DAYS", "30")),
+            first_load_approver=e("DMS_FIRST_LOAD_APPROVER", "dms_approval@rh.co.il").strip().lower(),
             submitted_editable=e("DMS_SUBMITTED_EDITABLE", "true").lower() not in ("0", "false", "no", "off"),
             shared_log=e("DMS_SHARED_LOG", "Shared/DMS-Shared-Log.csv").strip("/\\ "),
             ex_shortcut=e("DMS_EX_SHORTCUT", "true").lower() not in ("0", "false", "no", "off"),

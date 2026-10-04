@@ -1,5 +1,10 @@
-"""DMS First loading: bring documents that were already approved in the old (unmanaged) repository
-into the DMS, as approved and released, folder by folder with all its content.
+"""DMS First loading: bring documents from the old (unmanaged) repository into the DMS, folder by folder
+with all its content, in one of two modes:
+  save    - the files are only saved in the target folder (same subfolders), as is: no registration and
+            no workflow; File Linker links are moved to the new path.
+  approve - the DMS approval is simulated (the steps below): each file is released in Current_ReadOnly,
+            registered as Approved, and Control Audit and Approval Decisions show Created, Submitted
+            (by the runner) and Approved (by DMS_FIRST_LOAD_APPROVER, e.g. dms_approval@rh.co.il).
 
 For each file under the source folder (same relative path under the target folder):
   1. the file is taken from the target folder (when it was already moved there) or copied from the source;
@@ -64,7 +69,7 @@ def plan(source: str, target: str) -> list[dict]:
 
 def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: str, document_type: str | None,
         document_area: str | None, control_mode: str | None, dry_run: bool, copy_missing: bool, update_links: bool,
-        classify=None) -> None:
+        classify=None, mode: str = "approve", approver: str | None = None) -> None:
     """document_type / document_area None: each file inherits them from its blueprint folder (classify)."""
     c = s.choices
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -85,6 +90,8 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
     L(f"  document type: {document_type or 'from the blueprint folder'} | area: {document_area or 'from the blueprint folder'}"
       f" | control mode: {control_mode or 'from the blueprint folder'}")
     L(f"  copy missing from source: {copy_missing} | update File Linker: {update_links} (configured: {bool(linker and linker.enabled)})")
+    approver = (approver or s.first_load_approver or actor).lower()
+    L(f"  mode: {'save (files only, no workflow)' if mode == 'save' else f'DMS approval simulated - approver {approver}'}")
     items = plan(source, target)
     L(f"  files found: {len(items)} (source and target trees, without workflow folders and system files)")
     job.update(total=len(items), done=0, rows=[])
@@ -96,6 +103,16 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
         L(f"[{job['done'] + 1}/{len(items)}] {it['relative']}")
         L(f"    source path: {it['source']} (exists: {os.path.isfile(it['source'])})")
         L(f"    in target:   {it['moved']} (exists: {os.path.isfile(it['moved'])})")
+        if mode == "save":
+            row["target"] = it["moved"]
+            try:
+                _save_only(it, row, L, dry_run, copy_missing, update_links, linker)
+            except Exception as e:  # noqa: BLE001 - one file must not stop the others
+                row["result"] = f"error - {e}"
+                L(f"    ERROR: {e!r}")
+            job["rows"].append(row)
+            job["done"] += 1
+            continue
         try:
             bp = classify(it["folder"]) if classify and not (document_type and document_area and control_mode) else {}
             ftype, farea = document_type or bp.get("documentType"), document_area or bp.get("documentArea")
@@ -144,10 +161,19 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
                 rel_target = os.path.relpath(it["current"], s.repository_root)
                 sp.audit(document_id=doc["documentId"], event=c["Created"], from_status="", to_status=c["Approved_ReadOnly"],
                          actor=actor, details=f"DMS First loading from {it['source']}: {rel_target}. SHA-256 {sha}")
-                sp.audit(document_id=doc["documentId"], event=c["ApprovedEvent"], from_status="", to_status=c["Approved_ReadOnly"],
-                         actor=actor, details=f"DMS First loading: approved in the old repository, released as revision {rev}")
+                sp.audit(document_id=doc["documentId"], event=c["SubmittedEvent"], from_status=c["Working"], to_status=c["Submitted"],
+                         actor=actor, details=f"DMS First loading: submitted for approval (Approvers (chosen): {approver})")
+                sp.audit(document_id=doc["documentId"], event=c["ApprovedEvent"], from_status=c["Submitted"], to_status=c["Approved_ReadOnly"],
+                         actor=approver, details=f"Stage 2: DMS First loading - approved in the old repository, released as revision {rev}"
+                                                 f" [file SHA-256 {sha}]")
+                try:
+                    sp.log_decision(workflow_id=f"{doc['documentId']}-FL{stamp}"[:40], document_id=doc["documentId"], revision=rev,
+                                    approver=approver, role="Final", stage=2, decision="Approved",
+                                    comment="DMS First loading: approved in the old repository")
+                except Exception as e:  # noqa: BLE001 - the document is loaded; the decisions list is a record
+                    L(f"    Approval Decisions row failed: {e!r}")
                 L(f"    registered {doc['documentId']} (item {doc['id']}): Approved, revision {rev}, title '{title}', owner {actor}")
-                L("    Control Audit: Created + Approved (DMS First loading)")
+                L(f"    Control Audit: Created + Submitted ({actor}) + Approved ({approver}); Approval Decisions: Final, Approved")
                 registered.add(os.path.normcase(os.path.normpath(it["current"])))
                 row.update(documentId=doc["documentId"], revision=rev, sha256=sha, result="loaded")
                 if update_links and linker is not None and linker.enabled:
@@ -209,6 +235,39 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
     if logf:
         logf.close()
     job["state"] = "finished"
+
+
+def _save_only(it: dict, row: dict, L, dry_run: bool, copy_missing: bool, update_links: bool, linker) -> None:
+    """Mode save: the file goes to the same place under the target, as is (no registration, no workflow)."""
+    there = os.path.isfile(it["moved"])
+    if dry_run:
+        where = "already in the target" if there else ("copy from the source" if copy_missing else "MISSING in the target")
+        row["result"] = f"plan - {where} (save, no workflow)"
+        L(f"    plan: {where} -> {it['moved']} (save, no workflow)")
+        if update_links and linker is not None and linker.enabled:
+            row["fileLinker"] = "registered - would be updated" if linker.is_registered(it["source"]) else "not registered"
+        return
+    if there:
+        row["result"] = "skipped - already in the target"
+        L("    already in the target folder")
+    elif copy_missing and os.path.isfile(it["source"]):
+        os.makedirs(it["folder"], exist_ok=True)
+        shutil.copy2(it["source"], it["moved"])
+        row.update(result="saved", sha256=_sha256(it["moved"]))
+        L(f"    saved (no workflow): {it['moved']} ({os.path.getsize(it['moved'])} bytes)")
+    else:
+        raise FileNotFoundError("the file is not in the target folder (copy from the source is off)")
+    if update_links and linker is not None and linker.enabled and os.path.normcase(it["source"]) != os.path.normcase(it["moved"]):
+        try:
+            if linker.is_registered(it["source"]):
+                linker.replace(it["source"], it["moved"])
+                row["fileLinker"] = "updated"
+                L(f"    File Linker WebAPI#2: {it['source']} -> {it['moved']} OK")
+            else:
+                row["fileLinker"] = "not registered"
+        except Exception as e:  # noqa: BLE001
+            row["fileLinker"] = f"error - {e}"
+            L(f"    File Linker ERROR: {e!r}")
 
 
 def _log_path(s: Settings, stamp: str, dry_run: bool) -> str | None:
