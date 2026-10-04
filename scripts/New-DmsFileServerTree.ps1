@@ -152,7 +152,10 @@ function Grant-DmsAcl {
 $CustomerProjects = [ordered]@{}
 foreach ($c in $Customers) { $CustomerProjects[$c] = @($Projects) }
 if ($CustomersCsv) {
-    if (-not (Test-Path -LiteralPath $CustomersCsv)) { throw "CSV not found: $CustomersCsv" }
+    if (-not (Test-Path -LiteralPath $CustomersCsv)) {
+        throw ("CSV not found: $([IO.Path]::GetFullPath((Join-Path (Get-Location) $CustomersCsv))). " +
+               "Create it first, e.g. Copy-Item '$PSScriptRoot\customers.example.csv' .\customers.csv; notepad .\customers.csv")
+    }
     $rows = @(Import-Csv -LiteralPath $CustomersCsv -Encoding UTF8)
     if ($rows.Count -and -not ($rows[0].PSObject.Properties.Name -contains 'Customer')) { throw 'The CSV needs a Customer column (and optionally Project).' }
     foreach ($r in $rows) {
