@@ -27,62 +27,18 @@ def _same(*names: str) -> dict:
     return {n: (n.replace("_", " "), n.replace("_", " "), {}) for n in names}
 
 
-PROJECT = N({
-    "Project_Info": ("Project info", "מידע על הפרויקט", {}, "Project card, contacts, kickoff", "כרטיס פרויקט, אנשי קשר, פתיחה"),
-    "Customer_Source": ("Customer source", "חומר מהלקוח", N({
-        "Drawings": ("Drawings", "שרטוטים", {}), "Specifications": ("Specifications", "מפרטים", {}),
-        "BOM": ("BOM", "BOM", {}), "CAD": ("CAD", "CAD", {}), "PDFs": ("PDFs", "PDF", {}),
-        "Emails": ("Emails", "מיילים", {}), "Change_Requests": ("Change requests", "בקשות שינוי", {}),
-        "Other": ("Other", "אחר", {})}),
-        "Files received from the customer, as received", "קבצים שהתקבלו מהלקוח, כפי שהתקבלו"),
-    "Engineering": ("Engineering", "הנדסה", N({
-        "Mechanical": ("Mechanical", "מכני", {}), "Electrical": ("Electrical", "חשמלי", {}), "PCB": ("PCB", "PCB", {}),
-        "CAD": ("CAD", "CAD", {}), "Schematics": ("Schematics", "סכמות", {}), "Gerber": ("Gerber", "Gerber", {}),
-        "ODB++": ("ODB++", "ODB++", {}), "Netlist": ("Netlist", "Netlist", {}), "BOM": ("BOM", "BOM", {}),
-        "AVL": ("AVL", "AVL", {}), "DFM": ("DFM", "DFM", {}), "DFT": ("DFT", "DFT", {}),
-        "Simulations": ("Simulations", "סימולציות", {}), "Calculations": ("Calculations", "חישובים", {})}),
-        "Our design data: drawings, schematics, BOM, CAD", "נתוני התכן שלנו: שרטוטים, סכמות, BOM, CAD"),
-    "Development": ("Development", "פיתוח", _dev_stages(),
-                    "Development stages 01-10, from quotation to deliverables", "שלבי הפיתוח 01-10, מהצעת מחיר ועד תוצרים"),
-    "NPI": ("NPI", "הכנסת מוצר חדש (NPI)", N({
-        "Project_Plan": ("Project plan", "תוכנית פרויקט", {}), "Schedule": ("Schedule", "לוח זמנים", {}),
-        "Risk_Register": ("Risk register", "ניהול סיכונים", {}), "Gate_Reviews": ("Gate reviews", "סקרי שער", {}),
-        "Validation": ("Validation", "תיקוף", {}), "Transfer": ("Transfer to production", "העברה לייצור", {})}),
-        "New product introduction: plan, gates, transfer", "הכנסת מוצר חדש: תוכנית, שערים, העברה לייצור"),
-    "Manufacturing": ("Manufacturing", "ייצור - הנדסה", N({
-        "Assembly_Drawings": ("Assembly drawings", "שרטוטי הרכבה", {}),
-        "Work_Instructions": ("Work instructions", "הוראות עבודה", {}),
-        "Process_Flow": ("Process flow", "תהליך ייצור", {}), "Machine_Programs": ("Machine programs", "תוכניות מכונה", {}),
-        "Stencil": ("Stencil", "סטנסיל", {}), "Pick_and_Place": ("Pick and place", "Pick and Place", {}),
-        "Fixtures": ("Fixtures", "מתקנים", {}), "Photos": ("Photos", "תמונות", {}), "Videos": ("Videos", "סרטונים", {})}),
-        "Work instructions, assembly drawings, machine programs", "הוראות עבודה, שרטוטי הרכבה, תוכניות מכונה"),
-    "Test_Engineering": ("Test engineering", "הנדסת בדיקות", N({
-        "ATEFiles": ("ATE files", "קבצי ATE", N({
-            "ICT": ("ICT", "ICT", _same("Logging", "Source", "T1", "T4", "T5", "T9", "T10")),
-            "FCT": ("FCT", "FCT", _dev_stages()), "FTP": ("FTP", "FTP", {}),
-            "JTAG": ("JTAG", "JTAG", _same("CopyToCurrent", "Logging", "T1", "T2"))})),
-        "Test_Plans": ("Test plans", "תוכניות בדיקה", {}), "Test_Procedures": ("Test procedures", "נהלי בדיקה", {}),
-        "Test_Reports": ("Test reports", "דוחות בדיקה", {}), "Test_Coverage": ("Test coverage", "כיסוי בדיקות", {}),
-        "Yield_Analysis": ("Yield analysis", "ניתוח תפוקה", {}), "Debug": ("Debug", "דיבאג", {}),
-        "Calibration": ("Calibration", "כיול", {}), "Released": ("Released", "משוחרר", {}), "Archive": ("Archive", "ארכיון", {})}),
-        "Test plans, procedures, reports and ATE programs", "תוכניות, נהלים, דוחות בדיקה ותוכניות ATE"),
-    "Quality": ("Quality", "איכות", N({
-        "PPAP": ("PPAP", "PPAP", {}), "PFMEA": ("PFMEA", "PFMEA", {}), "Control_Plan": ("Control plan", "תוכנית בקרה", {}),
-        "NCR": ("NCR", "אי-התאמה (NCR)", {}), "CAR": ("CAR", "פעולה מתקנת (CAR)", {}), "8D": ("8D", "8D", {}),
-        "Certificates": ("Certificates", "תעודות", {}), "Audits": ("Audits", "מבדקים", {})}),
-        "PPAP, PFMEA, NCR, certificates", "PPAP, PFMEA, אי-התאמות, תעודות"),
-    "Production": ("Production", "ייצור שוטף", N({
-        "Builds": ("Builds", "סדרות ייצור", {}), "Travelers": ("Travelers", "כרטיסי עבודה", {}),
-        "Reports": ("Reports", "דוחות", {}), "KPIs": ("KPIs", "מדדים", {}), "OEE": ("OEE", "OEE", {})}),
-        "Builds, travelers, production reports", "סדרות ייצור, כרטיסי עבודה, דוחות ייצור"),
-    "Changes": ("Changes", "שינויים", N({
-        "ECO": ("ECO", "הוראת שינוי הנדסי (ECO)", {}), "ECN": ("ECN", "הודעת שינוי (ECN)", {}),
-        "Deviations": ("Deviations", "חריגות", {}), "Waivers": ("Waivers", "ויתורים", {})}),
-        "Engineering changes: ECO, ECN, deviations", "שינויים הנדסיים: ECO, ECN, חריגות"),
-    "Released": ("Released", "שוחרר", _same("Rev_A", "Rev_B", "Rev_C", "Current"),
-                 "Released revisions for production", "גרסאות משוחררות לייצור"),
-    "Archive": ("Archive", "ארכיון", {}),
-})
+# A product of a customer: 02_Customers\<Customer>\Develop\Products\<Product>, with the development stages.
+# (Called "project" in the code and the API: the customer's unit of work.)
+PRODUCTS = ("Develop", "Products")
+PROJECT = _dev_stages()
+
+
+def _ate() -> dict:
+    return N({
+        "FCT": ("FCT", "FCT", _dev_stages()), "FTP": ("FTP", "FTP", {}),
+        "ICT": ("ICT", "ICT", _same("Logging", "Source", "T1", "T4", "T5", "T9", "T10")),
+        "JTAG": ("JTAG", "JTAG", _same("CopyToCurrent", "Logging", "T1", "T2"))})
+
 
 CUSTOMER = N({
     "Customer_Profile": ("Customer profile", "פרופיל לקוח", {}, "Contacts, requirements, general agreements", "אנשי קשר, דרישות, הסכמים כלליים"),
@@ -92,28 +48,66 @@ CUSTOMER = N({
         "Contracts": ("Contracts and orders", "חוזים והזמנות", {}, "Contracts and purchase orders", "חוזים והזמנות רכש"),
         "NDA": ("NDA", "הסכמי סודיות (NDA)", {})}),
         "RFQ, quotations, contracts, NDA", "בקשות להצעה, הצעות מחיר, חוזים, NDA"),
-    "Projects": ("Projects", "פרויקטים", {"*": ("", "", PROJECT, "Project", "פרויקט")},
-                 "One folder per project", "תיקייה לכל פרויקט"),
+    "Pricing": ("Pricing", "תמחור", {}, "Costing and price calculations", "תמחיר וחישובי מחיר"),
+    "Develop": ("Develop", "פיתוח", N({
+        "ATEFiles": ("ATE files", "קבצי ATE", _ate(), "FCT, ICT, JTAG and FTP programs", "תוכניות FCT, ICT, JTAG ו-FTP"),
+        "Products": ("Products", "מוצרים", {"*": ("", "", PROJECT, "Product: development stages 01-10", "מוצר: שלבי פיתוח 01-10")},
+                     "One folder per product", "תיקייה לכל מוצר")}),
+        "Products and ATE files", "מוצרים וקבצי ATE"),
+    "Engineering": ("Engineering", "הנדסה", {}, "Engineering data of the customer's products", "נתוני הנדסה של מוצרי הלקוח"),
+    "DFM": ("DFM", "DFM", {}, "Design for manufacturing reviews", "סקרי התאמה לייצור"),
+    "DFT": ("DFT", "DFT", {}, "Design for test reviews", "סקרי התאמה לבדיקה"),
+    "NPI": ("NPI", "הכנסת מוצר חדש (NPI)", {}, "New product introduction", "הכנסת מוצר חדש"),
+    "Manufacturing": ("Manufacturing", "ייצור - הנדסה", N({
+        "Assembly_Drawings": ("Assembly drawings", "שרטוטי הרכבה", {}),
+        "Work_Instructions": ("Work instructions", "הוראות עבודה", {}),
+        "Process_Flow": ("Process flow", "תהליך ייצור", {}), "Machine_Programs": ("Machine programs", "תוכניות מכונה", {}),
+        "Stencil": ("Stencil", "סטנסיל", {}), "Pick_and_Place": ("Pick and place", "Pick and Place", {}),
+        "Fixtures": ("Fixtures", "מתקנים", {}), "Photos": ("Photos", "תמונות", {}), "Videos": ("Videos", "סרטונים", {})}),
+        "Work instructions, assembly drawings, machine programs", "הוראות עבודה, שרטוטי הרכבה, תוכניות מכונה"),
+    "Quality_QC": ("Quality and QC", "איכות ובקרת איכות", N({
+        "PPAP": ("PPAP", "PPAP", {}), "PFMEA": ("PFMEA", "PFMEA", {}), "Control_Plan": ("Control plan", "תוכנית בקרה", {}),
+        "NCR": ("NCR", "אי-התאמה (NCR)", {}), "CAR": ("CAR", "פעולה מתקנת (CAR)", {}), "8D": ("8D", "8D", {}),
+        "Certificates": ("Certificates", "תעודות", {}), "Audits": ("Audits", "מבדקים", {})}),
+        "PPAP, PFMEA, NCR, certificates", "PPAP, PFMEA, אי-התאמות, תעודות"),
+    "Supply_chain": ("Supply chain", "שרשרת אספקה", {}, "Customer-supplied material, forecasts, logistics", "חומר מהלקוח, תחזיות, לוגיסטיקה"),
     "Shared": ("Shared", "משותף", {}, "Files shared with the customer", "קבצים משותפים עם הלקוח"),
     "Archive": ("Archive", "ארכיון", {}),
 })
 
+# Quality procedures in operation, by division (Hebrew folder names, as on the file server)
+_QPROC = N({
+    "חטיבות": ("חטיבות", "חטיבות", {}),
+    "כלל חברה": ("כלל חברה", "כלל חברה", _same("ארכיון", "Training")),
+    "מערכות מידע": ("מערכות מידע", "מערכות מידע", _same("ארכיון")),
+    "מפעל ייצור": ("מפעל ייצור", "מפעל ייצור", _same("ארכיון")),
+    "משאבי אנוש": ("משאבי אנוש", "משאבי אנוש", _same("ארכיון")),
+    "נהלי אחזקה": ("נהלי אחזקה", "נהלי אחזקה", {}),
+    "רכש ואספקה": ("רכש ואספקה", "רכש ואספקה", _same("ארכיון")),
+    "תשתיות איכות": ("תשתיות איכות", "תשתיות איכות", _same("ארכיון")),
+})
+
 MANAGEMENT = N({k: (en, he, {}) for k, en, he in (
     ("Company_Profile", "Company profile", "פרופיל חברה"), ("Strategy", "Strategy", "אסטרטגיה"),
-    ("Sales_Marketing", "Sales and marketing", "מכירות ושיווק"), ("HR", "HR", "משאבי אנוש"), ("Finance", "Finance", "כספים"),
-    ("IT", "IT", "מערכות מידע"), ("Quality_System", "Quality system", "מערכת איכות"),
-    ("Engineering_Standards", "Engineering standards", "תקני הנדסה"), ("Manufacturing_Standards", "Manufacturing standards", "תקני ייצור"),
-    ("Development_Standards", "Development standards", "תקני פיתוח"), ("Project_Management", "Project management", "ניהול פרויקטים"),
-    ("Templates", "Templates", "תבניות"), ("Training", "Training", "הדרכה"), ("Suppliers", "Suppliers", "ספקים"),
-    ("Certifications", "Certifications", "הסמכות"), ("Legal", "Legal", "משפטי"), ("Assets", "Assets", "נכסים"),
-    ("AI_Automation", "AI and automation", "AI ואוטומציה"), ("Knowledge_Base", "Knowledge base", "מאגר ידע"),
+    ("Commercial", "Commercial", "מסחרי"), ("Sales_Marketing", "Sales and marketing", "מכירות ושיווק"),
+    ("Engineering", "Engineering", "הנדסה"), ("Project_Management", "Project management", "ניהול פרויקטים"),
+    ("Planners", "Planners", "תכנון"), ("Supply_chain", "Supply chain", "שרשרת אספקה"),
+    ("Quality_System", "Quality system", "מערכת איכות"), ("Quality and Standards", "Quality and standards", "איכות ותקנים"),
+    ("Certifications", "Certifications", "הסמכות"), ("HR", "HR", "משאבי אנוש"), ("Training", "Training", "הדרכה"),
+    ("Finance", "Finance", "כספים"), ("Legal", "Legal", "משפטי"), ("Assets", "Assets", "נכסים"),
+    ("IT", "IT", "מערכות מידע"), ("DB_Management", "Database management", "ניהול בסיסי נתונים"),
+    ("AI_Automation", "AI and automation", "AI ואוטומציה"), ("Templates", "Templates", "תבניות"),
     ("Archive", "Archive", "ארכיון"))})
+MANAGEMENT["Quality and Standards"] = ("Quality and standards", "איכות ותקנים", N({
+    "נהלי איכות בתפעול": ("נהלי איכות בתפעול", "נהלי איכות בתפעול", _QPROC,
+                          "Quality procedures in operation, by division", "נהלי האיכות בתפעול, לפי חטיבה")}),
+    "Company quality procedures and standards", "נהלי האיכות והתקנים של החברה")
 
 ROOT = N({
     "01_Management": ("Management", "הנהלה", MANAGEMENT, "Company-wide areas: procedures, standards, HR, finance",
                       "תחומי החברה: נהלים, תקנים, משאבי אנוש, כספים"),
     "02_Customers": ("Customers", "לקוחות", {"*": ("", "", CUSTOMER, "Customer", "לקוח")},
-                     "One folder per customer, with its commercial files and projects", "תיקייה לכל לקוח, עם המסמכים המסחריים והפרויקטים"),
+                     "One folder per customer, with its commercial files and products", "תיקייה לכל לקוח, עם המסמכים המסחריים והמוצרים"),
 })
 # 03_Operations_Staging, 04_Workflow_System and 05_Exchange_Quarantine are system folders, not shown to users.
 HIDDEN_AT_ROOT = ("03_Operations_Staging", "04_Workflow_System", "05_Exchange_Quarantine")
@@ -130,6 +124,14 @@ def _node(parts: list[str]):
     return node
 
 
+def product_index(parts: list[str]) -> int | None:
+    """Index of the product folder in a path (02_Customers/<c>/Develop/Products/<product>/...), else None."""
+    n = 2 + len(PRODUCTS)
+    if len(parts) > n and parts[0].lower() == "02_customers" and [p.lower() for p in parts[2:n]] == [p.lower() for p in PRODUCTS]:
+        return n
+    return None
+
+
 def describe(parts: list[str]) -> dict | None:
     """Names and hint for a folder. A customer or project folder keeps its own name."""
     node = _node(parts)
@@ -139,7 +141,7 @@ def describe(parts: list[str]) -> dict | None:
     en, he = node[0] or name, node[1] or name           # customers and projects keep their own names
     hint = (node[3], node[4]) if len(node) > 3 else ("", "")
     kind = "customer" if len(parts) == 2 and parts[0] == "02_Customers" else \
-           "project" if len(parts) == 4 and parts[0] == "02_Customers" and parts[2] == "Projects" else "area"
+           "project" if product_index(parts) == len(parts) - 1 else "area"
     return {"en": en, "he": he, "hintEn": hint[0], "hintHe": hint[1], "kind": kind}
 
 
@@ -166,69 +168,71 @@ SAVE_GUIDE = [
     ("quotation", "Quotation", "הצעת מחיר", "{c}/Commercial/Quotations"),
     ("contract", "Contract or purchase order", "חוזה או הזמנת רכש", "{c}/Commercial/Contracts"),
     ("nda", "NDA", "הסכם סודיות", "{c}/Commercial/NDA"),
-    ("cust_drawing", "Drawing from the customer", "שרטוט מהלקוח", "{p}/Customer_Source/Drawings"),
-    ("cust_spec", "Specification from the customer", "מפרט מהלקוח", "{p}/Customer_Source/Specifications"),
-    ("cust_bom", "BOM from the customer", "BOM מהלקוח", "{p}/Customer_Source/BOM"),
-    ("bom", "Our BOM", "BOM שלנו", "{p}/Engineering/BOM"),
-    ("schematics", "Schematics", "סכמות", "{p}/Engineering/Schematics"),
-    ("pcb", "PCB / Gerber files", "קבצי PCB / Gerber", "{p}/Engineering/Gerber"),
-    ("sow", "Statement of work (SOW)", "תכולת עבודה (SOW)", "{p}/Development/02_SOW"),
-    ("srs", "Requirements (SRS)", "דרישות מערכת (SRS)", "{p}/Development/03_SRS"),
-    ("pdr", "Preliminary design review (PDR)", "סקר תכן מקדים (PDR)", "{p}/Development/04_PDR"),
-    ("cdr", "Critical design review (CDR)", "סקר תכן קריטי (CDR)", "{p}/Development/05_CDR"),
-    ("fat", "Factory acceptance test (FAT)", "בדיקות קבלה במפעל (FAT)", "{p}/Development/07_FAT"),
-    ("deliverable", "Project deliverable", "תוצר פרויקט", "{p}/Development/10_Project_Deliverables"),
-    ("plan", "Project plan / schedule", "תוכנית פרויקט / לוח זמנים", "{p}/NPI/Project_Plan"),
-    ("work_instruction", "Work instruction", "הוראת עבודה", "{p}/Manufacturing/Work_Instructions"),
-    ("assembly", "Assembly drawing", "שרטוט הרכבה", "{p}/Manufacturing/Assembly_Drawings"),
-    ("test_procedure", "Test procedure", "נוהל בדיקה", "{p}/Test_Engineering/Test_Procedures"),
-    ("test_report", "Test report", "דוח בדיקה", "{p}/Test_Engineering/Test_Reports"),
-    ("ppap", "PPAP", "PPAP", "{p}/Quality/PPAP"),
-    ("ncr", "Non-conformance (NCR)", "אי-התאמה (NCR)", "{p}/Quality/NCR"),
-    ("eco", "Engineering change (ECO)", "הוראת שינוי הנדסי (ECO)", "{p}/Changes/ECO"),
-    ("released", "Released revision", "גרסה משוחררת", "{p}/Released/Current"),
+    ("pricing", "Pricing / costing", "תמחור", "{c}/Pricing"),
+    ("sow", "Statement of work (SOW)", "תכולת עבודה (SOW)", "{p}/02_SOW"),
+    ("srs", "Requirements (SRS)", "דרישות מערכת (SRS)", "{p}/03_SRS"),
+    ("pdr", "Preliminary design review (PDR)", "סקר תכן מקדים (PDR)", "{p}/04_PDR"),
+    ("cdr", "Critical design review (CDR)", "סקר תכן קריטי (CDR)", "{p}/05_CDR"),
+    ("fat", "Factory acceptance test (FAT)", "בדיקות קבלה במפעל (FAT)", "{p}/07_FAT"),
+    ("deliverable", "Product deliverable", "תוצר מוצר", "{p}/10_Project_Deliverables"),
+    ("fct", "FCT program", "תוכנית FCT", "{c}/Develop/ATEFiles/FCT"),
+    ("ict", "ICT program", "תוכנית ICT", "{c}/Develop/ATEFiles/ICT"),
+    ("dfm", "DFM report", "דוח DFM", "{c}/DFM"),
+    ("dft", "DFT report", "דוח DFT", "{c}/DFT"),
+    ("npi", "NPI document", "מסמך NPI", "{c}/NPI"),
+    ("work_instruction", "Work instruction", "הוראת עבודה", "{c}/Manufacturing/Work_Instructions"),
+    ("assembly", "Assembly drawing", "שרטוט הרכבה", "{c}/Manufacturing/Assembly_Drawings"),
+    ("ppap", "PPAP", "PPAP", "{c}/Quality_QC/PPAP"),
+    ("pfmea", "PFMEA / control plan", "PFMEA / תוכנית בקרה", "{c}/Quality_QC/PFMEA"),
+    ("ncr", "Non-conformance (NCR)", "אי-התאמה (NCR)", "{c}/Quality_QC/NCR"),
 ]
 
 
 # Document type and area inherited from the blueprint folder (English keys of the SharePoint choices;
 # LABELS gives the Hebrew value used on a Hebrew site). The deepest matching folder wins.
-_P = "02_Customers/*/Projects/*"
+_C = "02_Customers/*"
+_P = "02_Customers/*/Develop/Products/*"
 CLASSIFY = {
     "01_Management": ("Management", None),
     "01_Management/Company_Profile": ("Management", "Company Profile"),
     "01_Management/Strategy": ("Management", "Strategy"),
     "01_Management/Quality_System": ("Quality", "Procedure"),
-    "01_Management/Engineering_Standards": ("Development", "Procedure"),
-    "01_Management/Development_Standards": ("Development", "Procedure"),
-    "01_Management/Manufacturing_Standards": ("Manufacturing", "Procedure"),
+    "01_Management/Quality and Standards": ("Quality", "Procedure"),
+    "01_Management/Engineering": ("Development", "Procedure"),
+    "01_Management/Commercial": ("Commercial", None),
+    "01_Management/Planners": ("Manufacturing", None),
+    "01_Management/Supply_chain": ("Manufacturing", None),
     "01_Management/Project_Management": ("Management", "Procedure"),
     "01_Management/HR": ("Management", "Policy"),
     "01_Management/IT": ("IT", "IT Procedure"),
-    "02_Customers/*": ("Commercial", None),
-    "02_Customers/*/Commercial/RFQ": ("Commercial", "Quotation"),
-    "02_Customers/*/Commercial/Quotations": ("Commercial", "Quotation"),
-    "02_Customers/*/Commercial/Contracts": ("Commercial", "Contract / NDA"),
-    "02_Customers/*/Commercial/NDA": ("Commercial", "Contract / NDA"),
+    "01_Management/DB_Management": ("IT", "IT Procedure"),
+    _C: ("Commercial", None),
+    f"{_C}/Commercial/RFQ": ("Commercial", "Quotation"),
+    f"{_C}/Commercial/Quotations": ("Commercial", "Quotation"),
+    f"{_C}/Commercial/Contracts": ("Commercial", "Contract / NDA"),
+    f"{_C}/Commercial/NDA": ("Commercial", "Contract / NDA"),
+    f"{_C}/Pricing": ("Commercial", "Quotation"),
+    f"{_C}/Develop": ("Development", None),
+    f"{_C}/Develop/ATEFiles": ("Test Engineering", None),
+    f"{_C}/Engineering": ("Development", None),
+    f"{_C}/DFM": ("Manufacturing", None),
+    f"{_C}/DFT": ("Test Engineering", None),
+    f"{_C}/NPI": ("Development", None),
+    f"{_C}/Manufacturing": ("Manufacturing", None),
+    f"{_C}/Manufacturing/Work_Instructions": ("Manufacturing", "Work Instruction"),
+    f"{_C}/Quality_QC": ("Quality", None),
+    f"{_C}/Quality_QC/PFMEA": ("Quality", "PFMEA / Control Plan"),
+    f"{_C}/Quality_QC/Control_Plan": ("Quality", "PFMEA / Control Plan"),
+    f"{_C}/Supply_chain": ("Manufacturing", None),
     _P: ("Development", None),
-    f"{_P}/Development/01_Quotation": ("Commercial", "Quotation"),
-    f"{_P}/Development/02_SOW": ("Development", "SOW"),
-    f"{_P}/Development/03_SRS": ("Development", "SRS"),
-    f"{_P}/Development/04_PDR": ("Development", "PDR / CDR"),
-    f"{_P}/Development/05_CDR": ("Development", "PDR / CDR"),
-    f"{_P}/Development/07_FAT": ("Development", "FAT / SAT / FDR"),
-    f"{_P}/Development/08_SAT": ("Development", "FAT / SAT / FDR"),
-    f"{_P}/Development/09_FDR": ("Development", "FAT / SAT / FDR"),
-    f"{_P}/Manufacturing": ("Manufacturing", None),
-    f"{_P}/Manufacturing/Work_Instructions": ("Manufacturing", "Work Instruction"),
-    f"{_P}/Production": ("Manufacturing", None),
-    f"{_P}/Test_Engineering": ("Test Engineering", None),
-    f"{_P}/Test_Engineering/Test_Procedures": ("Test Engineering", "Test Procedure"),
-    f"{_P}/Quality": ("Quality", None),
-    f"{_P}/Quality/PFMEA": ("Quality", "PFMEA / Control Plan"),
-    f"{_P}/Quality/Control_Plan": ("Quality", "PFMEA / Control Plan"),
-    f"{_P}/Changes": ("Changes", None),
-    f"{_P}/Changes/ECO": ("Changes", "ECO / ECN"),
-    f"{_P}/Changes/ECN": ("Changes", "ECO / ECN"),
+    f"{_P}/01_Quotation": ("Commercial", "Quotation"),
+    f"{_P}/02_SOW": ("Development", "SOW"),
+    f"{_P}/03_SRS": ("Development", "SRS"),
+    f"{_P}/04_PDR": ("Development", "PDR / CDR"),
+    f"{_P}/05_CDR": ("Development", "PDR / CDR"),
+    f"{_P}/07_FAT": ("Development", "FAT / SAT / FDR"),
+    f"{_P}/08_SAT": ("Development", "FAT / SAT / FDR"),
+    f"{_P}/09_FDR": ("Development", "FAT / SAT / FDR"),
 }
 LABELS = {
     "Management": "ניהול", "Commercial": "מסחרי", "Development": "פיתוח", "Manufacturing": "ייצור",
@@ -250,8 +254,9 @@ def classify(parts: list[str]) -> dict:
     norm = list(parts)
     if len(norm) > 1 and norm[0].lower() == "02_customers":
         norm[1] = "*"
-        if len(norm) > 3 and norm[2].lower() == "projects":
-            norm[3] = "*"
+        k = product_index(norm)
+        if k is not None:
+            norm[k] = "*"
     keys = {k.lower(): v for k, v in CLASSIFY.items()}
     for n in range(len(norm), 0, -1):
         hit = keys.get("/".join(norm[:n]).lower())
@@ -268,3 +273,26 @@ def choice(key: str | None, values: list[str]) -> str | None:
         if v and v in values:
             return v
     return None
+
+
+def folder_list() -> list[str]:
+    """Every blueprint folder as a Windows path relative to the root, with <Customer> and <Project>
+    for the instance folders. scripts/blueprint-folders.txt is this list (the tree script reads it)."""
+    out = []
+
+    def walk(tree, prefix):
+        for name, v in tree.items():
+            key = {"02_Customers": "<Customer>", PRODUCTS[-1]: "<Product>"}.get(prefix[-1] if prefix else "", None) if name == "*" else name
+            if key is None:
+                continue
+            path = prefix + [key]
+            out.append("\\".join(path))
+            walk(v[2], path)
+    walk(ROOT, [])
+    return out
+
+
+if __name__ == "__main__":
+    import sys
+    sys.stdout.reconfigure(encoding="utf-8")
+    print("\n".join(folder_list()))

@@ -277,18 +277,17 @@ def test_actions_need_ad_write(env, limited):
 def test_blueprint_labels_order_and_context(env):
     c, _, q = env
     cust = q.parents[1]                                  # Customer_A
-    for d in ("Projects/PRJ-1/Development/02_SOW", "Projects/PRJ-1/Engineering", "Customer_Profile", "Zeta_Extra"):
+    for d in ("Develop/Products/PRJ-1/02_SOW", "Develop/Products/PRJ-1/01_Quotation", "Customer_Profile", "Zeta_Extra"):
         (cust / d).mkdir(parents=True, exist_ok=True)
     r = c.get("/api/browse", params={"path": str(cust)}).json()
-    assert [f["name"] for f in r["folders"]] == ["Customer_Profile", "Commercial", "Projects", "Zeta_Extra"]
+    assert [f["name"] for f in r["folders"]] == ["Customer_Profile", "Commercial", "Develop", "Zeta_Extra"]
     assert r["folders"][1]["label"]["he"] == "מסחרי" and r["folders"][3]["label"] is None
     assert r["node"]["kind"] == "customer" and r["context"]["customer"]["name"] == "Customer_A"
-    prj = c.get("/api/browse", params={"path": str(cust / "Projects" / "PRJ-1")}).json()
+    prj = c.get("/api/browse", params={"path": str(cust / "Develop" / "Products" / "PRJ-1")}).json()
     assert prj["node"]["kind"] == "project" and prj["context"]["project"]["name"] == "PRJ-1"
-    assert [f["name"] for f in prj["folders"]] == ["Engineering", "Development"]
-    dev = c.get("/api/browse", params={"path": str(cust / "Projects" / "PRJ-1" / "Development")}).json()
-    assert dev["folders"][0]["label"]["en"] == "02 Statement of work"
-    assert [t["name"] for t in dev["trail"]] == ["02_Customers", "Customer_A", "Projects", "PRJ-1", "Development"]
+    assert [f["name"] for f in prj["folders"]] == ["01_Quotation", "02_SOW"]
+    assert prj["folders"][1]["label"]["en"] == "02 Statement of work"
+    assert [t["name"] for t in prj["trail"]] == ["02_Customers", "Customer_A", "Develop", "Products", "PRJ-1"]
 
 
 def test_root_hides_system_folders_and_areas(env):
@@ -304,15 +303,16 @@ def test_save_guide(env):
     c, _, q = env
     cust = q.parents[1]
     kinds = {g["key"]: g for g in c.get("/api/guide").json()}
-    assert kinds["quotation"]["needsProject"] is False and kinds["eco"]["needsProject"] is True
+    assert kinds["quotation"]["needsProject"] is False and kinds["sow"]["needsProject"] is True
     t = c.get("/api/guide/target", params={"key": "quotation", "customer": str(cust)}).json()
     assert t["path"] == str(q) and t["exists"] and t["canWrite"]
-    assert c.get("/api/guide/target", params={"key": "eco", "customer": str(cust)}).status_code == 400
-    (cust / "Projects" / "PRJ-1").mkdir(parents=True)
+    assert c.get("/api/guide/target", params={"key": "sow", "customer": str(cust)}).status_code == 400
+    prd = cust / "Develop" / "Products" / "PRJ-1"
+    prd.mkdir(parents=True)
     assert [p["name"] for p in c.get("/api/projects", params={"customer": str(cust)}).json()] == ["PRJ-1"]
-    t = c.get("/api/guide/target", params={"key": "eco", "customer": str(cust), "project": str(cust / "Projects" / "PRJ-1")}).json()
-    assert t["path"].endswith(os.path.join("PRJ-1", "Changes", "ECO")) and not t["exists"]
-    made = c.post("/api/guide/create", params={"key": "eco", "customer": str(cust), "project": str(cust / "Projects" / "PRJ-1")})
+    t = c.get("/api/guide/target", params={"key": "sow", "customer": str(cust), "project": str(prd)}).json()
+    assert t["path"].endswith(os.path.join("PRJ-1", "02_SOW")) and not t["exists"]
+    made = c.post("/api/guide/create", params={"key": "sow", "customer": str(cust), "project": str(prd)})
     assert made.status_code == 201 and os.path.isdir(made.json()["path"])
 
 
@@ -385,12 +385,12 @@ def test_ai_insights(env, limited):
 
 def _tree_for_find(q):
     cust = q.parents[1]
-    prj = cust / "Projects" / "PRJ-101_CRU4"
-    for d in ("Changes/ECO", "Test_Engineering/Test_Reports", "Development/Obsolete_ReadOnly"):
+    prj = cust / "Develop" / "Products" / "PRJ-101_CRU4"
+    for d in ("06_Implementation", "07_FAT", "07_FAT/Obsolete_ReadOnly"):
         (prj / d).mkdir(parents=True)
-    (prj / "Changes" / "ECO" / "ECO-17 connector change.docx").write_text("x")
-    (prj / "Test_Engineering" / "Test_Reports" / "FCT report lot 3.pdf").write_text("x")
-    (prj / "Development" / "Obsolete_ReadOnly" / "FCT report lot 1.pdf").write_text("x")
+    (prj / "06_Implementation" / "ECO-17 connector change.docx").write_text("x")
+    (prj / "07_FAT" / "FCT report lot 3.pdf").write_text("x")
+    (prj / "07_FAT" / "Obsolete_ReadOnly" / "FCT report lot 1.pdf").write_text("x")
     secret = q.parents[2] / "Customer_B" / "Commercial"
     secret.mkdir(parents=True)
     (secret / "FCT quote Customer_B.xlsx").write_text("x")
@@ -411,7 +411,7 @@ def test_find_without_ai_uses_keywords_and_ad(env, limited):
 class PlanningAI(FakeAI):
     def plan_search(self, question, customers, kinds):
         self.seen_customers = customers
-        return {"terms": ["connector"], "customer": "Customer_A", "project": "PRJ-101", "kind": "eco", "extensions": [], "latest": True}
+        return {"terms": ["connector"], "customer": "Customer_A", "project": "PRJ-101", "kind": "srs", "extensions": [], "latest": True}
 
     def rank(self, question, candidates, lang="EN"):
         self.ranked = [c["relative"] for c in candidates]
@@ -424,7 +424,7 @@ def test_find_with_ai_plan_and_rank(env, limited):
     ai = PlanningAI()
     c.app.state.ai = ai
     r = c.post("/api/ai/find", json={"question": "the ECO about the connector in the CRU4 project", "lang": "EN"}).json()
-    assert r["usedAi"] and r["plan"] == {"terms": ["connector"], "customer": "Customer_A", "project": "PRJ-101_CRU4", "kind": "eco"}
+    assert r["usedAi"] and r["plan"] == {"terms": ["connector"], "customer": "Customer_A", "project": "PRJ-101_CRU4", "kind": "srs"}
     assert ai.seen_customers == ["Customer_A"]                  # the AI only hears about allowed customers
     assert all("Customer_B" not in p for p in ai.ranked)
     assert [x["name"] for x in r["suggestions"]] == ["ECO-17 connector change.docx"]
@@ -622,28 +622,28 @@ def test_file_service_report_and_old_layout(tmp_path):
 def test_path_finder(env):
     c, _, q = env
     cust = q.parents[1]
-    (cust / "Projects" / "PRJ-1").mkdir(parents=True)
+    (cust / "Develop" / "Products" / "PRJ-1").mkdir(parents=True)
     top = c.get("/api/pathfinder").json()
     assert [o["name"] for o in top["options"]] == ["01_Management", "02_Customers"] and top["options"][0]["exists"] is False
     lv = c.get("/api/pathfinder", params={"path": str(cust)}).json()
-    assert [(o["name"], o["exists"]) for o in lv["options"]] == [("Customer_Profile", False), ("Commercial", True), ("Projects", True),
-                                                                  ("Shared", False), ("Archive", False)]
-    prj = c.get("/api/pathfinder", params={"path": str(cust / "Projects" / "PRJ-1")}).json()
-    assert prj["node"]["kind"] == "project" and len(prj["options"]) == 12 and not any(o["exists"] for o in prj["options"])
-    target = cust / "Projects" / "PRJ-1" / "Test_Engineering" / "ATEFiles" / "FCT" / "07_FAT"
+    assert [(o["name"], o["exists"]) for o in lv["options"]][:4] == [("Customer_Profile", False), ("Commercial", True), ("Pricing", False),
+                                                                      ("Develop", True)]
+    prj = c.get("/api/pathfinder", params={"path": str(cust / "Develop" / "Products" / "PRJ-1")}).json()
+    assert prj["node"]["kind"] == "project" and len(prj["options"]) == 11 and not any(o["exists"] for o in prj["options"])
+    target = cust / "Develop" / "ATEFiles" / "FCT" / "07_FAT"
     r = c.post("/api/pathfinder/create", params={"path": str(target)})
     assert r.status_code == 201 and target.is_dir()
-    bad = cust / "Projects" / "PRJ-1" / "Random" / "x"
+    bad = cust / "Develop" / "Products" / "PRJ-1" / "Random" / "x"
     assert c.post("/api/pathfinder/create", params={"path": str(bad)}).status_code == 400 and not bad.exists()
     assert c.post("/api/pathfinder/create", params={"path": str(cust.parent / "New_Customer" / "Commercial")}).status_code == 400
 
 
 def test_path_finder_through_missing_folders(env):
     c, _, q = env
-    prj = q.parents[1] / "Projects" / "PRJ-2"
+    prj = q.parents[1] / "Develop" / "Products" / "PRJ-2"
     prj.mkdir(parents=True)
-    r = c.get("/api/pathfinder", params={"path": str(prj / "Test_Engineering" / "ATEFiles")}).json()
-    assert r["exists"] is False and [o["name"] for o in r["options"]] == ["ICT", "FCT", "FTP", "JTAG"]
+    r = c.get("/api/pathfinder", params={"path": str(q.parents[1] / "Develop" / "ATEFiles")}).json()
+    assert r["exists"] is False and [o["name"] for o in r["options"]] == ["FCT", "FTP", "ICT", "JTAG"]
     assert c.get("/api/pathfinder", params={"path": str(prj / "Nope" / "Deeper")}).status_code == 404
 
 
@@ -1014,10 +1014,10 @@ def test_type_and_area_inherited_from_the_blueprint_folder(tmp_path):
     from dms_api import blueprint
     from dms_api.memory import MemorySharePoint
     assert blueprint.classify(["01_Management", "Company_Profile"]) == {"area": "Management", "type": "Company Profile"}
-    assert blueprint.classify(["02_Customers", "Customer_A", "Projects", "PRJ-1", "Development", "02_SOW", "Working"]) == \
+    assert blueprint.classify(["02_Customers", "Customer_A", "Develop", "Products", "PRJ-1", "02_SOW", "Working"]) == \
         {"area": "Development", "type": "SOW"}
     assert blueprint.classify(["02_Customers", "Customer_A", "Commercial", "Quotations", "Old 2019"])["type"] == "Quotation"
-    assert blueprint.classify(["02_Customers", "Customer_A", "Projects", "PRJ-1", "Quality", "NCR"]) == {"area": "Quality", "type": None}
+    assert blueprint.classify(["02_Customers", "Customer_A", "Quality_QC", "NCR"]) == {"area": "Quality", "type": None}
     root = tmp_path / "Root"
     cp = root / "01_Management" / "Company_Profile"
     cp.mkdir(parents=True)
@@ -1451,12 +1451,13 @@ def test_new_customer_and_project_get_the_blueprint_folders(tmp_path):
     r = c.post("/api/folders", json={"parent": str(root / "02_Customers"), "name": "Elbit"})
     assert r.status_code == 201, r.text
     cust = root / "02_Customers" / "Elbit"
-    assert (cust / "Commercial" / "Quotations").is_dir() and (cust / "Shared").is_dir() and (cust / "Projects").is_dir()
-    r = c.post("/api/folders", json={"parent": str(cust / "Projects"), "name": "PRJ-200_Radar"})
-    prj = cust / "Projects" / "PRJ-200_Radar"
-    assert r.json()["blueprintFolders"] > 100
-    assert (prj / "Test_Engineering" / "ATEFiles" / "FCT" / "07_FAT").is_dir() and (prj / "Released" / "Current").is_dir()
-    sub = c.post("/api/folders", json={"parent": str(prj / "Engineering"), "name": "Extra"}).json()
+    assert (cust / "Commercial" / "Quotations").is_dir() and (cust / "Shared").is_dir() and (cust / "Develop" / "Products").is_dir()
+    assert (cust / "Develop" / "ATEFiles" / "FCT" / "07_FAT").is_dir() and (cust / "Quality_QC" / "PPAP").is_dir()
+    r = c.post("/api/folders", json={"parent": str(cust / "Develop" / "Products"), "name": "Radar"})
+    prj = cust / "Develop" / "Products" / "Radar"
+    assert r.json()["blueprintFolders"] == 11
+    assert (prj / "07_FAT").is_dir() and (prj / "10_Project_Deliverables").is_dir()
+    sub = c.post("/api/folders", json={"parent": str(prj / "07_FAT"), "name": "Extra"}).json()
     assert sub["blueprintFolders"] == 0                                              # deeper folders: just the folder
 
 
@@ -1465,16 +1466,25 @@ def test_blueprint_folders_locked_user_folders_and_projects_free(tmp_path):
     (root / "02_Customers").mkdir(parents=True)
     c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])))
     c.post("/api/folders", json={"parent": str(root / "02_Customers"), "name": "Customer_A"})
-    prj = root / "02_Customers" / "Customer_A" / "Projects"
+    prj = root / "02_Customers" / "Customer_A" / "Develop" / "Products"
     c.post("/api/folders", json={"parent": str(prj), "name": "Project_1"})
-    eng = prj / "Project_1" / "Engineering"
+    eng = root / "02_Customers" / "Customer_A" / "Manufacturing"
     assert c.post("/api/items/rename", json={"path": str(eng), "newName": "Eng2"}).status_code == 403      # blueprint
-    assert c.post("/api/items/delete", json={"path": str(eng / "PCB")}).status_code == 403
+    assert c.post("/api/items/delete", json={"path": str(eng / "Stencil")}).status_code == 403
+    assert c.post("/api/items/delete", json={"path": str(prj / "Project_1" / "07_FAT")}).status_code == 403
     assert c.post("/api/items/delete", json={"path": str(root / "02_Customers" / "Customer_A")}).status_code in (403, 409)
-    c.post("/api/folders", json={"parent": str(eng / "PCB"), "name": "Board_A"})                        # the user's own folder
-    r = c.post("/api/items/rename", json={"path": str(eng / "PCB" / "Board_A"), "newName": "Board_B"})
+    c.post("/api/folders", json={"parent": str(eng / "Stencil"), "name": "Board_A"})                    # the user's own folder
+    r = c.post("/api/items/rename", json={"path": str(eng / "Stencil" / "Board_A"), "newName": "Board_B"})
     assert r.status_code == 200, r.text
-    assert c.post("/api/items/delete", json={"path": str(eng / "PCB" / "Board_B")}).status_code == 200
-    r = c.post("/api/items/rename", json={"path": str(prj / "Project_1"), "newName": "PRJ-300_Radar"})    # a project is the user's
-    assert r.status_code == 200, r.text and (prj / "PRJ-300_Radar" / "Engineering" / "PCB").is_dir()
+    assert c.post("/api/items/delete", json={"path": str(eng / "Stencil" / "Board_B")}).status_code == 200
+    r = c.post("/api/items/rename", json={"path": str(prj / "Project_1"), "newName": "PRJ-300_Radar"})    # a product is the user's
+    assert r.status_code == 200, r.text and (prj / "PRJ-300_Radar" / "07_FAT").is_dir()
     assert c.post("/api/items/delete", json={"path": str(prj / "PRJ-300_Radar")}).status_code == 200
+
+
+def test_blueprint_folder_list_matches_the_tree_script_file():
+    import pathlib
+    from dms_api import blueprint
+    f = pathlib.Path(__file__).resolve().parents[2] / "scripts" / "blueprint-folders.txt"
+    lines = [x.strip() for x in f.read_text(encoding="utf-8-sig").splitlines() if x.strip()]
+    assert lines == blueprint.folder_list()          # regenerate: py -m dms_api.blueprint > ..\scripts\blueprint-folders.txt

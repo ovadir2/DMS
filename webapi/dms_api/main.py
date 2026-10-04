@@ -361,8 +361,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         ctx = {"customer": None, "project": None}
         if len(parts) >= 2 and parts[0].lower() == s.customers_folder.lower():
             ctx["customer"] = {"name": parts[1], "path": os.path.join(s.repository_root, *parts[:2])}
-            if len(parts) >= 4 and parts[2].lower() == "projects":
-                ctx["project"] = {"name": parts[3], "path": os.path.join(s.repository_root, *parts[:4])}
+            k = blueprint.product_index(parts)
+            if k is not None:
+                ctx["project"] = {"name": parts[k], "path": os.path.join(s.repository_root, *parts[:k + 1])}
         return ctx
 
     def child_folders(parts: list[str], user: User) -> list[dict]:
@@ -502,7 +503,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.get("/api/projects")
     def projects(customer: str, user: User = Depends(current_user)):
         """Project folders of one customer that the user may open."""
-        folder = os.path.join(files.resolve(s.repository_root, customer), "Projects")
+        folder = os.path.join(files.resolve(s.repository_root, customer), *blueprint.PRODUCTS)
         try:
             listing = files.list_folder(s.repository_root, folder, user.can)
         except (FileNotFoundError, PermissionError):
@@ -656,7 +657,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         parts, sub = rel_parts(path), []
         if len(parts) == 2 and parts[0].lower() == s.customers_folder.lower():
             sub = blueprint.leaves(blueprint.CUSTOMER)
-        elif len(parts) == 4 and parts[0].lower() == s.customers_folder.lower() and parts[2].lower() == "projects":
+        elif blueprint.product_index(parts) == len(parts) - 1:
             sub = blueprint.leaves(blueprint.PROJECT)
         for rel in sub:
             os.makedirs(os.path.join(path, *rel), exist_ok=True)

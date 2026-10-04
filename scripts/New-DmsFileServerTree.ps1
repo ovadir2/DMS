@@ -9,7 +9,7 @@
 
     Tree mode (default) - creates the repository root:
         01_Management\<20 management areas from blueprint Appendix A>
-        02_Customers\<Customer>\{Customer_Profile, Commercial\{RFQ,Quotations,Contracts,NDA}, Projects\<Project>\<full Appendix A tree>, Shared, Archive}
+        02_Customers\<Customer>\<customer tree>\Develop\Products\<Product>\<product tree>   (scripts\blueprint-folders.txt)
         03_Operations_Staging\{PLM_Release_Queue, MAE_Release_Queue, Priority_Import_Queue, Integration_Logs}
         04_Workflow_System\{Submitted_Queue, Rejected_Queue, Processing, Error_Queue}
         05_Exchange_Quarantine\{Inbound, Accepted, Rejected, Logs}
@@ -31,8 +31,9 @@
     Project folder names created under Projects of every customer in -Customers.
 
 .PARAMETER CustomersCsv
-    A CSV with the columns CustomerName and ProjectName (Customer / Project also accepted): one row
-    per project (a customer without projects gets one row with an empty ProjectName). Each customer gets the full customer tree and each of its
+    A CSV with the columns CustomerName and ProductName (Customer / Product / ProjectName also accepted):
+    one row per product (a customer without products gets one row with an empty ProductName). Each
+    product goes to 02_Customers\<Customer>\Develop\Products\<Product> with the development stages. Each customer gets the full customer tree and each of its
     projects the full project tree (Appendix A, the same tree the DMS page shows). Can be combined
     with -Customers / -Projects. UTF-8 (Hebrew names are fine).
 
@@ -55,7 +56,7 @@
     .\New-DmsFileServerTree.ps1 -Root 'D:\Corporate_Data_TEST' -Customers 'Customer_A'
 
 .EXAMPLE
-    # Real customers and their projects from a CSV (CustomerName,ProjectName); dry run first
+    # Real customers and their projects from a CSV (CustomerName,ProductName); dry run first
     .\New-DmsFileServerTree.ps1 -Root '\\FILE-SERVER\Corporate_Data' -CustomersCsv .\customers.csv -WhatIf
     .\New-DmsFileServerTree.ps1 -Root '\\FILE-SERVER\Corporate_Data' -CustomersCsv .\customers.csv
 
@@ -169,7 +170,7 @@ if ($CustomersCsv) {
     $rows = @(Import-Csv -LiteralPath $CustomersCsv -Encoding UTF8)
     $cols = if ($rows.Count) { @($rows[0].PSObject.Properties.Name) } else { @() }
     $cCol = @('CustomerName', 'Customer') | Where-Object { $cols -contains $_ } | Select-Object -First 1
-    $pCol = @('ProjectName', 'Project') | Where-Object { $cols -contains $_ } | Select-Object -First 1
+    $pCol = @('ProductName', 'Product', 'ProjectName', 'Project') | Where-Object { $cols -contains $_ } | Select-Object -First 1
     if ($rows.Count -and -not $cCol) { throw "The CSV needs a CustomerName column (and ProjectName). Found: $($cols -join ', ')" }
     foreach ($r in $rows) {
         $c = "$($r.$cCol)".Trim()
@@ -187,7 +188,7 @@ if ($CompleteExisting -and -not $CustomerProjects.Count -and (Test-Path -Literal
 }
 if ($true) {
     foreach ($c in @($CustomerProjects.Keys)) {
-        $pr = Join-Path (Join-Path $cRootAll $c) 'Projects'
+        $pr = Join-Path (Join-Path $cRootAll $c) 'Develop\Products'
         if (Test-Path -LiteralPath $pr) {
             foreach ($d in Get-ChildItem -LiteralPath $pr -Directory) {
                 if ($CustomerProjects[$c] -notcontains $d.Name) { $CustomerProjects[$c] = @($CustomerProjects[$c]) + $d.Name }
@@ -280,45 +281,27 @@ foreach ($t in $top.Keys) {
     foreach ($s in $top[$t]) { Add-DmsFolder (Join-Path (Join-Path $Root $t) $s) }
 }
 
-# Blueprint Appendix A - management areas
-$ManagementFolders = @('Company_Profile', 'Strategy', 'Sales_Marketing', 'HR', 'Finance', 'IT', 'Quality_System',
-    'Engineering_Standards', 'Manufacturing_Standards', 'Development_Standards', 'Project_Management', 'Templates',
-    'Training', 'Suppliers', 'Certifications', 'Legal', 'Assets', 'AI_Automation', 'Knowledge_Base', 'Archive')
-
-# Blueprint Appendix A - one customer project (relative paths)
-$DevStages = @('01_Quotation', '02_SOW', '03_SRS', '04_PDR', '05_CDR', '06_Implementation', '07_FAT', '08_SAT', '09_FDR',
-    '10_Project_Deliverables', 'Archive')
-$ProjectTree = @('Project_Info') +
-    (@('Drawings', 'Specifications', 'BOM', 'CAD', 'PDFs', 'Emails', 'Change_Requests', 'Other') | ForEach-Object { "Customer_Source\$_" }) +
-    (@('Mechanical', 'Electrical', 'PCB', 'CAD', 'Schematics', 'Gerber', 'ODB++', 'Netlist', 'BOM', 'AVL', 'DFM', 'DFT',
-       'Simulations', 'Calculations') | ForEach-Object { "Engineering\$_" }) +
-    ($DevStages | ForEach-Object { "Development\$_" }) +
-    (@('Project_Plan', 'Schedule', 'Risk_Register', 'Gate_Reviews', 'Validation', 'Transfer') | ForEach-Object { "NPI\$_" }) +
-    (@('Assembly_Drawings', 'Work_Instructions', 'Process_Flow', 'Machine_Programs', 'Stencil', 'Pick_and_Place', 'Fixtures',
-       'Photos', 'Videos') | ForEach-Object { "Manufacturing\$_" }) +
-    (@('Logging', 'Source', 'T1', 'T4', 'T5', 'T9', 'T10') | ForEach-Object { "Test_Engineering\ATEFiles\ICT\$_" }) +
-    ($DevStages | ForEach-Object { "Test_Engineering\ATEFiles\FCT\$_" }) +
-    @('Test_Engineering\ATEFiles\FTP') +
-    (@('CopyToCurrent', 'Logging', 'T1', 'T2') | ForEach-Object { "Test_Engineering\ATEFiles\JTAG\$_" }) +
-    (@('Test_Plans', 'Test_Procedures', 'Test_Reports', 'Test_Coverage', 'Yield_Analysis', 'Debug', 'Calibration', 'Released',
-       'Archive') | ForEach-Object { "Test_Engineering\$_" }) +
-    (@('PPAP', 'PFMEA', 'Control_Plan', 'NCR', 'CAR', '8D', 'Certificates', 'Audits') | ForEach-Object { "Quality\$_" }) +
-    (@('Builds', 'Travelers', 'Reports', 'KPIs', 'OEE') | ForEach-Object { "Production\$_" }) +
-    (@('ECO', 'ECN', 'Deviations', 'Waivers') | ForEach-Object { "Changes\$_" }) +
-    (@('Rev_A', 'Rev_B', 'Rev_C', 'Current') | ForEach-Object { "Released\$_" }) +
-    @('Archive')
+# The blueprint folders: scripts\blueprint-folders.txt, generated from webapi\dms_api\blueprint.py (the same
+# tree the DMS page shows). <Customer> and <Project> stand for each customer and project folder.
+$bpFile = Join-Path $PSScriptRoot 'blueprint-folders.txt'
+if (-not (Test-Path -LiteralPath $bpFile)) { throw "Missing $bpFile (git pull)" }
+$bp = @(Get-Content -LiteralPath $bpFile -Encoding UTF8 | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$ManagementFolders = @($bp | Where-Object { $_ -like '01_Management\*' } | ForEach-Object { $_.Substring('01_Management\'.Length) })
+$CustomerTree = @($bp | Where-Object { $_ -like '02_Customers\<Customer>\*' -and $_ -notlike '*<Product>*' } |
+    ForEach-Object { $_.Substring('02_Customers\<Customer>\'.Length) })
+$ProjectTree = @($bp | Where-Object { $_ -like '02_Customers\<Customer>\Develop\Products\<Product>\*' } |
+    ForEach-Object { $_.Substring('02_Customers\<Customer>\Develop\Products\<Product>\'.Length) })
 
 Write-Step 'Management areas (blueprint Appendix A)'
 foreach ($m in $ManagementFolders) { Add-DmsFolder (Join-Path (Join-Path $Root '01_Management') $m) }
 
 if ($Customers) {
-    Write-Step "Customer folders (blueprint Appendix A): $($Customers.Count) customers, $(@($CustomerProjects.Values | ForEach-Object { $_ }).Count) projects"
+    Write-Step "Customer folders (blueprint Appendix A): $($Customers.Count) customers, $(@($CustomerProjects.Values | ForEach-Object { $_ }).Count) products"
     foreach ($c in $Customers) {
         $cRoot = Join-Path (Join-Path $Root '02_Customers') $c
-        foreach ($s in 'Customer_Profile', 'Projects', 'Shared', 'Archive') { Add-DmsFolder (Join-Path $cRoot $s) }
-        foreach ($s in 'RFQ', 'Quotations', 'Contracts', 'NDA') { Add-DmsFolder (Join-Path (Join-Path $cRoot 'Commercial') $s) }
+        foreach ($rel in $CustomerTree) { Add-DmsFolder (Join-Path $cRoot $rel) }
         foreach ($p in $CustomerProjects[$c]) {
-            $pRoot = Join-Path (Join-Path $cRoot 'Projects') $p
+            $pRoot = Join-Path (Join-Path $cRoot 'Develop\Products') $p
             foreach ($rel in $ProjectTree) { Add-DmsFolder (Join-Path $pRoot $rel) }
         }
     }

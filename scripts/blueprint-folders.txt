@@ -1,0 +1,114 @@
+﻿01_Management
+01_Management\Company_Profile
+01_Management\Strategy
+01_Management\Commercial
+01_Management\Sales_Marketing
+01_Management\Engineering
+01_Management\Project_Management
+01_Management\Planners
+01_Management\Supply_chain
+01_Management\Quality_System
+01_Management\Quality and Standards
+01_Management\Quality and Standards\נהלי איכות בתפעול
+01_Management\Quality and Standards\נהלי איכות בתפעול\חטיבות
+01_Management\Quality and Standards\נהלי איכות בתפעול\כלל חברה
+01_Management\Quality and Standards\נהלי איכות בתפעול\כלל חברה\ארכיון
+01_Management\Quality and Standards\נהלי איכות בתפעול\כלל חברה\Training
+01_Management\Quality and Standards\נהלי איכות בתפעול\מערכות מידע
+01_Management\Quality and Standards\נהלי איכות בתפעול\מערכות מידע\ארכיון
+01_Management\Quality and Standards\נהלי איכות בתפעול\מפעל ייצור
+01_Management\Quality and Standards\נהלי איכות בתפעול\מפעל ייצור\ארכיון
+01_Management\Quality and Standards\נהלי איכות בתפעול\משאבי אנוש
+01_Management\Quality and Standards\נהלי איכות בתפעול\משאבי אנוש\ארכיון
+01_Management\Quality and Standards\נהלי איכות בתפעול\נהלי אחזקה
+01_Management\Quality and Standards\נהלי איכות בתפעול\רכש ואספקה
+01_Management\Quality and Standards\נהלי איכות בתפעול\רכש ואספקה\ארכיון
+01_Management\Quality and Standards\נהלי איכות בתפעול\תשתיות איכות
+01_Management\Quality and Standards\נהלי איכות בתפעול\תשתיות איכות\ארכיון
+01_Management\Certifications
+01_Management\HR
+01_Management\Training
+01_Management\Finance
+01_Management\Legal
+01_Management\Assets
+01_Management\IT
+01_Management\DB_Management
+01_Management\AI_Automation
+01_Management\Templates
+01_Management\Archive
+02_Customers
+02_Customers\<Customer>
+02_Customers\<Customer>\Customer_Profile
+02_Customers\<Customer>\Commercial
+02_Customers\<Customer>\Commercial\RFQ
+02_Customers\<Customer>\Commercial\Quotations
+02_Customers\<Customer>\Commercial\Contracts
+02_Customers\<Customer>\Commercial\NDA
+02_Customers\<Customer>\Pricing
+02_Customers\<Customer>\Develop
+02_Customers\<Customer>\Develop\ATEFiles
+02_Customers\<Customer>\Develop\ATEFiles\FCT
+02_Customers\<Customer>\Develop\ATEFiles\FCT\01_Quotation
+02_Customers\<Customer>\Develop\ATEFiles\FCT\02_SOW
+02_Customers\<Customer>\Develop\ATEFiles\FCT\03_SRS
+02_Customers\<Customer>\Develop\ATEFiles\FCT\04_PDR
+02_Customers\<Customer>\Develop\ATEFiles\FCT\05_CDR
+02_Customers\<Customer>\Develop\ATEFiles\FCT\06_Implementation
+02_Customers\<Customer>\Develop\ATEFiles\FCT\07_FAT
+02_Customers\<Customer>\Develop\ATEFiles\FCT\08_SAT
+02_Customers\<Customer>\Develop\ATEFiles\FCT\09_FDR
+02_Customers\<Customer>\Develop\ATEFiles\FCT\10_Project_Deliverables
+02_Customers\<Customer>\Develop\ATEFiles\FCT\Archive
+02_Customers\<Customer>\Develop\ATEFiles\FTP
+02_Customers\<Customer>\Develop\ATEFiles\ICT
+02_Customers\<Customer>\Develop\ATEFiles\ICT\Logging
+02_Customers\<Customer>\Develop\ATEFiles\ICT\Source
+02_Customers\<Customer>\Develop\ATEFiles\ICT\T1
+02_Customers\<Customer>\Develop\ATEFiles\ICT\T4
+02_Customers\<Customer>\Develop\ATEFiles\ICT\T5
+02_Customers\<Customer>\Develop\ATEFiles\ICT\T9
+02_Customers\<Customer>\Develop\ATEFiles\ICT\T10
+02_Customers\<Customer>\Develop\ATEFiles\JTAG
+02_Customers\<Customer>\Develop\ATEFiles\JTAG\CopyToCurrent
+02_Customers\<Customer>\Develop\ATEFiles\JTAG\Logging
+02_Customers\<Customer>\Develop\ATEFiles\JTAG\T1
+02_Customers\<Customer>\Develop\ATEFiles\JTAG\T2
+02_Customers\<Customer>\Develop\Products
+02_Customers\<Customer>\Develop\Products\<Product>
+02_Customers\<Customer>\Develop\Products\<Product>\01_Quotation
+02_Customers\<Customer>\Develop\Products\<Product>\02_SOW
+02_Customers\<Customer>\Develop\Products\<Product>\03_SRS
+02_Customers\<Customer>\Develop\Products\<Product>\04_PDR
+02_Customers\<Customer>\Develop\Products\<Product>\05_CDR
+02_Customers\<Customer>\Develop\Products\<Product>\06_Implementation
+02_Customers\<Customer>\Develop\Products\<Product>\07_FAT
+02_Customers\<Customer>\Develop\Products\<Product>\08_SAT
+02_Customers\<Customer>\Develop\Products\<Product>\09_FDR
+02_Customers\<Customer>\Develop\Products\<Product>\10_Project_Deliverables
+02_Customers\<Customer>\Develop\Products\<Product>\Archive
+02_Customers\<Customer>\Engineering
+02_Customers\<Customer>\DFM
+02_Customers\<Customer>\DFT
+02_Customers\<Customer>\NPI
+02_Customers\<Customer>\Manufacturing
+02_Customers\<Customer>\Manufacturing\Assembly_Drawings
+02_Customers\<Customer>\Manufacturing\Work_Instructions
+02_Customers\<Customer>\Manufacturing\Process_Flow
+02_Customers\<Customer>\Manufacturing\Machine_Programs
+02_Customers\<Customer>\Manufacturing\Stencil
+02_Customers\<Customer>\Manufacturing\Pick_and_Place
+02_Customers\<Customer>\Manufacturing\Fixtures
+02_Customers\<Customer>\Manufacturing\Photos
+02_Customers\<Customer>\Manufacturing\Videos
+02_Customers\<Customer>\Quality_QC
+02_Customers\<Customer>\Quality_QC\PPAP
+02_Customers\<Customer>\Quality_QC\PFMEA
+02_Customers\<Customer>\Quality_QC\Control_Plan
+02_Customers\<Customer>\Quality_QC\NCR
+02_Customers\<Customer>\Quality_QC\CAR
+02_Customers\<Customer>\Quality_QC\8D
+02_Customers\<Customer>\Quality_QC\Certificates
+02_Customers\<Customer>\Quality_QC\Audits
+02_Customers\<Customer>\Supply_chain
+02_Customers\<Customer>\Shared
+02_Customers\<Customer>\Archive
