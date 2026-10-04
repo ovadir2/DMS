@@ -91,7 +91,7 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
       f" | control mode: {control_mode or 'from the blueprint folder'}")
     L(f"  copy missing from source: {copy_missing} | update File Linker: {update_links} (configured: {bool(linker and linker.enabled)})")
     approver = (approver or s.first_load_approver or actor).lower()
-    L(f"  mode: {'save (files only, no workflow)' if mode == 'save' else f'DMS approval simulated - approver {approver}'}")
+    L(f"  mode: {'save - released by the DMS to Current_ReadOnly (no workflow, not registered)' if mode == 'save' else f'DMS approval simulated - approver {approver}'}")
     items = plan(source, target)
     L(f"  files found: {len(items)} (source and target trees, without workflow folders and system files)")
     job.update(total=len(items), done=0, rows=[])
@@ -104,9 +104,8 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
         L(f"    source path: {it['source']} (exists: {os.path.isfile(it['source'])})")
         L(f"    in target:   {it['moved']} (exists: {os.path.isfile(it['moved'])})")
         if mode == "save":
-            row["target"] = it["moved"]
             try:
-                _save_only(it, row, L, dry_run, copy_missing, update_links, linker, s.repository_root)
+                _save_only(it, row, L, dry_run, copy_missing, update_links, linker, s, sp, actor)
             except Exception as e:  # noqa: BLE001 - one file must not stop the others
                 row["result"] = f"error - {e}"
                 L(f"    ERROR: {e!r}")
@@ -266,28 +265,46 @@ def _approve_like_the_dms(sp, s: Settings, it: dict, working: str, ftype, farea,
     return doc, sha, rev, title
 
 
-def _save_only(it: dict, row: dict, L, dry_run: bool, copy_missing: bool, update_links: bool, linker, root: str) -> None:
-    """Mode save: the file goes to the same place under the target, as is (no registration, no workflow)."""
-    there = os.path.isfile(it["moved"])
+DMS_APPROVER = "DMS"
+
+
+def _save_only(it: dict, row: dict, L, dry_run: bool, copy_missing: bool, update_links: bool, linker,
+               s: Settings, sp, actor: str) -> None:
+    """Mode save: released as a formal approval, approved by the DMS itself - the file goes to Current_ReadOnly
+    in its folder, read only, with a Control Audit row (SHA-256); not registered, no workflow."""
+    from .file_service import _move, _set_read_only
+    from . import noworkflow
+    there, done = os.path.isfile(it["moved"]), os.path.isfile(it["current"])
     if dry_run:
-        where = "already in the target" if there else ("copy from the source" if copy_missing else "MISSING in the target")
-        row["result"] = f"plan - {where} (save, no workflow)"
-        L(f"    plan: {where} -> {it['moved']} (save, no workflow)")
+        where = "already released" if done else ("in the target" if there else ("copy from the source" if copy_missing else "MISSING in the target"))
+        row["result"] = f"plan - {where} -> Current_ReadOnly (approved by DMS, no workflow)"
+        L(f"    plan: {where} -> {it['current']} (approved by DMS, no workflow)")
         if update_links and linker is not None and linker.enabled:
             row["fileLinker"] = "registered - would be updated" if linker.is_registered(it["source"]) else "not registered"
         return
+    if done:
+        row["result"] = "skipped - already released"
+        L(f"    already in {it['current']}")
+        return
     if there:
-        row["result"] = "skipped - already in the target"
-        L("    already in the target folder")
+        cur = _move(it["moved"], it["current"])
+        L("    taken from the target folder (moved there before)")
     elif copy_missing and os.path.isfile(it["source"]):
-        os.makedirs(it["folder"], exist_ok=True)
-        shutil.copy2(it["source"], it["moved"])
-        row.update(result="saved", sha256=_sha256(it["moved"]))
-        from . import noworkflow
-        noworkflow.mark(root, it["moved"])
-        L(f"    saved (no workflow): {it['moved']} ({os.path.getsize(it['moved'])} bytes)")
+        os.makedirs(os.path.dirname(it["current"]), exist_ok=True)
+        shutil.copy2(it["source"], it["current"])
+        cur = it["current"]
     else:
         raise FileNotFoundError("the file is not in the target folder (copy from the source is off)")
+    _set_read_only(cur, True)
+    noworkflow.mark(s.repository_root, cur)
+    sha = _sha256(cur)
+    c = s.choices
+    sp.audit(document_id="", event=c["ApprovedEvent"], from_status="", to_status=c["Approved_ReadOnly"], actor=DMS_APPROVER,
+             details=f"Approved by DMS (First loading by {actor}, no workflow, not registered): {it['source']} -> "
+                     f"{os.path.relpath(cur, s.repository_root)} [file SHA-256 {sha}]", source=c["WorkflowService"])
+    row.update(result="released - approved by DMS", sha256=sha, target=cur)
+    L(f"    released (approved by DMS, no workflow): {cur}, read-only, SHA-256 {sha}")
+    it = {**it, "moved": cur}
     if update_links and linker is not None and linker.enabled and os.path.normcase(it["source"]) != os.path.normcase(it["moved"]):
         try:
             if linker.is_registered(it["source"]):

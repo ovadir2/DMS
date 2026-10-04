@@ -1527,12 +1527,15 @@ def test_first_loading_save_only(tmp_path):
     c.app.state.linker = linker
     body = {"source": str(old), "target": str(target), "mode": "save", "dryRun": False}
     j = _wait(c, c.post("/api/first-load", json=body).json()["id"])
-    assert {r["result"] for r in j["rows"]} == {"saved"}
-    assert (target / "Photos" / "line.jpg").exists() and (target / "notes.txt").exists()
-    assert not (target / "Current_ReadOnly").exists() and not sp.items                    # no workflow, not registered
-    assert linker.replaced == [(str(old / "notes.txt"), str(target / "notes.txt"))]
+    assert {r["result"] for r in j["rows"]} == {"released - approved by DMS"}
+    line, notes = target / "Photos" / "Current_ReadOnly" / "line.jpg", target / "Current_ReadOnly" / "notes.txt"
+    assert line.exists() and notes.exists() and files.is_read_only(str(notes))
+    assert not (target / "notes.txt").exists() and not sp.items                          # no workflow, not registered
+    rows = [a for a in sp.audits if a["actor"] == "DMS"]
+    assert len(rows) == 2 and all("[file SHA-256 " in a["details"] for a in rows)
+    assert linker.replaced == [(str(old / "notes.txt"), str(notes))]
     again = _wait(c, c.post("/api/first-load", json=body).json()["id"])
-    assert {r["result"] for r in again["rows"]} == {"skipped - already in the target"}
+    assert {r["result"] for r in again["rows"]} == {"skipped - already released"}
 
 
 def test_saved_without_workflow_has_no_start_workflow(tmp_path):
