@@ -1564,4 +1564,7 @@ def test_saved_without_workflow_has_no_start_workflow(tmp_path):
     assert c.app.state.sp.choices("ControlMode")[0] == d["controlMode"] and d["lifecycleStatus"] == c.app.state.sp.s.choices["Approved_ReadOnly"] and d["ownerEmail"] == USER
     assert len([a for a in sp.audits if a["documentId"] == d["documentId"] and a["actor"] == "DMS"]) == 2   # saved, then saved again
     assert c.get(f"/api/documents/{d['id']}/share-info").json()["customer"] == "Customer_A"           # can be shared
-    assert c.post(f"/api/documents/{d['id']}/revise").status_code == 409                               # no workflow, no revision
+    r = c.post(f"/api/documents/{d['id']}/revise")                                                       # New revision: into workflow
+    assert r.status_code == 200, r.text
+    d = sp.document(d["id"])
+    assert d["controlMode"] != sp.choices("ControlMode")[0] and not c.post(f"/api/documents/{d['id']}/submit").status_code >= 400

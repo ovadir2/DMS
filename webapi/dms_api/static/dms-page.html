@@ -332,7 +332,7 @@ const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${
 function fileActions(f) {
   return `${f.officeUri ? `<a class="link" href="${esc(f.officeUri)}">${T.open}</a>` : ''}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cp="${esc(f.path)}">🔗 ${T.copyLink}</button>`
     + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-drn="${f.document.id}" data-name="${esc(f.name)}">${T.rename}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
-        + (f.document.statusKey === 'Approved_ReadOnly' && samePath(f.path, f.document.currentUncPath) ? `${f.document.noWorkflow ? '' : `<button type="button" class="link" data-rev="${f.document.id}">⟳ ${T.newRev}</button>`}<button type="button" class="link" data-share="${f.document.id}">✉ ${T.share}</button>` : '')
+        + (f.document.statusKey === 'Approved_ReadOnly' && samePath(f.path, f.document.currentUncPath) ? `<button type="button" class="link" data-rev="${f.document.id}">⟳ ${T.newRev}</button><button type="button" class="link" data-share="${f.document.id}">✉ ${T.share}</button>` : '')
                   : (f.managed || f.system || f.noWorkflow ? '' : `<button type="button" class="link" data-st="${esc(f.path)}">${T.start}</button>`));
 }
 const samePath = (a, b) => !!a && !!b && a.replace(/\//g, '\\').toLowerCase() === b.replace(/\//g, '\\').toLowerCase();
@@ -526,7 +526,7 @@ async function mine(v) {
         ${d.workingUncPath ? `<button type="button" class="link" data-cp="${esc(d.workingUncPath)}">🔗 ${T.copyWorking}</button>` : ''}
         ${d.statusKey === 'Submitted' && d.editUri ? `<a class="link" href="${esc(d.editUri)}">✎ ${T.openEdit}</a>` : ''}
         ${d.statusKey === 'Submitted' ? `<button type="button" class="link" data-wd="${d.id}" style="color:var(--err)">${T.withdraw}</button>` : ''}
-        ${d.statusKey === 'Approved_ReadOnly' ? `${d.noWorkflow ? '' : `<button type="button" class="link" data-rev="${d.id}">⟳ ${T.newRev}</button>`}<button type="button" class="link" data-share="${d.id}">✉ ${T.share}</button>` : ''}
+        ${d.statusKey === 'Approved_ReadOnly' ? `<button type="button" class="link" data-rev="${d.id}">⟳ ${T.newRev}</button><button type="button" class="link" data-share="${d.id}">✉ ${T.share}</button>` : ''}
         <button type="button" class="link" data-hist="${d.id}">${T.history}</button>
 </td></tr>
       <tr id="h-${d.id}" hidden><td colspan="7"><ol class="timeline">${d.history.map(e => `<li><b>${esc(evName(e.event))}</b> <span class="muted">${when(e.utc)} · ${esc(e.actor)}${e.source ? ' · ' + esc(e.source) : ''}</span>${e.details ? `<div class="small">${esc(e.details)}</div>` : ''}</li>`).join('')}</ol></td></tr>`).join('')}

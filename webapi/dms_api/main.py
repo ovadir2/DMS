@@ -1329,8 +1329,6 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         d = sp().document(item_id)
         if d.get("lifecycleStatus") != c["Approved_ReadOnly"]:
             raise HTTPException(409, "Only an approved document can get a new revision")
-        if with_key(d)["noWorkflow"]:
-            raise HTTPException(409, f"{d.get('documentId')}: saved without workflow - save the new file again (Save file (no workflow))")
         current = to_root(s.repository_root, d.get("currentUncPath"))
         if not current or not os.path.isfile(current):
             raise HTTPException(409, "The approved file was not found on the file server")
@@ -1362,6 +1360,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         sp().audit(document_id=d.get("documentId") or f"ID {item_id}", event=c["StatusChanged"], from_status=c["Approved_ReadOnly"],
                    to_status=c["Working"], actor=user.email,
                    details=f"New revision {new_rev:02d} from {how}: {os.path.relpath(target, s.repository_root)}")
+        if with_key(d)["noWorkflow"]:                            # saved without workflow: from now on it goes through workflow
+            from . import noworkflow
+            sp().update(item_id, {"ControlMode": classify(os.path.dirname(target))["controlMode"]
+                                  or blueprint.choice("Workflow Required", sp().choices("ControlMode"))})
+            noworkflow.moved(s.repository_root, to_root(s.repository_root, d.get("currentUncPath")) or "", None)
         log(user, "revise", f"{d.get('documentId')} -> {target}")
         if submit:
             return {**submit_doc(item_id, None, user), "draft": target, "officeUri": files.office_uri(target)}
