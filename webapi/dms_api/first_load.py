@@ -145,35 +145,7 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
                     raise FileNotFoundError("the file is not in the target folder (copy from the source is off)")
                 if os.path.exists(it["current"]):
                     raise FileExistsError("a file with this name is already in Current_ReadOnly")
-                os.makedirs(os.path.dirname(it["current"]), exist_ok=True)
-                os.replace(from_path, it["current"])
-                os.chmod(it["current"], os.stat(it["current"]).st_mode & ~stat.S_IWRITE & ~stat.S_IWGRP & ~stat.S_IWOTH)
-                L(f"    moved to {it['current']}, set read-only")
-                sha = _sha256(it["current"])
-                L(f"    SHA-256 {sha}")
-                rev = f"{files.parse_revision(os.path.basename(it['current']))[1] or 1:02d}"
-                title = os.path.splitext(os.path.basename(it["current"]))[0]
-                doc = sp.create_document(title=title, path=it["current"], document_type=ftype, document_area=farea,
-                                         owner_email=actor, control_mode=fmode, document_id=None)
-                sp.update(doc["id"], {"LifecycleStatus": c["Approved_ReadOnly"], "CurrentUncPath": it["current"],
-                                      "CurrentSHA256": sha, "CurrentRevision": rev, "WorkingUncPath": "", "DraftRevision": "",
-                                      "LastApprovedUtc": datetime.now(timezone.utc).isoformat()})
-                rel_target = os.path.relpath(it["current"], s.repository_root)
-                sp.audit(document_id=doc["documentId"], event=c["Created"], from_status="", to_status=c["Approved_ReadOnly"],
-                         actor=actor, details=f"DMS First loading from {it['source']}: {rel_target}. SHA-256 {sha}")
-                sp.audit(document_id=doc["documentId"], event=c["SubmittedEvent"], from_status=c["Working"], to_status=c["Submitted"],
-                         actor=actor, details=f"DMS First loading: submitted for approval (Approvers (chosen): {approver})")
-                sp.audit(document_id=doc["documentId"], event=c["ApprovedEvent"], from_status=c["Submitted"], to_status=c["Approved_ReadOnly"],
-                         actor=approver, details=f"Stage 2: DMS First loading - approved in the old repository, released as revision {rev}"
-                                                 f" [file SHA-256 {sha}]")
-                try:
-                    sp.log_decision(workflow_id=f"{doc['documentId']}-FL{stamp}"[:40], document_id=doc["documentId"], revision=rev,
-                                    approver=approver, role="Final", stage=2, decision="Approved",
-                                    comment="DMS First loading: approved in the old repository")
-                except Exception as e:  # noqa: BLE001 - the document is loaded; the decisions list is a record
-                    L(f"    Approval Decisions row failed: {e!r}")
-                L(f"    registered {doc['documentId']} (item {doc['id']}): Approved, revision {rev}, title '{title}', owner {actor}")
-                L(f"    Control Audit: Created + Submitted ({actor}) + Approved ({approver}); Approval Decisions: Final, Approved")
+                doc, sha, rev, title = _approve_like_the_dms(sp, s, it, from_path, ftype, farea, fmode, actor, approver, L)
                 registered.add(os.path.normcase(os.path.normpath(it["current"])))
                 row.update(documentId=doc["documentId"], revision=rev, sha256=sha, result="loaded")
                 if update_links and linker is not None and linker.enabled:
@@ -235,6 +207,63 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
     if logf:
         logf.close()
     job["state"] = "finished"
+
+
+def _approve_like_the_dms(sp, s: Settings, it: dict, working: str, ftype, farea, fmode, actor: str, approver: str, L):
+    """The DMS approval of one file, step by step as on the page and in the file service, with the same
+    Document Register fields and Control Audit / Approval Decisions rows; the approver is `approver`."""
+    from .file_service import _move, _set_read_only
+    c = s.choices
+    rel = lambda p: os.path.relpath(p, s.repository_root)  # noqa: E731
+    title = os.path.splitext(os.path.basename(working))[0]
+    rev = f"{files.parse_revision(os.path.basename(working))[1] or 1:02d}"
+    # 1. registered in Working (as "Start workflow" on the page)
+    doc = sp.create_document(title=title, path=working, document_type=ftype, document_area=farea,
+                             owner_email=actor, control_mode=fmode, document_id=None)
+    did = doc["documentId"]
+    sp.update(doc["id"], {"DraftRevision": rev})
+    sp.audit(document_id=did, event=c["Created"], from_status="", to_status=c["Working"], actor=actor,
+             details=f"Registered by DMS First loading from {it['source']}: {rel(working)}")
+    L(f"    1 registered {did} (item {doc['id']}) in Working, revision {rev}, owner {actor}")
+    # 2. submitted for approval, the approver chosen
+    sp.update(doc["id"], {"LifecycleStatus": c["Submitted"]})
+    submitted_utc = datetime.now(timezone.utc)
+    sp.audit(document_id=did, event=c["SubmittedEvent"], from_status=c["Working"], to_status=c["Submitted"], actor=actor,
+             details=f"Submitted by DMS First loading. Approvers (chosen): {approver}")
+    L(f"    2 submitted, approver {approver}")
+    # 3. the file service locks it in Submitted
+    sub = _move(working, os.path.join(os.path.dirname(working), "Submitted", os.path.basename(working)), replace=True)
+    sha = _sha256(sub)
+    sp.audit(document_id=did, event=c["FileDone"], from_status=c["Submitted"], to_status=c["Submitted"],
+             actor="RH-DMS-Workflow-Service", details=f"MoveToSubmitted: {rel(working)} -> {rel(sub)}. SHA-256 {sha}",
+             source=c["WorkflowService"])
+    L(f"    3 file -> {sub} (SHA-256 {sha})")
+    # 4. approved by the approver
+    sp.update(doc["id"], {"LifecycleStatus": c["Approved_ReadOnly"], "LastApprovedUtc": datetime.now(timezone.utc).isoformat()})
+    sp.audit(document_id=did, event=c["ApprovedEvent"], from_status=c["Submitted"], to_status=c["Approved_ReadOnly"],
+             actor=approver, details=f"Stage 1: approved in the old repository (DMS First loading) [file SHA-256 {sha}]")
+    try:
+        sp.log_decision(workflow_id=f"{did}-{submitted_utc.strftime('%Y%m%dT%H')}"[:40], document_id=did, revision=rev,
+                        approver=approver, role="Mandatory", stage=1, decision="Approved",
+                        comment="Approved in the old repository (DMS First loading)")
+    except Exception as e:  # noqa: BLE001 - the decisions list is a record; the approval stands
+        L(f"    Approval Decisions row failed: {e!r}")
+    L(f"    4 approved by {approver} (Control Audit + Approval Decisions)")
+    # 5. the file service releases it: Current_ReadOnly, read-only, register updated
+    cur = _move(sub, it["current"])
+    _set_read_only(cur, True)
+    sha = _sha256(cur)
+    sp.update(doc["id"], {"CurrentUncPath": cur, "CurrentSHA256": sha, "WorkingUncPath": "",
+                          "CurrentRevision": rev, "DraftRevision": ""})
+    sp.audit(document_id=did, event=c["FileDone"], from_status=c["Approved_ReadOnly"], to_status=c["Approved_ReadOnly"],
+             actor="RH-DMS-Workflow-Service", details=f"PromoteToCurrent: {rel(sub)} -> {rel(cur)}. SHA-256 {sha}",
+             source=c["WorkflowService"])
+    L(f"    5 released: {cur}, read-only, revision {rev} current")
+    try:
+        os.rmdir(os.path.dirname(sub))                       # the Submitted folder, when it is left empty
+    except OSError:
+        pass
+    return doc, sha, rev, title
 
 
 def _save_only(it: dict, row: dict, L, dry_run: bool, copy_missing: bool, update_links: bool, linker) -> None:

@@ -933,9 +933,15 @@ def test_first_loading(tmp_path):
     assert any("DMS First loading" in e["details"] for e in sp.audit_events())
     assert j["report"] and os.path.isfile(j["report"])
     did = docs["Spec_Rev3"]["documentId"]
-    trail = [(e["event"], e["actor"]) for e in reversed(sp.audit_events()) if e["documentId"] == did][:3]
-    assert trail == [("נוצר", USER), ("הוגש", USER), ("אושר", "dms_approval@rh.co.il")]   # the DMS approval, simulated
-    assert any(x["approver"] == "dms_approval@rh.co.il" and x["role"] == "Final" for x in sp.decisions)
+    trail = [(e["event"], e["actor"], e["details"].split(":")[0]) for e in reversed(sp.audit_events()) if e["documentId"] == did]
+    c_ = s.choices                                                                   # the same steps as a normal approval
+    assert [x[:2] for x in trail[:5]] == [(c_["Created"], USER), (c_["SubmittedEvent"], USER), (c_["FileDone"], "RH-DMS-Workflow-Service"),
+                                          (c_["ApprovedEvent"], "dms_approval@rh.co.il"), (c_["FileDone"], "RH-DMS-Workflow-Service")]
+    assert [x[2] for x in trail[:5]][2::2] == ["MoveToSubmitted", "PromoteToCurrent"]
+    assert "Approvers (chosen): dms_approval@rh.co.il" in [e for e in reversed(sp.audit_events()) if e["documentId"] == did][1]["details"]
+    assert any(x["approver"] == "dms_approval@rh.co.il" and x["decision"] == "Approved" for x in sp.decisions)
+    assert docs["Spec_Rev3"]["currentRevision"] == "03" and not docs["Spec_Rev3"]["workingUncPath"] and docs["Spec_Rev3"]["lastApprovedUtc"]
+    assert not (target / "Submitted").exists()
     again = _wait(c, c.post("/api/first-load", json={**body, "dryRun": False}).json()["id"])
     assert all(r["result"] == "skipped - already loaded" for r in again["rows"])
     assert file_service.run_once(sp, s)["moved"] == 0                                   # the file service leaves them alone
