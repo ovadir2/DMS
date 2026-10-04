@@ -484,9 +484,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                             "label": blueprint.describe(parts[: i + 1])} for i, p in enumerate(parts)]
         result["context"] = context_of(parts)
         idx = register_index()
+        from . import noworkflow
+        nw = noworkflow.marked(s.repository_root)
         for f in result["files"]:
             d = find_registered(f["path"], idx)
             f["document"] = with_key(d) if d else None
+            if not d and noworkflow.is_marked(s.repository_root, f["path"], nw):
+                f["noWorkflow"] = True
             if holds_share_log(f["path"]) or in_shared_folder(f["path"]):
                 f.update(readOnly=True, system=True, noWorkflow=True)   # open (view), download, copy path only
         if in_shared_folder(os.path.join(result["path"], "x")):
@@ -592,7 +596,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.post("/api/files/upload", status_code=201)
     def upload(folder: str = Form(...), file: UploadFile = File(...), overwrite: bool = Form(False),
-               user: User = Depends(current_user)):
+               noWorkflow: bool = Form(False), user: User = Depends(current_user)):
         """Save a file from the user's PC into a folder of the repository (the user needs write access there)."""
         target_dir = files.resolve(s.repository_root, folder)
         if not os.path.isdir(target_dir):
@@ -610,7 +614,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, "A file with this name already exists in the folder") from None
         except (ValueError, PermissionError) as e:
             raise HTTPException(400, str(e)) from None
-        log(user, "upload", path)
+        from . import noworkflow
+        if noWorkflow:
+            noworkflow.mark(s.repository_root, path)               # saved as is: no Start workflow for it
+        log(user, "upload", path + (" (no workflow)" if noWorkflow else ""))
         d = find_registered(path, register_index())
         return {"name": os.path.basename(path), "path": path, "document": with_key(d) if d else None}
 
@@ -683,6 +690,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, f"It holds a controlled document ({d.get('documentId')}) and cannot be renamed")
         try:
             path = files.rename_item(s.repository_root, full, req.newName, s.protected_depth)
+            from . import noworkflow
+            noworkflow.moved(s.repository_root, full, path)
         except FileExistsError:
             raise HTTPException(409, "An item with this name already exists") from None
         except FileNotFoundError:
@@ -709,6 +718,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, f"It holds a controlled document ({d.get('documentId')}) and cannot be deleted")
         try:
             moved = files.delete_item(s.repository_root, full, s.protected_depth, user.email)
+            from . import noworkflow
+            noworkflow.moved(s.repository_root, full, None)
         except FileNotFoundError:
             raise HTTPException(404, "Not found") from None
         except PermissionError as e:
@@ -1235,6 +1246,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, "The file is already in a workflow folder")
         if holds_share_log(path):
             raise HTTPException(403, "The customer's share log is kept by the DMS and is not a controlled document")
+        from . import noworkflow
+        if noworkflow.is_marked(s.repository_root, path):
+            raise HTTPException(409, "This file was saved without workflow (Save file (no workflow))")
         if in_shared_folder(path):
             raise HTTPException(403, "Files in the customer's Shared folder are not workflowed (they are copies already sent)")
         existing = find_registered(path, register_index())

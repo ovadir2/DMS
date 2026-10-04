@@ -106,7 +106,7 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
         if mode == "save":
             row["target"] = it["moved"]
             try:
-                _save_only(it, row, L, dry_run, copy_missing, update_links, linker)
+                _save_only(it, row, L, dry_run, copy_missing, update_links, linker, s.repository_root)
             except Exception as e:  # noqa: BLE001 - one file must not stop the others
                 row["result"] = f"error - {e}"
                 L(f"    ERROR: {e!r}")
@@ -266,7 +266,7 @@ def _approve_like_the_dms(sp, s: Settings, it: dict, working: str, ftype, farea,
     return doc, sha, rev, title
 
 
-def _save_only(it: dict, row: dict, L, dry_run: bool, copy_missing: bool, update_links: bool, linker) -> None:
+def _save_only(it: dict, row: dict, L, dry_run: bool, copy_missing: bool, update_links: bool, linker, root: str) -> None:
     """Mode save: the file goes to the same place under the target, as is (no registration, no workflow)."""
     there = os.path.isfile(it["moved"])
     if dry_run:
@@ -283,6 +283,8 @@ def _save_only(it: dict, row: dict, L, dry_run: bool, copy_missing: bool, update
         os.makedirs(it["folder"], exist_ok=True)
         shutil.copy2(it["source"], it["moved"])
         row.update(result="saved", sha256=_sha256(it["moved"]))
+        from . import noworkflow
+        noworkflow.mark(root, it["moved"])
         L(f"    saved (no workflow): {it['moved']} ({os.path.getsize(it['moved'])} bytes)")
     else:
         raise FileNotFoundError("the file is not in the target folder (copy from the source is off)")

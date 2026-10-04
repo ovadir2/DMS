@@ -1533,3 +1533,19 @@ def test_first_loading_save_only(tmp_path):
     assert linker.replaced == [(str(old / "notes.txt"), str(target / "notes.txt"))]
     again = _wait(c, c.post("/api/first-load", json=body).json()["id"])
     assert {r["result"] for r in again["rows"]} == {"skipped - already in the target"}
+
+
+def test_saved_without_workflow_has_no_start_workflow(tmp_path):
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])))
+    r = c.post("/api/files/upload", data={"folder": str(q), "noWorkflow": "true"}, files={"file": ("notes.docx", b"x")})
+    assert r.status_code == 201, r.text
+    c.post("/api/files/upload", data={"folder": str(q)}, files={"file": ("quote.docx", b"y")})       # New document path
+    files_ = {f["name"]: f for f in c.get("/api/browse", params={"path": str(q)}).json()["files"]}
+    assert files_["notes.docx"].get("noWorkflow") and not files_["quote.docx"].get("noWorkflow")
+    assert c.post("/api/documents", json={"path": str(q / "notes.docx"), "documentType": "x", "documentArea": "y"}).status_code == 409
+    c.post("/api/items/rename", json={"path": str(q / "notes.docx"), "newName": "notes2.docx"})
+    files_ = {f["name"]: f for f in c.get("/api/browse", params={"path": str(q)}).json()["files"]}
+    assert files_["notes2.docx"].get("noWorkflow")                                      # the mark follows a rename

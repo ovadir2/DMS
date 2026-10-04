@@ -848,7 +848,7 @@ async function uploadDialog(folder) {
       <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="overwrite">${T.overwrite}</label>`,
     [['cancel', T.cancel, 'light'], ['ok', T.ok]]);
   while (r.action === 'ok') {
-    const fd = new FormData(r.form); fd.set('folder', folder); fd.set('overwrite', r.form.overwrite.checked ? 'true' : 'false');
+    const fd = new FormData(r.form); fd.set('folder', folder); fd.set('overwrite', r.form.overwrite.checked ? 'true' : 'false'); fd.set('noWorkflow', 'true');
     try { const x = await api('/api/files/upload', { method:'POST', body:fd }); $('#dlg').close(); render(); return x; }
     catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); r = await new Promise(res => $('#dlg-form').onsubmit = ev => { ev.preventDefault(); res({ action: ev.submitter?.value, form: ev.target }); }); }
   }
