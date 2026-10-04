@@ -139,13 +139,18 @@ def list_folder(root: str, path: str | None, can: Can = _allow_all) -> dict:
             "folders": folders, "files": files}
 
 
-def save_upload(root: str, folder: str, filename: str, stream: BinaryIO, max_bytes: int, overwrite: bool = False) -> str:
+def save_upload(root: str, folder: str, filename: str, stream: BinaryIO, max_bytes: int, overwrite: bool = False,
+                released: bool = False) -> str:
     """Write an uploaded file into `folder` (inside root): to a temporary name first, then renamed,
-    so a broken upload never leaves half a file. Workflow folders are refused."""
+    so a broken upload never leaves half a file. Workflow folders are refused, except with `released`:
+    the file goes straight into the folder's Current_ReadOnly, read only (saved without workflow)."""
     target_dir = resolve(root, folder)
+    if released:
+        target_dir = os.path.join(target_dir, WORKFLOW_FOLDERS[2])
+        os.makedirs(target_dir, exist_ok=True)
     if not os.path.isdir(target_dir):
         raise FileNotFoundError(target_dir)
-    if os.path.basename(target_dir) in WORKFLOW_FOLDERS[1:]:
+    if not released and os.path.basename(target_dir) in WORKFLOW_FOLDERS[1:]:
         raise PathNotAllowed("files cannot be saved into a workflow folder")
     name = os.path.basename(filename.replace("\\", "/"))
     if not name or name in (".", "..") or any(c in name for c in '<>:"|?*'):
@@ -163,8 +168,12 @@ def save_upload(root: str, folder: str, filename: str, stream: BinaryIO, max_byt
                     raise ValueError(f"the file is larger than {max_bytes // (1024 * 1024)} MB")
                 out.write(chunk)
         if os.path.exists(target) and is_read_only(target):
-            raise PermissionError("the existing file is read-only (controlled)")
+            if not released:
+                raise PermissionError("the existing file is read-only (controlled)")
+            os.chmod(target, os.stat(target).st_mode | stat.S_IWRITE)
         os.replace(tmp, target)
+        if released:
+            os.chmod(target, os.stat(target).st_mode & ~stat.S_IWRITE & ~stat.S_IWGRP & ~stat.S_IWOTH)
     finally:
         if os.path.exists(tmp):
             os.remove(tmp)

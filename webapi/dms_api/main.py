@@ -607,16 +607,20 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "You do not have permission to save files in this folder")
         if in_shared_folder(os.path.join(target_dir, "x")):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only)")
+        if noWorkflow:                                             # straight to Current_ReadOnly: never over a controlled document
+            there = os.path.join(target_dir, "Current_ReadOnly", os.path.basename((file.filename or "").replace("\\", "/")))
+            if os.path.exists(there) and find_registered(there, register_index()):
+                raise HTTPException(409, "A controlled document with this name is in Current_ReadOnly: use New revision")
         try:
             path = files.save_upload(s.repository_root, target_dir, file.filename or "", file.file,
-                                     s.max_upload_mb * 1024 * 1024, overwrite)
+                                     s.max_upload_mb * 1024 * 1024, overwrite, released=noWorkflow)
         except FileExistsError:
             raise HTTPException(409, "A file with this name already exists in the folder") from None
         except (ValueError, PermissionError) as e:
             raise HTTPException(400, str(e)) from None
         from . import noworkflow
         if noWorkflow:
-            noworkflow.mark(s.repository_root, path)               # saved as is: no Start workflow for it
+            noworkflow.mark(s.repository_root, path)               # released as is, read only: no Start workflow for it
         log(user, "upload", path + (" (no workflow)" if noWorkflow else ""))
         d = find_registered(path, register_index())
         return {"name": os.path.basename(path), "path": path, "document": with_key(d) if d else None}

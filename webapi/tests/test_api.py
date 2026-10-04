@@ -1543,9 +1543,14 @@ def test_saved_without_workflow_has_no_start_workflow(tmp_path):
     r = c.post("/api/files/upload", data={"folder": str(q), "noWorkflow": "true"}, files={"file": ("notes.docx", b"x")})
     assert r.status_code == 201, r.text
     c.post("/api/files/upload", data={"folder": str(q)}, files={"file": ("quote.docx", b"y")})       # New document path
-    files_ = {f["name"]: f for f in c.get("/api/browse", params={"path": str(q)}).json()["files"]}
-    assert files_["notes.docx"].get("noWorkflow") and not files_["quote.docx"].get("noWorkflow")
-    assert c.post("/api/documents", json={"path": str(q / "notes.docx"), "documentType": "x", "documentArea": "y"}).status_code == 409
-    c.post("/api/items/rename", json={"path": str(q / "notes.docx"), "newName": "notes2.docx"})
-    files_ = {f["name"]: f for f in c.get("/api/browse", params={"path": str(q)}).json()["files"]}
-    assert files_["notes2.docx"].get("noWorkflow")                                      # the mark follows a rename
+    cur = q / "Current_ReadOnly"
+    assert not (q / "notes.docx").exists() and (cur / "notes.docx").is_file()           # straight to Current_ReadOnly
+    assert files.is_read_only(str(cur / "notes.docx"))                                    # read only
+    files_ = {f["name"]: f for f in c.get("/api/browse", params={"path": str(cur)}).json()["files"]}
+    assert files_["notes.docx"].get("noWorkflow")
+    assert {f["name"] for f in c.get("/api/browse", params={"path": str(q)}).json()["files"]} == {"quote.docx"}
+    assert c.post("/api/documents", json={"path": str(cur / "notes.docx"), "documentType": "x", "documentArea": "y"}).status_code == 409
+    r = c.post("/api/files/upload", data={"folder": str(q), "noWorkflow": "true", "overwrite": "true"}, files={"file": ("notes.docx", b"z")})
+    assert r.status_code == 201, r.text
+    assert (cur / "notes.docx").read_bytes() == b"z" and files.is_read_only(str(cur / "notes.docx"))
+    assert c.post("/api/files/upload", data={"folder": str(q), "noWorkflow": "true"}, files={"file": ("notes.docx", b"w")}).status_code == 409
