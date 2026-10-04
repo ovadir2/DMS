@@ -1,0 +1,170 @@
+01_Management
+01_Management\AI_Automation
+01_Management\Archive
+01_Management\Assets
+01_Management\Certifications
+01_Management\Commercial
+01_Management\Company_Profile
+01_Management\DB_Management
+01_Management\Engineering
+01_Management\Finance
+01_Management\HR
+01_Management\IT
+01_Management\Legal
+01_Management\Planners
+01_Management\Project_Management
+01_Management\Quality and Standards
+01_Management\Quality and Standards\נהלי איכות בתפעול
+01_Management\Quality and Standards\נהלי איכות בתפעול\חטיבות
+01_Management\Quality and Standards\נהלי איכות בתפעול\כלל חברה
+01_Management\Quality and Standards\נהלי איכות בתפעול\כלל חברה\ארכיון
+01_Management\Quality and Standards\נהלי איכות בתפעול\כלל חברה\Training
+01_Management\Quality and Standards\נהלי איכות בתפעול\מערכות מידע
+01_Management\Quality and Standards\נהלי איכות בתפעול\מערכות מידע\ארכיון
+01_Management\Quality and Standards\נהלי איכות בתפעול\מפעל ייצור
+01_Management\Quality and Standards\נהלי איכות בתפעול\מפעל ייצור\ארכיון
+01_Management\Quality and Standards\נהלי איכות בתפעול\משאבי אנוש
+01_Management\Quality and Standards\נהלי איכות בתפעול\משאבי אנוש\ארכיון
+01_Management\Quality and Standards\נהלי איכות בתפעול\נהלי אחזקה
+01_Management\Quality and Standards\נהלי איכות בתפעול\רכש ואספקה
+01_Management\Quality and Standards\נהלי איכות בתפעול\רכש ואספקה\ארכיון
+01_Management\Quality and Standards\נהלי איכות בתפעול\תשתיות איכות
+01_Management\Quality and Standards\נהלי איכות בתפעול\תשתיות איכות\ארכיון
+01_Management\Quality_System
+01_Management\Sales_Marketing
+01_Management\Strategy
+01_Management\Supply_chain
+01_Management\Templates
+01_Management\Training
+02_Customers
+02_Customers\Customer_A
+02_Customers\Customer_A\Archive
+02_Customers\Customer_A\Commercial
+02_Customers\Customer_A\Commercial\Contracts
+02_Customers\Customer_A\Commercial\NDA
+02_Customers\Customer_A\Commercial\Quotations
+02_Customers\Customer_A\Commercial\Quotations\COM-QUO-00001_CRU4_FCT_Quote
+02_Customers\Customer_A\Commercial\RFQ
+02_Customers\Customer_A\Customer_Profile
+02_Customers\Customer_A\Engineering
+02_Customers\Customer_A\Projects
+02_Customers\Customer_A\Projects\Project_1
+02_Customers\Customer_A\Projects\Project_1\Archive
+02_Customers\Customer_A\Projects\Project_1\Development
+02_Customers\Customer_A\Projects\Project_1\Development\01_Quotation
+02_Customers\Customer_A\Projects\Project_1\Development\02_SOW
+02_Customers\Customer_A\Projects\Project_1\Development\03_SRS
+02_Customers\Customer_A\Projects\Project_1\Development\04_PDR
+02_Customers\Customer_A\Projects\Project_1\Development\05_CDR
+02_Customers\Customer_A\Projects\Project_1\Development\06_Implementation
+02_Customers\Customer_A\Projects\Project_1\Development\07_FAT
+02_Customers\Customer_A\Projects\Project_1\Development\08_SAT
+02_Customers\Customer_A\Projects\Project_1\Development\09_FDR
+02_Customers\Customer_A\Projects\Project_1\Development\10_Project_Deliverables
+02_Customers\Customer_A\Projects\Project_1\Development\Archive
+02_Customers\Customer_A\Projects\Project_1\Engineering
+02_Customers\Customer_A\Projects\Project_1\Engineering\Changes
+02_Customers\Customer_A\Projects\Project_1\Engineering\Changes\Deviations
+02_Customers\Customer_A\Projects\Project_1\Engineering\Changes\ECN
+02_Customers\Customer_A\Projects\Project_1\Engineering\Changes\ECO
+02_Customers\Customer_A\Projects\Project_1\Engineering\Changes\Waivers
+02_Customers\Customer_A\Projects\Project_1\Engineering\Customer_Source
+02_Customers\Customer_A\Projects\Project_1\Engineering\Customer_Source\BOM
+02_Customers\Customer_A\Projects\Project_1\Engineering\Customer_Source\CAD
+02_Customers\Customer_A\Projects\Project_1\Engineering\Customer_Source\Change_Requests
+02_Customers\Customer_A\Projects\Project_1\Engineering\Customer_Source\Drawings
+02_Customers\Customer_A\Projects\Project_1\Engineering\Customer_Source\Emails
+02_Customers\Customer_A\Projects\Project_1\Engineering\Customer_Source\Other
+02_Customers\Customer_A\Projects\Project_1\Engineering\Customer_Source\PDFs
+02_Customers\Customer_A\Projects\Project_1\Engineering\Customer_Source\Specifications
+02_Customers\Customer_A\Projects\Project_1\Engineering\DFM
+02_Customers\Customer_A\Projects\Project_1\Engineering\DFT
+02_Customers\Customer_A\Projects\Project_1\Engineering\ODB++
+02_Customers\Customer_A\Projects\Project_1\Manufacturing
+02_Customers\Customer_A\Projects\Project_1\Manufacturing\Assembly_Drawings
+02_Customers\Customer_A\Projects\Project_1\Manufacturing\Fixtures
+02_Customers\Customer_A\Projects\Project_1\Manufacturing\Machine_Programs
+02_Customers\Customer_A\Projects\Project_1\Manufacturing\Photos
+02_Customers\Customer_A\Projects\Project_1\Manufacturing\Pick_and_Place
+02_Customers\Customer_A\Projects\Project_1\Manufacturing\Process_Flow
+02_Customers\Customer_A\Projects\Project_1\Manufacturing\Stencil
+02_Customers\Customer_A\Projects\Project_1\Manufacturing\Videos
+02_Customers\Customer_A\Projects\Project_1\Manufacturing\Work_Instructions
+02_Customers\Customer_A\Projects\Project_1\NPI
+02_Customers\Customer_A\Projects\Project_1\NPI\Gate_Reviews
+02_Customers\Customer_A\Projects\Project_1\NPI\Project_Plan
+02_Customers\Customer_A\Projects\Project_1\NPI\Risk_Register
+02_Customers\Customer_A\Projects\Project_1\NPI\Schedule
+02_Customers\Customer_A\Projects\Project_1\NPI\Transfer
+02_Customers\Customer_A\Projects\Project_1\NPI\Validation
+02_Customers\Customer_A\Projects\Project_1\Production
+02_Customers\Customer_A\Projects\Project_1\Production\Builds
+02_Customers\Customer_A\Projects\Project_1\Production\KPIs
+02_Customers\Customer_A\Projects\Project_1\Production\OEE
+02_Customers\Customer_A\Projects\Project_1\Production\Reports
+02_Customers\Customer_A\Projects\Project_1\Production\Travelers
+02_Customers\Customer_A\Projects\Project_1\Project_Info
+02_Customers\Customer_A\Projects\Project_1\Quality_QC
+02_Customers\Customer_A\Projects\Project_1\Quality_QC\8D
+02_Customers\Customer_A\Projects\Project_1\Quality_QC\Audits
+02_Customers\Customer_A\Projects\Project_1\Quality_QC\CAR
+02_Customers\Customer_A\Projects\Project_1\Quality_QC\Certificates
+02_Customers\Customer_A\Projects\Project_1\Quality_QC\Control_Plan
+02_Customers\Customer_A\Projects\Project_1\Quality_QC\NCR
+02_Customers\Customer_A\Projects\Project_1\Quality_QC\PFMEA
+02_Customers\Customer_A\Projects\Project_1\Quality_QC\PPAP
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\Archive
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\FCT
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\FCT\01_Quotation
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\FCT\02_SOW
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\FCT\03_SRS
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\FCT\04_PDR
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\FCT\05_CDR
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\FCT\06_Implementation
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\FCT\07_FAT
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\FCT\08_SAT
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\FCT\09_FDR
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\FCT\10_Project_Deliverables
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\FCT\Archive
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\FTP
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\ICT
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\ICT\Logging
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\ICT\Source
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\ICT\T1
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\ICT\T10
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\ICT\T4
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\ICT\T5
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\ICT\T9
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\JTAG
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\JTAG\CopyToCurrent
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\JTAG\Logging
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\JTAG\T1
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\ATEFiles\JTAG\T2
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\Calibration
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\Debug
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\Released
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\Test_Coverage
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\Test_Plans
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\Test_Procedures
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\Test_Reports
+02_Customers\Customer_A\Projects\Project_1\Test_Engineering\Yield_Analysis
+02_Customers\Customer_A\Quality_QC
+02_Customers\Customer_A\Shared
+02_Customers\Customer_A\Supply_chain
+03_Operations_Staging
+03_Operations_Staging\Integration_Logs
+03_Operations_Staging\MAE_Release_Queue
+03_Operations_Staging\PLM_Release_Queue
+03_Operations_Staging\Priority_Import_Queue
+04_Workflow_System
+04_Workflow_System\Error_Queue
+04_Workflow_System\Processing
+04_Workflow_System\Rejected_Queue
+04_Workflow_System\Submitted_Queue
+05_Exchange_Quarantine
+05_Exchange_Quarantine\Accepted
+05_Exchange_Quarantine\Inbound
+05_Exchange_Quarantine\Logs
+05_Exchange_Quarantine\Rejected
