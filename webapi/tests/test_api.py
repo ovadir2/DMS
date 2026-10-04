@@ -1458,3 +1458,23 @@ def test_new_customer_and_project_get_the_blueprint_folders(tmp_path):
     assert (prj / "Test_Engineering" / "ATEFiles" / "FCT" / "07_FAT").is_dir() and (prj / "Released" / "Current").is_dir()
     sub = c.post("/api/folders", json={"parent": str(prj / "Engineering"), "name": "Extra"}).json()
     assert sub["blueprintFolders"] == 0                                              # deeper folders: just the folder
+
+
+def test_blueprint_folders_locked_user_folders_and_projects_free(tmp_path):
+    root = tmp_path / "Root"
+    (root / "02_Customers").mkdir(parents=True)
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])))
+    c.post("/api/folders", json={"parent": str(root / "02_Customers"), "name": "Customer_A"})
+    prj = root / "02_Customers" / "Customer_A" / "Projects"
+    c.post("/api/folders", json={"parent": str(prj), "name": "Project_1"})
+    eng = prj / "Project_1" / "Engineering"
+    assert c.post("/api/items/rename", json={"path": str(eng), "newName": "Eng2"}).status_code == 403      # blueprint
+    assert c.post("/api/items/delete", json={"path": str(eng / "PCB")}).status_code == 403
+    assert c.post("/api/items/delete", json={"path": str(root / "02_Customers" / "Customer_A")}).status_code in (403, 409)
+    c.post("/api/folders", json={"parent": str(eng / "PCB"), "name": "Board_A"})                        # the user's own folder
+    r = c.post("/api/items/rename", json={"path": str(eng / "PCB" / "Board_A"), "newName": "Board_B"})
+    assert r.status_code == 200, r.text
+    assert c.post("/api/items/delete", json={"path": str(eng / "PCB" / "Board_B")}).status_code == 200
+    r = c.post("/api/items/rename", json={"path": str(prj / "Project_1"), "newName": "PRJ-300_Radar"})    # a project is the user's
+    assert r.status_code == 200, r.text and (prj / "PRJ-300_Radar" / "Engineering" / "PCB").is_dir()
+    assert c.post("/api/items/delete", json={"path": str(prj / "PRJ-300_Radar")}).status_code == 200

@@ -224,7 +224,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/client-config")
     def client_config():
-        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "shareDays": s.ex_days,
+        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "shareDays": s.ex_days, "customersFolder": s.customers_folder,
                 "approvals": s.approvals, "fileLinker": bool(s.fl_check_url and s.fl_update_url),
                 "site": s.site_url if s.sharepoint != "memory" else "", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,
@@ -672,7 +672,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             files.check_editable(s.repository_root, full, s.protected_depth)   # workflow folders first: clearest reason
         if holds_share_log(full) or in_shared_folder(full):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only) and cannot be renamed")
-        if blueprint.describe(rel_parts(full)) is not None:
+        if (blueprint.describe(rel_parts(full)) or {}).get("kind") not in (None, "project"):   # a project folder is the user's
             raise HTTPException(403, "This folder is part of the company skeleton (blueprint) and cannot be renamed. Its content can.")
         d = registered_inside(full)
         if d:
@@ -698,7 +698,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             files.check_editable(s.repository_root, full, s.protected_depth)
         if holds_share_log(full) or in_shared_folder(full):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only) and cannot be deleted")
-        if blueprint.describe(rel_parts(full)) is not None:
+        if (blueprint.describe(rel_parts(full)) or {}).get("kind") not in (None, "project"):   # a project folder is the user's
             raise HTTPException(403, "This folder is part of the company skeleton (blueprint) and cannot be deleted. Its content can.")
         d = registered_inside(full)
         if d:
