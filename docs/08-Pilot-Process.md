@@ -73,6 +73,8 @@ The DocumentControl site is never shared. Only approved documents can be shared,
 
 ### What the approver does
 
+**Remarks in the file:** while a document is in approval, the owner and the approvers can open the submitted file for editing (**✎ Open to edit (remarks)** in Approvals and in My workflows) and add comments or tracked changes in Word / Excel. Every approve or reject records the file's SHA-256 in Control Audit, so it is known exactly which content each decision was made on; on approval the file as it is then becomes the current revision. `DMS_SUBMITTED_EDITABLE=false` (and `-SubmittedEditable $false` for the workflow service script) locks the submitted file again.
+
 **Pilot (on the page):** the header shows **Approvals** with the number waiting. The list shows each document, its owner, type, stage, who already approved and how long it waits, with Open, Download and ✦ AI to read it, and **Approve** (optional comment) / **Reject** (comment required). Stage 1: every mandatory approver must approve. Stage 2: the final approver. One rejection ends the cycle; the comment goes back to the owner in My workflows. A DMS super user can decide any stage (recorded as "super user") and see **All pending approvals**.
 
 **Delegate:** in Approvals, **⇄ Delegate** passes the approval to someone else (from the RH users, with a note) for **3 working days** (Sunday to Thursday; `DMS_DELEGATION_DAYS`, `DMS_WEEKEND`). The delegate sees it in Approvals and is notified; after the last day it returns to the original approver. A super user can delegate for any waiting approver (**On behalf of**). Each delegation is a row in the **Delegations** list (delegator, delegate, from, to, reason, who) and a Control Audit row `Delegated: a -> b (until dd/mm/yyyy)`.

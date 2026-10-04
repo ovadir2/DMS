@@ -141,7 +141,7 @@ def run_once(sp, s: Settings) -> dict:
             if status == c["Submitted"] and os.path.isfile(working):
                 action = "MoveToSubmitted"
                 target = _move(working, os.path.join(folder, "Submitted", name), replace=True)
-                _set_read_only(target, True)
+                _set_read_only(target, not s.submitted_editable)   # editable: owner and approvers add remarks
                 details = f"{action}: {rel(working)} -> {rel(target)}. SHA-256 {_sha256(target)}"
             elif status == c["Working"] and os.path.isfile(in_submitted) and not os.path.exists(working):
                 action = "ReturnToWorking"

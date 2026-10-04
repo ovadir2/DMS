@@ -467,7 +467,7 @@ def test_file_service_moves_by_status(tmp_path):
     r = file_service.run_once(sp, s)
     assert (r["moved"], r["failed"]) == (1, 0) and r["report"][0]["result"].startswith("MoveToSubmitted")
     sub = q / "Submitted" / "Quote_DRAFT.xlsx"
-    assert sub.exists() and file_service.is_read_only(str(sub))
+    assert sub.exists() and not file_service.is_read_only(str(sub))                  # editable during approval (remarks)
     assert sp.document(d["id"])["workingUncPath"] == str(q / "Quote_DRAFT.xlsx")      # Submitted record not touched
     sp.update(d["id"], {"LifecycleStatus": "בעבודה"})                                  # rejected
     file_service.run_once(sp, s)
@@ -536,7 +536,7 @@ def test_page_approvals_two_stages(tmp_path):
     assert c.post(f"/api/approvals/{d['id']}", json={"approve": False}).status_code == 400   # a comment is required
     r = c.post(f"/api/approvals/{d['id']}", json={"approve": True, "comment": "final"}).json()
     assert r["statusKey"] == "Approved_ReadOnly" and sp.items[d["id"]]["LastApprovedUtc"]
-    events = [(e["event"], e["details"]) for e in sp.audit_events()][:3]
+    events = [(e["event"], _nosha(e["details"])) for e in sp.audit_events()][:3]
     assert events == [("אושר", "Stage 2: final"), ("אושר", "Stage 1"), ("אושר", "Stage 1: ok")]
 
 
@@ -550,7 +550,15 @@ def test_page_approvals_reject_and_waiting_for(tmp_path):
     assert r["statusKey"] == "Working"
     s.dev_user = USER
     item = c.get("/api/my-workflows").json()["items"][0]
-    assert item["statusKey"] == "Rejected" and item["decision"]["details"] == "Stage 1: fix p.2"
+    assert item["statusKey"] == "Rejected" and _nosha(item["decision"]["details"]) == "Stage 1: fix p.2"
+    assert " [file SHA-256 " in item["decision"]["details"]                       # the content the decision was made on
+    sub = c.post(f"/api/documents/{d['id']}/submit").json()                        # submitted again
+    wf = next(i for i in c.get("/api/my-workflows").json()["items"] if i["id"] == d["id"])
+    assert wf["statusKey"] == "Submitted" and "editUri" in wf                     # the owner may add remarks
+    s.dev_user = "dana@rh.co.il"
+    ap = next(i for i in c.get("/api/approvals").json() if i["id"] == d["id"])
+    assert ap["editable"] and (ap["officeUri"] is None or ":ofe|u|" in ap["officeUri"])
+    s.dev_user = USER
     c.post(f"/api/documents/{d['id']}/submit")                                          # new cycle: the old rejection no longer counts
     s.dev_user = "dana@rh.co.il"
     assert c.get("/api/approvals").json()[0]["pending"] == ["dana@rh.co.il"]
@@ -563,7 +571,7 @@ def test_super_user_can_decide_any_stage(tmp_path):
     assert c.get("/api/approvals", params={"everyone": True}).json()[0]["mine"] is False
     assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["stage"] == 2
     assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["statusKey"] == "Approved_ReadOnly"
-    assert sp.audit_events()[0]["details"] == "Stage 2 (super user)"
+    assert _nosha(sp.audit_events()[0]["details"]) == "Stage 2 (super user)"
 
 
 def test_flow_mode_keeps_teams(env):
@@ -645,6 +653,10 @@ def test_path_finder_through_missing_folders(env):
     r = c.get("/api/pathfinder", params={"path": str(q.parents[1] / "Develop" / "ATEFiles")}).json()
     assert r["exists"] is False and [o["name"] for o in r["options"]] == ["FCT", "FTP", "ICT", "JTAG"]
     assert c.get("/api/pathfinder", params={"path": str(prj / "Nope" / "Deeper")}).status_code == 404
+
+
+def _nosha(details):
+    return details.split(" [file SHA-256 ")[0]
 
 
 def _approved_env(tmp_path):

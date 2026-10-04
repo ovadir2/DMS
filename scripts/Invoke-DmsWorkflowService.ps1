@@ -53,7 +53,9 @@ param(
     [string] $DocControlSiteAlias = 'DocumentControl',
     [ValidateSet('he', 'en')] [string] $ChoiceLanguage = 'he',
     [string] $Thumbprint,
-    [string] $LogFolder = (Join-Path $env:ProgramData 'DMS\logs')
+    [string] $LogFolder = (Join-Path $env:ProgramData 'DMS\logs'),
+    # During approval the owner and the approvers may edit the submitted file (remarks); $false locks it
+    [bool] $SubmittedEditable = $true
 )
 
 Set-StrictMode -Version Latest
@@ -158,7 +160,7 @@ foreach ($item in $items) {
                 $action = 'MoveToSubmitted'
                 if ($PSCmdlet.ShouldProcess($inWorking, $action)) {
                     $target = Move-DmsFile $inWorking (Join-Path $docFolder "Submitted\$name") -Replace
-                    Set-ReadOnly $target $true
+                    Set-ReadOnly $target (-not $SubmittedEditable)
                     $sha = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
                     $details = "${action}: $inWorking -> $target. SHA-256 $sha"
                 }

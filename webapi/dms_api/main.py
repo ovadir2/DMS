@@ -898,14 +898,32 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             st = approval_state(d, events, rules)
             if user.email in st["pending"] or (everyone and is_admin(user)):
                 submitted = next((e for e in events if e["event"] == s.choices["SubmittedEvent"]), None)
-                path = d.get("workingUncPath") or ""
-                folder = os.path.dirname(path)
-                in_sub = os.path.join(folder if os.path.basename(folder) != "Submitted" else os.path.dirname(folder), "Submitted", os.path.basename(path))
-                file = in_sub if path and os.path.isfile(in_sub) else path
+                file = submitted_file(d)
                 out.append({**with_key(d), **st, "submittedUtc": submitted["utc"] if submitted else None,
                             "submittedBy": submitted["actor"] if submitted else None, "file": file,
-                            "officeUri": files.office_uri(file) if file else None, "mine": user.email in st["pending"]})
+                            "officeUri": files.office_uri(file, edit=s.submitted_editable) if file else None,
+                            "editable": s.submitted_editable, "mine": user.email in st["pending"]})
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
+
+    def submitted_file(d: dict) -> str | None:
+        """Where the file of a submitted document is now (its Submitted folder, else its working path)."""
+        path = d.get("workingUncPath") or ""
+        if not path:
+            return None
+        folder = os.path.dirname(path)
+        in_sub = os.path.join(folder if os.path.basename(folder) != "Submitted" else os.path.dirname(folder), "Submitted", os.path.basename(path))
+        return in_sub if os.path.isfile(in_sub) else path
+
+    def file_sha(path: str | None) -> str:
+        import hashlib
+        try:
+            h = hashlib.sha256()
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(1 << 20), b""):
+                    h.update(chunk)
+            return h.hexdigest().upper()
+        except (OSError, TypeError):
+            return "?"
 
     @app.post("/api/approvals/{item_id}")
     def decide(item_id: int, req: DecisionRequest, user: User = Depends(current_user)):
@@ -925,11 +943,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if not req.approve and not req.comment.strip():
             raise HTTPException(400, "Please write why the document is rejected")
         tag = f"Stage {st['stage']}" + (" (super user)" if su else "")
+        sha = f" [file SHA-256 {file_sha(submitted_file(d))}]"    # the exact content this decision was made on
         doc_id = d.get("documentId") or f"ID {item_id}"
         if not req.approve:
             sp().update(item_id, {"LifecycleStatus": c["Working"]})
             sp().audit(document_id=doc_id, event=c["RejectedEvent"], from_status=c["Submitted"], to_status=c["Working"],
-                       actor=user.email, details=f"{tag}: {req.comment.strip()}")
+                       actor=user.email, details=f"{tag}: {req.comment.strip()}{sha}")
             file_back(d, c["Working"])
         else:
             if st["stage"] == 2:
@@ -941,7 +960,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 sp().update(item_id, {"LifecycleStatus": c["Approved_ReadOnly"], "LastApprovedUtc": datetime.now(timezone.utc).isoformat()})
             sp().audit(document_id=doc_id, event=c["ApprovedEvent"], from_status=c["Submitted"],
                        to_status=c["Approved_ReadOnly"] if final else c["Submitted"], actor=user.email,
-                       details=tag + (f": {req.comment.strip()}" if req.comment.strip() else ""))
+                       details=tag + (f": {req.comment.strip()}" if req.comment.strip() else "") + sha)
         log(user, "approve" if req.approve else "reject", f"{doc_id} {tag}")
         original = next((x["from"] for x in st.get("delegated") or [] if x["to"] == user.email), None)
         decision_row(d, user.email, st["stage"] or 1, "Approved" if req.approve else "Rejected", req.comment.strip(),
@@ -1026,6 +1045,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 doc["statusKey"] = "Rejected"                           # returned to the owner after a rejection
             if s.approvals == "page" and doc["statusKey"] == "Submitted":
                 doc.update(approval_state(d, events, rules))
+            if doc["statusKey"] == "Submitted" and s.submitted_editable:
+                f = submitted_file(d)
+                doc["editUri"] = files.office_uri(f, edit=True) if f else None
             doc.update(submittedUtc=submitted["utc"] if submitted else None, decision=decision,
                        lastEvent=events[0] if events else None, history=list(reversed(events)))
             items.append(doc)

@@ -88,9 +88,9 @@ def short_path(path: str) -> str:
         return path
 
 
-def office_uri(path: str) -> str | None:
+def office_uri(path: str, edit: bool = False) -> str | None:
     """ms-word/ms-excel/ms-powerpoint link that opens the file from the server in the desktop app
-    (a long path is given in its short 8.3 form)."""
+    (a long path is given in its short 8.3 form). View only, unless edit."""
     app = {".doc": "ms-word", ".docx": "ms-word", ".docm": "ms-word",
            ".xls": "ms-excel", ".xlsx": "ms-excel", ".xlsm": "ms-excel",
            ".ppt": "ms-powerpoint", ".pptx": "ms-powerpoint"}.get(os.path.splitext(path)[1].lower())
@@ -98,7 +98,7 @@ def office_uri(path: str) -> str | None:
         return None
     path = short_path(path)
     url = "file:" + path.replace("\\", "/") if path.startswith("\\\\") else "file:///" + path.replace("\\", "/").lstrip("/")
-    return f"{app}:ofv|u|{url}"
+    return f"{app}:{'ofe' if edit else 'ofv'}|u|{url}"
 
 
 Can = Callable[[str, str], bool]          # (path, "read" | "write") -> allowed

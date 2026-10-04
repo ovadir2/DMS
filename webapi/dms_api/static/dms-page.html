@@ -224,7 +224,7 @@ document.documentElement.dir = lang === 'HE' ? 'rtl' : 'ltr';
 const T = {
   EN: { welcome:'RH - Documents Management System', search:'Search', all:'All', customer:'Customer', project:'Product', document:'Document ID', file:'File', description:'Description',
         go:'Search', refresh:'Refresh', lang:'English', customers:'Customers', myDocs:'My documents', home:'Home', goBack:'Back', noAccess:'No customers are available to you.',
-        name:'Name', status:'Status', modified:'Modified', actions:'', open:'Open', download:'Download', start:'Start workflow', submit:'Submit for approval',
+        name:'Name', status:'Status', modified:'Modified', actions:'', open:'Open', openEdit:'Open to edit (remarks)', download:'Download', start:'Start workflow', submit:'Submit for approval',
         upload:'Upload file', uploadTitle:'Save a file in this folder', chooseFile:'File from your computer', folder:'Folder', overwrite:'Replace a file with the same name',
         ok:'OK', cancel:'Cancel', saved:'Saved to', notReg:'Not registered', none:'Nothing here.', results:'Results', type:'Document type', area:'Area', mode:'Control mode',
         titleF:'Title', registerSubmit:'Register and submit', registerOnly:'Register only', registered:'Registered as', err:'Error', docId:'Document ID', path:'Location', copy:'Copy path', copied:'Copied', copyWorking:'Copy working path', copyLink:'Copy link',
@@ -232,7 +232,7 @@ const T = {
         Working:'Working', Submitted:'Submitted', Approved_ReadOnly:'Approved (read-only)', Other:'Other', None:'Not registered', other:'עברית' },
   HE: { welcome:'RH - מערכת ניהול מסמכים', search:'חיפוש', all:'הכל', customer:'לקוח', project:'פרויקט', document:'מזהה מסמך', file:'קובץ', description:'תיאור',
         go:'חיפוש', refresh:'רענון', lang:'עברית', customers:'לקוחות', myDocs:'המסמכים שלי', home:'ראשי', goBack:'חזרה', noAccess:'אין לקוחות זמינים עבורך.',
-        name:'שם', status:'סטטוס', modified:'עודכן', actions:'', open:'פתיחה', download:'הורדה', start:'שליחה לאישור', submit:'הגשה לאישור',
+        name:'שם', status:'סטטוס', modified:'עודכן', actions:'', open:'פתיחה', openEdit:'פתיחה לעריכה (הערות)', download:'הורדה', start:'שליחה לאישור', submit:'הגשה לאישור',
         upload:'העלאת קובץ', uploadTitle:'שמירת קובץ בתיקייה זו', chooseFile:'קובץ מהמחשב', folder:'תיקייה', overwrite:'החלפת קובץ קיים באותו שם',
         ok:'אישור', cancel:'ביטול', saved:'נשמר ב-', notReg:'לא רשום', none:'אין פריטים.', results:'תוצאות', type:'סוג מסמך', area:'תחום', mode:'מצב בקרה',
         titleF:'כותרת', registerSubmit:'רישום והגשה לאישור', registerOnly:'רישום בלבד', registered:'נרשם כ-', err:'שגיאה', docId:'מזהה מסמך', path:'מיקום', copy:'העתקת נתיב', copied:'הועתק', copyWorking:'העתקת נתיב עבודה', copyLink:'העתקת קישור',
@@ -518,10 +518,11 @@ async function mine(v) {
         ${d.statusKey === 'Submitted' && days(d.submittedUtc) !== null ? `<div class="muted small">${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}
         ${d.statusKey === 'Submitted' && d.pending && d.pending.length ? `<div class="small">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')} (${T.stage} ${d.stage})</div>` : ''}</td>
       <td class="hide-s muted small">${when(d.submittedUtc)}</td>
-      <td class="hide-s small">${who(d.decision || d.lastEvent)}${d.decision && d.decision.details ? `<div class="muted">${esc(d.decision.details)}</div>` : ''}</td>
+      <td class="hide-s small">${who(d.decision || d.lastEvent)}${d.decision && d.decision.details ? `<div class="muted">${esc(d.decision.details.replace(/ \[file SHA-256 [^\]]+\]/, ''))}</div>` : ''}</td>
       <td class="actions">${state.everyone ? `<div class="muted small">${esc(d.ownerName || d.ownerEmail || '')}</div>` : ''}${['Working', 'Rejected'].includes(d.statusKey) ? `<button type="button" class="link" data-sub="${d.id}">${T.submit}</button><button type="button" class="link" data-drn="${d.id}" data-name="${esc((d.workingUncPath || '').split(/[\\/]/).pop())}">${T.rename}</button><button type="button" class="link" data-ddel="${d.id}" style="color:var(--err)">${T.del}</button>` : ''}
         ${d.currentUncPath ? `<button type="button" class="link" data-cp="${esc(d.currentUncPath)}">🔗 ${T.copy}</button>` : ''}
         ${d.workingUncPath ? `<button type="button" class="link" data-cp="${esc(d.workingUncPath)}">🔗 ${T.copyWorking}</button>` : ''}
+        ${d.statusKey === 'Submitted' && d.editUri ? `<a class="link" href="${esc(d.editUri)}">✎ ${T.openEdit}</a>` : ''}
         ${d.statusKey === 'Submitted' ? `<button type="button" class="link" data-wd="${d.id}" style="color:var(--err)">${T.withdraw}</button>` : ''}
         ${d.statusKey === 'Approved_ReadOnly' ? `<button type="button" class="link" data-rev="${d.id}">⟳ ${T.newRev}</button><button type="button" class="link" data-share="${d.id}">✉ ${T.share}</button>` : ''}
         <button type="button" class="link" data-hist="${d.id}">${T.history}</button>
@@ -545,7 +546,7 @@ async function approvalsView(v) {
       <td class="small">${d.stage === 1 ? T.stage1 : T.stage2}${d.approved.length ? `<div class="muted">${T.approvedBy}: ${d.approved.map(a => esc(a.split('@')[0])).join(', ')}</div>` : ''}
         ${!d.mine ? `<div class="muted">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')}</div>` : ''}</td>
       <td class="hide-s small muted">${when(d.submittedUtc)}${days(d.submittedUtc) !== null ? `<div>${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}</td>
-      <td class="actions">${d.officeUri ? `<a class="link" href="${esc(d.officeUri)}">${T.open}</a>` : ''}
+      <td class="actions">${d.officeUri ? `<a class="link" href="${esc(d.officeUri)}">${d.editable ? '✎ ' + T.openEdit : T.open}</a>` : ''}
         ${d.file ? `<button type="button" class="link" data-dl="${esc(d.file)}">${T.download}</button>` : ''}
         <div style="margin-top:6px"><button type="button" class="pillbtn small" data-ok="${d.id}">✔ ${T.approve}${d.mine ? '' : ' (' + T.asSuper + ')'}</button>
         <button type="button" class="pillbtn small light" data-no="${d.id}" style="color:var(--err)">✖ ${T.reject}</button>
