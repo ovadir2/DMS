@@ -31,8 +31,8 @@
     Project folder names created under Projects of every customer in -Customers.
 
 .PARAMETER CustomersCsv
-    A CSV with the columns Customer and Project: one row per project (a customer without projects
-    gets one row with an empty Project). Each customer gets the full customer tree and each of its
+    A CSV with the columns CustomerName and ProjectName (Customer / Project also accepted): one row
+    per project (a customer without projects gets one row with an empty ProjectName). Each customer gets the full customer tree and each of its
     projects the full project tree (Appendix A, the same tree the DMS page shows). Can be combined
     with -Customers / -Projects. UTF-8 (Hebrew names are fine).
 
@@ -50,7 +50,7 @@
     .\New-DmsFileServerTree.ps1 -Root 'D:\Corporate_Data_TEST' -Customers 'Customer_A'
 
 .EXAMPLE
-    # Real customers and their projects from a CSV (Customer,Project); dry run first
+    # Real customers and their projects from a CSV (CustomerName,ProjectName); dry run first
     .\New-DmsFileServerTree.ps1 -Root '\\FILE-SERVER\Corporate_Data' -CustomersCsv .\customers.csv -WhatIf
     .\New-DmsFileServerTree.ps1 -Root '\\FILE-SERVER\Corporate_Data' -CustomersCsv .\customers.csv
 
@@ -157,12 +157,15 @@ if ($CustomersCsv) {
                "Create it first, e.g. Copy-Item '$PSScriptRoot\customers.example.csv' .\customers.csv; notepad .\customers.csv")
     }
     $rows = @(Import-Csv -LiteralPath $CustomersCsv -Encoding UTF8)
-    if ($rows.Count -and -not ($rows[0].PSObject.Properties.Name -contains 'Customer')) { throw 'The CSV needs a Customer column (and optionally Project).' }
+    $cols = if ($rows.Count) { @($rows[0].PSObject.Properties.Name) } else { @() }
+    $cCol = @('CustomerName', 'Customer') | Where-Object { $cols -contains $_ } | Select-Object -First 1
+    $pCol = @('ProjectName', 'Project') | Where-Object { $cols -contains $_ } | Select-Object -First 1
+    if ($rows.Count -and -not $cCol) { throw "The CSV needs a CustomerName column (and ProjectName). Found: $($cols -join ', ')" }
     foreach ($r in $rows) {
-        $c = "$($r.Customer)".Trim()
+        $c = "$($r.$cCol)".Trim()
         if (-not $c) { continue }
         if (-not $CustomerProjects.Contains($c)) { $CustomerProjects[$c] = @() }
-        $p = if ($r.PSObject.Properties.Name -contains 'Project') { "$($r.Project)".Trim() } else { '' }
+        $p = if ($pCol) { "$($r.$pCol)".Trim() } else { '' }
         if ($p -and $CustomerProjects[$c] -notcontains $p) { $CustomerProjects[$c] = @($CustomerProjects[$c]) + $p }
     }
 }
