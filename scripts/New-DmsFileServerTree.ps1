@@ -37,9 +37,9 @@
     with -Customers / -Projects. UTF-8 (Hebrew names are fine).
 
 .PARAMETER CompleteExisting
-    Also complete the project folders that already exist under each customer's Projects (and,
-    without -Customers / -CustomersCsv, every customer already under 02_Customers): missing
-    blueprint folders are added, nothing is moved or deleted.
+    Without -Customers / -CustomersCsv: complete every customer already under 02_Customers. (The
+    project folders that already exist under a listed customer's Projects are always completed.)
+    Missing blueprint folders are added; nothing is moved or deleted.
 
 .PARAMETER ApplyAcl
     Break inheritance and apply the NTFS permissions from docs/02 §3.2. Run on the file server
@@ -179,11 +179,13 @@ if ($CustomersCsv) {
         if ($p -and $CustomerProjects[$c] -notcontains $p) { $CustomerProjects[$c] = @($CustomerProjects[$c]) + $p }
     }
 }
-if ($CompleteExisting) {
-    $cRootAll = Join-Path $Root '02_Customers'
-    if (-not $CustomerProjects.Count -and (Test-Path -LiteralPath $cRootAll)) {
-        foreach ($d in Get-ChildItem -LiteralPath $cRootAll -Directory) { $CustomerProjects[$d.Name] = @() }
-    }
+# Every project folder that already exists under a listed customer's Projects is completed too
+# (-CompleteExisting without customers: every customer already under 02_Customers).
+$cRootAll = Join-Path $Root '02_Customers'
+if ($CompleteExisting -and -not $CustomerProjects.Count -and (Test-Path -LiteralPath $cRootAll)) {
+    foreach ($d in Get-ChildItem -LiteralPath $cRootAll -Directory) { $CustomerProjects[$d.Name] = @() }
+}
+if ($true) {
     foreach ($c in @($CustomerProjects.Keys)) {
         $pr = Join-Path (Join-Path $cRootAll $c) 'Projects'
         if (Test-Path -LiteralPath $pr) {
