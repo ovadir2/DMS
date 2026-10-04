@@ -36,6 +36,11 @@
     projects the full project tree (Appendix A, the same tree the DMS page shows). Can be combined
     with -Customers / -Projects. UTF-8 (Hebrew names are fine).
 
+.PARAMETER CompleteExisting
+    Also complete the project folders that already exist under each customer's Projects (and,
+    without -Customers / -CustomersCsv, every customer already under 02_Customers): missing
+    blueprint folders are added, nothing is moved or deleted.
+
 .PARAMETER ApplyAcl
     Break inheritance and apply the NTFS permissions from docs/02 §3.2. Run on the file server
     (or with admin rights on the share) as a member of GG_DMS_ITAdmins. The groups must exist
@@ -53,6 +58,10 @@
     # Real customers and their projects from a CSV (CustomerName,ProjectName); dry run first
     .\New-DmsFileServerTree.ps1 -Root '\\FILE-SERVER\Corporate_Data' -CustomersCsv .\customers.csv -WhatIf
     .\New-DmsFileServerTree.ps1 -Root '\\FILE-SERVER\Corporate_Data' -CustomersCsv .\customers.csv
+
+.EXAMPLE
+    # Bring Customer_A (and every project already in it) to the full blueprint
+    .\New-DmsFileServerTree.ps1 -Root $Root -Customers Customer_A -CompleteExisting
 
 .EXAMPLE
     # Folder for one document, with permissions
@@ -83,6 +92,7 @@ param(
     [string[]] $Customers = @(),
     [string[]] $Projects = @(),
     [string] $CustomersCsv,
+    [switch] $CompleteExisting,
 
     # Document mode
     [ValidatePattern('^[A-Z]{2,3}-[A-Z]{2,3}-\d{5}$')] [string] $DocumentId,
@@ -167,6 +177,20 @@ if ($CustomersCsv) {
         if (-not $CustomerProjects.Contains($c)) { $CustomerProjects[$c] = @() }
         $p = if ($pCol) { "$($r.$pCol)".Trim() } else { '' }
         if ($p -and $CustomerProjects[$c] -notcontains $p) { $CustomerProjects[$c] = @($CustomerProjects[$c]) + $p }
+    }
+}
+if ($CompleteExisting) {
+    $cRootAll = Join-Path $Root '02_Customers'
+    if (-not $CustomerProjects.Count -and (Test-Path -LiteralPath $cRootAll)) {
+        foreach ($d in Get-ChildItem -LiteralPath $cRootAll -Directory) { $CustomerProjects[$d.Name] = @() }
+    }
+    foreach ($c in @($CustomerProjects.Keys)) {
+        $pr = Join-Path (Join-Path $cRootAll $c) 'Projects'
+        if (Test-Path -LiteralPath $pr) {
+            foreach ($d in Get-ChildItem -LiteralPath $pr -Directory) {
+                if ($CustomerProjects[$c] -notcontains $d.Name) { $CustomerProjects[$c] = @($CustomerProjects[$c]) + $d.Name }
+            }
+        }
     }
 }
 $bad = [regex]'[\\/:*?"<>|]'
