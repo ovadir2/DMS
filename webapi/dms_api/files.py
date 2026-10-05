@@ -148,11 +148,15 @@ def office_uri(path: str, edit: bool = False) -> str | None:
     if not app:
         return None
     full, path = path, user_path(path)
-    if url_len(path) > LONG_PATH:                              # still too long for Office: 8.3 names inside the folder
+    if url_len(path) > LONG_PATH and BASE_URL.get():
+        # too long for Office as a file path (Hebrew names count 6 characters each): the DMS link (WebDAV, like
+        # SharePoint) - the original file name, and Save writes back to the same file on the server
+        from urllib.parse import quote
+        return (f"{app}:{'ofe' if edit else 'ofv'}|u|{BASE_URL.get().rstrip('/')}/api/o/{open_token(full)}/"
+                f"{quote(os.path.basename(full))}")
+    if url_len(path) > LONG_PATH:                              # no DMS address: the 8.3 names, if the volume has them
         short = user_path(short_path(full, force=True))
         path = short if url_len(short) < url_len(path) else short_path(path)
-    if url_len(path) > LONG_PATH and BASE_URL.get():           # no 8.3 names (or still long): a short DMS link, view only
-        return f"{app}:ofv|u|{BASE_URL.get().rstrip('/')}/api/o/{open_token(full)}/{_ascii_name(full)}"
     url = "file:" + path.replace("\\", "/") if path.startswith("\\\\") else "file:///" + path.replace("\\", "/").lstrip("/")
     return f"{app}:{'ofe' if edit else 'ofv'}|u|{url}"
 

@@ -1608,15 +1608,85 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     submit_doc = submit                                         # used where a parameter is called "submit"
 
-    @app.get("/api/o/{token}/{name}")
-    def open_link(token: str, name: str, user: User = Depends(current_user)):
-        """Open for a path too long for Office (Hebrew names, no 8.3 names): Word / Excel / PowerPoint get the file here."""
+    # The DMS link for Office (paths too long for Word): a small WebDAV resource, as Office uses with SharePoint.
+    # Word opens it with the original file name and Save writes back to the same file on the server.
+    DAV_METHODS = ["GET", "HEAD", "OPTIONS", "PROPFIND", "LOCK", "UNLOCK", "PUT"]
+
+    def dav_writable(full: str, user: User) -> bool:
+        return (not files.is_read_only(full) and user.can(full, "write")
+                and os.path.basename(os.path.dirname(full)) not in WORKFLOW_FOLDERS[2:])
+
+    def dav_props(full: str, href: str, user: User) -> str:
+        from email.utils import formatdate
+        from xml.sax.saxutils import escape
+        st = os.stat(full)
+        etag = f'"{int(st.st_mtime)}-{st.st_size}"'
+        return (f"<d:response><d:href>{escape(href)}</d:href><d:propstat><d:prop>"
+                f"<d:displayname>{escape(os.path.basename(full))}</d:displayname><d:resourcetype/>"
+                f"<d:getcontentlength>{st.st_size}</d:getcontentlength>"
+                f"<d:getlastmodified>{formatdate(st.st_mtime, usegmt=True)}</d:getlastmodified>"
+                f"<d:creationdate>{datetime.fromtimestamp(st.st_ctime, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}</d:creationdate>"
+                f"<d:getetag>{etag}</d:getetag>"
+                "<d:supportedlock><d:lockentry><d:lockscope><d:exclusive/></d:lockscope><d:locktype><d:write/></d:locktype>"
+                "</d:lockentry></d:supportedlock>"
+                f"</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>")
+
+    @app.api_route("/api/o/{token}/", methods=["OPTIONS", "PROPFIND"])
+    def open_link_folder(token: str, request: Request, _: User = Depends(current_user)):
+        """Office asks about the "folder" of the DMS link too."""
+        from fastapi.responses import Response
+        dav = {"DAV": "1,2", "MS-Author-Via": "DAV", "Allow": ", ".join(DAV_METHODS)}
+        if request.method == "OPTIONS":
+            return Response(status_code=200, headers=dav)
+        body = ('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response>'
+                f"<d:href>{request.url.path}</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop>"
+                "<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>")
+        return Response(body, status_code=207, media_type="application/xml; charset=utf-8", headers=dav)
+
+    @app.api_route("/api/o/{token}/{name}", methods=DAV_METHODS)
+    async def open_link(token: str, name: str, request: Request, user: User = Depends(current_user)):
+        """Open for a path too long for Office (Hebrew names): Word / Excel / PowerPoint open and save the file here."""
+        from fastapi.responses import Response
         full = files.open_path(token)
         if not full or not os.path.isfile(full):
             raise HTTPException(404, "The link expired: open the file again from the DMS page")
+        if name != os.path.basename(full):                     # only this file (not Office's temporary ~$ files)
+            raise HTTPException(404 if request.method in ("GET", "HEAD", "PROPFIND") else 403, "Not this file")
         if not user.can(full):
             raise HTTPException(403, "You do not have access to this file")
-        return FileResponse(full, filename=name)
+        m = request.method
+        dav = {"DAV": "1,2", "MS-Author-Via": "DAV", "Allow": ", ".join(DAV_METHODS)}
+        if m == "OPTIONS":
+            return Response(status_code=200, headers=dav)
+        if m == "PROPFIND":
+            body = ('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:">'
+                    + dav_props(full, str(request.url.path), user) + "</d:multistatus>")
+            return Response(body, status_code=207, media_type="application/xml; charset=utf-8", headers=dav)
+        if m == "LOCK":
+            if not dav_writable(full, user):
+                raise HTTPException(423, "Read only")
+            lock = "opaquelocktoken:" + token + "-" + format(int(datetime.now().timestamp()), "x")
+            body = ('<?xml version="1.0" encoding="utf-8"?><d:prop xmlns:d="DAV:"><d:lockdiscovery><d:activelock>'
+                    "<d:locktype><d:write/></d:locktype><d:lockscope><d:exclusive/></d:lockscope><d:depth>0</d:depth>"
+                    f"<d:owner>{user.email}</d:owner><d:timeout>Second-3600</d:timeout>"
+                    f"<d:locktoken><d:href>{lock}</d:href></d:locktoken></d:activelock></d:lockdiscovery></d:prop>")
+            return Response(body, status_code=200, media_type="application/xml; charset=utf-8", headers={**dav, "Lock-Token": f"<{lock}>"})
+        if m == "UNLOCK":
+            return Response(status_code=204, headers=dav)
+        if m == "PUT":
+            if not dav_writable(full, user):
+                raise HTTPException(403, "This file is read only in the DMS")
+            data = await request.body()
+            tmp = full + ".dms-save"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, full)
+            log(user, "upload", full + " (saved from Office)")
+            return Response(status_code=204, headers=dav)
+        if m == "HEAD":
+            return Response(status_code=200, headers={**dav, "Content-Length": str(os.path.getsize(full))})
+        return FileResponse(full, filename=os.path.basename(full), headers=dav,
+                            content_disposition_type="inline")
 
     @app.get("/api/files/download")
     def download(path: str, user: User = Depends(current_user)):

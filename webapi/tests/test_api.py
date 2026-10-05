@@ -1662,21 +1662,35 @@ def test_office_uri_long_hebrew_path_uses_8dot3(tmp_path, monkeypatch):
     files._SHORT_PREFIX.clear()
 
 
-def test_office_uri_too_long_without_8dot3_gives_short_dms_link(tmp_path):
+def test_office_uri_too_long_gives_dms_webdav_link(tmp_path):
+    from urllib.parse import quote
     root = tmp_path
     heb = "נוהל בקרת מסמכים ורשומות ארגוניות"
     d = root / "01_General" / "Quality and Standards" / heb / heb
     d.mkdir(parents=True)
-    f = d / f"QP-2.1 V06 {heb}_Rev02.docx"
-    f.write_bytes(b"doc")
+    name = f"QP-2.1 V06 {heb}_Rev02.docx"
+    (d / name).write_bytes(b"doc")
     c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
                                        short_paths={"01_General": "G:"})))
-    uri = next(x for x in c.get("/api/browse", params={"path": str(d)}).json()["files"])["officeUri"]
-    assert uri.startswith("ms-word:ofv|u|http://testserver/api/o/") and uri.endswith("/QP-2.1_V06_Rev02.docx")
-    link = uri.split("|u|http://testserver", 1)[1]
+    f = next(x for x in c.get("/api/browse", params={"path": str(d)}).json()["files"])
+    assert f["editable"] and f["officeUri"].startswith("ms-word:ofe|u|http://testserver/api/o/")   # edit, the original name
+    assert f["officeUri"].endswith("/" + quote(name))
+    link = f["officeUri"].split("|u|http://testserver", 1)[1]
     files.OPEN_TOKENS.clear()                                                            # as after a restart
-    r = c.get(link)
-    assert r.status_code == 200 and r.content == b"doc"
+    assert c.get(link).content == b"doc"
+    assert c.request("OPTIONS", link).headers["DAV"] == "1,2"
+    pf = c.request("PROPFIND", link)
+    assert pf.status_code == 207 and "<d:getcontentlength>3</d:getcontentlength>" in pf.text
+    assert c.request("LOCK", link).status_code == 200
+    assert c.put(link, content=b"saved from Word").status_code == 204                   # Save writes back to the source
+    assert (d / name).read_bytes() == b"saved from Word"
+    assert c.put(link.rsplit("/", 1)[0] + "/~$tmp.docx", content=b"x").status_code == 403   # only this file
+    ro = d / "Current_ReadOnly"
+    ro.mkdir()
+    (ro / name).write_bytes(b"approved")
+    g = next(x for x in c.get("/api/browse", params={"path": str(ro)}).json()["files"])
+    assert g["officeUri"].startswith("ms-word:ofv|u|http://testserver/api/o/")           # Current_ReadOnly: view
+    assert c.put(g["officeUri"].split("|u|http://testserver", 1)[1], content=b"x").status_code == 403
     files.set_short_paths("", {})
 
 
