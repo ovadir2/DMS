@@ -69,7 +69,9 @@ if (-not (Test-Path $py)) {
 
 $env:DMS_REPOSITORY_ROOT = (Resolve-Path -LiteralPath $Root).ProviderPath
 $env:DMS_AUTH_MODE = 'dev'
-$env:DMS_ADMINS = ($Admins -join ',').ToLower()
+$dotenv = Join-Path $PSScriptRoot '.env'
+$adminsInEnv = (Test-Path $dotenv) -and (Select-String -LiteralPath $dotenv -Pattern '^\s*DMS_ADMINS\s*=' -Quiet)
+if ($PSBoundParameters.ContainsKey('Admins') -or -not $adminsInEnv) { $env:DMS_ADMINS = ($Admins -join ',').ToLower() }   # else DMS_ADMINS in .env
 $env:DMS_APPROVALS = $Approvals
 if ($Users) { $env:DMS_DEV_USERS = ($Users -join ',').ToLower() }   # "Acting as" list (testing); else DMS_DEV_USERS in .env
 $env:DMS_DEV_AD_CHECK = if (($Live -or $AdCheck) -and -not $NoAdCheck) { '1' } else { '' }   # AD / NTFS checks (on in the pilot), not for -Admins
