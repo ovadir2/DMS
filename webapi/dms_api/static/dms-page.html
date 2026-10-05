@@ -327,7 +327,7 @@ document.querySelector('.brand').title = T.welcome;
 document.querySelector('.brand').onclick = () => {
   $('#q').value = ''; if (typeof taClose === 'function') taClose();
   $('#ai-panel').classList.remove('open');
-  Object.assign(state, { view: 'customers', folder: null, wfFilter: null });
+  Object.assign(state, { view: 'customers', folder: null, wfFilter: null }); navTrail.length = 0; navCur = null;
   history.replaceState(null, '', location.pathname + '?lang=' + lang);
   refreshApprovals(); render(); window.scrollTo(0, 0);
 };
@@ -391,15 +391,24 @@ async function copyText(text) {
 }
 
 // ---------------------------------------------------------------- views
-let navKey = null, popping = false;
+// Back: the DMS keeps its own trail of the screens visited (the browser Back button works too)
+let navKey = null, popping = false, navCur = null;
+const navTrail = [];
 window.addEventListener('popstate', e => {
-  if (!e.state || !e.state.dms) return;
-  state.view = e.state.view; state.folder = e.state.folder; popping = true; render();
+  const st = e.state && e.state.dms ? e.state : { view: 'customers', folder: null };
+  navTrail.pop();
+  state.view = st.view; state.folder = st.folder; popping = true; render();
 });
+function goBack() {
+  const prev = navTrail.pop() || { view: 'customers', folder: null };
+  state.view = prev.view; state.folder = prev.folder; popping = true; render();
+}
 async function render() {
   const key = state.view + '|' + (state.view === 'browse' ? state.folder || '' : '');
   if (key !== navKey) {
     const st = { dms: 1, view: state.view, folder: state.folder };
+    if (!popping && navCur) navTrail.push(navCur);
+    navCur = { view: state.view, folder: state.folder };
     try { navKey === null || popping ? history.replaceState(st, '') : history.pushState(st, ''); } catch (e) { /* ignore */ }
     navKey = key;
   }
@@ -456,7 +465,7 @@ async function browse(v) {
     </table>` : ''}${folders.length + r.files.length ? '' : `<p class="muted">${T.none}</p>`}`;
   v.querySelector('[data-home]').onclick = () => { state.view = 'customers'; render(); };
   const upb = v.querySelector('#go-up'); if (upb) upb.onclick = () => { if ((r.trail || []).length > 1) { state.folder = r.parent; } else { state.view = 'customers'; } render(); };
-  v.querySelector('#go-back').onclick = () => history.length > 1 ? history.back() : (state.view = 'customers', render());
+  v.querySelector('#go-back').onclick = goBack;
   v.querySelector('#pf-b').onclick = () => pathFinder(r.path);
   if (r.canWrite) { const nd = v.querySelector('#nd'); if (nd) nd.onclick = () => newDocument(r.path); v.querySelector('#up').onclick = () => uploadDialog(r.path); v.querySelector('#mk').onclick = () => newFolderDialog(r.path); }
   v.querySelectorAll('[data-rn]').forEach(b => b.onclick = () => renameDialog(b.dataset.rn));
