@@ -75,8 +75,8 @@ def test_browse_marks_registration(env):
     r = c.get("/api/browse", params={"path": str(q)})
     assert r.status_code == 200
     f = r.json()["files"][0]
+    assert f["name"] == "CRU 4 FCT Quote_Rev1.xlsx" and f["document"] is None
     assert f["officeUri"].startswith("ms-excel:ofe|u|file:") and f["editable"]          # not registered yet: edit
-    assert f["officeUri"].startswith("ms-excel:ofv|u|file:")
 
 
 def test_paths_outside_root_are_refused(env):
