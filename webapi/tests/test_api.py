@@ -1597,3 +1597,18 @@ def test_dev_ad_check_for_acting_users_not_for_admins(tmp_path, monkeypatch):
     names = lambda h: {f["name"] for f in c.get("/api/browse", params={"path": str(cust)}, headers=h).json()["folders"]}  # noqa: E731
     assert names({}) == {"Customer_A", "Customer_B"}                                   # super user: no AD check
     assert names({"X-DMS-Dev-User": other}) == {"Customer_A"}                          # acting user: AD decides
+
+
+def test_short_paths_for_open_and_copy(tmp_path):
+    from dms_api.config import _short_paths
+    m = _short_paths(r"02_Customers=\\fs\Customers; 01_Management=\\fs\General\ ")
+    assert m == {"02_Customers": r"\\fs\Customers", "01_Management": r"\\fs\General"}
+    c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                                       short_paths=m)))
+    assert [p[1] for p in c.get("/api/client-config").json()["shortPaths"]] == [r"\\fs\Customers", r"\\fs\General"]
+    f = os.path.join(str(tmp_path), "02_Customers", "Customer_A", "q.docx")
+    assert files.user_path(f) == "\\\\fs\\Customers\\Customer_A\\q.docx"
+    assert "file://fs/Customers/Customer_A/q.docx" in files.office_uri(f)
+    other = os.path.join(str(tmp_path), "03_Operations_Staging", "x.docx")
+    assert files.user_path(other) == other                                               # not mapped: unchanged
+    files.set_short_paths("", {})

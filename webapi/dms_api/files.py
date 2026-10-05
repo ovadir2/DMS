@@ -88,6 +88,27 @@ def short_path(path: str) -> str:
         return path
 
 
+SHORT: list[tuple[str, str]] = []          # (long prefix, short prefix), set by the app from DMS_SHORT_PATHS
+
+
+def set_short_paths(root: str, mapping: dict) -> None:
+    SHORT[:] = sorted(((os.path.join(root, folder), short) for folder, short in mapping.items()),
+                      key=lambda x: -len(x[0]))
+
+
+def user_path(path: str) -> str:
+    """The path users open and copy: $Root\\02_Customers\\... -> the short path of that folder (DMS_SHORT_PATHS)."""
+    if not path:
+        return path
+    n = os.path.normcase(os.path.normpath(path))
+    for long, short in SHORT:
+        lp = os.path.normcase(os.path.normpath(long))
+        if n == lp or n.startswith(lp + os.sep):
+            rest = os.path.normpath(path)[len(os.path.normpath(long)):].lstrip("\\/")
+            return short + ("\\" + rest.replace("/", "\\") if rest else "")
+    return path
+
+
 def office_uri(path: str, edit: bool = False) -> str | None:
     """ms-word/ms-excel/ms-powerpoint link that opens the file from the server in the desktop app
     (a long path is given in its short 8.3 form). View only, unless edit."""
@@ -96,6 +117,7 @@ def office_uri(path: str, edit: bool = False) -> str | None:
            ".ppt": "ms-powerpoint", ".pptx": "ms-powerpoint"}.get(os.path.splitext(path)[1].lower())
     if not app:
         return None
+    path = user_path(path)
     path = short_path(path)
     url = "file:" + path.replace("\\", "/") if path.startswith("\\\\") else "file:///" + path.replace("\\", "/").lstrip("/")
     return f"{app}:{'ofe' if edit else 'ofv'}|u|{url}"

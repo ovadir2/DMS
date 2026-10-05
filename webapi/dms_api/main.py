@@ -147,6 +147,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     app = FastAPI(title="RH DMS Web API", version="1.1")
     app.state.settings = s
+    files.set_short_paths(s.repository_root, s.short_paths)
     own_register = sharepoint is None                            # False in the tests (they pass their own)
     if sharepoint is None and s.sharepoint == "memory":
         from .memory import MemorySharePoint
@@ -228,7 +229,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/client-config")
     def client_config():
-        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "firstLoadApprover": s.first_load_approver, "shareDays": s.ex_days, "customersFolder": s.customers_folder, "devUsers": [s.dev_user.lower(), *[u for u in s.dev_users if u != s.dev_user.lower()]] if s.auth_mode == "dev" and s.dev_users else [],
+        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "firstLoadApprover": s.first_load_approver, "shareDays": s.ex_days, "customersFolder": s.customers_folder, "shortPaths": [[os.path.join(s.repository_root, k), v] for k, v in s.short_paths.items()], "devUsers": [s.dev_user.lower(), *[u for u in s.dev_users if u != s.dev_user.lower()]] if s.auth_mode == "dev" and s.dev_users else [],
                 "approvals": s.approvals, "fileLinker": bool(s.fl_check_url and s.fl_update_url),
                 "site": s.site_url if s.sharepoint != "memory" else "", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,

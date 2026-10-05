@@ -361,7 +361,7 @@ function wire(v) {
   v.querySelectorAll('[data-sf]').forEach(a => a.onclick = () => { state.wfFilter = a.dataset.sf || null; render(); });
   v.querySelectorAll('[data-st]').forEach(a => a.onclick = () => startWorkflow(a.dataset.st));
   v.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => submitDialog(b.dataset.sub));
-  v.querySelectorAll('[data-cp]').forEach(a => a.onclick = async () => { await copyText(a.dataset.cp); a.textContent = T.copied; });
+  v.querySelectorAll('[data-cp]').forEach(a => a.onclick = async () => { await copyText(userPath(a.dataset.cp)); a.textContent = T.copied; });
   v.querySelectorAll('[data-drn]').forEach(b => b.onclick = () =>
     simpleDialog(T.rename, T.newName, b.dataset.name, `/api/documents/${b.dataset.drn}/rename`, newName => ({ newName })));
   v.querySelectorAll('[data-ddel]').forEach(b => b.onclick = async () => {
@@ -370,6 +370,14 @@ function wire(v) {
   });
 }
 // The clipboard API needs https; on an http intranet address fall back to a hidden text box.
+// The path users copy: $Root\02_Customers\... -> its short path (DMS_SHORT_PATHS)
+function userPath(p) {
+  for (const [long, short] of (cfg.shortPaths || []).sort((a, b) => b[0].length - a[0].length)) {
+    const l = long.replace(/[\\/]+$/, '');
+    if (p && (p.toLowerCase() === l.toLowerCase() || p.toLowerCase().startsWith(l.toLowerCase() + '\\'))) return short + p.slice(l.length);
+  }
+  return p;
+}
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return; } catch (e) { /* fall back */ }
   const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';

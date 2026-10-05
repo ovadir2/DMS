@@ -17,6 +17,17 @@ def _load_dotenv() -> None:
             os.environ.setdefault(key.strip(), value.strip().strip("'\""))
 
 
+def _short_paths(value: str) -> dict:
+    """DMS_SHORT_PATHS=02_Customers=\\\\fs\\Customers;01_Management=\\\\fs\\General -> {folder: short path}."""
+    out = {}
+    for part in value.split(";"):
+        if "=" in part:
+            folder, short = part.split("=", 1)
+            if folder.strip() and short.strip():
+                out[folder.strip().strip("\\/")] = short.strip().rstrip("\\/")
+    return out
+
+
 # Choice values as stored in the lists. The DocumentControl site is provisioned in Hebrew.
 CHOICES = {
     "he": {"Working": "בעבודה", "Submitted": "הוגש לאישור", "Approved_ReadOnly": "מאושר - קריאה בלבד",
@@ -55,6 +66,7 @@ class Settings:
     document_id_prefix: str = "DMS"
     register_cache_seconds: int = 30
     customers_folder: str = "02_Customers"  # under the root: one folder per customer
+    short_paths: dict = field(default_factory=dict)  # folder under the root -> shorter path users open and copy
     max_upload_mb: int = 500
     search_limit: int = 200
     approvals: str = "flow"                 # flow (DC-P1 in Teams) | page (approve on the DMS page; turn DC-P1 off)
@@ -130,6 +142,7 @@ class Settings:
             document_id_prefix=e("DMS_DOCUMENT_ID_PREFIX", "DMS"),
             register_cache_seconds=int(e("DMS_REGISTER_CACHE_SECONDS", "30")),
             customers_folder=e("DMS_CUSTOMERS_FOLDER", "02_Customers"),
+            short_paths=_short_paths(e("DMS_SHORT_PATHS", "")),
             max_upload_mb=int(e("DMS_MAX_UPLOAD_MB", "500")),
             search_limit=int(e("DMS_SEARCH_LIMIT", "200")),
             protected_depth=int(e("DMS_PROTECTED_DEPTH", "2")),
