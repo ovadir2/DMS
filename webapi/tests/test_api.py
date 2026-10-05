@@ -1625,3 +1625,14 @@ def test_user_drive_letters_from_the_page(tmp_path):
     assert "file:///K:/Customer_A/a.docx" in uri({"X-DMS-Drives": "02_Customers=K:"})   # this PC's letter
     assert "file:///R:/Customer_A/a.docx" in uri({})                                   # only for that request
     files.set_short_paths("", {})
+
+
+def test_dotenv_inline_comments(tmp_path, monkeypatch):
+    from dms_api import config
+    env = tmp_path / ".env"
+    env.write_text('DMS_T1=\\\\FS\\Data   # [script] -Root\nDMS_T2={"a": "{old}"}\nDMS_T3=DMS Shortcuts\n', encoding="utf-8")
+    for k in ("DMS_T1", "DMS_T2", "DMS_T3"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr(config, "Path", lambda *_: type("P", (), {"resolve": lambda self: type("Q", (), {"parent": type("R", (), {"parent": tmp_path})()})()})())
+    config._load_dotenv()
+    assert os.environ["DMS_T1"] == "\\\\FS\\Data" and os.environ["DMS_T2"] == '{"a": "{old}"}' and os.environ["DMS_T3"] == "DMS Shortcuts"

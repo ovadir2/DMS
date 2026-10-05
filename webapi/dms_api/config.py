@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -14,7 +15,8 @@ def _load_dotenv() -> None:
         line = line.strip()
         if line and not line.startswith("#") and "=" in line:
             key, value = line.split("=", 1)
-            os.environ.setdefault(key.strip(), value.strip().strip("'\""))
+            value = re.sub(r"\s+#.*$", "", value).strip()       # a comment after the value (" # ...")
+            os.environ.setdefault(key.strip(), value.strip("'\""))
 
 
 def _short_paths(value: str) -> dict:
