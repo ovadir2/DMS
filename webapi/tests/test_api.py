@@ -1579,3 +1579,21 @@ def test_dev_mode_acting_as_another_listed_user(tmp_path):
     me = c.get("/api/me", headers={"X-DMS-Dev-User": other}).json()
     assert me["email"] == other and not me["admin"]
     assert c.get("/api/me", headers={"X-DMS-Dev-User": "someone@else.com"}).json()["email"] == USER   # not listed: ignored
+
+
+def test_dev_ad_check_for_acting_users_not_for_admins(tmp_path, monkeypatch):
+    from dms_api import security
+    other = "user@rh.co.il"
+    cust = tmp_path / "02_Customers"
+    (cust / "Customer_A").mkdir(parents=True)
+    (cust / "Customer_B").mkdir()
+
+    class FakeAd:                                             # AD lets the user see only Customer_A
+        def can(self, path, access="read"):
+            return "Customer_B" not in path
+    monkeypatch.setattr(security.AdUser, "get", classmethod(lambda cls, upn: FakeAd()))
+    c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER, dev_users=[other],
+                                       dev_ad_check=True, sharepoint="memory", admins=[USER])))
+    names = lambda h: {f["name"] for f in c.get("/api/browse", params={"path": str(cust)}, headers=h).json()["folders"]}  # noqa: E731
+    assert names({}) == {"Customer_A", "Customer_B"}                                   # super user: no AD check
+    assert names({"X-DMS-Dev-User": other}) == {"Customer_A"}                          # acting user: AD decides

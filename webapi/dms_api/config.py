@@ -50,6 +50,7 @@ class Settings:
     user_header: str = "X-MS-CLIENT-PRINCIPAL-NAME"   # header: set by the trusted reverse proxy
     dev_user: str = ""                      # dev: fixed user email, never in production
     dev_users: list[str] = field(default_factory=list)  # dev: other users to act as (page: "Acting as"), testing only
+    dev_ad_check: bool = False              # dev: check AD / NTFS for each user (not the DMS_ADMINS), domain PC only
     allowed_origins: list[str] = field(default_factory=list)
     document_id_prefix: str = "DMS"
     register_cache_seconds: int = 30
@@ -124,6 +125,7 @@ class Settings:
             user_header=e("DMS_USER_HEADER", "X-MS-CLIENT-PRINCIPAL-NAME"),
             dev_user=e("DMS_DEV_USER", ""),
             dev_users=[a.strip().lower() for a in e("DMS_DEV_USERS", "").split(",") if a.strip()],
+            dev_ad_check=e("DMS_DEV_AD_CHECK", "").strip().lower() in ("1", "true", "yes", "on"),
             allowed_origins=[o.strip() for o in e("DMS_ALLOWED_ORIGINS", "").split(",") if o.strip()],
             document_id_prefix=e("DMS_DOCUMENT_ID_PREFIX", "DMS"),
             register_cache_seconds=int(e("DMS_REGISTER_CACHE_SECONDS", "30")),

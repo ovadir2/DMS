@@ -4,7 +4,8 @@ windows: IIS Windows Authentication, the login of the person at the PC (no login
          decide what they see (security.py). The default for the company network.
 entra:   Entra ID access token (single sign-on from outside the network, e.g. Application Proxy).
 header:  a trusted reverse proxy puts the user's email in a header.
-dev:     a fixed user, for testing only (DMS_DEV_USERS: others to act as, header X-DMS-Dev-User).
+dev:     a fixed user, for testing only (DMS_DEV_USERS: others to act as, header X-DMS-Dev-User;
+         DMS_DEV_AD_CHECK: their AD / NTFS access is checked, except DMS_ADMINS).
 """
 from __future__ import annotations
 
@@ -37,7 +38,14 @@ def _resolve(request: Request) -> User:
         acting = (request.headers.get("X-DMS-Dev-User") or "").strip().lower()
         if acting and (acting == email or acting in s.dev_users):   # testing: act as another listed user
             email = acting
-        return User(email=email, name=email.split("@")[0])
+        user = User(email=email, name=email.split("@")[0])
+        if s.dev_ad_check and email not in s.admins:            # testing AD: super users are not checked
+            from .security import AdUser
+            try:
+                user.ad = AdUser.get(email)
+            except Exception as e:  # noqa: BLE001 - say why, do not show everything
+                raise HTTPException(403, f"AD check for {email}: {e}") from None
+        return user
     if s.auth_mode == "header":
         user = request.headers.get(s.user_header)
         if not user:

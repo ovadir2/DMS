@@ -175,7 +175,7 @@ The server must be joined to the domain, reach `$Root`, and have outbound HTTPS 
 
 **Update production:** `cd C:\DMS; git pull; webapi\.venv\Scripts\pip install -r webapi\requirements.txt`, then recycle the app pool. **Roll back:** `git checkout <previous commit>` and recycle.
 
-**Testing without IIS:** set `DMS_AUTH_MODE=dev` and `DMS_DEV_USER` (optional `DMS_DEV_USERS=a@rh.co.il,b@rh.co.il`: an "Acting as" list at the top of the page to switch user, e.g. owner and approver), then `.\.venv\Scripts\python -m uvicorn dms_api.main:app --port 8080`. In dev mode there are no AD checks.
+**Testing without IIS:** set `DMS_AUTH_MODE=dev` and `DMS_DEV_USER` (optional `DMS_DEV_USERS=a@rh.co.il,b@rh.co.il`: an "Acting as" list at the top of the page to switch user, e.g. owner and approver; add `DMS_DEV_AD_CHECK=1` on a domain PC to check each acting user's AD / NTFS access to `$Root` - the `DMS_ADMINS` are not checked), then `.\.venv\Scripts\python -m uvicorn dms_api.main:app --port 8080`. In dev mode there are no AD checks.
 
 ## Link it
 
