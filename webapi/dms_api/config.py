@@ -49,6 +49,7 @@ class Settings:
     spa_client_id: str = ""                 # entra: app id the built-in page signs in with
     user_header: str = "X-MS-CLIENT-PRINCIPAL-NAME"   # header: set by the trusted reverse proxy
     dev_user: str = ""                      # dev: fixed user email, never in production
+    dev_users: list[str] = field(default_factory=list)  # dev: other users to act as (page: "Acting as"), testing only
     allowed_origins: list[str] = field(default_factory=list)
     document_id_prefix: str = "DMS"
     register_cache_seconds: int = 30
@@ -122,6 +123,7 @@ class Settings:
             spa_client_id=e("DMS_SPA_CLIENT_ID", ""),
             user_header=e("DMS_USER_HEADER", "X-MS-CLIENT-PRINCIPAL-NAME"),
             dev_user=e("DMS_DEV_USER", ""),
+            dev_users=[a.strip().lower() for a in e("DMS_DEV_USERS", "").split(",") if a.strip()],
             allowed_origins=[o.strip() for o in e("DMS_ALLOWED_ORIGINS", "").split(",") if o.strip()],
             document_id_prefix=e("DMS_DOCUMENT_ID_PREFIX", "DMS"),
             register_cache_seconds=int(e("DMS_REGISTER_CACHE_SECONDS", "30")),

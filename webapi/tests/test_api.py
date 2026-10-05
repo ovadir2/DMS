@@ -1568,3 +1568,14 @@ def test_saved_without_workflow_has_no_start_workflow(tmp_path):
     assert r.status_code == 200, r.text
     d = sp.document(d["id"])
     assert d["controlMode"] != sp.choices("ControlMode")[0] and not c.post(f"/api/documents/{d['id']}/submit").status_code >= 400
+
+
+def test_dev_mode_acting_as_another_listed_user(tmp_path):
+    other = "approver@rh.co.il"
+    c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER, dev_users=[other],
+                                       sharepoint="memory", admins=[USER])))
+    assert c.get("/api/client-config").json()["devUsers"] == [USER, other]
+    assert c.get("/api/me").json()["email"] == USER
+    me = c.get("/api/me", headers={"X-DMS-Dev-User": other}).json()
+    assert me["email"] == other and not me["admin"]
+    assert c.get("/api/me", headers={"X-DMS-Dev-User": "someone@else.com"}).json()["email"] == USER   # not listed: ignored

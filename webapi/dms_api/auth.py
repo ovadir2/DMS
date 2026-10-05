@@ -4,7 +4,7 @@ windows: IIS Windows Authentication, the login of the person at the PC (no login
          decide what they see (security.py). The default for the company network.
 entra:   Entra ID access token (single sign-on from outside the network, e.g. Application Proxy).
 header:  a trusted reverse proxy puts the user's email in a header.
-dev:     a fixed user, for testing only.
+dev:     a fixed user, for testing only (DMS_DEV_USERS: others to act as, header X-DMS-Dev-User).
 """
 from __future__ import annotations
 
@@ -33,7 +33,11 @@ def _resolve(request: Request) -> User:
     if s.auth_mode == "dev":
         if not s.dev_user:
             raise HTTPException(500, "DMS_DEV_USER is not set")
-        return User(email=s.dev_user.lower(), name=s.dev_user.split("@")[0])
+        email = s.dev_user.lower()
+        acting = (request.headers.get("X-DMS-Dev-User") or "").strip().lower()
+        if acting and (acting == email or acting in s.dev_users):   # testing: act as another listed user
+            email = acting
+        return User(email=email, name=email.split("@")[0])
     if s.auth_mode == "header":
         user = request.headers.get(s.user_header)
         if not user:
