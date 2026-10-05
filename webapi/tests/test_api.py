@@ -294,9 +294,9 @@ def test_root_hides_system_folders_and_areas(env):
     c, _, q = env
     root = q.parents[3]
     (root / "04_Workflow_System").mkdir()
-    (root / "01_Management").mkdir()
+    (root / "01_General").mkdir()
     assert "04_Workflow_System" not in [f["name"] for f in c.get("/api/browse").json()["folders"]]
-    assert [a["name"] for a in c.get("/api/areas").json()] == ["01_Management", "02_Customers"]
+    assert [a["name"] for a in c.get("/api/areas").json()] == ["01_General", "02_Customers"]
 
 
 def test_save_guide(env):
@@ -632,7 +632,7 @@ def test_path_finder(env):
     cust = q.parents[1]
     (cust / "Develop" / "Products" / "PRJ-1").mkdir(parents=True)
     top = c.get("/api/pathfinder").json()
-    assert [o["name"] for o in top["options"]] == ["01_Management", "02_Customers"] and top["options"][0]["exists"] is False
+    assert [o["name"] for o in top["options"]] == ["01_General", "02_Customers"] and top["options"][0]["exists"] is False
     lv = c.get("/api/pathfinder", params={"path": str(cust)}).json()
     assert [(o["name"], o["exists"]) for o in lv["options"]][:4] == [("Customer_Profile", False), ("Commercial", True), ("Pricing", False),
                                                                       ("Develop", True)]
@@ -1035,13 +1035,13 @@ def test_type_without_matrix_rule_goes_to_the_super_user(tmp_path):
 def test_type_and_area_inherited_from_the_blueprint_folder(tmp_path):
     from dms_api import blueprint
     from dms_api.memory import MemorySharePoint
-    assert blueprint.classify(["01_Management", "Company_Profile"]) == {"area": "Management", "type": "Company Profile"}
+    assert blueprint.classify(["01_General", "Company_Profile"]) == {"area": "Management", "type": "Company Profile"}
     assert blueprint.classify(["02_Customers", "Customer_A", "Develop", "Products", "PRJ-1", "02_SOW", "Working"]) == \
         {"area": "Development", "type": "SOW"}
     assert blueprint.classify(["02_Customers", "Customer_A", "Commercial", "Quotations", "Old 2019"])["type"] == "Quotation"
     assert blueprint.classify(["02_Customers", "Customer_A", "Quality_QC", "NCR"]) == {"area": "Quality", "type": None}
     root = tmp_path / "Root"
-    cp = root / "01_Management" / "Company_Profile"
+    cp = root / "01_General" / "Company_Profile"
     cp.mkdir(parents=True)
     (cp / "Profile.docx").write_text("x")
     s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
@@ -1050,7 +1050,7 @@ def test_type_and_area_inherited_from_the_blueprint_folder(tmp_path):
         {"documentType": "פרופיל חברה", "documentArea": "ניהול", "controlMode": "תהליך אישור חובה"}
     d = c.post("/api/documents", json={"path": str(cp / "Profile.docx")}).json()
     assert (d["documentType"], d["documentArea"]) == ("פרופיל חברה", "ניהול")
-    other = root / "01_Management" / "Templates"
+    other = root / "01_General" / "Templates"
     other.mkdir()
     (other / "T.docx").write_text("x")
     assert c.post("/api/documents", json={"path": str(other / "T.docx")}).status_code == 400   # the folder sets no type
@@ -1156,7 +1156,7 @@ def test_rename_a_working_document(tmp_path):
 def test_main_search_covers_folders_file_names_and_document_ids(tmp_path):
     from dms_api.memory import MemorySharePoint
     root = tmp_path / "Root"
-    qa = root / "01_Management" / "Quality" / "Quality and Standards"
+    qa = root / "01_General" / "Quality" / "Quality and Standards"
     qa.mkdir(parents=True)
     (qa / "QP-2.1 V06 הודעות ללקוחות.docx").write_text("x")
     q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
@@ -1601,8 +1601,8 @@ def test_dev_ad_check_for_acting_users_not_for_admins(tmp_path, monkeypatch):
 
 def test_short_paths_for_open_and_copy(tmp_path):
     from dms_api.config import _short_paths
-    m = _short_paths(r"02_Customers=\\fs\Customers; 01_Management=\\fs\General\ ")
-    assert m == {"02_Customers": r"\\fs\Customers", "01_Management": r"\\fs\General"}
+    m = _short_paths(r"02_Customers=\\fs\Customers; 01_General=\\fs\General\ ")
+    assert m == {"02_Customers": r"\\fs\Customers", "01_General": r"\\fs\General"}
     c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER, sharepoint="memory",
                                        short_paths=m)))
     assert [p[1] for p in c.get("/api/client-config").json()["shortPaths"]] == [r"\\fs\Customers", r"\\fs\General"]

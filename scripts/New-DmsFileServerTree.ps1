@@ -8,7 +8,7 @@
     Two modes.
 
     Tree mode (default) - creates the repository root:
-        01_Management\<20 management areas from blueprint Appendix A>
+        01_General\<20 management areas from blueprint Appendix A>
         02_Customers\<Customer>\<customer tree>\Develop\Products\<Product>\<product tree>   (scripts\blueprint-folders.txt)
         03_Operations_Staging\{PLM_Release_Queue, MAE_Release_Queue, Priority_Import_Queue, Integration_Logs}
         04_Workflow_System\{Submitted_Queue, Rejected_Queue, Processing, Error_Queue}
@@ -79,15 +79,15 @@ param(
     # Area code -> folder where that area's controlled documents live (blueprint Appendix A).
     # Documents that belong to a customer project use -DocumentParent instead.
     [hashtable] $AreaFolders = [ordered]@{
-        MGT = '01_Management\Company_Profile'
-        COM = '01_Management\Sales_Marketing'
-        DEV = '01_Management\Development_Standards'
-        MFG = '01_Management\Manufacturing_Standards'
-        TST = '01_Management\Engineering_Standards'
-        QA  = '01_Management\Quality_System'
-        CHG = '01_Management\Engineering_Standards'
-        IT  = '01_Management\IT'
-        SEC = '01_Management\IT'
+        MGT = '01_General\Company_Profile'
+        COM = '01_General\Sales_Marketing'
+        DEV = '01_General\Development_Standards'
+        MFG = '01_General\Manufacturing_Standards'
+        TST = '01_General\Engineering_Standards'
+        QA  = '01_General\Quality_System'
+        CHG = '01_General\Engineering_Standards'
+        IT  = '01_General\IT'
+        SEC = '01_General\IT'
     },
 
     [string[]] $Customers = @(),
@@ -270,7 +270,7 @@ if ($DocumentId) {
 Write-Step "Repository tree under $Root"
 Add-DmsFolder $Root
 $top = [ordered]@{
-    '01_Management'          = @()
+    '01_General'          = @()
     '02_Customers'           = @()
     '03_Operations_Staging'  = @('PLM_Release_Queue', 'MAE_Release_Queue', 'Priority_Import_Queue', 'Integration_Logs')
     '04_Workflow_System'     = @('Submitted_Queue', 'Rejected_Queue', 'Processing', 'Error_Queue')
@@ -286,14 +286,14 @@ foreach ($t in $top.Keys) {
 $bpFile = Join-Path $PSScriptRoot 'blueprint-folders.txt'
 if (-not (Test-Path -LiteralPath $bpFile)) { throw "Missing $bpFile (git pull)" }
 $bp = @(Get-Content -LiteralPath $bpFile -Encoding UTF8 | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$ManagementFolders = @($bp | Where-Object { $_ -like '01_Management\*' } | ForEach-Object { $_.Substring('01_Management\'.Length) })
+$ManagementFolders = @($bp | Where-Object { $_ -like '01_General\*' } | ForEach-Object { $_.Substring('01_General\'.Length) })
 $CustomerTree = @($bp | Where-Object { $_ -like '02_Customers\<Customer>\*' -and $_ -notlike '*<Product>*' } |
     ForEach-Object { $_.Substring('02_Customers\<Customer>\'.Length) })
 $ProjectTree = @($bp | Where-Object { $_ -like '02_Customers\<Customer>\Develop\Products\<Product>\*' } |
     ForEach-Object { $_.Substring('02_Customers\<Customer>\Develop\Products\<Product>\'.Length) })
 
 Write-Step 'Management areas (blueprint Appendix A)'
-foreach ($m in $ManagementFolders) { Add-DmsFolder (Join-Path (Join-Path $Root '01_Management') $m) }
+foreach ($m in $ManagementFolders) { Add-DmsFolder (Join-Path (Join-Path $Root '01_General') $m) }
 
 if ($Customers) {
     Write-Step "Customer folders (blueprint Appendix A): $($Customers.Count) customers, $(@($CustomerProjects.Values | ForEach-Object { $_ }).Count) products"

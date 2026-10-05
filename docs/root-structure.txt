@@ -1,41 +1,41 @@
-﻿01_Management
-01_Management\AI_Automation
-01_Management\Archive
-01_Management\Assets
-01_Management\Certifications
-01_Management\Commercial
-01_Management\Company_Profile
-01_Management\DB_Management
-01_Management\Engineering
-01_Management\Finance
-01_Management\HR
-01_Management\IT
-01_Management\Legal
-01_Management\Planners
-01_Management\Project_Management
-01_Management\Quality and Standards
-01_Management\Quality and Standards\נהלי איכות בתפעול
-01_Management\Quality and Standards\נהלי איכות בתפעול\חטיבות
-01_Management\Quality and Standards\נהלי איכות בתפעול\כלל חברה
-01_Management\Quality and Standards\נהלי איכות בתפעול\כלל חברה\ארכיון
-01_Management\Quality and Standards\נהלי איכות בתפעול\כלל חברה\Training
-01_Management\Quality and Standards\נהלי איכות בתפעול\מערכות מידע
-01_Management\Quality and Standards\נהלי איכות בתפעול\מערכות מידע\ארכיון
-01_Management\Quality and Standards\נהלי איכות בתפעול\מפעל ייצור
-01_Management\Quality and Standards\נהלי איכות בתפעול\מפעל ייצור\ארכיון
-01_Management\Quality and Standards\נהלי איכות בתפעול\משאבי אנוש
-01_Management\Quality and Standards\נהלי איכות בתפעול\משאבי אנוש\ארכיון
-01_Management\Quality and Standards\נהלי איכות בתפעול\נהלי אחזקה
-01_Management\Quality and Standards\נהלי איכות בתפעול\רכש ואספקה
-01_Management\Quality and Standards\נהלי איכות בתפעול\רכש ואספקה\ארכיון
-01_Management\Quality and Standards\נהלי איכות בתפעול\תשתיות איכות
-01_Management\Quality and Standards\נהלי איכות בתפעול\תשתיות איכות\ארכיון
-01_Management\Quality_System
-01_Management\Sales_Marketing
-01_Management\Strategy
-01_Management\Supply_chain
-01_Management\Templates
-01_Management\Training
+﻿01_General
+01_General\AI_Automation
+01_General\Archive
+01_General\Assets
+01_General\Certifications
+01_General\Commercial
+01_General\Company_Profile
+01_General\DB_Management
+01_General\Engineering
+01_General\Finance
+01_General\HR
+01_General\IT
+01_General\Legal
+01_General\Planners
+01_General\Project_Management
+01_General\Quality and Standards
+01_General\Quality and Standards\נהלי איכות בתפעול
+01_General\Quality and Standards\נהלי איכות בתפעול\חטיבות
+01_General\Quality and Standards\נהלי איכות בתפעול\כלל חברה
+01_General\Quality and Standards\נהלי איכות בתפעול\כלל חברה\ארכיון
+01_General\Quality and Standards\נהלי איכות בתפעול\כלל חברה\Training
+01_General\Quality and Standards\נהלי איכות בתפעול\מערכות מידע
+01_General\Quality and Standards\נהלי איכות בתפעול\מערכות מידע\ארכיון
+01_General\Quality and Standards\נהלי איכות בתפעול\מפעל ייצור
+01_General\Quality and Standards\נהלי איכות בתפעול\מפעל ייצור\ארכיון
+01_General\Quality and Standards\נהלי איכות בתפעול\משאבי אנוש
+01_General\Quality and Standards\נהלי איכות בתפעול\משאבי אנוש\ארכיון
+01_General\Quality and Standards\נהלי איכות בתפעול\נהלי אחזקה
+01_General\Quality and Standards\נהלי איכות בתפעול\רכש ואספקה
+01_General\Quality and Standards\נהלי איכות בתפעול\רכש ואספקה\ארכיון
+01_General\Quality and Standards\נהלי איכות בתפעול\תשתיות איכות
+01_General\Quality and Standards\נהלי איכות בתפעול\תשתיות איכות\ארכיון
+01_General\Quality_System
+01_General\Sales_Marketing
+01_General\Strategy
+01_General\Supply_chain
+01_General\Templates
+01_General\Training
 02_Customers
 02_Customers\Customer_A
 02_Customers\Customer_A\Archive

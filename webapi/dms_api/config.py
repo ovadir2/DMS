@@ -20,7 +20,7 @@ def _load_dotenv() -> None:
 
 
 def _short_paths(value: str) -> dict:
-    """DMS_SHORT_PATHS=02_Customers=\\\\fs\\Customers;01_Management=\\\\fs\\General -> {folder: short path}."""
+    """DMS_SHORT_PATHS=02_Customers=\\\\fs\\Customers;01_General=\\\\fs\\General -> {folder: short path}."""
     out = {}
     for part in value.split(";"):
         if "=" in part:

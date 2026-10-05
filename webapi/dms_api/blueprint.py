@@ -104,8 +104,8 @@ MANAGEMENT["Quality and Standards"] = ("Quality and standards", "איכות ות
     "Company quality procedures and standards", "נהלי האיכות והתקנים של החברה")
 
 ROOT = N({
-    "01_Management": ("Management", "הנהלה", MANAGEMENT, "Company-wide areas: procedures, standards, HR, finance",
-                      "תחומי החברה: נהלים, תקנים, משאבי אנוש, כספים"),
+    "01_General": ("General", "כללי", MANAGEMENT, "Company-wide areas: procedures, standards, HR, finance",
+                   "תחומי החברה: נהלים, תקנים, משאבי אנוש, כספים"),
     "02_Customers": ("Customers", "לקוחות", {"*": ("", "", CUSTOMER, "Customer", "לקוח")},
                      "One folder per customer, with its commercial files and products", "תיקייה לכל לקוח, עם המסמכים המסחריים והמוצרים"),
 })
@@ -193,19 +193,19 @@ SAVE_GUIDE = [
 _C = "02_Customers/*"
 _P = "02_Customers/*/Develop/Products/*"
 CLASSIFY = {
-    "01_Management": ("Management", None),
-    "01_Management/Company_Profile": ("Management", "Company Profile"),
-    "01_Management/Strategy": ("Management", "Strategy"),
-    "01_Management/Quality_System": ("Quality", "Procedure"),
-    "01_Management/Quality and Standards": ("Quality", "Procedure"),
-    "01_Management/Engineering": ("Development", "Procedure"),
-    "01_Management/Commercial": ("Commercial", None),
-    "01_Management/Planners": ("Manufacturing", None),
-    "01_Management/Supply_chain": ("Manufacturing", None),
-    "01_Management/Project_Management": ("Management", "Procedure"),
-    "01_Management/HR": ("Management", "Policy"),
-    "01_Management/IT": ("IT", "IT Procedure"),
-    "01_Management/DB_Management": ("IT", "IT Procedure"),
+    "01_General": ("Management", None),
+    "01_General/Company_Profile": ("Management", "Company Profile"),
+    "01_General/Strategy": ("Management", "Strategy"),
+    "01_General/Quality_System": ("Quality", "Procedure"),
+    "01_General/Quality and Standards": ("Quality", "Procedure"),
+    "01_General/Engineering": ("Development", "Procedure"),
+    "01_General/Commercial": ("Commercial", None),
+    "01_General/Planners": ("Manufacturing", None),
+    "01_General/Supply_chain": ("Manufacturing", None),
+    "01_General/Project_Management": ("Management", "Procedure"),
+    "01_General/HR": ("Management", "Policy"),
+    "01_General/IT": ("IT", "IT Procedure"),
+    "01_General/DB_Management": ("IT", "IT Procedure"),
     _C: ("Commercial", None),
     f"{_C}/Commercial/RFQ": ("Commercial", "Quotation"),
     f"{_C}/Commercial/Quotations": ("Commercial", "Quotation"),

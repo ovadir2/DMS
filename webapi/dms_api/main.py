@@ -261,7 +261,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return os.path.join(s.repository_root, s.customers_folder)
 
     def search_roots() -> list[str]:
-        """The user areas of the repository (01_Management, 02_Customers, ...), without the system folders."""
+        """The user areas of the repository (01_General, 02_Customers, ...), without the system folders."""
         try:
             return [e.path for e in sorted(os.scandir(s.repository_root), key=lambda e: e.name)
                     if e.is_dir() and e.name not in blueprint.HIDDEN_AT_ROOT and not files.is_hidden(e)]

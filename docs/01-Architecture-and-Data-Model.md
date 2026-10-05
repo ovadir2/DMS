@@ -68,7 +68,7 @@ The worker is idempotent. It only picks up rows in `Queued`, sets them to `Proce
 
 ```text
 \\FILE-SERVER\Corporate_Data
-├── 01_Management
+├── 01_General
 ├── 02_Customers\${CustomerName}\{Customer_Profile, Commercial, Projects\${ProjectName}, Shared, Archive}
 ├── 03_Operations_Staging\{PLM_Release_Queue, MAE_Release_Queue, Priority_Import_Queue, Integration_Logs}
 ├── 04_Workflow_System\{Submitted_Queue, Rejected_Queue, Processing, Error_Queue}
@@ -89,7 +89,7 @@ Only areas that need formal control get this pattern (blueprint 4.2 "Workflow fo
     Obsolete_ReadOnly\  previous revisions
 ```
 
-Example: `01_Management\Company_Profile\MGT-CPR-00001_Company_Profile\Current_ReadOnly\MGT-CPR-00001_Company_Profile_Rev03.docx`
+Example: `01_General\Company_Profile\MGT-CPR-00001_Company_Profile\Current_ReadOnly\MGT-CPR-00001_Company_Profile_Rev03.docx`
 
 ### 4.3 Identifier conventions
 
