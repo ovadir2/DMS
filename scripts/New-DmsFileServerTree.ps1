@@ -31,9 +31,9 @@
     Project folder names created under Projects of every customer in -Customers.
 
 .PARAMETER CustomersCsv
-    A CSV with the columns CustomerName and ProductName (Customer / Product / ProjectName also accepted):
-    one row per product (a customer without products gets one row with an empty ProductName). Each
-    product goes to 02_Customers\<Customer>\Develop\Products\<Product> with the development stages. Each customer gets the full customer tree and each of its
+    A CSV with the column CustomerName (Customer also accepted): one row per customer. The departments
+    inside each customer handle their projects themselves. An optional ProductName column still creates
+    02_Customers\<Customer>\Develop\Products\<Product> with the development stages. Each customer gets the full customer tree and each of its
     projects the full project tree (Appendix A, the same tree the DMS page shows). Can be combined
     with -Customers / -Projects. UTF-8 (Hebrew names are fine).
 
@@ -56,7 +56,7 @@
     .\New-DmsFileServerTree.ps1 -Root 'D:\Corporate_Data_TEST' -Customers 'Customer_A'
 
 .EXAMPLE
-    # Real customers and their projects from a CSV (CustomerName,ProductName); dry run first
+    # Real customers from a CSV (CustomerName); dry run first
     .\New-DmsFileServerTree.ps1 -Root '\\FILE-SERVER\Corporate_Data' -CustomersCsv .\customers.csv -WhatIf
     .\New-DmsFileServerTree.ps1 -Root '\\FILE-SERVER\Corporate_Data' -CustomersCsv .\customers.csv
 
@@ -171,7 +171,7 @@ if ($CustomersCsv) {
     $cols = if ($rows.Count) { @($rows[0].PSObject.Properties.Name) } else { @() }
     $cCol = @('CustomerName', 'Customer') | Where-Object { $cols -contains $_ } | Select-Object -First 1
     $pCol = @('ProductName', 'Product', 'ProjectName', 'Project') | Where-Object { $cols -contains $_ } | Select-Object -First 1
-    if ($rows.Count -and -not $cCol) { throw "The CSV needs a CustomerName column (and ProjectName). Found: $($cols -join ', ')" }
+    if ($rows.Count -and -not $cCol) { throw "The CSV needs a CustomerName column. Found: $($cols -join ', ')" }
     foreach ($r in $rows) {
         $c = "$($r.$cCol)".Trim()
         if (-not $c) { continue }
