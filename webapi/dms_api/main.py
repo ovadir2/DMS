@@ -173,9 +173,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     async def page_language(request: Request, call_next):
         """The page sends its language (X-DMS-Lang); notifications are written in it."""
         token = PAGE_LANG.set("HE" if (request.headers.get("x-dms-lang") or "").upper() == "HE" else "EN")
+        from .config import _short_paths
+        drives = files.user_drives(_short_paths(request.headers.get("x-dms-drives") or ""))   # this PC's drive letters
         try:
             return await call_next(request)
         finally:
+            files.USER_SHORT.reset(drives)
             PAGE_LANG.reset(token)
 
     if s.allowed_origins:
@@ -229,7 +232,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/client-config")
     def client_config():
-        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "firstLoadApprover": s.first_load_approver, "shareDays": s.ex_days, "customersFolder": s.customers_folder, "shortPaths": [[os.path.join(s.repository_root, k), v] for k, v in s.short_paths.items()], "devUsers": [s.dev_user.lower(), *[u for u in s.dev_users if u != s.dev_user.lower()]] if s.auth_mode == "dev" and s.dev_users else [],
+        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "firstLoadApprover": s.first_load_approver, "shareDays": s.ex_days, "customersFolder": s.customers_folder, "root": s.repository_root, "shortPaths": [[os.path.join(s.repository_root, k), v] for k, v in s.short_paths.items()], "devUsers": [s.dev_user.lower(), *[u for u in s.dev_users if u != s.dev_user.lower()]] if s.auth_mode == "dev" and s.dev_users else [],
                 "approvals": s.approvals, "fileLinker": bool(s.fl_check_url and s.fl_update_url),
                 "site": s.site_url if s.sharepoint != "memory" else "", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,

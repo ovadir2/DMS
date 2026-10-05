@@ -1612,3 +1612,16 @@ def test_short_paths_for_open_and_copy(tmp_path):
     other = os.path.join(str(tmp_path), "03_Operations_Staging", "x.docx")
     assert files.user_path(other) == other                                               # not mapped: unchanged
     files.set_short_paths("", {})
+
+
+def test_user_drive_letters_from_the_page(tmp_path):
+    c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                                       short_paths={"02_Customers": "R:"})))
+    q = tmp_path / "02_Customers" / "Customer_A"
+    q.mkdir(parents=True)
+    (q / "a.docx").write_bytes(b"x")
+    uri = lambda h: next(f for f in c.get("/api/browse", params={"path": str(q)}, headers=h).json()["files"])["officeUri"]  # noqa: E731
+    assert "file:///R:/Customer_A/a.docx" in uri({})                                   # DMS_SHORT_PATHS
+    assert "file:///K:/Customer_A/a.docx" in uri({"X-DMS-Drives": "02_Customers=K:"})   # this PC's letter
+    assert "file:///R:/Customer_A/a.docx" in uri({})                                   # only for that request
+    files.set_short_paths("", {})

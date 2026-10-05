@@ -9,6 +9,7 @@ import stat
 import uuid
 from collections.abc import Callable, Iterator
 from datetime import datetime, timezone
+from contextvars import ContextVar
 from typing import BinaryIO
 
 from .config import WORKFLOW_FOLDERS
@@ -89,11 +90,23 @@ def short_path(path: str) -> str:
 
 
 SHORT: list[tuple[str, str]] = []          # (long prefix, short prefix), set by the app from DMS_SHORT_PATHS
+ROOT = [""]
+# this user's own drive letters (the page sends them, X-DMS-Drives), when they differ from DMS_SHORT_PATHS
+USER_SHORT: ContextVar[list | None] = ContextVar("USER_SHORT", default=None)
+
+
+def _pairs(root: str, mapping: dict) -> list[tuple[str, str]]:
+    return sorted(((os.path.join(root, folder), short) for folder, short in mapping.items()), key=lambda x: -len(x[0]))
 
 
 def set_short_paths(root: str, mapping: dict) -> None:
-    SHORT[:] = sorted(((os.path.join(root, folder), short) for folder, short in mapping.items()),
-                      key=lambda x: -len(x[0]))
+    ROOT[0] = root
+    SHORT[:] = _pairs(root, mapping)
+
+
+def user_drives(mapping: dict):
+    """For one request: this user's drive letters first, then DMS_SHORT_PATHS. Returns the token to reset."""
+    return USER_SHORT.set(_pairs(ROOT[0], mapping) + SHORT if mapping else None)
 
 
 def user_path(path: str) -> str:
@@ -101,7 +114,7 @@ def user_path(path: str) -> str:
     if not path:
         return path
     n = os.path.normcase(os.path.normpath(path))
-    for long, short in SHORT:
+    for long, short in (USER_SHORT.get() or SHORT):
         lp = os.path.normcase(os.path.normpath(long))
         if n == lp or n.startswith(lp + os.sep):
             rest = os.path.normpath(path)[len(os.path.normpath(long)):].lstrip("\\/")

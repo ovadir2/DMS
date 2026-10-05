@@ -255,10 +255,13 @@ async function token() {
   try { return (await msal.acquireTokenSilent({ scopes:[cfg.scope], account })).accessToken; }
   catch { await msal.acquireTokenRedirect({ scopes:[cfg.scope], account }); }
 }
+// This PC's drive letters for the root folders (scripts/Set-DmsDrives.ps1 opens the page with ?drives=...)
+function myDrives() { try { return localStorage.getItem('dmsDrives') || ''; } catch (e) { return ''; } }
+try { const q = new URLSearchParams(location.search); if (q.has('drives')) { localStorage.setItem('dmsDrives', q.get('drives')); q.delete('drives'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '')); } } catch (e) {}
 function devUser() { try { return (cfg.devUsers || []).length ? localStorage.getItem('dmsDevUser') || '' : ''; } catch (e) { return ''; } }
 async function api(path, opts = {}) {
   const t = await token();
-  const headers = { ...(opts.body && !(opts.body instanceof FormData) ? { 'Content-Type':'application/json' } : {}), ...(t ? { Authorization:'Bearer ' + t } : {}), ...(devUser() ? { 'X-DMS-Dev-User': devUser() } : {}), 'X-DMS-Lang': lang };
+  const headers = { ...(opts.body && !(opts.body instanceof FormData) ? { 'Content-Type':'application/json' } : {}), ...(t ? { Authorization:'Bearer ' + t } : {}), ...(devUser() ? { 'X-DMS-Dev-User': devUser() } : {}), ...(myDrives() ? { 'X-DMS-Drives': myDrives() } : {}), 'X-DMS-Lang': lang };
   const r = await fetch(path, { credentials:'include', ...opts, headers });
   const body = r.headers.get('content-type')?.includes('json') ? await r.json() : null;
   if (!r.ok) throw new Error(typeof body?.detail === 'string' ? body.detail : (body?.detail?.message || r.statusText));
@@ -372,7 +375,9 @@ function wire(v) {
 // The clipboard API needs https; on an http intranet address fall back to a hidden text box.
 // The path users copy: $Root\02_Customers\... -> its short path (DMS_SHORT_PATHS)
 function userPath(p) {
-  for (const [long, short] of (cfg.shortPaths || []).sort((a, b) => b[0].length - a[0].length)) {
+  const root = (cfg.root || '').replace(/[\\/]+$/, '');
+  const mine = myDrives().split(';').filter(x => x.includes('=')).map(x => { const [f, d] = x.split('='); return [root + '\\' + f.trim(), d.trim().replace(/[\\/]+$/, '')]; });
+  for (const [long, short] of [...mine, ...(cfg.shortPaths || [])].sort((a, b) => b[0].length - a[0].length)) {
     const l = long.replace(/[\\/]+$/, '');
     if (p && (p.toLowerCase() === l.toLowerCase() || p.toLowerCase().startsWith(l.toLowerCase() + '\\'))) return short + p.slice(l.length);
   }
