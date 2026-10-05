@@ -151,8 +151,55 @@ def office_uri(path: str, edit: bool = False) -> str | None:
     if url_len(path) > LONG_PATH:                              # still too long for Office: 8.3 names inside the folder
         short = user_path(short_path(full, force=True))
         path = short if url_len(short) < url_len(path) else short_path(path)
+    if url_len(path) > LONG_PATH and BASE_URL.get():           # no 8.3 names (or still long): a short DMS link, view only
+        return f"{app}:ofv|u|{BASE_URL.get().rstrip('/')}/api/o/{open_token(full)}/{_ascii_name(full)}"
     url = "file:" + path.replace("\\", "/") if path.startswith("\\\\") else "file:///" + path.replace("\\", "/").lstrip("/")
     return f"{app}:{'ofe' if edit else 'ofv'}|u|{url}"
+
+
+BASE_URL: ContextVar[str] = ContextVar("BASE_URL", default="")   # this request's DMS address, for the short Open link
+OPEN_TOKENS: dict[str, str] = {}
+
+
+def _tokens_file() -> str:
+    return os.path.join(ROOT[0], "04_Workflow_System", "OpenLinks.json") if ROOT[0] else ""
+
+
+def open_token(path: str) -> str:
+    """A short hash for a path, kept in 04_Workflow_System\\OpenLinks.json (the links work after a restart)."""
+    import hashlib
+    import json
+    t = hashlib.sha1(os.path.normcase(path).encode("utf-8")).hexdigest()[:16]
+    if OPEN_TOKENS.get(t) != path:
+        OPEN_TOKENS[t] = path
+        f = _tokens_file()
+        if f:
+            try:
+                os.makedirs(os.path.dirname(f), exist_ok=True)
+                with open(f + ".tmp", "w", encoding="utf-8") as out:
+                    json.dump(OPEN_TOKENS, out, ensure_ascii=False)
+                os.replace(f + ".tmp", f)
+            except OSError:
+                pass
+    return t
+
+
+def open_path(token: str) -> str | None:
+    if token not in OPEN_TOKENS and _tokens_file():
+        import json
+        try:
+            with open(_tokens_file(), encoding="utf-8") as f:
+                OPEN_TOKENS.update({k: v for k, v in json.load(f).items() if k not in OPEN_TOKENS})
+        except (OSError, ValueError):
+            pass
+    return OPEN_TOKENS.get(token)
+
+
+def _ascii_name(path: str) -> str:
+    """A short ASCII file name for the link (Word shows it as the title): the ASCII part of the name, else "document"."""
+    base, ext = os.path.splitext(os.path.basename(path))
+    a = re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9._-]+", "_", base)).strip("_.")[:60]
+    return (a or "document") + ext.lower()
 
 
 Can = Callable[[str, str], bool]          # (path, "read" | "write") -> allowed

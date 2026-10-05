@@ -1660,3 +1660,21 @@ def test_office_uri_long_hebrew_path_uses_8dot3(tmp_path, monkeypatch):
     assert "file:///G:/QUALIT~1/D7A1~1/D7A2~1/a.docx" in files.office_uri(f)
     files.set_short_paths("", {})
     files._SHORT_PREFIX.clear()
+
+
+def test_office_uri_too_long_without_8dot3_gives_short_dms_link(tmp_path):
+    root = tmp_path
+    heb = "נוהל בקרת מסמכים ורשומות ארגוניות"
+    d = root / "01_General" / "Quality and Standards" / heb / heb
+    d.mkdir(parents=True)
+    f = d / f"QP-2.1 V06 {heb}_Rev02.docx"
+    f.write_bytes(b"doc")
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                                       short_paths={"01_General": "G:"})))
+    uri = next(x for x in c.get("/api/browse", params={"path": str(d)}).json()["files"])["officeUri"]
+    assert uri.startswith("ms-word:ofv|u|http://testserver/api/o/") and uri.endswith("/QP-2.1_V06_Rev02.docx")
+    link = uri.split("|u|http://testserver", 1)[1]
+    files.OPEN_TOKENS.clear()                                                            # as after a restart
+    r = c.get(link)
+    assert r.status_code == 200 and r.content == b"doc"
+    files.set_short_paths("", {})

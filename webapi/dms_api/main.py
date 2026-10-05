@@ -175,9 +175,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         token = PAGE_LANG.set("HE" if (request.headers.get("x-dms-lang") or "").upper() == "HE" else "EN")
         from .config import _short_paths
         drives = files.user_drives(_short_paths(request.headers.get("x-dms-drives") or ""))   # this PC's drive letters
+        base = files.BASE_URL.set(str(request.base_url))
         try:
             return await call_next(request)
         finally:
+            files.BASE_URL.reset(base)
             files.USER_SHORT.reset(drives)
             PAGE_LANG.reset(token)
 
@@ -1601,6 +1603,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return with_key(sp().document(item_id))
 
     submit_doc = submit                                         # used where a parameter is called "submit"
+
+    @app.get("/api/o/{token}/{name}")
+    def open_link(token: str, name: str, user: User = Depends(current_user)):
+        """Open for a path too long for Office (Hebrew names, no 8.3 names): Word / Excel / PowerPoint get the file here."""
+        full = files.open_path(token)
+        if not full or not os.path.isfile(full):
+            raise HTTPException(404, "The link expired: open the file again from the DMS page")
+        if not user.can(full):
+            raise HTTPException(403, "You do not have access to this file")
+        return FileResponse(full, filename=name)
 
     @app.get("/api/files/download")
     def download(path: str, user: User = Depends(current_user)):
