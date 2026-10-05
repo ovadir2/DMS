@@ -26,6 +26,11 @@
 
 .EXAMPLE
     .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C
+
+.EXAMPLE
+    .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C -Users user1@rh.co.il,user2@rh.co.il -AdCheck
+    "Acting as" list on the page to switch user; -AdCheck checks each user's AD / NTFS access to -Root
+    (domain PC). The -Admins are not checked.
 #>
 [CmdletBinding()]
 param(
@@ -39,6 +44,8 @@ param(
     [ValidateSet('page', 'flow')] [string] $Approvals = 'page',
     [int] $FileServiceSeconds = 60,
     [string] $User,
+    [string[]] $Users = @(),
+    [switch] $AdCheck,
     [int] $Port = 8080,
     [ValidateSet('EN', 'HE')] [string] $Lang = 'EN',
     [string] $AiUrl, [string] $AiToken, [string] $AiModel
@@ -63,6 +70,8 @@ $env:DMS_REPOSITORY_ROOT = (Resolve-Path -LiteralPath $Root).ProviderPath
 $env:DMS_AUTH_MODE = 'dev'
 $env:DMS_ADMINS = ($Admins -join ',').ToLower()
 $env:DMS_APPROVALS = $Approvals
+$env:DMS_DEV_USERS = ($Users -join ',').ToLower()      # "Acting as" list on the page (testing)
+$env:DMS_DEV_AD_CHECK = if ($AdCheck) { '1' } else { '' }   # AD / NTFS checks for the acting users, not for -Admins
 $env:DMS_DEV_USER = if ($User) { $User.ToLower() } elseif ($Live) { '' } else { "$env:USERNAME@rh.co.il".ToLower() }
 if ($Live) {
     $env:DMS_SHAREPOINT = 'online'
