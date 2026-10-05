@@ -1636,3 +1636,12 @@ def test_dotenv_inline_comments(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "Path", lambda *_: type("P", (), {"resolve": lambda self: type("Q", (), {"parent": type("R", (), {"parent": tmp_path})()})()})())
     config._load_dotenv()
     assert os.environ["DMS_T1"] == "\\\\FS\\Data" and os.environ["DMS_T2"] == '{"a": "{old}"}' and os.environ["DMS_T3"] == "DMS Shortcuts"
+
+
+def test_dev_user_is_always_super_user(tmp_path):
+    from dms_api.memory import MemorySharePoint
+    s = Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER, dev_users=["x@rh.co.il"],
+                 sharepoint="online", sp_auth="interactive", admins=["<your.email>@rh.co.il"])
+    c = TestClient(create_app(s, MemorySharePoint(s)))                                  # the live pilot
+    assert c.get("/api/me").json()["admin"]                                             # menu: SharePoint check, First loading
+    assert not c.get("/api/me", headers={"X-DMS-Dev-User": "x@rh.co.il"}).json()["admin"]

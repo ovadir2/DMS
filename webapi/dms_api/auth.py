@@ -39,7 +39,7 @@ def _resolve(request: Request) -> User:
         if acting and (acting == email or acting in s.dev_users):   # testing: act as another listed user
             email = acting
         user = User(email=email, name=email.split("@")[0])
-        if s.dev_ad_check and email not in s.admins:            # testing AD: super users are not checked
+        if s.dev_ad_check and email not in s.admins and not (s.sp_auth == "interactive" and email == s.dev_user.lower()):   # super users are not checked
             from .security import AdUser
             try:
                 user.ad = AdUser.get(email)

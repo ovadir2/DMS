@@ -277,7 +277,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return False
 
     def is_admin(user: User) -> bool:
-        return user.email in s.admins
+        return user.email in s.admins or pilot_owner(user.email)
+
+    def pilot_owner(email: str) -> bool:
+        """The live pilot on a PC (dev mode, real SharePoint): the person who runs the DMS is always a super user."""
+        return s.auth_mode == "dev" and s.sp_auth == "interactive" and email == (s.dev_user or "").lower()
 
     @app.get("/api/diagnostics/sharepoint")
     def sp_check(user: User = Depends(current_user)):
