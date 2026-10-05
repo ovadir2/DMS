@@ -71,7 +71,7 @@ $env:DMS_REPOSITORY_ROOT = (Resolve-Path -LiteralPath $Root).ProviderPath
 $env:DMS_AUTH_MODE = 'dev'
 $env:DMS_ADMINS = ($Admins -join ',').ToLower()
 $env:DMS_APPROVALS = $Approvals
-$env:DMS_DEV_USERS = ($Users -join ',').ToLower()      # "Acting as" list on the page (testing)
+if ($Users) { $env:DMS_DEV_USERS = ($Users -join ',').ToLower() }   # "Acting as" list (testing); else DMS_DEV_USERS in .env
 $env:DMS_DEV_AD_CHECK = if (($Live -or $AdCheck) -and -not $NoAdCheck) { '1' } else { '' }   # AD / NTFS checks (on in the pilot), not for -Admins
 $env:DMS_DEV_USER = if ($User) { $User.ToLower() } elseif ($Live) { '' } else { "$env:USERNAME@rh.co.il".ToLower() }
 if ($Live) {
