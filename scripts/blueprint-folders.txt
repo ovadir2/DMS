@@ -1,13 +1,14 @@
 ﻿01_General
 01_General\Company_Profile
-01_General\Strategy
+01_General\Company_Strategy
 01_General\Commercial
+01_General\Commercial\Pricing
 01_General\Sales_Marketing
-01_General\Engineering
+01_General\Enginnering
+01_General\Process_Engineering
 01_General\Project_Management
-01_General\Planners
 01_General\Supply_chain
-01_General\Quality_System
+01_General\Supply_chain\Planners
 01_General\Quality and Standards
 01_General\Quality and Standards\נהלי איכות בתפעול
 01_General\Quality and Standards\נהלי איכות בתפעול\חטיבות
@@ -25,16 +26,13 @@
 01_General\Quality and Standards\נהלי איכות בתפעול\רכש ואספקה\ארכיון
 01_General\Quality and Standards\נהלי איכות בתפעול\תשתיות איכות
 01_General\Quality and Standards\נהלי איכות בתפעול\תשתיות איכות\ארכיון
-01_General\Certifications
+01_General\RA_Certifications
 01_General\HR
 01_General\Training
 01_General\Finance
 01_General\Legal
-01_General\Assets
 01_General\IT
 01_General\DB_Management
-01_General\AI_Automation
-01_General\Templates
 01_General\Archive
 02_Customers
 02_Customers\<Customer>
@@ -42,10 +40,12 @@
 02_Customers\<Customer>\Commercial
 02_Customers\<Customer>\Commercial\RFQ
 02_Customers\<Customer>\Commercial\Quotations
+02_Customers\<Customer>\Commercial\Pricing
 02_Customers\<Customer>\Commercial\Contracts
 02_Customers\<Customer>\Commercial\NDA
-02_Customers\<Customer>\Pricing
+02_Customers\<Customer>\Program
 02_Customers\<Customer>\Develop
+02_Customers\<Customer>\Develop\AI_Automation
 02_Customers\<Customer>\Develop\ATEFiles
 02_Customers\<Customer>\Develop\ATEFiles\FCT
 02_Customers\<Customer>\Develop\ATEFiles\FCT\01_Quotation
@@ -90,25 +90,27 @@
 02_Customers\<Customer>\DFM
 02_Customers\<Customer>\DFT
 02_Customers\<Customer>\NPI
-02_Customers\<Customer>\Manufacturing
-02_Customers\<Customer>\Manufacturing\Assembly_Drawings
-02_Customers\<Customer>\Manufacturing\Work_Instructions
-02_Customers\<Customer>\Manufacturing\Process_Flow
-02_Customers\<Customer>\Manufacturing\Machine_Programs
-02_Customers\<Customer>\Manufacturing\Stencil
-02_Customers\<Customer>\Manufacturing\Pick_and_Place
-02_Customers\<Customer>\Manufacturing\Fixtures
-02_Customers\<Customer>\Manufacturing\Photos
-02_Customers\<Customer>\Manufacturing\Videos
-02_Customers\<Customer>\Quality_QC
-02_Customers\<Customer>\Quality_QC\PPAP
-02_Customers\<Customer>\Quality_QC\PFMEA
-02_Customers\<Customer>\Quality_QC\Control_Plan
-02_Customers\<Customer>\Quality_QC\NCR
-02_Customers\<Customer>\Quality_QC\CAR
-02_Customers\<Customer>\Quality_QC\8D
-02_Customers\<Customer>\Quality_QC\Certificates
-02_Customers\<Customer>\Quality_QC\Audits
+02_Customers\<Customer>\Process_Engineering
+02_Customers\<Customer>\Process_Engineering\Assembly_Drawings
+02_Customers\<Customer>\Process_Engineering\Work_Instructions
+02_Customers\<Customer>\Process_Engineering\Process_Flow
+02_Customers\<Customer>\Process_Engineering\Machine_Programs
+02_Customers\<Customer>\Process_Engineering\Stencil
+02_Customers\<Customer>\Process_Engineering\Pick_and_Place
+02_Customers\<Customer>\Process_Engineering\Fixtures
+02_Customers\<Customer>\Process_Engineering\Photos
+02_Customers\<Customer>\Process_Engineering\Videos
+02_Customers\<Customer>\QC
+02_Customers\<Customer>\QC\PPAP
+02_Customers\<Customer>\QC\PFMEA
+02_Customers\<Customer>\QC\Control_Plan
+02_Customers\<Customer>\QC\NCR
+02_Customers\<Customer>\QC\CAR
+02_Customers\<Customer>\QC\8D
+02_Customers\<Customer>\QC\Certificates
+02_Customers\<Customer>\QC\Audits
+02_Customers\<Customer>\QC_Standards
 02_Customers\<Customer>\Supply_chain
+02_Customers\<Customer>\IT
 02_Customers\<Customer>\Shared
 02_Customers\<Customer>\Archive

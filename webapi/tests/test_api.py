@@ -634,7 +634,7 @@ def test_path_finder(env):
     top = c.get("/api/pathfinder").json()
     assert [o["name"] for o in top["options"]] == ["01_General", "02_Customers"] and top["options"][0]["exists"] is False
     lv = c.get("/api/pathfinder", params={"path": str(cust)}).json()
-    assert [(o["name"], o["exists"]) for o in lv["options"]][:4] == [("Customer_Profile", False), ("Commercial", True), ("Pricing", False),
+    assert [(o["name"], o["exists"]) for o in lv["options"]][:4] == [("Customer_Profile", False), ("Commercial", True), ("Program", False),
                                                                       ("Develop", True)]
     prj = c.get("/api/pathfinder", params={"path": str(cust / "Develop" / "Products" / "PRJ-1")}).json()
     assert prj["node"]["kind"] == "project" and len(prj["options"]) == 11 and not any(o["exists"] for o in prj["options"])
@@ -1039,7 +1039,7 @@ def test_type_and_area_inherited_from_the_blueprint_folder(tmp_path):
     assert blueprint.classify(["02_Customers", "Customer_A", "Develop", "Products", "PRJ-1", "02_SOW", "Working"]) == \
         {"area": "Development", "type": "SOW"}
     assert blueprint.classify(["02_Customers", "Customer_A", "Commercial", "Quotations", "Old 2019"])["type"] == "Quotation"
-    assert blueprint.classify(["02_Customers", "Customer_A", "Quality_QC", "NCR"]) == {"area": "Quality", "type": None}
+    assert blueprint.classify(["02_Customers", "Customer_A", "QC", "NCR"]) == {"area": "Quality", "type": None}
     root = tmp_path / "Root"
     cp = root / "01_General" / "Company_Profile"
     cp.mkdir(parents=True)
@@ -1474,7 +1474,7 @@ def test_new_customer_and_project_get_the_blueprint_folders(tmp_path):
     assert r.status_code == 201, r.text
     cust = root / "02_Customers" / "Elbit"
     assert (cust / "Commercial" / "Quotations").is_dir() and (cust / "Shared").is_dir() and (cust / "Develop" / "Products").is_dir()
-    assert (cust / "Develop" / "ATEFiles" / "FCT" / "07_FAT").is_dir() and (cust / "Quality_QC" / "PPAP").is_dir()
+    assert (cust / "Develop" / "ATEFiles" / "FCT" / "07_FAT").is_dir() and (cust / "QC" / "PPAP").is_dir()
     r = c.post("/api/folders", json={"parent": str(cust / "Develop" / "Products"), "name": "Radar"})
     prj = cust / "Develop" / "Products" / "Radar"
     assert r.json()["blueprintFolders"] == 11
@@ -1490,7 +1490,7 @@ def test_blueprint_folders_locked_user_folders_and_projects_free(tmp_path):
     c.post("/api/folders", json={"parent": str(root / "02_Customers"), "name": "Customer_A"})
     prj = root / "02_Customers" / "Customer_A" / "Develop" / "Products"
     c.post("/api/folders", json={"parent": str(prj), "name": "Project_1"})
-    eng = root / "02_Customers" / "Customer_A" / "Manufacturing"
+    eng = root / "02_Customers" / "Customer_A" / "Process_Engineering"
     assert c.post("/api/items/rename", json={"path": str(eng), "newName": "Eng2"}).status_code == 403      # blueprint
     assert c.post("/api/items/delete", json={"path": str(eng / "Stencil")}).status_code == 403
     assert c.post("/api/items/delete", json={"path": str(prj / "Project_1" / "07_FAT")}).status_code == 403
@@ -1518,7 +1518,7 @@ def test_first_loading_save_only(tmp_path):
     (old / "Photos").mkdir(parents=True)
     (old / "Photos" / "line.jpg").write_text("img")
     (old / "notes.txt").write_text("n")
-    target = tmp_path / "Root" / "02_Customers" / "Customer_A" / "Manufacturing"
+    target = tmp_path / "Root" / "02_Customers" / "Customer_A" / "Process_Engineering"
     target.mkdir(parents=True)
     s = Settings(repository_root=str(tmp_path / "Root"), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
     sp = MemorySharePoint(s)
