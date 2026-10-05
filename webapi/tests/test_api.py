@@ -1645,3 +1645,18 @@ def test_dev_user_is_always_super_user(tmp_path):
     c = TestClient(create_app(s, MemorySharePoint(s)))                                  # the live pilot
     assert c.get("/api/me").json()["admin"]                                             # menu: SharePoint check, First loading
     assert not c.get("/api/me", headers={"X-DMS-Dev-User": "x@rh.co.il"}).json()["admin"]
+
+
+def test_office_uri_long_hebrew_path_uses_8dot3(tmp_path, monkeypatch):
+    root = str(tmp_path)
+    files.set_short_paths(root, {"01_General": "G:"})
+    heb = "נוהל בקרת מסמכים ורשומות ארגוניות"
+    f = os.path.join(root, "01_General", "Quality and Standards", heb, heb, "a.docx")
+    assert files.url_len(files.user_path(f)) > files.LONG_PATH                          # Hebrew = 6 characters each in the URL
+    fake = {os.path.join(root, "01_General"): os.path.join(root, "01_GEN~1"),
+            f: os.path.join(root, "01_GEN~1", "QUALIT~1", "D7A1~1", "D7A2~1", "a.docx")}
+    monkeypatch.setattr(files, "short_path", lambda p, force=False: fake.get(p, p))
+    files._SHORT_PREFIX.clear()
+    assert "file:///G:/QUALIT~1/D7A1~1/D7A2~1/a.docx" in files.office_uri(f)
+    files.set_short_paths("", {})
+    files._SHORT_PREFIX.clear()

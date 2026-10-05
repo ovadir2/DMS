@@ -64,13 +64,20 @@ def same_path(a: str | None, b: str | None) -> bool:
     return bool(a) and bool(b) and _norm(a) == _norm(b)
 
 
-LONG_PATH = 200          # Office cannot open longer paths (about 218 characters): use the short (8.3) path
+LONG_PATH = 200          # Office cannot open longer paths (about 218 characters, as URL): use the short (8.3) path
 
 
-def short_path(path: str) -> str:
-    """The Windows short (8.3) form of a long path, e.g. \\\\srv\\Shares\\QUALIT~1\\..., so Office can open it.
-    The same path when it is short enough, when not on Windows, or when the volume has no 8.3 names."""
-    if os.name != "nt" or len(path) <= LONG_PATH:
+def url_len(path: str) -> int:
+    """The length Office sees: the path as a URL (a space is %20, a Hebrew letter is %D7%xx = 6 characters)."""
+    from urllib.parse import quote
+    return len(quote(path.replace("\\", "/"), safe="/:"))
+
+
+def short_path(path: str, force: bool = False) -> str:
+    """The Windows short (8.3) form of a long path, e.g. \\\\srv\\Shares\\QUALIT~1\\..., so Office can open it
+    (8.3 names are ASCII: Hebrew names become short too). The same path when it is short enough (unless force),
+    when not on Windows, or when the volume has no 8.3 names."""
+    if os.name != "nt" or (not force and url_len(path) <= LONG_PATH):
         return path
     try:
         import ctypes
@@ -115,11 +122,21 @@ def user_path(path: str) -> str:
         return path
     n = os.path.normcase(os.path.normpath(path))
     for long, short in (USER_SHORT.get() or SHORT):
-        lp = os.path.normcase(os.path.normpath(long))
-        if n == lp or n.startswith(lp + os.sep):
-            rest = os.path.normpath(path)[len(os.path.normpath(long)):].lstrip("\\/")
-            return short + ("\\" + rest.replace("/", "\\") if rest else "")
+        for lg in (long, _short_prefix(long)):                 # the folder, or its 8.3 form in a short path
+            lp = os.path.normcase(os.path.normpath(lg))
+            if n == lp or n.startswith(lp + os.sep):
+                rest = os.path.normpath(path)[len(os.path.normpath(lg)):].lstrip("\\/")
+                return short + ("\\" + rest.replace("/", "\\") if rest else "")
     return path
+
+
+_SHORT_PREFIX: dict[str, str] = {}
+
+
+def _short_prefix(long: str) -> str:
+    if long not in _SHORT_PREFIX:
+        _SHORT_PREFIX[long] = short_path(long, force=True)
+    return _SHORT_PREFIX[long]
 
 
 def office_uri(path: str, edit: bool = False) -> str | None:
@@ -130,8 +147,10 @@ def office_uri(path: str, edit: bool = False) -> str | None:
            ".ppt": "ms-powerpoint", ".pptx": "ms-powerpoint"}.get(os.path.splitext(path)[1].lower())
     if not app:
         return None
-    path = user_path(path)
-    path = short_path(path)
+    full, path = path, user_path(path)
+    if url_len(path) > LONG_PATH:                              # still too long for Office: 8.3 names inside the folder
+        short = user_path(short_path(full, force=True))
+        path = short if url_len(short) < url_len(path) else short_path(path)
     url = "file:" + path.replace("\\", "/") if path.startswith("\\\\") else "file:///" + path.replace("\\", "/").lstrip("/")
     return f"{app}:{'ofe' if edit else 'ofv'}|u|{url}"
 
