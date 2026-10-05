@@ -75,7 +75,7 @@ def test_browse_marks_registration(env):
     r = c.get("/api/browse", params={"path": str(q)})
     assert r.status_code == 200
     f = r.json()["files"][0]
-    assert f["name"] == "CRU 4 FCT Quote_Rev1.xlsx" and f["document"] is None
+    assert f["officeUri"].startswith("ms-excel:ofe|u|file:") and f["editable"]          # not registered yet: edit
     assert f["officeUri"].startswith("ms-excel:ofv|u|file:")
 
 
@@ -1678,3 +1678,15 @@ def test_office_uri_too_long_without_8dot3_gives_short_dms_link(tmp_path):
     r = c.get(link)
     assert r.status_code == 200 and r.content == b"doc"
     files.set_short_paths("", {})
+
+
+def test_files_before_registration_open_for_editing(tmp_path):
+    q = tmp_path / "02_Customers" / "Customer_A" / "Commercial"
+    (q / "Current_ReadOnly").mkdir(parents=True)
+    (q / "draft.docx").write_bytes(b"x")
+    (q / "Current_ReadOnly" / "approved.docx").write_bytes(b"y")
+    c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER, sharepoint="memory")))
+    f = next(x for x in c.get("/api/browse", params={"path": str(q)}).json()["files"] if x["name"] == "draft.docx")
+    assert f["editable"] and f["officeUri"].startswith("ms-word:ofe|u|")                 # not registered: edit
+    g = c.get("/api/browse", params={"path": str(q / "Current_ReadOnly")}).json()["files"][0]
+    assert not g.get("editable") and g["officeUri"].startswith("ms-word:ofv|u|")          # Current_ReadOnly: view

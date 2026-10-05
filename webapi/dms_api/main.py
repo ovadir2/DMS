@@ -504,6 +504,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 f["noWorkflow"] = True
             if holds_share_log(f["path"]) or in_shared_folder(f["path"]):
                 f.update(readOnly=True, system=True, noWorkflow=True)   # open (view), download, copy path only
+            elif (f.get("officeUri") and not f.get("readOnly") and not files.in_workflow_folder(s.repository_root, f["path"])
+                  and (not d or d.get("lifecycleStatus") == s.choices["Working"]) and user.can(f["path"], "write")):
+                # not yet registered (or still in Working): opens in Word / Excel / PowerPoint for editing
+                f.update(officeUri=files.office_uri(f["path"], edit=True), editable=True)
         if in_shared_folder(os.path.join(result["path"], "x")):
             result.update(noWorkflow=True, canWrite=False, sharedNote=True)
         return result
@@ -1377,8 +1381,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             noworkflow.moved(s.repository_root, to_root(s.repository_root, d.get("currentUncPath")) or "", None)
         log(user, "revise", f"{d.get('documentId')} -> {target}")
         if submit:
-            return {**submit_doc(item_id, None, user), "draft": target, "officeUri": files.office_uri(target)}
-        return {**with_key(sp().document(item_id)), "draft": target, "officeUri": files.office_uri(target)}
+            return {**submit_doc(item_id, None, user), "draft": target, "officeUri": files.office_uri(target, edit=True)}
+        return {**with_key(sp().document(item_id)), "draft": target, "officeUri": files.office_uri(target, edit=True)}
 
     def shareable(item_id: int, user: User) -> tuple[dict, str, str]:
         """An approved document the user may share: (record, approved file, revision), else HTTP error."""
