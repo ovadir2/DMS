@@ -58,7 +58,7 @@ foreach ($folder in $wanted.Keys) {
     $before = (Get-ItemProperty -Path $keep -Name $folder -ErrorAction SilentlyContinue).$folder   # letter of an earlier run
     if ($before) { $m = Get-Mapped $before; if ($m -and $m.Kind -ne 'disk' -and $m.Target -eq $target) { Remove-Mapped $before $m } }
     if ($Remove) { Remove-ItemProperty -Path $keep -Name $folder -ErrorAction SilentlyContinue; if ($before) { Write-Host "$before removed" }; continue }
-    if (-not (Test-Path -LiteralPath $target)) { throw "Folder not found: $target" }
+    if (-not (Test-Path -LiteralPath $target)) { Write-Warning "Folder not found, no drive for it: $target"; continue }
 
     # the letter: the earlier one, else the preferred one, else the next free one from Z: down
     $letters = @(@($before, $wanted[$folder]) | Where-Object { $_ }) + @([char[]](90..68) | ForEach-Object { "$_" })

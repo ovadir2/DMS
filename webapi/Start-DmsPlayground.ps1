@@ -47,6 +47,8 @@ param(
     [string[]] $Users = @(),
     [switch] $AdCheck,
     [switch] $NoAdCheck,
+    [string] $GeneralFolder = '01_General',
+    [switch] $NoDrives,
     [int] $Port = 8080,
     [ValidateSet('EN', 'HE')] [string] $Lang = 'EN',
     [string] $AiUrl, [string] $AiToken, [string] $AiModel
@@ -92,6 +94,21 @@ if ($Live) {
 if ($AiUrl) { $env:DMS_AI_URL = $AiUrl }
 if ($AiToken) { $env:DMS_AI_TOKEN = $AiToken }
 if ($AiModel) { $env:DMS_AI_MODEL = $AiModel }
+
+# Drive letters for the customers and general folders on this PC (a free letter when R: / G: is busy),
+# so Open and Copy link give short paths. -NoDrives skips it.
+if (-not $NoDrives) {
+    $drv = Join-Path $PSScriptRoot '..\scripts\Set-DmsDrives.ps1'
+    $cust = if ($env:DMS_CUSTOMERS_FOLDER) { $env:DMS_CUSTOMERS_FOLDER } else { '02_Customers' }
+    if (Test-Path $drv) {
+        try {
+            & $drv -Root $env:DMS_REPOSITORY_ROOT -CustomersFolder $cust -GeneralFolder $GeneralFolder
+            $k = Get-ItemProperty -Path 'HKCU:\Software\RH\DMS' -ErrorAction SilentlyContinue
+            $pairs = @($cust, $GeneralFolder | Where-Object { $k -and $k.$_ } | ForEach-Object { "$_=$($k.$_)" })
+            if ($pairs) { $env:DMS_SHORT_PATHS = $pairs -join ';' }
+        } catch { Write-Warning "Drive letters were not set: $_" }
+    }
+}
 
 $url = "http://localhost:$Port/dms/dms-page?lang=$Lang"
 $env:DMS_PAGE_URL = $url   # notification links (DC-P2) open the page here
