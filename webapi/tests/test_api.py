@@ -769,8 +769,12 @@ def test_notifications_follow_the_approval(tmp_path):
     assert "withdrawn" in n[-1]["subject"] and n[-1]["to"] == ["dana@rh.co.il", "eli@rh.co.il"]
     c.post(f"/api/documents/{e['id']}/submit")
     s.dev_user = "dana@rh.co.il"
+    k = len(n)
     c.post(f"/api/approvals/{e['id']}", json={"approve": False, "comment": "fix p.2"})
-    assert n[-1]["to"] == [USER] and "fix p.2" in n[-1]["body"]
+    assert len(n) == k                                                            # eli still reviews: no mail yet
+    s.dev_user = "eli@rh.co.il"
+    c.post(f"/api/approvals/{e['id']}", json={"approve": True})
+    assert n[-1]["to"] == [USER] and "fix p.2" in n[-1]["body"]                    # then the owner gets all the remarks
 
 
 def test_share_with_customer(tmp_path):
@@ -1704,3 +1708,35 @@ def test_files_before_registration_open_for_editing(tmp_path):
     assert f["editable"] and f["officeUri"].startswith("ms-word:ofe|u|")                 # not registered: edit
     g = c.get("/api/browse", params={"path": str(q / "Current_ReadOnly")}).json()["files"][0]
     assert not g.get("editable") and g["officeUri"].startswith("ms-word:ofv|u|")          # Current_ReadOnly: view
+
+
+def test_review_cycle_all_approvers_return_remarks_then_owner_resubmits(tmp_path):
+    rule = {"mandatory": ["dana@rh.co.il", "eli@rh.co.il"], "final": "boss@rh.co.il"}
+    c, sp, s, d = _approvals_env(tmp_path, rule)
+    s.dev_user = "dana@rh.co.il"
+    r = c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "table 3 is wrong"}).json()
+    assert r["statusKey"] == "Submitted" and r["pending"] == ["eli@rh.co.il"]            # the review goes on
+    assert r["returned"] == [{"by": "dana@rh.co.il", "comment": "table 3 is wrong"}]
+    s.dev_user = "eli@rh.co.il"
+    ap = next(i for i in c.get("/api/approvals").json() if i["id"] == d["id"])
+    assert ap["editable"]                                                                # eli adds remarks in the file too
+    r = c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "add the test limits"}).json()
+    assert r["statusKey"] == "Working"                                                   # everyone answered: back to the owner
+    s.dev_user = USER
+    item = next(i for i in c.get("/api/my-workflows").json()["items"] if i["id"] == d["id"])
+    det = _nosha(item["decision"]["details"])
+    assert item["statusKey"] == "Rejected" and "dana: table 3 is wrong" in det and "eli: add the test limits" in det
+    sub = c.post(f"/api/documents/{d['id']}/submit").json()                              # the owner accepted them, submits again
+    assert sub["statusKey"] == "Submitted"
+    st = next(i for i in c.get("/api/my-workflows").json()["items"] if i["id"] == d["id"])
+    assert st["pending"] == ["dana@rh.co.il", "eli@rh.co.il"] and not st.get("returned")   # a new review, the same approvers
+
+
+def test_approvals_list_shows_remarks_so_far(tmp_path):
+    rule = {"mandatory": ["dana@rh.co.il", "eli@rh.co.il"], "final": "boss@rh.co.il"}
+    c, sp, s, d = _approvals_env(tmp_path, rule)
+    s.dev_user = "dana@rh.co.il"
+    c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "table 3"})
+    s.dev_user = "eli@rh.co.il"
+    ap = next(i for i in c.get("/api/approvals").json() if i["id"] == d["id"])
+    assert ap["returned"] == [{"by": "dana@rh.co.il", "comment": "table 3"}]

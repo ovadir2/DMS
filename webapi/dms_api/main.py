@@ -839,6 +839,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             rule = {"mandatory": [], "final": s.admins[0], "fallback": True}
         return rule
 
+    RETURNED = "Stage 1 returned with remarks: "
+
     def approval_state(d: dict, events: list[dict], rules: dict) -> dict:
         """Where a submitted document stands, by the DC-P1 rules: stage 1 = every mandatory approver,
         stage 2 = the final approver. Decisions of the current cycle are the audit rows after the last submission."""
@@ -867,8 +869,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         approvals = [e for e in cycle if e["event"] == c["ApprovedEvent"]]
         stage1 = {e["actor"] for e in approvals if (e.get("details") or "").startswith("Stage 1")}
         su = any((e.get("details") or "").startswith("Stage 1 (super user)") for e in approvals)
-        pending1 = [] if su else [m for m in rule["mandatory"] if m not in stage1]
-        extra = {"chosen": bool(rule.get("chosen")), "final": rule.get("final"),
+        returned = [{"by": e["actor"], "comment": (e.get("details") or "")[len(RETURNED):].split(" [file SHA-256")[0]}
+                    for e in reversed(cycle) if e["event"] == c["StatusChanged"] and (e.get("details") or "").startswith(RETURNED)]
+        answered = stage1 | {r["by"] for r in returned}
+        pending1 = [] if su else [m for m in rule["mandatory"] if m not in answered]
+        extra = {"chosen": bool(rule.get("chosen")), "final": rule.get("final"), "returned": returned,
                  "delegated": [{"from": a, "to": b} for a, b in delegated.items()]}
         if pending1:
             return {"stage": 1, "pending": pending1, "approved": sorted(stage1), "rule": True, **extra}
@@ -985,29 +990,47 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         tag = f"Stage {st['stage']}" + (" (super user)" if su else "")
         sha = f" [file SHA-256 {file_sha(submitted_file(d))}]"    # the exact content this decision was made on
         doc_id = d.get("documentId") or f"ID {item_id}"
-        if not req.approve:
-            sp().update(item_id, {"LifecycleStatus": c["Working"]})
-            sp().audit(document_id=doc_id, event=c["RejectedEvent"], from_status=c["Submitted"], to_status=c["Working"],
-                       actor=user.email, details=f"{tag}: {req.comment.strip()}{sha}")
-            file_back(d, c["Working"])
+        left = [] if su else [p for p in st["pending"] if p != user.email]
+        remarks = st.get("returned") or []
+        back_to_owner = None                                    # the remarks of the whole review, when it ends returned
+        if not req.approve and st["stage"] == 1 and not su and left:
+            # stage 1: the review goes on - the others still add their remarks; the owner gets them all at the end
+            sp().audit(document_id=doc_id, event=c["StatusChanged"], from_status=c["Submitted"], to_status=c["Submitted"],
+                       actor=user.email, details=f"{RETURNED}{req.comment.strip()}{sha}")
+        elif not req.approve:
+            remarks = remarks + [{"by": user.email, "comment": req.comment.strip()}]
+            back_to_owner = remarks
         else:
             if st["stage"] == 2:
                 final = True
             else:                                               # stage 1 ends when nobody is left; then the final approver
-                left = [] if su else [p for p in st["pending"] if p != user.email]
                 final = not left and not st.get("final")
+            if not left and remarks and st["stage"] == 1 and not su:
+                final = False                                   # someone returned it: back to the owner, not on
+                back_to_owner = remarks
             if final:
                 sp().update(item_id, {"LifecycleStatus": c["Approved_ReadOnly"], "LastApprovedUtc": datetime.now(timezone.utc).isoformat()})
             sp().audit(document_id=doc_id, event=c["ApprovedEvent"], from_status=c["Submitted"],
                        to_status=c["Approved_ReadOnly"] if final else c["Submitted"], actor=user.email,
                        details=tag + (f": {req.comment.strip()}" if req.comment.strip() else "") + sha)
+        if back_to_owner is not None:                           # the owner reviews all the remarks and submits again
+            summary = "; ".join(f"{r['by'].split('@')[0]}: {r['comment']}" for r in back_to_owner)
+            one = len(back_to_owner) == 1 and back_to_owner[0]["by"] == user.email
+            sp().update(item_id, {"LifecycleStatus": c["Working"]})
+            sp().audit(document_id=doc_id, event=c["RejectedEvent"], from_status=c["Submitted"], to_status=c["Working"],
+                       actor=user.email, details=(f"{tag}: {back_to_owner[0]['comment']}" if one
+                                                  else f"{tag}: returned to the owner with remarks - {summary}") + sha)
+            file_back(d, c["Working"])
         log(user, "approve" if req.approve else "reject", f"{doc_id} {tag}")
         original = next((x["from"] for x in st.get("delegated") or [] if x["to"] == user.email), None)
         decision_row(d, user.email, st["stage"] or 1, "Approved" if req.approve else "Rejected", req.comment.strip(),
                      delegated_from=original, final=st["stage"] == 2)
         after = sp().document(item_id)
-        if not req.approve:
-            notify("rejected", after, [after.get("ownerEmail") or ""], req.comment.strip())
+        if back_to_owner is not None:
+            notify("rejected", after, [after.get("ownerEmail") or ""],
+                   "; ".join(f"{r['by'].split('@')[0]}: {r['comment']}" for r in back_to_owner))
+        elif not req.approve:
+            pass                                                # remarks kept; the owner is told when the review ends
         elif after.get("lifecycleStatus") == c["Approved_ReadOnly"]:
             notify("approved", after, [after.get("ownerEmail") or ""])
         elif st["stage"] == 1 and approval_state(after, events_by_doc().get(after.get("documentId") or "", []), {})["stage"] == 2:
