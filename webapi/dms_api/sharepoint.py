@@ -151,6 +151,9 @@ class SharePoint:
         return d
 
     def _user_id(self, email: str) -> int:
+        if "@" not in email:                                    # a domain account with no email (UPN) in AD
+            raise SharePointError(f"{email} has no email (Microsoft 365 account): SharePoint knows people by email. "
+                                  "Act as a user with an email for workflow actions (submit, approve, share).")
         r = self._call("POST", f"{self.s.site_url}/_api/web/ensureuser",
                        json={"logonName": f"i:0#.f|membership|{email}"})
         return r["Id"]
