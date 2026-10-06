@@ -175,6 +175,21 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         before it opens a DMS link for editing; without these answers Word opens it read only."""
         from fastapi.responses import Response
         path = request.url.path
+        office = path.startswith(("/api/o", "/_vti")) or request.method not in ("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD")
+        if office:                                              # what Word / Excel ask: logs\office.log (support)
+            response = await _office(request, call_next, path)
+            try:
+                os.makedirs(os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs"), exist_ok=True)
+                with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs", "office.log"), "a", encoding="utf-8") as f:
+                    f.write(f"{datetime.now():%Y-%m-%d %H:%M:%S} {request.method} {path} -> {response.status_code}"
+                            f" | {request.headers.get('user-agent', '')[:80]}\n")
+            except OSError:
+                pass
+            return response
+        return await call_next(request)
+
+    async def _office(request: Request, call_next, path: str):
+        from fastapi.responses import Response
         dav = {"DAV": "1,2", "MS-Author-Via": "DAV", "Allow": "OPTIONS, GET, HEAD, PROPFIND, LOCK, UNLOCK, PUT"}
         is_file = path.startswith("/api/o/") and path.count("/") >= 4 and not path.endswith("/")
         if request.method == "OPTIONS" and not is_file and "access-control-request-method" not in request.headers:   # not a CORS preflight
