@@ -341,6 +341,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 "notifications": {"on": s.approvals == "page" and s.notify, "approvals": s.approvals, "notify": s.notify,
                                   "pageUrl": s.page_url, "last": list(app.state.notify_log)}}
 
+    @app.post("/api/diagnostics/clear-errors")
+    def clear_errors(user: User = Depends(current_user)):
+        """Super users: empty the list of last SharePoint errors (it also empties at every restart)."""
+        if not is_admin(user):
+            raise HTTPException(403, "Only a DMS super user can clear the errors")
+        app.state.sp_errors.clear()
+        return {"errors": 0}
+
     @app.post("/api/diagnostics/notify-test")
     def notify_test(user: User = Depends(current_user)):
         """Super users: write one test row to DMS Notifications, addressed to themselves (the DC-P2 flow sends it)."""
