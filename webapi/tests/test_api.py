@@ -1774,3 +1774,18 @@ def test_sharepoint_call_retries_a_dropped_connection(monkeypatch):
     sp.http = type("H", (), {"request": staticmethod(request)})()
     monkeypatch.setattr("time.sleep", lambda s: None)
     assert sp._call("GET", "https://x/_api/web") == {"ok": 1} and len(calls) == 2
+
+
+def test_drive_letters_of_the_dms_pc_only_for_that_pc(tmp_path):
+    files.set_short_paths(str(tmp_path), {"02_Customers": "R:"})
+    f = os.path.join(str(tmp_path), "02_Customers", "A", "q.docx")
+    t = files.user_drives({}, local=True)
+    assert files.user_path(f).startswith("R:")                                          # the PC that runs the DMS
+    files.USER_SHORT.reset(t)
+    t = files.user_drives({}, local=False)
+    assert files.user_path(f) == f                                                      # an approver's PC: network path
+    files.USER_SHORT.reset(t)
+    t = files.user_drives({"02_Customers": "K:"}, local=False)
+    assert files.user_path(f).startswith("K:")                                          # unless it sent its own letters
+    files.USER_SHORT.reset(t)
+    files.set_short_paths("", {})

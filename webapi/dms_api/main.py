@@ -206,7 +206,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """The page sends its language (X-DMS-Lang); notifications are written in it."""
         token = PAGE_LANG.set("HE" if (request.headers.get("x-dms-lang") or "").upper() == "HE" else "EN")
         from .config import _short_paths
-        drives = files.user_drives(_short_paths(request.headers.get("x-dms-drives") or ""))   # this PC's drive letters
+        local = (request.client.host if request.client else "") in ("127.0.0.1", "::1", "localhost", "testclient")
+        drives = files.user_drives(_short_paths(request.headers.get("x-dms-drives") or ""), local)   # the user's drive letters
         base = files.BASE_URL.set(str(request.base_url))
         try:
             return await call_next(request)

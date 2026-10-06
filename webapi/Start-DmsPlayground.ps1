@@ -50,6 +50,7 @@ param(
     [string] $GeneralFolder = '01_General',
     [switch] $NoDrives,
     [int] $Port = 8080,
+    [switch] $Share,
     [ValidateSet('EN', 'HE')] [string] $Lang = 'EN',
     [string] $AiUrl, [string] $AiToken, [string] $AiModel
 )
@@ -125,7 +126,23 @@ if (-not $NoDrives) {
 }
 
 $url = "http://localhost:$Port/dms/dms-page?lang=$Lang"
-$env:DMS_PAGE_URL = $url   # notification links (DC-P2) open the page here
+$bind = '127.0.0.1'
+if ($Share) {
+    # -Share: other PCs in the network open the DMS at http://<this PC>:<Port> (pilot: approvers pick themselves
+    # in "Acting as"; their AD rights are checked). Needs the port open in the Windows firewall (once, as admin).
+    $bind = '0.0.0.0'
+    $fqdn = try { [System.Net.Dns]::GetHostEntry($env:COMPUTERNAME).HostName } catch { $env:COMPUTERNAME }
+    $shared = "http://$($fqdn):$Port/dms/dms-page?lang=$Lang"
+    $env:DMS_PAGE_URL = $shared                                   # the links in the emails / Teams
+    if (-not (Get-NetFirewallRule -DisplayName "RH DMS $Port" -ErrorAction SilentlyContinue)) {
+        try { New-NetFirewallRule -DisplayName "RH DMS $Port" -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Domain -ErrorAction Stop | Out-Null
+              Write-Host "Firewall: port $Port opened (domain network)." -ForegroundColor Green }
+        catch { Write-Warning "Port $Port is not open in the firewall. Once, in PowerShell as administrator: New-NetFirewallRule -DisplayName 'RH DMS $Port' -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Domain" }
+    }
+    Write-Host "Shared: the approvers open $shared" -ForegroundColor Green
+} else {
+    $env:DMS_PAGE_URL = $url   # notification links (DC-P2) open the page here
+}
 Write-Host "DMS page on $url  (root: $env:DMS_REPOSITORY_ROOT). Ctrl+C to stop." -ForegroundColor Green
 Start-Job -ScriptBlock { param($u, $p) for ($i = 0; $i -lt 120; $i++) { Start-Sleep 2; try { Invoke-WebRequest "http://localhost:$p/api/health" -UseBasicParsing | Out-Null; Start-Process $u; break } catch {} } } -ArgumentList $url, $Port | Out-Null
-& $py -m uvicorn dms_api.main:app --host 127.0.0.1 --port $Port
+& $py -m uvicorn dms_api.main:app --host $bind --port $Port

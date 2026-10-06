@@ -26,6 +26,18 @@ cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C
 - `-Admins` (default `roneno@rh.co.il`) are DMS super users: they may submit any document, decide any approval stage and see **All workflows** and **All pending approvals**.
 - For one person to approve everything during the pilot: `..\scripts\Set-DmsTestApprover.ps1 -TenantName rhisrael -DocControlSiteAlias DocumentControl-TEST -ClientId $C -Approver roneno@rh.co.il` (it saves a backup and prints the command to restore the real approvers).
 
+
+### Let the approvers try it (from their PCs)
+
+```powershell
+.\Start-DmsPlayground.ps1 -Live -Share -Users dana@rh.co.il,eli@rh.co.il
+```
+
+- The DMS listens on the network: the approvers open `http://<your PC>.rh.local:8080/dms/dms-page` (the script prints the address; the links in the email / Teams notifications point there too). Port 8080 is opened in the Windows firewall for the domain network (run PowerShell as administrator the first time, or ask IT).
+- Each approver picks **themselves** in **Acting as** (top of the page). Pilot only: this is not a sign-in, anyone on the network could pick any listed user. Their AD / NTFS rights are checked (`-Users` must be their emails, with Microsoft 365 accounts).
+- Open on their PC uses the network path (`\\FILE-SERVER\...`), or the DMS link for long paths; your drive letters are only for you. Word opens and saves with their own Windows rights.
+- Your PC must stay on with the DMS running. For real use: the server install below (IIS, Windows sign-in, no Acting as).
+
 ## How it knows the AD permissions
 
 1. IIS signs the user in with **Windows Authentication**, using the login of the person at the PC. Browsers on domain PCs do this silently.

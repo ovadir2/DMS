@@ -111,9 +111,12 @@ def set_short_paths(root: str, mapping: dict) -> None:
     SHORT[:] = _pairs(root, mapping)
 
 
-def user_drives(mapping: dict):
-    """For one request: this user's drive letters first, then DMS_SHORT_PATHS. Returns the token to reset."""
-    return USER_SHORT.set(_pairs(ROOT[0], mapping) + SHORT if mapping else None)
+def user_drives(mapping: dict, local: bool = True):
+    """For one request: this user's drive letters first, then DMS_SHORT_PATHS (the drives of the PC that runs the
+    DMS - only for requests from that PC; another PC gets the network path). Returns the token to reset."""
+    if mapping:
+        return USER_SHORT.set(_pairs(ROOT[0], mapping) + (SHORT if local else []))
+    return USER_SHORT.set(None if local else [])
 
 
 def user_path(path: str) -> str:
@@ -121,7 +124,8 @@ def user_path(path: str) -> str:
     if not path:
         return path
     n = os.path.normcase(os.path.normpath(path))
-    for long, short in (USER_SHORT.get() or SHORT):
+    us = USER_SHORT.get()
+    for long, short in (SHORT if us is None else us):
         for lg in (long, _short_prefix(long)):                 # the folder, or its 8.3 form in a short path
             lp = os.path.normcase(os.path.normpath(lg))
             if n == lp or n.startswith(lp + os.sep):
