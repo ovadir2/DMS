@@ -1750,3 +1750,27 @@ def test_approvals_list_shows_remarks_so_far(tmp_path):
     s.dev_user = "eli@rh.co.il"
     ap = next(i for i in c.get("/api/approvals").json() if i["id"] == d["id"])
     assert ap["returned"] == [{"by": "dana@rh.co.il", "comment": "table 3"}]
+
+
+def test_sharepoint_call_retries_a_dropped_connection(monkeypatch):
+    import requests
+    from dms_api.sharepoint import SharePoint
+    sp = SharePoint.__new__(SharePoint)
+    sp._access_token = lambda: "t"
+    calls = []
+
+    class R:
+        status_code, content, headers = 200, b'{"ok": 1}', {}
+        text = '{"ok": 1}'
+
+        def json(self):
+            return {"ok": 1}
+
+    def request(*a, **k):
+        calls.append(1)
+        if len(calls) == 1:
+            raise requests.ConnectionError("RemoteDisconnected")                      # an idle connection dropped
+        return R()
+    sp.http = type("H", (), {"request": staticmethod(request)})()
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    assert sp._call("GET", "https://x/_api/web") == {"ok": 1} and len(calls) == 2

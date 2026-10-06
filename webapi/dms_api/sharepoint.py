@@ -103,7 +103,18 @@ class SharePoint:
         h = {"Authorization": f"Bearer {self._access_token()}", "Accept": "application/json;odata=nometadata",
              "Content-Type": "application/octet-stream" if data is not None else "application/json;odata=nometadata"}
         h.update(headers or {})
-        r = self.http.request(method, url, json=json, data=data, headers=h, timeout=300 if data is not None else 30)
+        for attempt in range(3):                               # SharePoint drops idle connections / throttles:
+            try:                                                # the first call after a pause could fail, so try again
+                r = self.http.request(method, url, json=json, data=data, headers=h, timeout=300 if data is not None else 30)
+            except (requests.ConnectionError, requests.Timeout):
+                if attempt == 2:
+                    raise
+                time.sleep(1 + attempt)
+                continue
+            if r.status_code in (429, 503, 504) and attempt < 2:
+                time.sleep(min(int(r.headers.get("Retry-After", "2") or 2), 10))
+                continue
+            break
         if r.status_code >= 400:
             raise SharePointError(f"{method} {url.split('?')[0]} -> {r.status_code}: {r.text[:300]}")
         return r.json() if r.content else {}

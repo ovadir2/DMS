@@ -583,8 +583,9 @@ async function approvalsView(v) {
   v.querySelectorAll('[data-dg]').forEach(b => b.onclick = () => delegateDialog(list.find(x => String(x.id) === b.dataset.dg)));
   v.querySelectorAll('[data-ok],[data-no]').forEach(b => b.onclick = async () => {
     const approve = !!b.dataset.ok, id = b.dataset.ok || b.dataset.no;
-    const comment = prompt(approve ? T.apComment : T.rejComment, '');
-    if (comment === null || (!approve && !comment.trim())) return;
+    let comment = prompt(approve ? T.apComment : T.rejComment, '');
+    while (comment !== null && !approve && !comment.trim()) comment = prompt(T.rejComment, '');   // remarks are required
+    if (comment === null) return;
     b.disabled = true;
     try { await api(`/api/approvals/${id}`, { method:'POST', body:JSON.stringify({ approve, comment }) }); refreshApprovals(); render(); }
     catch (e) { b.disabled = false; alert(e.message); }
