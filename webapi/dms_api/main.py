@@ -1671,6 +1671,23 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return (not files.is_read_only(full) and user.can(full, "write")
                 and os.path.basename(os.path.dirname(full)) not in WORKFLOW_FOLDERS[2:])
 
+    DAV_LOCKS: dict[str, dict] = {}                             # file -> {token, owner, until}: Office checks its lock
+
+    def dav_lock(full: str) -> dict | None:
+        lk = DAV_LOCKS.get(full)
+        if lk and lk["until"] < datetime.now().timestamp():
+            DAV_LOCKS.pop(full, None)
+            return None
+        return lk
+
+    def active_lock(lk: dict, href: str) -> str:
+        from xml.sax.saxutils import escape
+        left = max(1, int(lk["until"] - datetime.now().timestamp()))
+        return ("<d:activelock><d:locktype><d:write/></d:locktype><d:lockscope><d:exclusive/></d:lockscope>"
+                f"<d:depth>0</d:depth>{lk['owner']}<d:timeout>Second-{left}</d:timeout>"
+                f"<d:locktoken><d:href>{lk['token']}</d:href></d:locktoken>"
+                f"<d:lockroot><d:href>{escape(href)}</d:href></d:lockroot></d:activelock>")
+
     def dav_props(full: str, href: str, user: User) -> str:
         from email.utils import formatdate
         from xml.sax.saxutils import escape
@@ -1683,7 +1700,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 f"<d:creationdate>{datetime.fromtimestamp(st.st_ctime, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}</d:creationdate>"
                 f"<d:getetag>{etag}</d:getetag>"
                 "<d:supportedlock><d:lockentry><d:lockscope><d:exclusive/></d:lockscope><d:locktype><d:write/></d:locktype>"
-                "</d:lockentry></d:supportedlock><d:lockdiscovery/>"
+                "</d:lockentry></d:supportedlock>"
+                + (f"<d:lockdiscovery>{active_lock(dav_lock(full), href)}</d:lockdiscovery>" if dav_lock(full) else "<d:lockdiscovery/>") +
                 f"<d:isreadonly>{'f' if dav_writable(full, user) else 't'}</d:isreadonly>"
                 f"</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>")
 
@@ -1721,13 +1739,28 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if m == "LOCK":
             if not dav_writable(full, user):
                 raise HTTPException(423, "Read only")
-            lock = "opaquelocktoken:" + token + "-" + format(int(datetime.now().timestamp()), "x")
-            body = ('<?xml version="1.0" encoding="utf-8"?><d:prop xmlns:d="DAV:"><d:lockdiscovery><d:activelock>'
-                    "<d:locktype><d:write/></d:locktype><d:lockscope><d:exclusive/></d:lockscope><d:depth>0</d:depth>"
-                    f"<d:owner>{user.email}</d:owner><d:timeout>Second-3600</d:timeout>"
-                    f"<d:locktoken><d:href>{lock}</d:href></d:locktoken></d:activelock></d:lockdiscovery></d:prop>")
-            return Response(body, status_code=200, media_type='text/xml; charset="utf-8"', headers={**dav, "Lock-Token": f"<{lock}>"})
+            import re as _re
+            import uuid as _uuid
+            body_in = (await request.body()).decode("utf-8", "replace")
+            lk = dav_lock(full)
+            if lk and body_in.strip():                          # a new lock while another is active
+                raise HTTPException(423, "The file is open for editing by someone else")
+            secs = 3600
+            t = _re.search(r"Second-(\d+)", request.headers.get("timeout", ""))
+            if t:
+                secs = min(int(t.group(1)), 86400)
+            if not lk:
+                o = _re.search(r"<(?:\w+:)?owner\b[^>]*>.*?</(?:\w+:)?owner>", body_in, _re.S)
+                owner = (_re.sub(r"<(/?)\w+:", r"<\1d:", o.group(0)) if o else f"<d:owner>{user.email}</d:owner>")
+                lk = {"token": f"opaquelocktoken:{_uuid.uuid4()}", "owner": owner}
+            lk["until"] = datetime.now().timestamp() + secs     # new lock, or a refresh (no body)
+            DAV_LOCKS[full] = lk
+            body = ('<?xml version="1.0" encoding="utf-8"?><d:prop xmlns:d="DAV:"><d:lockdiscovery>'
+                    + active_lock(lk, str(request.url.path)) + "</d:lockdiscovery></d:prop>")
+            return Response(body, status_code=200, media_type='text/xml; charset="utf-8"',
+                            headers={**dav, "Lock-Token": f"<{lk['token']}>", "Timeout": f"Second-{secs}"})
         if m == "UNLOCK":
+            DAV_LOCKS.pop(full, None)
             return Response(status_code=204, headers=dav)
         if m == "PUT":
             if not dav_writable(full, user):
