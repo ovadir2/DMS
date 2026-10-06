@@ -141,8 +141,12 @@ if ($Share) {
     # -Share: other PCs in the network open the DMS at http://<this PC>:<Port> (pilot: approvers pick themselves
     # in "Acting as"; their AD rights are checked). Needs the port open in the Windows firewall (once, as admin).
     $bind = '0.0.0.0'
-    $fqdn = try { [System.Net.Dns]::GetHostEntry($env:COMPUTERNAME).HostName } catch { $env:COMPUTERNAME }
-    $shared = "http://$($fqdn):$Port/dms/dms-page?lang=$Lang"
+    # the IPv4 address (the DMS listens on IPv4; the PC name can also resolve to IPv6 addresses that time out)
+    $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+          Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.PrefixOrigin -ne 'WellKnown' } |
+          Sort-Object InterfaceMetric | Select-Object -First 1 -ExpandProperty IPAddress
+    $hostName = if ($ip) { $ip } else { try { [System.Net.Dns]::GetHostEntry($env:COMPUTERNAME).HostName } catch { $env:COMPUTERNAME } }
+    $shared = "http://$($hostName):$Port/dms/dms-page?lang=$Lang"
     $env:DMS_PAGE_URL = $shared                                   # the links in the emails / Teams
     if (-not (Get-NetFirewallRule -DisplayName "RH DMS $Port" -ErrorAction SilentlyContinue)) {
         try { New-NetFirewallRule -DisplayName "RH DMS $Port" -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Domain -ErrorAction Stop | Out-Null
