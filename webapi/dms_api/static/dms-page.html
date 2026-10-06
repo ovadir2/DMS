@@ -272,7 +272,7 @@ async function api(path, opts = {}) {
 $('#t-welcome').textContent = T.welcome; $('#t-search').textContent = T.search; $('#t-refresh').textContent = T.refresh;
 $('#go').textContent = T.go; $('#q').placeholder = T.searchPh; $('#lang-t').textContent = T.lang; $('#lang').title = T.lang;
 $('#lang').onclick = () => { q.set('lang', lang === 'HE' ? 'EN' : 'HE'); location.search = q.toString(); };
-$('#menu').innerHTML = `<button data-m="customers">${T.customers}</button><button data-m="mine">${T.myWf}</button><button data-m="pf">🧭 ${T.pathFinder}</button><button data-m="ai">${T.aiInsights}</button><button data-m="lang">${T.other}</button>`;
+$('#menu').innerHTML = `<button data-m="customers">⌂ ${T.home}</button><button data-m="mine">${T.myWf}</button><button data-m="pf">🧭 ${T.pathFinder}</button><button data-m="ai">${T.aiInsights}</button><button data-m="lang">${T.other}</button>`;
 $('#menu-b').onclick = e => { e.stopPropagation(); $('#menu').classList.toggle('open'); };
 document.onclick = () => $('#menu').classList.remove('open');
 $('#menu').onclick = e => { const m = e.target.dataset.m; if (m === 'lang') return $('#lang').click(); if (m === 'actas') return actingAsDialog(); if (m === 'ai') return openAI(null); if (m === 'pf') return pathFinder(state.view === 'browse' ? state.folder : null); if (m === 'fl') { state.flTarget = state.view === 'browse' ? state.folder : state.flTarget; state.view = 'firstLoad'; return render(); } if (m) { state.view = m; render(); } };
