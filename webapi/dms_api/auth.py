@@ -35,20 +35,9 @@ def _resolve(request: Request) -> User:
         if not s.dev_user:
             raise HTTPException(500, "DMS_DEV_USER is not set")
         email = s.dev_user.lower()
-        acting = (request.headers.get("X-DMS-Dev-User") or "").strip().lower()
-        if acting and (acting == email or acting in s.dev_users):   # testing: act as another listed user
-            email = acting
-        account = email
-        if "@" not in email:                                    # a domain account (RH\name): its email (UPN) from AD,
-            from .security import upn_of                        # SharePoint knows people only by email
-            email = upn_of(account) or email
-        user = User(email=email, name=email.split("@")[0].split("\\")[-1])
-        if s.dev_ad_check and email not in s.admins and not (s.sp_auth == "interactive" and email == s.dev_user.lower()):   # super users are not checked
-            from .security import AdUser
-            try:
-                user.ad = AdUser.get(account)
-            except Exception as e:  # noqa: BLE001 - say why, do not show everything
-                raise HTTPException(403, f"AD check for {email}: {e}") from None
+        user = User(email=email, name=email.split("@")[0])
+        if s.dev_ad_check and not _super(s, email):            # super users are not checked
+            _with_ad(user, email)
         return user
     if s.auth_mode == "header":
         user = request.headers.get(s.user_header)
@@ -73,8 +62,41 @@ def _resolve(request: Request) -> User:
     return User(email=email.lower(), name=claims.get("name", ""))
 
 
+def _super(s: Settings, email: str) -> bool:
+    """A DMS super user (DMS_ADMINS), or the person who runs the DMS in dev mode."""
+    return email in s.admins or (s.auth_mode == "dev" and email == (s.dev_user or "").lower())
+
+
+def _with_ad(user: User, account: str) -> None:
+    from .security import AdUser
+    try:
+        user.ad = AdUser.get(account)
+    except Exception as e:  # noqa: BLE001 - say why, do not show everything
+        raise HTTPException(403, f"AD check for {user.email}: {e}") from None
+
+
+def _acting(request: Request, real: User) -> User:
+    """ "Acting as" (super users only, the ⋮ menu): see and act as another user, with that user's AD rights.
+    DMS_DEV_USERS limits who can be chosen; empty = anyone. Any other request keeps the real user."""
+    s: Settings = request.app.state.settings
+    target = (request.headers.get("X-DMS-Dev-User") or "").strip().lower()
+    if not target or target == real.email or not _super(s, real.email):
+        return real
+    if s.dev_users and target not in s.dev_users:
+        return real
+    email = target
+    if "@" not in target:                                      # a domain account (RH\name): its email (UPN) from AD,
+        from .security import upn_of                           # SharePoint knows people only by email
+        email = upn_of(target) or target
+    user = User(email=email, name=email.split("@")[0].split("\\")[-1], acting_from=real.email)
+    real.close()
+    if (s.auth_mode == "windows" or s.dev_ad_check) and email not in s.admins:
+        _with_ad(user, target)                                 # that user's AD / NTFS rights
+    return user
+
+
 def current_user(request: Request) -> Iterator[User]:
-    user = _resolve(request)
+    user = _acting(request, _resolve(request))
     try:
         yield user
     finally:

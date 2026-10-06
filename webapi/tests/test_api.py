@@ -1578,11 +1578,27 @@ def test_dev_mode_acting_as_another_listed_user(tmp_path):
     other = "approver@rh.co.il"
     c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER, dev_users=[other],
                                        sharepoint="memory", admins=[USER])))
-    assert c.get("/api/client-config").json()["devUsers"] == [USER, other]
-    assert c.get("/api/me").json()["email"] == USER
+    me = c.get("/api/me").json()
+    assert me["email"] == USER and me["actingUsers"] == [USER, other]                     # the ⋮ menu for super users
     me = c.get("/api/me", headers={"X-DMS-Dev-User": other}).json()
-    assert me["email"] == other and not me["admin"]
+    assert me["email"] == other and not me["admin"] and me["actingFrom"] == USER
+    assert me["actingUsers"] == [USER, other]                                               # can switch back
     assert c.get("/api/me", headers={"X-DMS-Dev-User": "someone@else.com"}).json()["email"] == USER   # not listed: ignored
+
+
+def test_acting_as_only_for_super_users_with_windows_sign_in(tmp_path, monkeypatch):
+    from dms_api import auth
+    from dms_api.security import User
+    real = {"who": "boss@rh.co.il"}
+    monkeypatch.setattr(auth, "_resolve", lambda request: User(email=real["who"]))
+    monkeypatch.setattr(auth, "_with_ad", lambda user, account: None)
+    c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="windows", sharepoint="memory",
+                                       admins=["boss@rh.co.il"])))
+    h = {"X-DMS-Dev-User": "dana@rh.co.il"}
+    assert c.get("/api/me", headers=h).json()["email"] == "dana@rh.co.il"                 # a super user: any user (no list)
+    real["who"] = "eli@rh.co.il"
+    me = c.get("/api/me", headers=h).json()
+    assert me["email"] == "eli@rh.co.il" and "actingUsers" not in me                       # a normal user: never
 
 
 def test_dev_ad_check_for_acting_users_not_for_admins(tmp_path, monkeypatch):

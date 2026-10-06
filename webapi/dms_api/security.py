@@ -20,6 +20,7 @@ class User:
     name: str = ""
     token: object | None = None             # Windows impersonation token (windows mode only)
     ad: object | None = None                # dev mode with DMS_DEV_AD_CHECK: the user's AD access (AuthZ, see AdUser)
+    acting_from: str = ""                   # a super user acting as this user ("Acting as"): the super user's email
     _cache: dict = field(default_factory=dict, repr=False)
 
     def can(self, path: str, access: str = READ) -> bool:

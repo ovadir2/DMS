@@ -279,7 +279,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/client-config")
     def client_config():
-        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "firstLoadApprover": s.first_load_approver, "shareDays": s.ex_days, "customersFolder": s.customers_folder, "root": s.repository_root, "shortPaths": [[os.path.join(s.repository_root, k), v] for k, v in s.short_paths.items()], "devUsers": [s.dev_user.lower(), *[u for u in s.dev_users if u != s.dev_user.lower()]] if s.auth_mode == "dev" and s.dev_users else [],
+        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "firstLoadApprover": s.first_load_approver, "shareDays": s.ex_days, "customersFolder": s.customers_folder, "root": s.repository_root, "shortPaths": [[os.path.join(s.repository_root, k), v] for k, v in s.short_paths.items()],
                 "approvals": s.approvals, "fileLinker": bool(s.fl_check_url and s.fl_update_url),
                 "site": s.site_url if s.sharepoint != "memory" else "", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,
@@ -391,7 +391,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/me")
     def me(user: User = Depends(current_user)):
-        return {"email": user.email, "name": user.name, "admin": is_admin(user)}
+        out = {"email": user.email, "name": user.name, "admin": is_admin(user), "actingFrom": user.acting_from}
+        if is_admin(user) or user.acting_from:                  # super users: "Acting as" in the ⋮ menu
+            real = user.acting_from or user.email
+            out["actingUsers"] = [real, *[u for u in s.dev_users if u != real]]
+        return out
 
     @app.get("/api/options")
     def options(_: User = Depends(current_user)):
