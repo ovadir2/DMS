@@ -1,5 +1,5 @@
 """Shares with customers expire: files in <library>/<DMS_EX_FOLDER>/<Customer>/ on the Large File Exchange site
-are removed DMS_EX_DAYS (default 30) days after their last share. A customer folder left empty is removed too,
+are removed DMS_EX_DAYS (default 3) days after their last share. A customer folder left empty is removed too,
 and with it the customer's access. Each removal is a Control Audit row. Runs every hour inside the DMS."""
 from __future__ import annotations
 

@@ -1427,18 +1427,18 @@ def test_onedrive_not_set_up_is_requested():
     assert sess.calls[-1] == ("POST", "https://rhisrael.sharepoint.com/_api/SP.UserProfiles.ProfileLoader.GetProfileLoader/GetUserProfile/CreatePersonalSiteEnque(false)")
 
 
-def test_shares_expire_after_30_days(tmp_path):
+def test_shares_expire_after_3_days(tmp_path):
     from datetime import datetime, timedelta, timezone
     from dms_api import exchange_expiry
     c, sp, s, q, d, fs = _approved_env(tmp_path)
-    assert s.ex_days == 30
+    assert s.ex_days == 3
     c.post(f"/api/documents/{d['id']}/share", json={"email": "x@cust.com"})
     assert exchange_expiry.run_once(sp, s) == []                                   # shared today: kept
-    sp.shares[0]["utc"] = (datetime.now(timezone.utc) - timedelta(days=31)).isoformat()
+    sp.shares[0]["utc"] = (datetime.now(timezone.utc) - timedelta(days=4)).isoformat()
     r = exchange_expiry.run_once(sp, s)
     assert r[0]["file"] == "CRU 4 FCT Quote_Rev1.xlsx" and r[0]["folderRemoved"] and not sp.shares
     ev = sp.audit_events()[0]
-    assert ev["documentId"] == "DMS-00001" and "Share expired after 30 days" in ev["details"] and "no access" in ev["details"]
+    assert ev["documentId"] == "DMS-00001" and "Share expired after 3 days" in ev["details"] and "no access" in ev["details"]
     last = (tmp_path / "Root" / "02_Customers" / "Customer_A" / "Shared" / "DMS-Shared-Log.csv").read_text(encoding="utf-8-sig").splitlines()[-1]
     assert "Expired" in last and "CRU 4 FCT Quote_Rev1.xlsx" in last
 

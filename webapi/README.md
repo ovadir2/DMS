@@ -172,7 +172,7 @@ The server must be joined to the domain, reach `$Root`, and have outbound HTTPS 
    DMS_ADMINS=<super user emails, comma separated>
    DMS_EX_SITE_URL=https://rhisrael.sharepoint.com/sites/LargeFileExchange
    ```
-   Optional: `DMS_EX_DAYS` (30), `DMS_SHARED_LOG`, `DMS_EX_SHORTCUT`, `DMS_DELEGATION_DAYS` (3), `DMS_WEEKEND` (fri,sat), the AI and File Linker keys.
+   Optional: `DMS_EX_DAYS` (3), `DMS_SHARED_LOG`, `DMS_EX_SHORTCUT`, `DMS_DELEGATION_DAYS` (3), `DMS_WEEKEND` (fri,sat), the AI and File Linker keys.
 6. **SharePoint lists and flows** on the production site: as in A2 and A3, with the production site alias.
    **Folder tree** on the production `$Root`: as in A4, adding `-ApplyAcl` (and `-CreateAdGroups -GroupOU <OU>` the first time) for the NTFS permissions per customer.
 7. **IIS site:** new site on `C:\DMS\webapi`, HTTPS binding with the company certificate, app pool *No Managed Code*, identity = the gMSA. `web.config` is already in the folder (Windows Authentication on, Anonymous off). If IIS reports a locked `authentication` section, set the same in IIS Manager.
