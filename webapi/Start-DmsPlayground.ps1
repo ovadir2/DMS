@@ -125,6 +125,16 @@ if (-not $NoDrives) {
     }
 }
 
+# An older DMS still running (another window, or left behind) would keep answering on the port: stop it first
+$old = @(Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction SilentlyContinue |
+         Where-Object { $_.CommandLine -like '*uvicorn*dms_api.main:app*' } | ForEach-Object { $_.ProcessId })
+$old += @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $_.OwningProcess })
+foreach ($id in ($old | Where-Object { $_ -and $_ -ne $PID } | Select-Object -Unique)) {
+    try { Stop-Process -Id $id -Force -ErrorAction Stop; Write-Host "Stopped an older DMS (process $id)." -ForegroundColor Yellow }
+    catch { Write-Warning "Could not stop process $id that holds port ${Port}: $_" }
+}
+if ($old) { Start-Sleep -Seconds 1 }
+
 $url = "http://localhost:$Port/dms/dms-page?lang=$Lang"
 $bind = '127.0.0.1'
 if ($Share) {
