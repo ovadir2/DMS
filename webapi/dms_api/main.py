@@ -260,9 +260,21 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return JSONResponse({"detail": f"SharePoint: {e}"}, status_code=502)
 
     # ------------------------------------------------------------------ public
+    def _version() -> str:
+        """The git commit this DMS runs (to check that a pull + restart took effect)."""
+        import subprocess
+        try:
+            return subprocess.run(["git", "-C", os.path.dirname(os.path.abspath(__file__)), "rev-parse", "--short", "HEAD"],
+                                  capture_output=True, text=True, timeout=5).stdout.strip() or "unknown"
+        except (OSError, subprocess.SubprocessError):
+            return "unknown"
+    version = _version()
+    logger.info("DMS version %s", version)
+
     @app.get("/api/health")
     def health():
-        return {"status": "ok", "repositoryRoot": s.repository_root, "rootReachable": os.path.isdir(s.repository_root)}
+        return {"status": "ok", "version": version, "repositoryRoot": s.repository_root,
+                "rootReachable": os.path.isdir(s.repository_root)}
 
     @app.get("/api/client-config")
     def client_config():
