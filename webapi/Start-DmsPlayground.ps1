@@ -34,7 +34,7 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)] [string] $Root,
+    [string] $Root,
     [switch] $Live,
     [string] $ClientId,
     [string] $TenantName = 'rhisrael',
@@ -55,8 +55,22 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
+# -Root / -ClientId not given: DMS_REPOSITORY_ROOT / DMS_CLIENT_ID from .env (a <placeholder> does not count)
+function Get-DotEnv([string] $key) {
+    $f = Join-Path $PSScriptRoot '.env'
+    if (-not (Test-Path $f)) { return '' }
+    $line = Select-String -LiteralPath $f -Pattern "^\s*$key\s*=" | Select-Object -First 1
+    if (-not $line) { return '' }
+    $v = (($line.Line -split '=', 2)[1] -replace '\s+#.*$', '').Trim().Trim('"', "'")
+    if ($v -like '<*') { return '' } else { return $v }
+}
+if (-not $Root) { $Root = Get-DotEnv 'DMS_REPOSITORY_ROOT' }
+if (-not $ClientId) { $ClientId = Get-DotEnv 'DMS_CLIENT_ID' }
+if (-not $Root) { throw 'No root: give -Root <folder>, or set DMS_REPOSITORY_ROOT in .env' }
 if (-not (Test-Path -LiteralPath $Root)) { throw "Root not found: $Root" }
-if ($Live -and -not $ClientId) { throw '-Live needs -ClientId (the Entra app you use for PnP, $C)' }
+if ($Live -and -not $ClientId) {
+    throw '-Live needs the Entra app id you use for PnP: -ClientId <app id>, or DMS_CLIENT_ID=<app id> in .env'
+}
 
 $py = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path $py)) {
