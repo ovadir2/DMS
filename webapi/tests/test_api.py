@@ -1683,6 +1683,8 @@ def test_office_uri_too_long_gives_dms_webdav_link(tmp_path):
     files.OPEN_TOKENS.clear()                                                            # as after a restart
     assert c.get(link).content == b"doc"
     assert c.request("OPTIONS", link).headers["DAV"] == "1,2"
+    assert c.request("OPTIONS", "/").headers["MS-Author-Via"] == "DAV"                  # Office asks the server first
+    assert c.request("PROPFIND", link.rsplit("/", 1)[0]).status_code == 207              # and the folder of the link
     pf = c.request("PROPFIND", link)
     assert pf.status_code == 207 and "<d:getcontentlength>3</d:getcontentlength>" in pf.text
     assert c.request("LOCK", link).status_code == 200

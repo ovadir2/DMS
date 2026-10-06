@@ -170,6 +170,23 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     from .filelinker import FileLinker
     app.state.linker = FileLinker(s)
     @app.middleware("http")
+    async def office_dav_discovery(request: Request, call_next):
+        """Office asks the server and the folders above a file whether they speak WebDAV (OPTIONS / PROPFIND)
+        before it opens a DMS link for editing; without these answers Word opens it read only."""
+        from fastapi.responses import Response
+        path = request.url.path
+        dav = {"DAV": "1,2", "MS-Author-Via": "DAV", "Allow": "OPTIONS, GET, HEAD, PROPFIND, LOCK, UNLOCK, PUT"}
+        is_file = path.startswith("/api/o/") and path.count("/") >= 4 and not path.endswith("/")
+        if request.method == "OPTIONS" and not is_file and "access-control-request-method" not in request.headers:   # not a CORS preflight
+            return Response(status_code=200, headers=dav)
+        if request.method == "PROPFIND" and not is_file:
+            body = ('<?xml version="1.0" encoding="utf-8"?><D:multistatus xmlns:D="DAV:"><D:response>'
+                    f"<D:href>{path}</D:href><D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype>"
+                    "</D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response></D:multistatus>")
+            return Response(body, status_code=207, media_type='text/xml; charset="utf-8"', headers=dav)
+        return await call_next(request)
+
+    @app.middleware("http")
     async def page_language(request: Request, call_next):
         """The page sends its language (X-DMS-Lang); notifications are written in it."""
         token = PAGE_LANG.set("HE" if (request.headers.get("x-dms-lang") or "").upper() == "HE" else "EN")
@@ -1651,7 +1668,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 f"<d:creationdate>{datetime.fromtimestamp(st.st_ctime, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}</d:creationdate>"
                 f"<d:getetag>{etag}</d:getetag>"
                 "<d:supportedlock><d:lockentry><d:lockscope><d:exclusive/></d:lockscope><d:locktype><d:write/></d:locktype>"
-                "</d:lockentry></d:supportedlock>"
+                "</d:lockentry></d:supportedlock><d:lockdiscovery/>"
+                f"<d:isreadonly>{'f' if dav_writable(full, user) else 't'}</d:isreadonly>"
                 f"</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>")
 
     @app.api_route("/api/o/{token}/", methods=["OPTIONS", "PROPFIND"])
@@ -1684,7 +1702,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if m == "PROPFIND":
             body = ('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:">'
                     + dav_props(full, str(request.url.path), user) + "</d:multistatus>")
-            return Response(body, status_code=207, media_type="application/xml; charset=utf-8", headers=dav)
+            return Response(body, status_code=207, media_type='text/xml; charset="utf-8"', headers=dav)
         if m == "LOCK":
             if not dav_writable(full, user):
                 raise HTTPException(423, "Read only")
@@ -1693,7 +1711,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     "<d:locktype><d:write/></d:locktype><d:lockscope><d:exclusive/></d:lockscope><d:depth>0</d:depth>"
                     f"<d:owner>{user.email}</d:owner><d:timeout>Second-3600</d:timeout>"
                     f"<d:locktoken><d:href>{lock}</d:href></d:locktoken></d:activelock></d:lockdiscovery></d:prop>")
-            return Response(body, status_code=200, media_type="application/xml; charset=utf-8", headers={**dav, "Lock-Token": f"<{lock}>"})
+            return Response(body, status_code=200, media_type='text/xml; charset="utf-8"', headers={**dav, "Lock-Token": f"<{lock}>"})
         if m == "UNLOCK":
             return Response(status_code=204, headers=dav)
         if m == "PUT":
