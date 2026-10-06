@@ -1119,7 +1119,7 @@ async function viewFile(path) {
   else if (cfg.site && cfg.authMode === 'dev') { $('#pg').hidden = false; $('#pg').classList.add('live'); $('#pg').textContent = T.liveBanner.replace('{site}', cfg.site.split('/').pop()).replace('{where}', cfg.approvals === 'page' ? T.apPage : T.apTeams); }
   try { me = await api('/api/me'); $('#who').textContent = (me.name || me.email) + (me.admin ? ' ★' : ''); } catch (e) { $('#who').textContent = ''; }
   if ((cfg.devUsers || []).length) {   // testing (dev mode): act as another user
-    $('#who').innerHTML = `<select id="as" title="${T.actingAs}">${cfg.devUsers.map(u => `<option ${u === me.email ? 'selected' : ''}>${esc(u)}</option>`).join('')}</select>${me.admin ? ' ★' : ''}`;
+    $('#who').innerHTML = `<select id="as" title="${T.actingAs}">${cfg.devUsers.map(u => `<option ${u === (devUser() || me.email) ? 'selected' : ''}>${esc(u)}</option>`).join('')}</select>${me.admin ? ' ★' : ''}`;
     $('#as').onchange = e => { try { localStorage.setItem('dmsDevUser', e.target.value); } catch (x) {} location.reload(); };
   }
   try { const st = await api('/api/ai/status'); aiApi = st.enabled; aiUrl = st.url || aiUrl; ragTools = st.rag || []; addRagTabs(); } catch { aiApi = false; }

@@ -38,11 +38,15 @@ def _resolve(request: Request) -> User:
         acting = (request.headers.get("X-DMS-Dev-User") or "").strip().lower()
         if acting and (acting == email or acting in s.dev_users):   # testing: act as another listed user
             email = acting
-        user = User(email=email, name=email.split("@")[0])
+        account = email
+        if "@" not in email:                                    # a domain account (RH\name): its email (UPN) from AD,
+            from .security import upn_of                        # SharePoint knows people only by email
+            email = upn_of(account) or email
+        user = User(email=email, name=email.split("@")[0].split("\\")[-1])
         if s.dev_ad_check and email not in s.admins and not (s.sp_auth == "interactive" and email == s.dev_user.lower()):   # super users are not checked
             from .security import AdUser
             try:
-                user.ad = AdUser.get(email)
+                user.ad = AdUser.get(account)
             except Exception as e:  # noqa: BLE001 - say why, do not show everything
                 raise HTTPException(403, f"AD check for {email}: {e}") from None
         return user

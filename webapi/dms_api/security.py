@@ -140,3 +140,25 @@ class AdUser:
             return False
         wanted = 0x120089 if access == READ else 0x120116       # FILE_GENERIC_READ / FILE_GENERIC_WRITE
         return error.value == 0 and (granted.value & wanted) == wanted
+
+
+_UPN: dict = {}
+
+
+def upn_of(account: str) -> str:
+    """RH\\name -> name@rh.co.il (the user principal name in AD), "" when it cannot be found (not Windows, no domain)."""
+    if account in _UPN:
+        return _UPN[account]
+    upn = ""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        size = wintypes.ULONG(512)
+        buf = ctypes.create_unicode_buffer(512)
+        # TranslateNameW(name, NameSamCompatible=2, NameUserPrincipal=8, out, size)
+        if ctypes.WinDLL("secur32").TranslateNameW(account, 2, 8, buf, ctypes.byref(size)):
+            upn = buf.value.lower()
+    except (OSError, AttributeError):
+        pass
+    _UPN[account] = upn
+    return upn
