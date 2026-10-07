@@ -354,6 +354,8 @@ def test_my_workflows(env):
     assert by["DMS-00002"]["statusKey"] == "Rejected" and by["DMS-00002"]["decision"]["details"] == "fix p.3"
     assert by["DMS-00001"]["decision"]["actor"] == "boss@rh.co.il" and by["DMS-00001"]["submittedUtc"]
     assert [e["event"] for e in by["DMS-00001"]["history"]] == ["נוצר", "הוגש", "אושר"]
+    assert by["DMS-00002"]["editUri"].startswith("ms-word:ofe|")                         # returned: the owner opens to edit
+    assert by["DMS-00003"]["editUri"].startswith("ms-word:ofe|")
 
 
 class FakeAI:

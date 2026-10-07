@@ -550,7 +550,7 @@ async function mine(v) {
       <td class="actions">${state.everyone ? `<div class="muted small">${esc(d.ownerName || d.ownerEmail || '')}</div>` : ''}${['Working', 'Rejected'].includes(d.statusKey) ? `<button type="button" class="link" data-sub="${d.id}">${T.submit}</button><button type="button" class="link" data-drn="${d.id}" data-name="${esc((d.workingUncPath || '').split(/[\\/]/).pop())}">${T.rename}</button><button type="button" class="link" data-ddel="${d.id}" style="color:var(--err)">${T.del}</button>` : ''}
         ${d.currentUncPath ? `<button type="button" class="link" data-cp="${esc(d.currentUncPath)}">🔗 ${T.copy}</button>` : ''}
         ${d.workingUncPath ? `<button type="button" class="link" data-cp="${esc(d.workingUncPath)}">🔗 ${T.copyWorking}</button>` : ''}
-        ${d.statusKey === 'Submitted' && d.editUri ? `<a class="link" href="${esc(d.editUri)}">✎ ${T.openEdit}</a>` : ''}
+        ${d.editUri ? `<a class="link" href="${esc(d.editUri)}">✎ ${T.openEdit}</a>` : d.viewUri ? `<a class="link" href="${esc(d.viewUri)}">${T.open}</a>` : ''}
         ${d.statusKey === 'Submitted' ? `<button type="button" class="link" data-wd="${d.id}" style="color:var(--err)">${T.withdraw}</button>` : ''}
         ${d.statusKey === 'Approved_ReadOnly' ? `<button type="button" class="link" data-rev="${d.id}">⟳ ${T.newRev}</button><button type="button" class="link" data-share="${d.id}">✉ ${T.share}</button>` : ''}
         <button type="button" class="link" data-hist="${d.id}">${T.history}</button>
