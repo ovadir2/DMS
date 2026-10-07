@@ -522,6 +522,19 @@ def test_release_selected_files_without_workflow(env):
     assert d["id"]
 
 
+def test_share_finds_the_approved_file_when_the_record_was_not_updated(env):
+    c, sp, q = env
+    d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "הצעת מחיר", "documentArea": "מסחרי"}).json()
+    (q / "Current_ReadOnly").mkdir()
+    (q / "CRU 4 FCT Quote_Rev1.xlsx").rename(q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx")   # moved, record not updated
+    sp.update(d["id"], {"LifecycleStatus": sp.s.choices["Approved_ReadOnly"]})
+    assert c.get(f"/api/documents/{d['id']}/share-info").json()["customer"] == "Customer_A"
+    assert sp.items[d["id"]]["currentUncPath"] == str(q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx")   # corrected
+    sp.update(d["id"], {"CurrentUncPath": str(q / "gone.xlsx"), "WorkingUncPath": ""})
+    r = c.get(f"/api/documents/{d['id']}/share-info")
+    assert r.status_code == 409 and "gone.xlsx" in r.json()["detail"]                    # says where it looked
+
+
 def test_super_user(env):
     c, sp, q = env
     d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()

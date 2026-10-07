@@ -1504,9 +1504,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         d = sp().document(item_id)
         if d.get("lifecycleStatus") != c["Approved_ReadOnly"]:
             raise HTTPException(409, "Only an approved document can get a new revision")
-        current = to_root(s.repository_root, d.get("currentUncPath"))
-        if not current or not os.path.isfile(current):
-            raise HTTPException(409, "The approved file was not found on the file server")
+        current = approved_file(d)
+        if not current:
+            raise HTTPException(409, f"The approved file was not found on the file server ({d.get('currentUncPath') or 'no path in the record'})")
         if not user.can(current):
             raise HTTPException(403, "You do not have access to this document")
         cur_dir = os.path.dirname(current)
@@ -1545,6 +1545,26 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return {**submit_doc(item_id, None, user), "draft": target, "officeUri": files.office_uri(target, edit=True)}
         return {**with_key(sp().document(item_id)), "draft": target, "officeUri": files.office_uri(target, edit=True)}
 
+    def approved_file(d: dict) -> str | None:
+        """The approved file of a record: CurrentUncPath, else where the file service puts it (Current_ReadOnly next to
+        the working file) - then the record is corrected (it was not updated when the file moved)."""
+        import re as _re
+        from .file_service import _sha256, to_root
+        current = to_root(s.repository_root, d.get("currentUncPath"))
+        if current and os.path.isfile(current):
+            return current
+        working = to_root(s.repository_root, d.get("workingUncPath"))
+        if not working:
+            return None
+        parent = os.path.dirname(working)
+        folder = os.path.dirname(parent) if os.path.basename(parent) in WORKFLOW_FOLDERS else parent
+        landed = os.path.join(folder, "Current_ReadOnly", _re.sub(r"_DRAFT(?=\.[^.]+$|$)", "", os.path.basename(working), flags=_re.I))
+        if not os.path.isfile(landed):
+            return None
+        sp().update(d["id"], {"CurrentUncPath": landed, "CurrentSHA256": _sha256(landed), "WorkingUncPath": ""})
+        logger.info("%s: CurrentUncPath corrected to %s", d.get("documentId"), landed)
+        return landed
+
     def shareable(item_id: int, user: User) -> tuple[dict, str, str]:
         """An approved document the user may share: (record, approved file, revision), else HTTP error."""
         from .file_service import to_root
@@ -1553,9 +1573,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, f"{d.get('documentId') or item_id}: only an approved document can be shared with a customer")
         if (d.get("ownerEmail") or "").lower() != user.email and not is_admin(user):
             raise HTTPException(403, f"{d.get('documentId')}: only the document owner (or a DMS super user) can share it")
-        current = to_root(s.repository_root, d.get("currentUncPath"))
-        if not current or not os.path.isfile(current):
-            raise HTTPException(409, f"{d.get('documentId')}: the approved file was not found on the file server")
+        current = approved_file(d)
+        if not current:
+            raise HTTPException(409, f"{d.get('documentId')}: the approved file was not found on the file server "
+                                     f"({d.get('currentUncPath') or d.get('workingUncPath') or 'no path in the record'})")
         if not user.can(current):
             raise HTTPException(403, f"{d.get('documentId')}: you do not have access to this document")
         rev = str(d.get("currentRevision") or files.parse_revision(os.path.basename(current))[1] or 1).zfill(2)
