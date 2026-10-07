@@ -154,6 +154,17 @@ if ($Share) {
         catch { Write-Warning "Port $Port is not open in the firewall. Once, in PowerShell as administrator: New-NetFirewallRule -DisplayName 'RH DMS $Port' -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Domain" }
     }
     Write-Host "Shared: the approvers open $shared" -ForegroundColor Green
+    # Setup for the approvers' PCs (no git / VS Code there): the scripts and a ready Setup-DMS.cmd on the share.
+    # Double-click it once: drive letters + the Open handler (rh-dms:) + the DMS page.
+    try {
+        $setup = Join-Path $env:DMS_REPOSITORY_ROOT '04_Workflow_System\Setup'
+        $cust = if ($env:DMS_CUSTOMERS_FOLDER) { $env:DMS_CUSTOMERS_FOLDER } else { '02_Customers' }
+        New-Item -ItemType Directory -Path $setup -Force | Out-Null
+        foreach ($f in 'Set-DmsDrives.ps1', 'Open-DmsFile.ps1') { Copy-Item -LiteralPath (Join-Path $PSScriptRoot "..\scripts\$f") -Destination $setup -Force }
+        $cmd = "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%~dp0Set-DmsDrives.ps1`" -Root `"$env:DMS_REPOSITORY_ROOT`" -CustomersFolder `"$cust`" -GeneralFolder `"$GeneralFolder`" -DmsUrl `"http://$($hostName):$Port`"`r`npause`r`n"
+        [IO.File]::WriteAllText((Join-Path $setup 'Setup-DMS.cmd'), $cmd, [Text.Encoding]::Default)
+        Write-Host "  Approvers' PCs: double-click once $(Join-Path $setup 'Setup-DMS.cmd')" -ForegroundColor Green
+    } catch { Write-Warning "Setup for the approvers' PCs not written: $_" }
     Write-Host ("  Each one signs in with their own Windows account (asked once: RH\name + password; no question when " +
                 "http://$hostName is in Local intranet sites). This PC stays you.") -ForegroundColor Green
 } else {
