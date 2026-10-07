@@ -160,5 +160,5 @@ if ($Share) {
     $env:DMS_PAGE_URL = $url   # notification links (DC-P2) open the page here
 }
 Write-Host "DMS page on $url  (root: $env:DMS_REPOSITORY_ROOT). Ctrl+C to stop." -ForegroundColor Green
-Start-Job -ScriptBlock { param($u, $p) for ($i = 0; $i -lt 120; $i++) { Start-Sleep 2; try { Invoke-WebRequest "http://localhost:$p/api/health" -UseBasicParsing | Out-Null; Start-Process $u; break } catch {} } } -ArgumentList $url, $Port | Out-Null
+Start-Job -ScriptBlock { param($u, $p) for ($i = 0; $i -lt 120; $i++) { Start-Sleep 2; try { Invoke-WebRequest "http://localhost:$p/api/health" -UseBasicParsing | Out-Null; Start-Process $u; break } catch {} } } -ArgumentList $(if ($NoDrives) { $url } else { "$url&opener=1" }), $Port | Out-Null   # opener: Set-DmsDrives installed rh-dms:
 & $py -m uvicorn dms_api.main:app --host $bind --port $Port

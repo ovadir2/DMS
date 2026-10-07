@@ -11,6 +11,8 @@
     free one (from Z: down) is used. With -DmsUrl the DMS page is opened once with this PC's letters
     (?drives=...), and the page remembers them: Open and Copy link then use this PC's drives.
     The letters chosen are kept in HKCU\Software\RH\DMS (a second run keeps them). -Remove takes them away.
+    It also installs the "rh-dms:" link handler (Open-DmsFile.ps1): files with long Hebrew paths open from the
+    DMS page like a double-click in Explorer (an ms-word: link cannot carry them).
 
 .EXAMPLE
     .\Set-DmsDrives.ps1 -Root $Root -DmsUrl http://localhost:8080
@@ -80,10 +82,28 @@ foreach ($folder in $wanted.Keys) {
     $result[$folder] = $drive
     Write-Host "$drive -> $target$(if ($drive -ne "$($wanted[$folder]):") { "  ($($wanted[$folder]): is busy on this PC)" })" -ForegroundColor Green
 }
+$cls = 'HKCU:\Software\Classes\rh-dms'
+$opener = Join-Path $env:LOCALAPPDATA 'RH\DMS\Open-DmsFile.ps1'
+if ($Remove) {
+    Remove-Item -Path $cls -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path $keep -Name Root -ErrorAction SilentlyContinue
+} else {
+    # rh-dms:<path> opens the file like Explorer (only Office files under this PC's DMS drives / root)
+    New-Item -ItemType Directory -Path (Split-Path $opener) -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Open-DmsFile.ps1') -Destination $opener -Force
+    New-Item -Path "$cls\shell\open\command" -Force | Out-Null
+    Set-ItemProperty -Path $cls -Name '(default)' -Value 'URL:RH DMS open file'
+    Set-ItemProperty -Path $cls -Name 'URL Protocol' -Value ''
+    Set-ItemProperty -Path "$cls\shell\open\command" -Name '(default)' `
+        -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$opener`" `"%1`""
+    if (-not (Test-Path $keep)) { New-Item -Path $keep -Force | Out-Null }
+    Set-ItemProperty -Path $keep -Name Root -Value $Root
+    Write-Host "Open handler installed (rh-dms:): long paths open from the DMS page like in Explorer." -ForegroundColor Green
+}
 if (-not $Remove) {
     $drives = ($result.Keys | ForEach-Object { "$_=$($result[$_])" }) -join ';'
     if ($DmsUrl) {
-        Start-Process ("$($DmsUrl.TrimEnd('/'))/dms/dms-page?drives=" + [uri]::EscapeDataString($drives))   # the page remembers this PC's letters
+        Start-Process ("$($DmsUrl.TrimEnd('/'))/dms/dms-page?opener=1&drives=" + [uri]::EscapeDataString($drives))   # the page remembers this PC's letters
         Write-Host "`nThe DMS page was opened with this PC's drives ($drives)." -ForegroundColor Cyan
     } else {
         Write-Host "`nThis PC's drives: $drives. Run again with -DmsUrl <DMS address> so the page uses them." -ForegroundColor Cyan

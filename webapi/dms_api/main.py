@@ -211,9 +211,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         local = (request.client.host if request.client else "") in ("127.0.0.1", "::1", "localhost", "testclient")
         drives = files.user_drives(_short_paths(request.headers.get("x-dms-drives") or ""), local)   # the user's drive letters
         base = files.BASE_URL.set(str(request.base_url))
+        opener = files.OPENER.set(request.headers.get("x-dms-opener") == "1")
         try:
             return await call_next(request)
         finally:
+            files.OPENER.reset(opener)
             files.BASE_URL.reset(base)
             files.USER_SHORT.reset(drives)
             PAGE_LANG.reset(token)

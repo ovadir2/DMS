@@ -1736,6 +1736,10 @@ def test_office_uri_too_long_gives_dms_webdav_link(tmp_path):
     f = next(x for x in c.get("/api/browse", params={"path": str(d)}).json()["files"])
     assert f["editable"] and f["officeUri"].startswith("ms-word:ofe|u|http://testserver/api/o/")   # edit, the original name
     assert f["officeUri"].endswith("/" + quote(name))
+    o = next(x for x in c.get("/api/browse", params={"path": str(d)}, headers={"X-DMS-Opener": "1"}).json()["files"])
+    from urllib.parse import unquote
+    assert o["officeUri"].startswith("rh-dms:G%3A") and unquote(o["officeUri"]).replace("\\", "/").endswith(
+        "Quality and Standards/" + heb + "/" + heb + "/" + name)                         # PC handler: the path itself
     link = f["officeUri"].split("|u|http://testserver", 1)[1]
     files.OPEN_TOKENS.clear()                                                            # as after a restart
     assert c.get(link).content == b"doc"

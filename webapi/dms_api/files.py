@@ -152,6 +152,10 @@ def office_uri(path: str, edit: bool = False) -> str | None:
     if not app:
         return None
     full, path = path, user_path(path)
+    if url_len(path) > LONG_PATH and OPENER.get():
+        # this PC has the rh-dms: handler (Set-DmsDrives): Word opens the path itself, like a double-click in Explorer
+        from urllib.parse import quote
+        return "rh-dms:" + quote(path, safe="")
     if url_len(path) > LONG_PATH and BASE_URL.get():
         # too long for Office as a file path (Hebrew names count 6 characters each): the DMS link (WebDAV, like
         # SharePoint) - the original file name, and Save writes back to the same file on the server
@@ -165,6 +169,7 @@ def office_uri(path: str, edit: bool = False) -> str | None:
     return f"{app}:{'ofe' if edit else 'ofv'}|u|{url}"
 
 
+OPENER: ContextVar[bool] = ContextVar("OPENER", default=False)   # the user's PC has the rh-dms: link handler
 BASE_URL: ContextVar[str] = ContextVar("BASE_URL", default="")   # this request's DMS address, for the short Open link
 OPEN_TOKENS: dict[str, str] = {}
 
