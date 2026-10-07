@@ -611,6 +611,23 @@ def test_approved_file_stays_approved_while_its_next_revision_is_in_approval(env
     assert c.get(f"/api/documents/{doc['id']}/share-info").status_code == 200              # the approved one can be shared
 
 
+def test_release_a_submitted_document_without_workflow(env):
+    from dms_api import file_service
+    c, sp, q = env
+    (q / "S.docx").write_text("s")
+    d = c.post("/api/documents", json={"path": str(q / "S.docx"), "documentType": "נוהל", "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, c.app.state.settings)                                      # moved to Submitted
+    sub = q / "Submitted" / "S.docx"
+    assert sub.exists()
+    f = next(x for x in c.get("/api/browse", params={"path": str(q / "Submitted")}).json()["files"] if x["name"] == "S.docx")
+    assert f["document"]["statusKey"] == "Submitted"
+    r = c.post("/api/files/release", json={"paths": [str(sub)]}).json()["results"][0]
+    assert r["ok"] and r["documentId"] == d["documentId"], r
+    doc = sp.items[d["id"]]
+    assert doc["lifecycleStatus"] == sp.s.choices["Approved_ReadOnly"] and (q / "Current_ReadOnly" / "S.docx").exists() and not sub.exists()
+    assert "approval workflow was stopped" in sp.audit_events()[0]["details"]
+
+
 def test_super_user(env):
     c, sp, q = env
     d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()

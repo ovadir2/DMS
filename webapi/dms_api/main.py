@@ -798,8 +798,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         from . import noworkflow
         from .file_service import _move, _set_read_only, _sha256, to_root
         c = s.choices
-        if d.get("lifecycleStatus") != c["Working"]:
-            raise ValueError("in a workflow (submitted or approved): use its workflow")
+        status = d.get("lifecycleStatus")
+        if status not in (c["Working"], c["Submitted"]):
+            raise ValueError("already approved: use New revision")
         cur = to_root(s.repository_root, d.get("currentUncPath"))
         if cur and os.path.normcase(os.path.normpath(cur)) == os.path.normcase(os.path.normpath(full)):
             raise ValueError("this is the approved file: use New revision")   # matched as the record's working file otherwise
@@ -827,9 +828,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         sp().update(d["id"], {k: v for k, v in values.items() if v is not None})
         noworkflow.mark(s.repository_root, target)
         rel = os.path.relpath(target, s.repository_root)
-        sp().audit(document_id=d.get("documentId") or f"ID {d['id']}", event=c["ApprovedEvent"], from_status=c["Working"],
+        sp().audit(document_id=d.get("documentId") or f"ID {d['id']}", event=c["ApprovedEvent"], from_status=status,
                    to_status=c["Approved_ReadOnly"], actor=noworkflow.DMS_APPROVER,
-                   details=f"Approved by DMS - released without workflow by {user.email}: {rel} [file SHA-256 {sha}]"
+                   details=f"Approved by DMS - released without workflow by {user.email}"
+                           + (" (the approval workflow was stopped)" if status == c["Submitted"] else "") + f": {rel} [file SHA-256 {sha}]"
                            + (f". Previous revision -> {os.path.relpath(obsolete, s.repository_root)}" if obsolete else ""),
                    source=c["WorkflowService"])
         log(user, "release", target)
@@ -849,12 +851,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             try:
                 if not os.path.isfile(full):
                     raise ValueError("file not found")
+                d = find_registered(full, idx)
+                if d:                                               # In Work or Submitted: released on its own record
+                    out.append({"path": p, **release_working(d, full, user)})
+                    continue
                 if os.path.basename(folder) in WORKFLOW_FOLDERS or files.in_workflow_folder(s.repository_root, folder):
                     raise ValueError("already in a DMS workflow folder")
-                d = find_registered(full, idx)
-                if d:
-                    out.append({"path": p, **release_working(d, full, user)})   # In Work: released on its own record
-                    continue
                 if not (user.can(full, "write") and user.can(folder, "write")):
                     raise ValueError("no permission")
                 target = os.path.join(folder, "Current_ReadOnly", name)
