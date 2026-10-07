@@ -70,6 +70,10 @@ class MemorySharePoint:
             self.shortcuts = getattr(self, "shortcuts", []) + [{"name": shortcut_name, "folder": folder, "user": shortcut_for}]
         return {"urls": urls, "url": urls[0], "folderUrl": f"memory://{self.s.ex_library}/{folder}", "shortcut": f"{self.s.ex_shortcut_folder}/{shortcut_name}" if shortcut_name and self.s.ex_shortcut_folder else shortcut_name, "shortcutError": None}
 
+    def outbound_files(self, name: str) -> list[dict]:
+        return [{"name": x["url"].rsplit("/", 1)[-1], "utc": x["utc"], "size": 0} for x in getattr(self, "shares", [])
+                if x["url"].rsplit("/", 2)[-2].lower() == name.lower()]
+
     def expire_outbound(self, days: int, now=None) -> list[dict]:
         limit = (now or datetime.now(timezone.utc)).timestamp() - days * 86400
         old = [x for x in getattr(self, "shares", []) if datetime.fromisoformat(x["utc"]).timestamp() < limit]

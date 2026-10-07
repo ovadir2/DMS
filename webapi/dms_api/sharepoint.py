@@ -375,6 +375,21 @@ class SharePoint:
                     removed[-1]["folderRemoved"] = True
         return removed
 
+    def outbound_files(self, name: str) -> list[dict]:
+        """The files now in <library>/<ex_folder>/<name>/ on the Large File Exchange site (what that customer or
+        person can see): name and when it was put there. [] when the folder does not exist."""
+        ex = self.s.ex_site_url.rstrip("/")
+        q = lambda p: quote(p.replace("'", "''"), safe="/")  # noqa: E731
+        folder = f"{urlparse(ex).path.rstrip('/')}/{self.s.ex_library}/{self.s.ex_folder}/{name}"
+        try:
+            files = self._call("GET", f"{ex}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(folder)}')/Files"
+                                      "?$select=Name,TimeLastModified,Length").get("value", [])
+        except SharePointError as e:
+            if " 404" in str(e):
+                return []
+            raise
+        return [{"name": x["Name"], "utc": x.get("TimeLastModified"), "size": int(x.get("Length") or 0)} for x in files]
+
     def _folder_exists(self, web: str, server_relative: str) -> bool:
         try:
             r = self._call("GET", f"{web}/_api/web/GetFolderByServerRelativePath(DecodedUrl='"

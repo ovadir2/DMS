@@ -1594,6 +1594,25 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         except (FileNotFoundError, PermissionError):
             return []
 
+    def is_hr(path: str) -> bool:
+        """A file of HR (01_General\\HR and its subfolders): shared with a potential employee, not a customer."""
+        parts = [p.lower() for p in rel_parts(path)]
+        return len(parts) > 1 and parts[1] == "hr" and parts[0] != s.customers_folder.lower()
+
+    def recipient_name(name: str) -> str:
+        """A customer or person name typed in the Share dialog: the folder name on the Exchange site."""
+        n = re.sub(r"\s+", " ", (name or "").strip())
+        if not n or len(n) > 100 or re.search(r'[\\/:*?"<>|#%]', n) or n.startswith(".") or n.endswith("."):
+            raise HTTPException(400, "Write a name without \\ / : * ? \" < > | # % (up to 100 characters)")
+        return n
+
+    @app.get("/api/exchange/files")
+    def exchange_files(name: str, user: User = Depends(current_user)):
+        """What is on the Large File Exchange site now for this customer / person (read only, for the Share dialog)."""
+        if s.sharepoint != "memory" and not s.ex_site_url:
+            return []
+        return sp().outbound_files(recipient_name(name))
+
     def customer_of_path(path: str) -> str | None:
         from .file_service import _under_root, to_root
         full = to_root(s.repository_root, path)
@@ -1612,7 +1631,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 and os.path.normcase(os.path.dirname(to_root(s.repository_root, x.get("currentUncPath")) or "")) == here]
         others = [{"id": x["id"], "documentId": x.get("documentId"), "title": x.get("title"), "revision": x.get("currentRevision"),
                    "customer": customer_of_path(x.get("currentUncPath") or "")} for x in mine]
-        return {"customer": customer_of_path(current), "customers": customer_names(user), "revision": rev,
+        return {"customer": customer_of_path(current), "customers": customer_names(user), "revision": rev, "hr": is_hr(current),
                 "folder": s.ex_folder, "shortcut": s.ex_shortcut, "days": s.ex_days, "others": others}
 
     @app.post("/api/documents/{item_id}/share")
@@ -1627,12 +1646,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, "Sharing with customers is not configured (DMS_EX_SITE_URL)")
         docs = [shareable(i, user) for i in dict.fromkeys([item_id, *req.documentIds])]
         names = {n.lower(): n for n in customer_names(user)}
-        if (req.customer or "").strip():                       # chosen in the dialog (default: the file's customer folder)
-            customer = names.get(req.customer.strip().lower())
+        hr = is_hr(docs[0][1])
+        if (req.customer or "").strip():                       # chosen in the dialog (a customer folder, another customer,
+            typed = recipient_name(req.customer)               # or for HR files a potential employee)
+            customer = names.get(typed.lower(), typed)
         else:
-            customer = customer_of_path(docs[0][1])
+            customer = None if hr else customer_of_path(docs[0][1])
         if not customer:
-            raise HTTPException(400, "Choose the customer (a folder under " + s.customers_folder + ")")
+            raise HTTPException(400, "Write the potential employee's name" if hr else "Choose the customer (a folder under " + s.customers_folder + ")")
+        kind = "potential employee" if hr else "customer"
+        has_log = customer.lower() in names
         names = [os.path.basename(p) for _, p, _ in docs]
         if len({n.lower() for n in names}) != len(names):
             raise HTTPException(409, "Two of the files have the same name; share them separately")
@@ -1647,16 +1670,20 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             doc_id = d.get("documentId") or f"ID {d['id']}"
             sp().audit(document_id=doc_id, event=c["PermissionChanged"], from_status=c["Approved_ReadOnly"],
                        to_status=c["Approved_ReadOnly"], actor=user.email,
-                       details=f"Shared revision {rev} with {email} (customer {customer}, view only, Large File Exchange): {url}")
+                       details=f"Shared revision {rev} with {email} ({kind} {customer}, view only, Large File Exchange): {url}")
             log(user, "share", f"{doc_id} Rev{rev} -> {email} ({customer})")
         from . import shared_log
         until = (datetime.now(timezone.utc) + timedelta(days=s.ex_days)).strftime("%Y-%m-%d") if s.ex_days > 0 else ""
         log_error = None
         try:
+            if not has_log:                                     # no folder under 02_Customers: Control Audit only
+                raise LookupError
             shared_log.append(s, customer, [{"Action": "Shared", "Shared by": user.email, "Shared with": email,
                                              "Document ID": d.get("documentId"), "Title": d.get("title"), "Revision": rev,
                                              "File": os.path.basename(p), "Exchange link": url, "Available until": until}
                                             for (d, p, rev), url in zip(docs, r["urls"])])
+        except LookupError:
+            pass
         except OSError as e:
             log_error = str(e)
             logger.warning("Share log of %s: %s", customer, e)

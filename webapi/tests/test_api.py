@@ -553,6 +553,23 @@ def test_old_paths_after_the_repository_was_reorganized(tmp_path):
     assert file_service.relocate(str(root), old, "0" * 64) is None                       # other content: not this file
 
 
+def test_hr_files_are_shared_with_a_potential_employee(tmp_path):
+    root = tmp_path / "Root"
+    hr = root / "01_General" / "HR" / "Recruiting"
+    hr.mkdir(parents=True)
+    (hr / "Offer.docx").write_text("o")
+    (root / "02_Customers").mkdir()
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])))
+    d = c.post("/api/files/release", json={"paths": [str(hr / "Offer.docx")]}).json()["results"][0]
+    doc = next(x for x in c.app.state.sp.documents() if x["documentId"] == d["documentId"])
+    assert c.get(f"/api/documents/{doc['id']}/share-info").json()["hr"] is True
+    r = c.post(f"/api/documents/{doc['id']}/share", json={"email": "dana@gmail.com"})
+    assert r.status_code == 400 and "potential employee" in r.json()["detail"]
+    assert c.post(f"/api/documents/{doc['id']}/share", json={"email": "dana@gmail.com", "customer": "Dana Levi"}).status_code == 200
+    assert "potential employee Dana Levi" in c.app.state.sp.audit_events()[0]["details"]
+    assert [f["name"] for f in c.get("/api/exchange/files", params={"name": "Dana Levi"}).json()] == ["Offer.docx"]
+
+
 def test_super_user(env):
     c, sp, q = env
     d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()
@@ -935,11 +952,13 @@ def test_share_several_files_outside_customers(tmp_path):
     fs.run_once(sp, s)
     assert c.get(f"/api/documents/{e['id']}/share-info").json()["customer"] is None
     assert c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com"}).status_code == 400   # customer needed
-    assert c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "Nobody"}).status_code == 400
+    assert c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "a/b"}).status_code == 400   # not a folder name
+    assert c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "New Customer"}).status_code == 200   # out of the list
+    assert [f["name"] for f in c.get("/api/exchange/files", params={"name": "new customer"}).json()]                 # what is there now
     r = c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "customer_a", "documentIds": [d["id"]]})
     assert r.status_code == 200, r.text
     assert r.json()["customer"] == "Customer_A" and len(r.json()["documents"]) == 2
-    assert {u["url"].rsplit("/", 2)[-2] for u in sp.shares} == {"Customer_A"}
+    assert {u["url"].rsplit("/", 2)[-2] for u in sp.shares} == {"Customer_A", "New Customer"}
     (tmp_path / "Root" / "02_Customers" / "Elbit").mkdir()
     r = c.post(f"/api/documents/{d['id']}/share", json={"email": "y@elbit.com", "customer": "Elbit"})  # another customer
     assert r.status_code == 200 and r.json()["customer"] == "Elbit" and "Outbound/Elbit/" in sp.shares[-1]["url"]
