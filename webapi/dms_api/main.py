@@ -783,6 +783,51 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 logger.warning("audit row not written for %s: %s", action, e)
                 sp_error(f"Control Audit row ({action})", e)
 
+    def release_working(d: dict, full: str, user: User) -> dict:
+        """A document In Work (registered, not submitted) released without workflow on its record: the file goes to
+        Current_ReadOnly (without _DRAFT), the record becomes approved by DMS (Collaboration, SHA-256, Control Audit);
+        for a new revision draft the previous approved file goes to Obsolete_ReadOnly."""
+        import re as _re
+        from datetime import datetime, timezone
+        from . import noworkflow
+        from .file_service import _move, _set_read_only, _sha256, to_root
+        c = s.choices
+        if d.get("lifecycleStatus") != c["Working"]:
+            raise ValueError("in a workflow (submitted or approved): use its workflow")
+        if os.path.normcase(to_root(s.repository_root, d.get("workingUncPath")) or "") != os.path.normcase(full):
+            raise ValueError("already registered (use its workflow)")
+        if (d.get("ownerEmail") or "").lower() != user.email and not is_admin(user):
+            raise ValueError("only the document owner (or a DMS super user) can release it")
+        parent = os.path.dirname(full)
+        folder = os.path.dirname(parent) if os.path.basename(parent) in WORKFLOW_FOLDERS else parent
+        name = _re.sub(r"_DRAFT(?=\.[^.]+$|$)", "", os.path.basename(full), flags=_re.I)
+        target = os.path.join(folder, "Current_ReadOnly", name)
+        old = to_root(s.repository_root, d.get("currentUncPath"))
+        obsolete = None
+        if old and os.path.isfile(old):                           # a new revision: the approved one becomes obsolete
+            obsolete = _move(old, os.path.join(folder, "Obsolete_ReadOnly", os.path.basename(old)))
+            _set_read_only(obsolete, True)
+        if os.path.exists(target):
+            raise ValueError("a file with this name is already in Current_ReadOnly")
+        target = _move(full, target)
+        _set_read_only(target, True)
+        sha = _sha256(target)
+        values = {"LifecycleStatus": c["Approved_ReadOnly"], "CurrentUncPath": target, "WorkingUncPath": "", "CurrentSHA256": sha,
+                  "LastApprovedUtc": datetime.now(timezone.utc).isoformat(),
+                  "ControlMode": blueprint.choice("Collaboration", sp().choices("ControlMode"))}
+        if d.get("draftRevision"):
+            values.update(CurrentRevision=d["draftRevision"], DraftRevision="")
+        sp().update(d["id"], {k: v for k, v in values.items() if v is not None})
+        noworkflow.mark(s.repository_root, target)
+        rel = os.path.relpath(target, s.repository_root)
+        sp().audit(document_id=d.get("documentId") or f"ID {d['id']}", event=c["ApprovedEvent"], from_status=c["Working"],
+                   to_status=c["Approved_ReadOnly"], actor=noworkflow.DMS_APPROVER,
+                   details=f"Approved by DMS - released without workflow by {user.email}: {rel} [file SHA-256 {sha}]"
+                           + (f". Previous revision -> {os.path.relpath(obsolete, s.repository_root)}" if obsolete else ""),
+                   source=c["WorkflowService"])
+        log(user, "release", target)
+        return {"ok": True, "documentId": d.get("documentId"), "target": target}
+
     @app.post("/api/files/release")
     def release_files(req: ReleaseRequest, user: User = Depends(current_user)):
         """Selected files released without workflow, like Save file (no workflow): each goes to Current_ReadOnly in
@@ -799,8 +844,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     raise ValueError("file not found")
                 if os.path.basename(folder) in WORKFLOW_FOLDERS or files.in_workflow_folder(s.repository_root, folder):
                     raise ValueError("already in a DMS workflow folder")
-                if find_registered(full, idx):
-                    raise ValueError("already registered (use its workflow)")
+                d = find_registered(full, idx)
+                if d:
+                    out.append({"path": p, **release_working(d, full, user)})   # In Work: released on its own record
+                    continue
                 if not (user.can(full, "write") and user.can(folder, "write")):
                     raise ValueError("no permission")
                 target = os.path.join(folder, "Current_ReadOnly", name)

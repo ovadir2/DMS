@@ -514,7 +514,7 @@ def test_release_selected_files_without_workflow(env):
     d = c.post("/api/documents", json={"path": str(q / "B.docx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()
     resp = c.post("/api/files/release", json={"paths": [str(q / "A.docx"), str(q / "B.docx")]})
     r = resp.json()["results"]
-    assert r[0]["ok"] and r[0]["documentId"] and not r[1]["ok"] and "registered" in r[1]["error"]   # B has a workflow
+    assert r[0]["ok"] and r[0]["documentId"] and r[1]["ok"] and r[1]["documentId"] == d["documentId"]   # B In Work: its record
     cur = q / "Current_ReadOnly" / "A.docx"
     assert cur.exists() and not (q / "A.docx").exists()
     f = next(x for x in c.get("/api/browse", params={"path": str(q / "Current_ReadOnly")}).json()["files"] if x["name"] == "A.docx")
@@ -585,6 +585,19 @@ def test_release_puts_the_file_back_when_sharepoint_refuses(env, monkeypatch):
     r = c.post("/api/files/release", json={"paths": [str(q / "A.docx")]}).json()["results"][0]
     assert not r["ok"] and "403" in r["error"]
     assert (q / "A.docx").exists() and not (q / "Current_ReadOnly" / "A.docx").exists()   # back where it was
+
+
+def test_release_a_document_in_work_without_workflow(env):
+    c, sp, q = env
+    (q / "W.docx").write_text("w")
+    d = c.post("/api/documents", json={"path": str(q / "W.docx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()
+    r = c.post("/api/files/release", json={"paths": [str(q / "W.docx")]}).json()["results"][0]
+    assert r["ok"] and r["documentId"] == d["documentId"]                                 # its own record, no new one
+    doc = sp.items[d["id"]]
+    assert doc["lifecycleStatus"] == sp.s.choices["Approved_ReadOnly"] and doc["currentUncPath"] == str(q / "Current_ReadOnly" / "W.docx")
+    assert doc["workingUncPath"] == "" and (q / "Current_ReadOnly" / "W.docx").exists()
+    again = c.post("/api/files/release", json={"paths": [str(q / "Current_ReadOnly" / "W.docx")]}).json()["results"][0]
+    assert not again["ok"]                                                               # approved: not again
 
 
 def test_super_user(env):
