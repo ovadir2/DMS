@@ -1550,9 +1550,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         the working file) - then the record is corrected (it was not updated when the file moved)."""
         import re as _re
         from .file_service import _sha256, to_root
+        from .file_service import relocate
         current = to_root(s.repository_root, d.get("currentUncPath"))
         if current and os.path.isfile(current):
             return current
+        moved = relocate(s.repository_root, d.get("currentUncPath"), d.get("currentSHA256"))
+        if moved:                                               # recorded under an older layout of the repository
+            sp().update(d["id"], {"CurrentUncPath": moved})
+            logger.info("%s: CurrentUncPath corrected to %s", d.get("documentId"), moved)
+            return moved
         working = to_root(s.repository_root, d.get("workingUncPath"))
         if not working:
             return None

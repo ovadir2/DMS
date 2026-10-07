@@ -535,6 +535,24 @@ def test_share_finds_the_approved_file_when_the_record_was_not_updated(env):
     assert r.status_code == 409 and "gone.xlsx" in r.json()["detail"]                    # says where it looked
 
 
+def test_old_paths_after_the_repository_was_reorganized(tmp_path):
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    cur = root / "01_General" / "Quality and Standards" / "נהלי איכות" / "Current_ReadOnly"
+    cur.mkdir(parents=True)
+    (cur / "QP-2.1.docx").write_text("v")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory")
+    sp = MemorySharePoint(s)
+    d = sp.create_document(title="QP", path="", document_type="x", document_area="y", owner_email=USER, control_mode=None, document_id=None)
+    old = "\\\\10.10.10.80\\e$\\Shares\\01_Management\\Quality\\Quality and Standards\\נהלי איכות\\Current_ReadOnly\\QP-2.1.docx"
+    sp.update(d["id"], {"LifecycleStatus": "מאושר - קריאה בלבד", "CurrentUncPath": old, "WorkingUncPath": "",
+                        "CurrentSHA256": file_service._sha256(str(cur / "QP-2.1.docx"))})
+    r = file_service.run_once(sp, s)
+    assert r["moved"] == 1 and sp.document(d["id"])["currentUncPath"] == str(cur / "QP-2.1.docx")
+    assert file_service.relocate(str(root), old, "0" * 64) is None                       # other content: not this file
+
+
 def test_super_user(env):
     c, sp, q = env
     d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()

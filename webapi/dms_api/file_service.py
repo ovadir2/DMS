@@ -84,6 +84,25 @@ def to_root(root: str, path: str | None) -> str | None:
     return None
 
 
+def relocate(root: str, path: str | None, sha: str | None = None) -> str | None:
+    """A file recorded under an older layout of the repository (e.g. ...\\01_Management\\Quality\\Quality and
+    Standards\\... before it became 01_General\\Quality and Standards\\...): the longest end of the old path that
+    exists under the root, or under one of its top folders. With a recorded SHA-256 the content must match."""
+    if not path:
+        return None
+    parts = [p for p in path.replace("\\", "/").split("/") if p]
+    try:
+        tops = [root] + [os.path.join(root, d) for d in sorted(os.listdir(root)) if os.path.isdir(os.path.join(root, d))]
+    except OSError:
+        return None
+    for i in range(1, len(parts)):                               # longest tail first
+        for base in tops:
+            candidate = os.path.join(base, *parts[i:])
+            if os.path.isfile(candidate) and (not sha or _sha256(candidate).lower() == sha.lower()):
+                return candidate
+    return None
+
+
 def find_submitted(folder: str, name: str) -> str | None:
     """The document's file in <folder>\\Submitted: its own name, or (older runs) the name with a timestamp suffix."""
     exact = os.path.join(folder, "Submitted", name)
@@ -127,6 +146,17 @@ def run_once(sp, s: Settings) -> dict:
             continue
         if not raw:
             if status == c["Approved_ReadOnly"] and d.get("currentUncPath"):
+                cur = to_root(s.repository_root, d["currentUncPath"])
+                if not (cur and os.path.isfile(cur)):              # recorded under an older layout of the repository
+                    moved = relocate(s.repository_root, d["currentUncPath"], d.get("currentSHA256"))
+                    if moved:
+                        sp.update(d["id"], {"CurrentUncPath": moved})
+                        details = f"CurrentUncPath corrected (the repository was reorganized): {d['currentUncPath']} -> {rel(moved)}"
+                        sp.audit(document_id=doc_id, event=c["FileDone"], from_status=status, to_status=status,
+                                 actor="RH-DMS-Workflow-Service", details=details, source=c["WorkflowService"])
+                        report.append({"documentId": doc_id, "result": details})
+                        done += 1
+                        continue
                 report.append({"documentId": doc_id, "result": f"current: {d['currentUncPath']}"})
             continue
         working = to_root(s.repository_root, raw)
