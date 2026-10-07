@@ -574,6 +574,19 @@ def test_hr_files_are_shared_with_a_potential_employee(tmp_path):
     assert b["sharedNote"] and not b["canWrite"]                                          # kept by the DMS, read only
 
 
+def test_release_puts_the_file_back_when_sharepoint_refuses(env, monkeypatch):
+    from dms_api import noworkflow
+    from dms_api.sharepoint import SharePointError
+    c, sp, q = env
+    (q / "A.docx").write_text("a")
+    def refuse(*a, **k):
+        raise SharePointError("403 Forbidden")
+    monkeypatch.setattr(noworkflow, "release", refuse)
+    r = c.post("/api/files/release", json={"paths": [str(q / "A.docx")]}).json()["results"][0]
+    assert not r["ok"] and "403" in r["error"]
+    assert (q / "A.docx").exists() and not (q / "Current_ReadOnly" / "A.docx").exists()   # back where it was
+
+
 def test_super_user(env):
     c, sp, q = env
     d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()

@@ -808,8 +808,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     raise ValueError("a file with this name is already in Current_ReadOnly")
                 target = _move(full, target)
                 _set_read_only(target, True)
-                noworkflow.mark(s.repository_root, target)
-                doc = noworkflow.release(sp(), s, target, user.email, "Released without workflow on the DMS page", classify)
+                try:
+                    noworkflow.mark(s.repository_root, target)
+                    doc = noworkflow.release(sp(), s, target, user.email, "Released without workflow on the DMS page", classify)
+                except Exception as e:  # noqa: BLE001 - not registered: the file goes back where it was
+                    _set_read_only(target, False)
+                    _move(target, full)
+                    noworkflow.moved(s.repository_root, target, None)
+                    if isinstance(e, SharePointError):
+                        sp_error("POST /api/files/release", e)       # listed under Last SharePoint errors
+                    raise ValueError(f"not registered in SharePoint, the file stays where it was: {e}") from e
                 log(user, "release", target)
                 out.append({"path": p, "ok": True, "documentId": doc.get("documentId"), "target": target})
             except (ValueError, OSError, SharePointError) as e:
