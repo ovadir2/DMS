@@ -352,14 +352,16 @@ document.querySelector('.brand').onclick = () => {
 const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${esc(d ? (T[d.statusKey] || d.lifecycleStatus) : T.None)}</span>${d ? ` <span class="muted small">${esc(d.documentId)}</span>` : ''}` + (d && d.nextRevision ? ` <div class="muted small">${T.nextRev.replace('{rev}', esc(d.nextRevision.revision || '')).replace('{status}', esc(d.nextRevision.status || ''))}</div>` : '');
 function fileActions(f) {
   return `${f.officeUri ? `<a class="link" href="${esc(f.officeUri)}">${f.editable ? '✎ ' + T.openEditFile : T.open}</a>` : (VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${T.open}</button>` : '')}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cp="${esc(f.path)}">🔗 ${T.copyLink}</button>`
-    + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-drn="${f.document.id}" data-name="${esc(f.name)}">${T.rename}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
+    + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button><button type="button" class="link" data-drn="${f.document.id}" data-name="${esc(f.name)}">${T.rename}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
+        + (f.document.statusKey === 'Submitted' && !f.document.nextRevision ? `<button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button>` : '')
         + (f.document.statusKey === 'Approved_ReadOnly' && samePath(f.path, f.document.currentUncPath) ? `${f.document.nextRevision ? '' : `<button type="button" class="link" data-rev="${f.document.id}">⟳ ${T.newRev}</button>`}<button type="button" class="link" data-share="${f.document.id}">✉ ${isHr(f.path) ? T.shareHrBtn : T.share}</button>` : '')
-                  : (f.managed || f.system || f.noWorkflow ? '' : `<button type="button" class="link" data-st="${esc(f.path)}">${T.start}</button>`));
+                  : (f.managed || f.system || f.noWorkflow ? '' : `<button type="button" class="link" data-st="${esc(f.path)}">${T.start}</button><button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button>`));
 }
 const samePath = (a, b) => !!a && !!b && a.replace(/\//g, '\\').toLowerCase() === b.replace(/\//g, '\\').toLowerCase();
 function wire(v) {
   v.querySelectorAll('[data-rev]').forEach(b => b.onclick = () => newRevision(+b.dataset.rev));
   v.querySelectorAll('[data-share]').forEach(b => b.onclick = () => shareDialog(+b.dataset.share));
+  v.querySelectorAll('[data-relp]').forEach(b => b.onclick = () => releasePaths([b.dataset.relp]));
   v.querySelectorAll('[data-f]').forEach(a => a.onclick = () => { state.view = 'browse'; state.folder = a.dataset.f; render(); });
   v.querySelectorAll('[data-dl]').forEach(a => a.onclick = () => download(a.dataset.dl));
   v.querySelectorAll('[data-vw]').forEach(a => a.onclick = () => viewFile(a.dataset.vw));
@@ -1134,6 +1136,17 @@ async function simpleDialog(title, label, value, url, body) {
 }
 const newFolderDialog = parent => simpleDialog(T.newFolder, T.folderName, '', '/api/folders', name => ({ parent, name }));
 const renameDialog = path => simpleDialog(T.rename, T.newName, path.split(/[\\/]/).pop(), '/api/items/rename', newName => ({ path, newName }));
+// Release without workflow (one row or the ticked files): Not registered, In Work or Submitted
+async function releasePaths(paths) {
+  if (!paths.length) return alert(T.relNone);
+  if (!confirm(T.relNwQ.replace('{n}', paths.length))) return;
+  try {
+    const r = await api('/api/files/release', { method:'POST', body:JSON.stringify({ paths }) });
+    const bad = r.results.filter(x => !x.ok);
+    alert(`${T.relDone}: ${r.results.length - bad.length}` + (bad.length ? `\n\n${bad.map(x => `${x.path.split(/[\\/]/).pop()}: ${x.error}`).join('\n')}` : ''));
+  } catch (e) { alert(`${T.err}: ${e.message}`); }
+  render();
+}
 // Download several files: the list, then one click
 async function downloadDialog(paths) {
   const r = await dialog(`${T.download} (${paths.length} ${T.shareFiles})`,
@@ -1192,9 +1205,9 @@ function wireSelection(v) {
   };
   // a command in a ticked row, while several files are ticked: for all of them
   const table = boxes.length ? boxes[0].closest('table') : null;
-  const bulk = { st: '#sel-wf', dl: '#sel-dl', del: '#sel-del', share: '#sel-share' };   // Open, Copy path, New revision: the row
+  const bulk = { st: '#sel-wf', relp: '#sel-rel', dl: '#sel-dl', del: '#sel-del', share: '#sel-share' };   // Open, Copy path, New revision: the row
   if (table) table.addEventListener('click', ev => {
-    const a = ev.target.closest('[data-st],[data-dl],[data-cp],[data-del],[data-share],[data-regshare]');
+    const a = ev.target.closest('[data-st],[data-relp],[data-dl],[data-del],[data-share]');
     const row = a && a.closest('tr'), box = row && row.querySelector('input.sel');
     if (!a || !box || !box.checked || chosen().length < 2) return;
     const key = Object.keys(bulk).find(k => a.hasAttribute('data-' + k)), btn = key && v.querySelector(bulk[key]);
@@ -1208,18 +1221,7 @@ function wireSelection(v) {
   };
   const cp = v.querySelector('#sel-cp'); if (cp) cp.onclick = async () => { await copyText(chosen().map(b => userPath(b.dataset.path)).join('\r\n')); cp.textContent = T.copied; };
   const dl = v.querySelector('#sel-dl'); if (dl) dl.onclick = () => downloadDialog(chosen().map(b => b.dataset.path));
-  const rel = v.querySelector('#sel-rel'); if (rel) rel.onclick = async () => {
-    const paths = chosen().filter(b => b.dataset.rel).map(b => b.dataset.path);   // Not registered, or In Work
-    if (!paths.length) return alert(T.relNone);
-    if (!confirm(T.relNwQ.replace('{n}', paths.length))) return;
-    rel.disabled = true;
-    try {
-      const r = await api('/api/files/release', { method:'POST', body:JSON.stringify({ paths }) });
-      const bad = r.results.filter(x => !x.ok);
-      alert(`${T.relDone}: ${r.results.length - bad.length}` + (bad.length ? `\n\n${bad.map(x => `${x.path.split(/[\\/]/).pop()}: ${x.error}`).join('\n')}` : ''));
-    } catch (e) { alert(`${T.err}: ${e.message}`); }
-    render();
-  };
+  const rel = v.querySelector('#sel-rel'); if (rel) rel.onclick = () => releasePaths(chosen().filter(b => b.dataset.rel).map(b => b.dataset.path));
   const del = v.querySelector('#sel-del'); if (del) del.onclick = async () => {
     const paths = chosen().filter(b => b.dataset.free).map(b => b.dataset.path);
     if (!paths.length) return alert(T.relNone);
