@@ -7,6 +7,7 @@ Docs: /docs (OpenAPI). Page: /dms/dms-page?lang=EN&path=<UNC>&name=<file>
 from __future__ import annotations
 
 import logging
+import mimetypes
 import os
 import re
 from datetime import date, datetime, timedelta, timezone
@@ -189,6 +190,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return await call_next(request)
 
     async def _office(request: Request, call_next, path: str):
+        from urllib.parse import quote, unquote
         from fastapi.responses import Response
         dav = {"DAV": "1,2", "MS-Author-Via": "DAV", "Allow": "OPTIONS, GET, HEAD, PROPFIND, LOCK, UNLOCK, PUT"}
         is_file = path.startswith("/api/o/") and path.count("/") >= 4 and not path.endswith("/")
@@ -196,7 +198,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return Response(status_code=200, headers=dav)
         if request.method == "PROPFIND" and not is_file:
             body = ('<?xml version="1.0" encoding="utf-8"?><D:multistatus xmlns:D="DAV:"><D:response>'
-                    f"<D:href>{path}</D:href><D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype>"
+                    f"<D:href>{quote(unquote(path), safe='/')}</D:href><D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype>"
                     "</D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response></D:multistatus>")
             return Response(body, status_code=207, media_type='text/xml; charset="utf-8"', headers=dav)
         return await call_next(request)
@@ -1749,6 +1751,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 f"<d:locktoken><d:href>{lk['token']}</d:href></d:locktoken>"
                 f"<d:lockroot><d:href>{escape(href)}</d:href></d:lockroot></d:activelock>")
 
+    def dav_href(request: Request) -> str:
+        """The address as Office sent it, percent-encoded (spaces, Hebrew): with a raw name Word cannot match the
+        answer to the file it locked and opens it read only."""
+        from urllib.parse import quote, unquote
+        return quote(unquote(request.url.path), safe="/")
+
     def dav_props(full: str, href: str, user: User) -> str:
         from email.utils import formatdate
         from xml.sax.saxutils import escape
@@ -1757,6 +1765,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return (f"<d:response><d:href>{escape(href)}</d:href><d:propstat><d:prop>"
                 f"<d:displayname>{escape(os.path.basename(full))}</d:displayname><d:resourcetype/>"
                 f"<d:getcontentlength>{st.st_size}</d:getcontentlength>"
+                f"<d:getcontenttype>{mimetypes.guess_type(full)[0] or 'application/octet-stream'}</d:getcontenttype>"
                 f"<d:getlastmodified>{formatdate(st.st_mtime, usegmt=True)}</d:getlastmodified>"
                 f"<d:creationdate>{datetime.fromtimestamp(st.st_ctime, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}</d:creationdate>"
                 f"<d:getetag>{etag}</d:getetag>"
@@ -1774,7 +1783,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if request.method == "OPTIONS":
             return Response(status_code=200, headers=dav)
         body = ('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response>'
-                f"<d:href>{request.url.path}</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop>"
+                f"<d:href>{dav_href(request)}</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop>"
                 "<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>")
         return Response(body, status_code=207, media_type="application/xml; charset=utf-8", headers=dav)
 
@@ -1795,7 +1804,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return Response(status_code=200, headers=dav)
         if m == "PROPFIND":
             body = ('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:">'
-                    + dav_props(full, str(request.url.path), user) + "</d:multistatus>")
+                    + dav_props(full, dav_href(request), user) + "</d:multistatus>")
             return Response(body, status_code=207, media_type='text/xml; charset="utf-8"', headers=dav)
         if m == "LOCK":
             if not dav_writable(full, user):
@@ -1817,7 +1826,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             lk["until"] = datetime.now().timestamp() + secs     # new lock, or a refresh (no body)
             DAV_LOCKS[full] = lk
             body = ('<?xml version="1.0" encoding="utf-8"?><d:prop xmlns:d="DAV:"><d:lockdiscovery>'
-                    + active_lock(lk, str(request.url.path)) + "</d:lockdiscovery></d:prop>")
+                    + active_lock(lk, dav_href(request)) + "</d:lockdiscovery></d:prop>")
             return Response(body, status_code=200, media_type='text/xml; charset="utf-8"',
                             headers={**dav, "Lock-Token": f"<{lk['token']}>", "Timeout": f"Second-{secs}"})
         if m == "UNLOCK":

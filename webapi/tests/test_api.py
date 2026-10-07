@@ -1744,12 +1744,14 @@ def test_office_uri_too_long_gives_dms_webdav_link(tmp_path):
     assert c.request("PROPFIND", link.rsplit("/", 1)[0]).status_code == 207              # and the folder of the link
     pf = c.request("PROPFIND", link)
     assert pf.status_code == 207 and "<d:getcontentlength>3</d:getcontentlength>" in pf.text
+    assert f"<d:href>{link}</d:href>" in pf.text and heb not in pf.text.split("<d:displayname>")[0]   # encoded, as Word sent it
     lock = c.request("LOCK", link, content='<?xml version="1.0"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/>'
                      '</D:lockscope><D:locktype><D:write/></D:locktype><D:owner><D:href>roneno</D:href></D:owner></D:lockinfo>')
     assert lock.status_code == 200 and lock.headers["Lock-Token"].startswith("<opaquelocktoken:")
     token = lock.headers["Lock-Token"][1:-1]
     pf = c.request("PROPFIND", link)                                                     # Word checks its lock is there
     assert token in pf.text and "<d:href>roneno</d:href>" in pf.text
+    assert f"<d:lockroot><d:href>{link}</d:href></d:lockroot>" in lock.text
     assert c.request("LOCK", link, headers={"Timeout": "Second-600"}).headers["Lock-Token"] == f"<{token}>"   # refresh
     assert c.request("LOCK", link, content="<D:lockinfo xmlns:D='DAV:'/>").status_code == 423   # someone else meanwhile
     assert c.put(link, content=b"saved from Word").status_code == 204                   # Save writes back to the source
