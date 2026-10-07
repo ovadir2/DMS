@@ -152,8 +152,9 @@ def office_uri(path: str, edit: bool = False) -> str | None:
     if not app:
         return None
     full, path = path, user_path(path)
-    if url_len(path) > LONG_PATH and OPENER.get():
-        # this PC has the rh-dms: handler (Set-DmsDrives): Word opens the path itself, like a double-click in Explorer
+    if OPENER.get() and (url_len(path) > LONG_PATH or not path.isascii()):
+        # this PC has the rh-dms: handler (Set-DmsDrives): Office opens the path itself, like a double-click in Explorer
+        # (also for Hebrew names: Excel does not decode %D7.. in an ms-excel: link and cannot find the file)
         from urllib.parse import quote
         return "rh-dms:" + quote(path, safe="")
     if url_len(path) > LONG_PATH and BASE_URL.get():

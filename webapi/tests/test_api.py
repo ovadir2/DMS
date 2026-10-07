@@ -628,6 +628,19 @@ def test_release_a_submitted_document_without_workflow(env):
     assert "approval workflow was stopped" in sp.audit_events()[0]["details"]
 
 
+def test_hebrew_name_opens_through_the_pc_handler(tmp_path):
+    root = tmp_path
+    d = root / "01_General" / "HR"
+    d.mkdir(parents=True)
+    (d / "1970193לקוחות.xlsx").write_text("x")
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory")))
+    f = c.get("/api/browse", params={"path": str(d)}, headers={"X-DMS-Opener": "1"}).json()["files"][0]
+    assert f["officeUri"].startswith("rh-dms:")                                           # not ms-excel: (%D7.. not decoded)
+    (d / "plain.xlsx").write_text("x")
+    g = next(x for x in c.get("/api/browse", params={"path": str(d)}, headers={"X-DMS-Opener": "1"}).json()["files"] if x["name"] == "plain.xlsx")
+    assert g["officeUri"].startswith("ms-excel:")                                         # English names: as before
+
+
 def test_super_user(env):
     c, sp, q = env
     d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()
