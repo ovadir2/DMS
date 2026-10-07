@@ -50,6 +50,7 @@ param(
     [string] $GeneralFolder = '01_General',
     [switch] $NoDrives,
     [int] $Port = 8080,
+    [string] $Address,      # -Share: the address the approvers use (e.g. the VPN address); default: this PC's first IPv4
     [switch] $Share,
     [ValidateSet('EN', 'HE')] [string] $Lang = 'EN',
     [string] $AiUrl, [string] $AiToken, [string] $AiModel
@@ -145,6 +146,9 @@ if ($Share) {
     $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
           Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.PrefixOrigin -ne 'WellKnown' } |
           Sort-Object InterfaceMetric | Select-Object -First 1 -ExpandProperty IPAddress
+    $all = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' })
+    Write-Host "This PC's addresses: $(($all | ForEach-Object { "$($_.IPAddress) ($($_.InterfaceAlias))" }) -join ', ')   (choose one with -Address)" -ForegroundColor Cyan
+    if ($Address) { $ip = $Address }
     $hostName = if ($ip) { $ip } else { try { [System.Net.Dns]::GetHostEntry($env:COMPUTERNAME).HostName } catch { $env:COMPUTERNAME } }
     $shared = "http://$($hostName):$Port/dms/dms-page?lang=$Lang"
     $env:DMS_PAGE_URL = $shared                                   # the links in the emails / Teams
