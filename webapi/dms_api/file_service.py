@@ -148,9 +148,23 @@ def run_once(sp, s: Settings) -> dict:
                 details = return_to_working(s.repository_root, working)
             elif status == c["Approved_ReadOnly"]:
                 source = next((p for p in (in_submitted, working) if os.path.isfile(p)), None)
-                if not source:
+                landed = os.path.join(folder, "Current_ReadOnly", re.sub(r"_DRAFT(?=\.[^.]+$|$)", "", name, flags=re.I))
+                same = os.path.normcase(os.path.normpath(landed)) == os.path.normcase(os.path.normpath(
+                    to_root(s.repository_root, d.get("currentUncPath")) or ""))      # the previous revision, not this one
+                if not source and os.path.isfile(landed) and not same:
+                    # moved on an earlier run, but SharePoint was not updated then (error): finish it now
+                    action = "PromoteToCurrent"
+                    sha = _sha256(landed)
+                    values = {"CurrentUncPath": landed, "CurrentSHA256": sha, "WorkingUncPath": ""}
+                    if d.get("draftRevision"):
+                        values.update(CurrentRevision=d["draftRevision"], DraftRevision="")
+                    sp.update(d["id"], values)
+                    details = f"{action} (completed, the record was not updated before): {rel(landed)}. SHA-256 {sha}"
+                    source = None
+                elif not source:
                     report.append({"documentId": doc_id, "result": f"skipped - approved, but the file is not at {rel(working)} or {rel(in_submitted)}"})
                     continue
+            if status == c["Approved_ReadOnly"] and source:
                 action = "PromoteToCurrent"
                 obsolete = None
                 old = d.get("currentUncPath")

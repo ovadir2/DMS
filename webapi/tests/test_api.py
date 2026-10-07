@@ -489,6 +489,25 @@ def test_file_service_moves_by_status(tmp_path):
     assert c.get("/api/browse", params={"path": str(q / "Current_ReadOnly")}).json()["files"][0]["document"]["statusKey"] == "Approved_ReadOnly"
 
 
+def test_file_service_completes_a_move_whose_sharepoint_update_failed(tmp_path):
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "01_General" / "Quality and Standards"
+    (q / "Current_ReadOnly").mkdir(parents=True)
+    (q / "Current_ReadOnly" / "Index.xlsx").write_text("v1")                         # moved, then SharePoint failed
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory")
+    sp = MemorySharePoint(s)
+    d = sp.create_document(title="Index", path=str(q / "Index.xlsx"), document_type="x", document_area="y",
+                           owner_email=USER, control_mode=None, document_id=None)
+    sp.update(d["id"], {"LifecycleStatus": "מאושר - קריאה בלבד"})
+    r = file_service.run_once(sp, s)
+    assert (r["moved"], r["failed"]) == (1, 0) and "completed" in r["report"][0]["result"]
+    doc = sp.document(d["id"])
+    assert doc["currentUncPath"] == str(q / "Current_ReadOnly" / "Index.xlsx") and doc["workingUncPath"] == ""
+    assert file_service.run_once(sp, s)["moved"] == 0                                    # once
+
+
 def test_super_user(env):
     c, sp, q = env
     d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()
