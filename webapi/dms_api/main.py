@@ -1605,8 +1605,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """For the Share dialog: the customer from the file's folder (02_Customers\\<name>, preselected), the
         customer folders to choose from (any of them), and the other approved documents the user may add."""
         d, current, rev = shareable(item_id, user)
+        from .file_service import to_root
+        here = os.path.normcase(os.path.dirname(current))         # the source folder: the files next to this one
         mine = [x for x in sp().documents() if x.get("lifecycleStatus") == s.choices["Approved_ReadOnly"] and x["id"] != item_id
-                and ((x.get("ownerEmail") or "").lower() == user.email or is_admin(user))]
+                and ((x.get("ownerEmail") or "").lower() == user.email or is_admin(user))
+                and os.path.normcase(os.path.dirname(to_root(s.repository_root, x.get("currentUncPath")) or "")) == here]
         others = [{"id": x["id"], "documentId": x.get("documentId"), "title": x.get("title"), "revision": x.get("currentRevision"),
                    "customer": customer_of_path(x.get("currentUncPath") or "")} for x in mine]
         return {"customer": customer_of_path(current), "customers": customer_names(user), "revision": rev,
