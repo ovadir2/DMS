@@ -5,7 +5,8 @@ windows: IIS Windows Authentication, the login of the person at the PC (no login
 entra:   Entra ID access token (single sign-on from outside the network, e.g. Application Proxy).
 header:  a trusted reverse proxy puts the user's email in a header.
 dev:     a fixed user, for testing only (DMS_DEV_USERS: others to act as, header X-DMS-Dev-User;
-         DMS_DEV_AD_CHECK: their AD / NTFS access is checked, except DMS_ADMINS).
+         DMS_DEV_AD_CHECK: their AD / NTFS access is checked, except DMS_ADMINS). Other PCs sign in with
+         their own Windows account (DMS_REMOTE_SIGNIN=ntlm, ntlm.py).
 """
 from __future__ import annotations
 
@@ -34,9 +35,10 @@ def _resolve(request: Request) -> User:
     if s.auth_mode == "dev":
         if not s.dev_user:
             raise HTTPException(500, "DMS_DEV_USER is not set")
-        email = s.dev_user.lower()
-        user = User(email=email, name=email.split("@")[0])
-        if s.dev_ad_check and not _super(s, email):            # super users are not checked
+        remote = getattr(request.state, "remote_user", None)   # another PC, signed in with its Windows account
+        email = (remote[0] if remote else s.dev_user).lower()
+        user = User(email=email, name=(remote[1].split("\\")[-1] if remote else email.split("@")[0]))
+        if (s.dev_ad_check or remote) and not _super(s, email):   # super users are not checked
             _with_ad(user, email)
         return user
     if s.auth_mode == "header":

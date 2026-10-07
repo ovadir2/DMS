@@ -34,7 +34,8 @@ cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C
 ```
 
 - The DMS listens on the network: the approvers open `http://<your PC>.rh.local:8080/dms/dms-page` (the script prints the address; the links in the email / Teams notifications point there too). Port 8080 is opened in the Windows firewall for the domain network (run PowerShell as administrator the first time, or ask IT).
-- **Acting as** is in the ⋮ menu, for DMS super users only (also on the server with Windows sign-in): see and act as another user, with that user's AD rights, and back. With `-Share` in the pilot everyone reaches the DMS as you (the person who runs it) and uses **Acting as** to pick themselves - not a sign-in, pilot only. Their AD / NTFS rights are checked (`-Users` must be their emails, with Microsoft 365 accounts).
+- **Each approver signs in with their own Windows account** (NTLM through Windows, `DMS_REMOTE_SIGNIN=ntlm`, the default on Windows): the browser asks once for `RH\name` and password, or not at all when the address is in the Local intranet sites (IT can push it by GPO). Their AD / NTFS rights are checked; your PC stays you. The password goes to the domain controller, never to the DMS.
+- **Acting as** stays in the ⋮ menu for DMS super users only (you): see and act as another user, with that user's AD rights, and back.
 - Open on their PC uses the network path (`\\FILE-SERVER\...`), or the DMS link for long paths; your drive letters are only for you. Word opens and saves with their own Windows rights.
 - Your PC must stay on with the DMS running. For real use: the server install below (IIS, Windows sign-in, no Acting as).
 

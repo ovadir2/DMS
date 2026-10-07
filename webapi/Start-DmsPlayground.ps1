@@ -138,8 +138,8 @@ if ($old) { Start-Sleep -Seconds 1 }
 $url = "http://localhost:$Port/dms/dms-page?lang=$Lang"
 $bind = '127.0.0.1'
 if ($Share) {
-    # -Share: other PCs in the network open the DMS at http://<this PC>:<Port> (pilot: approvers pick themselves
-    # in "Acting as"; their AD rights are checked). Needs the port open in the Windows firewall (once, as admin).
+    # -Share: other PCs in the network open the DMS at http://<this PC>:<Port> and sign in with their own Windows
+    # account (dms_api\ntlm.py; their AD rights are checked). Needs the port open in the Windows firewall (once, as admin).
     $bind = '0.0.0.0'
     # the IPv4 address (the DMS listens on IPv4; the PC name can also resolve to IPv6 addresses that time out)
     $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
@@ -154,6 +154,8 @@ if ($Share) {
         catch { Write-Warning "Port $Port is not open in the firewall. Once, in PowerShell as administrator: New-NetFirewallRule -DisplayName 'RH DMS $Port' -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Domain" }
     }
     Write-Host "Shared: the approvers open $shared" -ForegroundColor Green
+    Write-Host ("  Each one signs in with their own Windows account (asked once: RH\name + password; no question when " +
+                "http://$hostName is in Local intranet sites). This PC stays you.") -ForegroundColor Green
 } else {
     $env:DMS_PAGE_URL = $url   # notification links (DC-P2) open the page here
 }

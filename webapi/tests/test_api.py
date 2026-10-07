@@ -41,7 +41,8 @@ class FakeSharePoint:
                 "ControlMode": ["תהליך אישור רשות", "תהליך אישור חובה"]}[field]
 
     def audit(self, **kw):
-        self.audits.append({**kw, "utc": f"2026-10-01T10:{len(self.audits):02d}:00Z"})
+        from datetime import datetime, timezone
+        self.audits.append({**kw, "utc": f"{datetime.now(timezone.utc):%Y-%m-%d}T00:{len(self.audits):02d}:00Z"})   # today: delegations still valid
 
     def log_decision(self, **kw):
         self.decisions = getattr(self, "decisions", []) + [kw]
@@ -1617,6 +1618,46 @@ def test_dev_ad_check_for_acting_users_not_for_admins(tmp_path, monkeypatch):
     names = lambda h: {f["name"] for f in c.get("/api/browse", params={"path": str(cust)}, headers=h).json()["folders"]}  # noqa: E731
     assert names({}) == {"Customer_A", "Customer_B"}                                   # super user: no AD check
     assert names({"X-DMS-Dev-User": other}) == {"Customer_A"}                          # acting user: AD decides
+
+
+def test_other_pcs_sign_in_with_their_windows_account(tmp_path, monkeypatch):
+    import base64
+    from dms_api import ntlm, security
+    steps = []
+
+    class FakeCtx:                                            # Windows SSPI: message 1 -> challenge, message 3 -> signed in
+        def authorize(self, token):
+            steps.append(token[8:9])
+            if token[8:9] == b"\x01":
+                return 1, [type("B", (), {"Buffer": b"NTLMSSP\x00\x02challenge"})()]
+            if token.endswith(b"bad"):
+                raise RuntimeError("logon failure")
+            return 0, None
+    monkeypatch.setattr(ntlm, "_server_context", FakeCtx)
+    monkeypatch.setattr(ntlm, "_account", lambda ctx: "RH\\dana")
+    monkeypatch.setattr(security, "upn_of", lambda account: "dana@rh.co.il")
+    monkeypatch.setattr(security.AdUser, "get", classmethod(lambda cls, upn: type("Ad", (), {"can": lambda self, p, a="read": True})()))
+    app = create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                              admins=[USER], remote_signin="ntlm"))
+    assert TestClient(app).get("/api/me").json()["email"] == USER                       # the PC itself: the PC owner
+    c = TestClient(app, client=("10.30.8.50", 50000))
+    r = c.get("/api/me")
+    assert r.status_code == 401 and r.headers["www-authenticate"] == "NTLM"            # another PC: Windows sign-in
+    assert c.get("/api/health").status_code == 200
+    m1 = "NTLM " + base64.b64encode(b"NTLMSSP\x00\x01\x00\x00\x00").decode()
+    r = c.get("/api/me", headers={"Authorization": m1})
+    assert r.status_code == 401 and r.headers["www-authenticate"].startswith("NTLM ") and len(r.headers["www-authenticate"]) > 5
+    bad = "NTLM " + base64.b64encode(b"NTLMSSP\x00\x03\x00\x00\x00bad").decode()
+    assert c.get("/api/me", headers={"Authorization": bad}).status_code == 401
+    c.get("/api/me", headers={"Authorization": m1})
+    m3 = "NTLM " + base64.b64encode(b"NTLMSSP\x00\x03\x00\x00\x00ok").decode()
+    me = c.get("/api/me", headers={"Authorization": m3}).json()
+    assert me["email"] == "dana@rh.co.il" and "actingUsers" not in me                  # herself, not the PC owner
+    other = TestClient(app, client=("10.30.8.50", 50001), cookies={ntlm.COOKIE: c.cookies[ntlm.COOKIE]})
+    assert other.get("/api/me").json()["email"] == "dana@rh.co.il"                     # the cookie keeps her signed in
+    assert other.get("/api/me", headers={"X-DMS-Dev-User": USER}).json()["email"] == "dana@rh.co.il"   # no Acting as
+    forged = TestClient(app, client=("10.30.8.51", 1), cookies={ntlm.COOKIE: ntlm.cookie_for(USER, "RH\\x")[:-2] + "00"})
+    assert forged.get("/api/me").status_code == 401
 
 
 def test_short_paths_for_open_and_copy(tmp_path):

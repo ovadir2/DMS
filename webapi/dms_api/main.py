@@ -216,6 +216,42 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             files.USER_SHORT.reset(drives)
             PAGE_LANG.reset(token)
 
+    @app.middleware("http")
+    async def remote_signin(request: Request, call_next):
+        """Pilot on a PC (dev mode): another PC signs in with its own Windows account (ntlm.py)."""
+        from fastapi.responses import Response
+        from starlette.concurrency import run_in_threadpool
+        from . import ntlm
+        if (s.auth_mode != "dev" or s.remote_signin != "ntlm" or ntlm.is_local(request)
+                or request.method == "OPTIONS" or request.url.path == "/api/health"):
+            return await call_next(request)
+        ask = Response("Sign in with your Windows account (RH\\name).", status_code=401,
+                       headers={"WWW-Authenticate": "NTLM"}, media_type="text/plain")
+        conn = ntlm.connection(request)
+        who = ntlm.from_cookie(request.cookies.get(ntlm.COOKIE, "")) or ntlm.signed_in(conn)
+        fresh = False
+        scheme, _, data = request.headers.get("authorization", "").partition(" ")
+        if not who and scheme.lower() == "ntlm" and data:
+            import base64
+            try:
+                challenge, account = await run_in_threadpool(ntlm.accept, conn, base64.b64decode(data))
+            except Exception as e:  # noqa: BLE001 - wrong password, unknown account: ask again
+                logging.getLogger("dms_api").warning("Windows sign-in from %s refused: %s", conn[0], e)
+                return ask
+            if challenge:
+                return Response(status_code=401, headers={"WWW-Authenticate": "NTLM " + base64.b64encode(challenge).decode("ascii")})
+            from .security import upn_of
+            who, fresh = ((upn_of(account) or account).lower(), account), True
+            ntlm.remember(conn, *who)
+            logging.getLogger("dms_api").info("Windows sign-in from %s: %s (%s)", conn[0], who[0], account)
+        if not who:
+            return ask
+        request.state.remote_user = who
+        response = await call_next(request)
+        if fresh:
+            response.set_cookie(ntlm.COOKIE, ntlm.cookie_for(*who), max_age=ntlm.HOURS * 3600, httponly=True, samesite="lax")
+        return response
+
     if s.allowed_origins:
         app.add_middleware(CORSMiddleware, allow_origins=s.allowed_origins, allow_credentials=True,
                            allow_methods=["*"], allow_headers=["*"])
