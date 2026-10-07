@@ -573,7 +573,7 @@ async function approvalsView(v) {
         ${!d.mine ? `<div class="muted">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')}</div>` : ''}</td>
       <td class="hide-s small muted">${when(d.submittedUtc)}${days(d.submittedUtc) !== null ? `<div>${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}</td>
       <td class="actions">${d.officeUri ? `<a class="link" href="${esc(d.officeUri)}">${d.editable ? '✎ ' + T.openEdit : T.open}</a>` : ''}
-        ${d.file ? `<button type="button" class="link" data-dl="${esc(d.file)}">${T.download}</button>` : ''}
+        ${d.file ? `<button type="button" class="link" data-dl="${esc(d.file)}">${T.download}</button><button type="button" class="link" data-cp="${esc(d.file)}">🔗 ${T.copyLink}</button>` : ''}
         <div style="margin-top:6px"><button type="button" class="pillbtn small" data-ok="${d.id}">✔ ${T.approve}${d.mine ? '' : ' (' + T.asSuper + ')'}</button>
         <button type="button" class="pillbtn small light" data-no="${d.id}" style="color:var(--err)">✖ ${T.reject}</button>
         <button type="button" class="pillbtn small light" data-dg="${d.id}">⇄ ${T.dgBtn}</button></div>
