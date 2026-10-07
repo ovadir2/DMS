@@ -600,6 +600,17 @@ def test_release_a_document_in_work_without_workflow(env):
     assert not again["ok"]                                                               # approved: not again
 
 
+def test_approved_file_stays_approved_while_its_next_revision_is_in_approval(env):
+    c, sp, q = env
+    (q / "N.docx").write_text("n")
+    d = c.post("/api/files/release", json={"paths": [str(q / "N.docx")]}).json()["results"][0]
+    doc = next(x for x in sp.documents() if x["documentId"] == d["documentId"])
+    sp.update(doc["id"], {"LifecycleStatus": sp.s.choices["Submitted"], "WorkingUncPath": str(q / "N_Rev02_DRAFT.docx"), "DraftRevision": "02"})
+    f = c.get("/api/browse", params={"path": str(q / "Current_ReadOnly")}).json()["files"][0]
+    assert f["document"]["statusKey"] == "Approved_ReadOnly" and f["document"]["nextRevision"]["revision"] == "02"
+    assert c.get(f"/api/documents/{doc['id']}/share-info").status_code == 200              # the approved one can be shared
+
+
 def test_super_user(env):
     c, sp, q = env
     d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()
@@ -927,8 +938,8 @@ def test_share_with_customer(tmp_path):
     info = c.get(f"/api/documents/{d['id']}/share-info").json()
     assert info["customer"] == "Customer_A" and "Customer_A" in info["customers"]
     assert c.post(f"/api/documents/{d['id']}/share", json={"email": "not-an-email"}).status_code == 422
-    c.post(f"/api/documents/{d['id']}/revise")                                     # in work again: not shareable
-    assert c.post(f"/api/documents/{d['id']}/share", json={"email": "edssrom@gmail.com"}).status_code == 409
+    c.post(f"/api/documents/{d['id']}/revise")                                     # next revision in work: the approved one still shareable
+    assert c.post(f"/api/documents/{d['id']}/share", json={"email": "edssrom@gmail.com"}).status_code == 200
 
 
 def test_share_payloads():

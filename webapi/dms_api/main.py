@@ -606,9 +606,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         idx = register_index()
         from . import noworkflow
         nw = noworkflow.marked(s.repository_root)
+        from .file_service import to_root
         for f in result["files"]:
             d = find_registered(f["path"], idx)
             f["document"] = with_key(d) if d else None
+            if d and f["document"]["statusKey"] in ("Working", "Submitted") and os.path.normcase(os.path.normpath(
+                    to_root(s.repository_root, d.get("currentUncPath")) or "")) == os.path.normcase(os.path.normpath(f["path"])):
+                # the approved revision of a document whose next revision is in work: still approved, shareable
+                f["document"] = {**f["document"], "statusKey": "Approved_ReadOnly", "lifecycleStatus": s.choices["Approved_ReadOnly"],
+                                 "nextRevision": {"status": d.get("lifecycleStatus"), "revision": d.get("draftRevision")}}
             if noworkflow.is_marked(s.repository_root, f["path"], nw):
                 f["noWorkflow"] = True
             if holds_share_log(f["path"]) or in_shared_folder(f["path"]):
@@ -1624,7 +1630,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             logger.info("%s: CurrentUncPath corrected to %s", d.get("documentId"), moved)
             return moved
         working = to_root(s.repository_root, d.get("workingUncPath"))
-        if not working:
+        if not working or d.get("lifecycleStatus") != s.choices["Approved_ReadOnly"]:
             return None
         parent = os.path.dirname(working)
         folder = os.path.dirname(parent) if os.path.basename(parent) in WORKFLOW_FOLDERS else parent
@@ -1639,7 +1645,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """An approved document the user may share: (record, approved file, revision), else HTTP error."""
         from .file_service import to_root
         d = sp().document(item_id)
-        if d.get("lifecycleStatus") != s.choices["Approved_ReadOnly"]:
+        st = d.get("lifecycleStatus")
+        revising = st in (s.choices["Working"], s.choices["Submitted"]) and d.get("currentUncPath")   # next revision in work:
+        if st != s.choices["Approved_ReadOnly"] and not revising:                                    # the approved one still counts
             raise HTTPException(409, f"{d.get('documentId') or item_id}: only an approved document can be shared with a customer")
         if (d.get("ownerEmail") or "").lower() != user.email and not is_admin(user):
             raise HTTPException(403, f"{d.get('documentId')}: only the document owner (or a DMS super user) can share it")
