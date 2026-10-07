@@ -62,6 +62,10 @@
   .pillbtn:disabled { opacity:.5; cursor:default; }
   .pillbtn.small { height:38px; min-width:0; padding:0 20px; }
   .pillbtn.light { background:#e8eef5; color:var(--navy); }
+  /* on the page (not in dialogs): dark = can be clicked now, grey = not available */
+  #view .pillbtn.light:not(:disabled) { background:var(--btn); color:#fff; }
+  #view .pillbtn:disabled { background:#e8eef5; color:var(--navy); opacity:.45; }
+  #view #sel-del:not(:disabled) { background:var(--err) !important; color:#fff !important; }
   .refresh { display:inline-flex; gap:5px; align-items:center; color:var(--info); font-size:13px; margin-top:6px; background:none; border:none; cursor:pointer; padding:0; }
   .crumbs { display:flex; flex-wrap:wrap; gap:6px; align-items:center; color:var(--muted); margin-bottom:12px; }
   .crumbs a { color:var(--info); cursor:pointer; }
