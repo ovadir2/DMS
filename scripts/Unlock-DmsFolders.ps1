@@ -20,27 +20,33 @@
     Run as a user who may change permissions on the share (IT / file server admin). Supports -WhatIf.
 
 .EXAMPLE
-    .\Unlock-DmsFolders.ps1                                    # report only (root from webapi\.env)
+    .\Unlock-DmsFolders.ps1                                    # report only (root and group from webapi\.env)
     .\Unlock-DmsFolders.ps1 -Apply -WhatIf                     # what would change
-    .\Unlock-DmsFolders.ps1 -Apply -Group 'RH\GG_DMS_Employees' -ProtectBlueprint
+    .\Unlock-DmsFolders.ps1 -Apply -ProtectBlueprint            # DMS_EDITORS_GROUP=RH\GG_DMS_Employees in .env
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [string] $Root,
-    [string] $Group = "$env:USERDOMAIN\Domain Users",
+    [string] $Root,                 # default: DMS_REPOSITORY_ROOT (environment, else webapi\.env)
+    [string] $Group,                # default: DMS_EDITORS_GROUP (environment, else webapi\.env), else <domain>\Domain Users
     [switch] $Apply,
     [switch] $ProtectBlueprint
 )
 $ErrorActionPreference = 'Stop'
 
-if (-not $Root) {
-    $envFile = Join-Path $PSScriptRoot '..\webapi\.env'
-    if (Test-Path -LiteralPath $envFile) {
-        $line = Get-Content -LiteralPath $envFile | Where-Object { $_ -match '^\s*DMS_REPOSITORY_ROOT\s*=' } | Select-Object -First 1
-        if ($line) { $Root = ($line -split '=', 2)[1].Split('#')[0].Trim().Trim('"') }
-    }
+# Settings: the parameter, else the environment variable, else webapi\.env (same file the DMS reads)
+$envFile = Join-Path $PSScriptRoot '..\webapi\.env'
+function Get-DmsSetting([string]$Name) {
+    $v = [Environment]::GetEnvironmentVariable($Name)
+    if ($v) { return $v.Trim() }
+    if (-not (Test-Path -LiteralPath $envFile)) { return '' }
+    $line = Get-Content -LiteralPath $envFile -Encoding UTF8 | Where-Object { $_ -match "^\s*$Name\s*=" } | Select-Object -Last 1
+    if (-not $line) { return '' }
+    (($line -split '=', 2)[1] -replace '\s+#.*$', '').Trim().Trim('"').Trim("'")   # an inline comment starts with " #"
 }
-if (-not $Root -or -not (Test-Path -LiteralPath $Root)) { throw "Give -Root (the DMS repository root), not found: '$Root'" }
+if (-not $Root) { $Root = Get-DmsSetting 'DMS_REPOSITORY_ROOT' }
+if (-not $Group) { $Group = Get-DmsSetting 'DMS_EDITORS_GROUP' }
+if (-not $Group) { $Group = "$env:USERDOMAIN\Domain Users" }
+if (-not $Root -or -not (Test-Path -LiteralPath $Root)) { throw "Repository root not found: '$Root'. Set DMS_REPOSITORY_ROOT in webapi\.env or give -Root." }
 
 $Workflow = @('Submitted', 'Current_ReadOnly', 'Obsolete_ReadOnly')
 $Tops = @('01_General', '02_Customers') | ForEach-Object { Join-Path $Root $_ } | Where-Object { Test-Path -LiteralPath $_ }
