@@ -89,6 +89,10 @@ class DelegateRequest(BaseModel):
     comment: str = Field("", max_length=1000)
 
 
+class ReleaseRequest(BaseModel):
+    paths: list[str] = Field(min_length=1, max_length=200)   # files released without workflow (check boxes)
+
+
 class ShareRequest(BaseModel):
     email: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     message: str = Field("", max_length=2000)
@@ -770,6 +774,39 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             except Exception as e:  # noqa: BLE001 - the change itself is done; do not fail the request
                 logger.warning("audit row not written for %s: %s", action, e)
                 sp_error(f"Control Audit row ({action})", e)
+
+    @app.post("/api/files/release")
+    def release_files(req: ReleaseRequest, user: User = Depends(current_user)):
+        """Selected files released without workflow, like Save file (no workflow): each goes to Current_ReadOnly in
+        its folder, read only, registered in SharePoint (approved by DMS, Collaboration, SHA-256); can be shared."""
+        from . import noworkflow
+        from .file_service import _move, _set_read_only
+        idx = register_index()
+        out = []
+        for p in req.paths:
+            full = files.resolve(s.repository_root, p)
+            folder, name = os.path.dirname(full), os.path.basename(full)
+            try:
+                if not os.path.isfile(full):
+                    raise ValueError("file not found")
+                if os.path.basename(folder) in WORKFLOW_FOLDERS or files.in_workflow_folder(s.repository_root, folder):
+                    raise ValueError("already in a DMS workflow folder")
+                if find_registered(full, idx):
+                    raise ValueError("already registered (use its workflow)")
+                if not (user.can(full, "write") and user.can(folder, "write")):
+                    raise ValueError("no permission")
+                target = os.path.join(folder, "Current_ReadOnly", name)
+                if os.path.exists(target):
+                    raise ValueError("a file with this name is already in Current_ReadOnly")
+                target = _move(full, target)
+                _set_read_only(target, True)
+                noworkflow.mark(s.repository_root, target)
+                doc = noworkflow.release(sp(), s, target, user.email, "Released without workflow on the DMS page", classify)
+                log(user, "release", target)
+                out.append({"path": p, "ok": True, "documentId": doc.get("documentId"), "target": target})
+            except (ValueError, OSError, SharePointError) as e:
+                out.append({"path": p, "ok": False, "error": str(e)})
+        return {"results": out}
 
     @app.post("/api/folders", status_code=201)
     def new_folder(req: NewFolderRequest, user: User = Depends(current_user)):

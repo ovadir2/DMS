@@ -32,9 +32,8 @@ class FakeSharePoint:
         return self.document(i)
 
     def update(self, item_id, values):
-        key = {"LifecycleStatus": "lifecycleStatus"}
-        for k, v in values.items():
-            self.items[item_id][key.get(k, k)] = v
+        for k, v in values.items():                             # as SharePoint: CurrentUncPath -> currentUncPath
+            self.items[item_id][k[0].lower() + k[1:]] = v
 
     def choices(self, field):
         return {"DocumentType": ["הצעת מחיר", "נוהל"], "DocumentArea": ["מסחרי"],
@@ -508,6 +507,21 @@ def test_file_service_completes_a_move_whose_sharepoint_update_failed(tmp_path):
     assert file_service.run_once(sp, s)["moved"] == 0                                    # once
 
 
+def test_release_selected_files_without_workflow(env):
+    c, sp, q = env
+    (q / "A.docx").write_text("a")
+    (q / "B.docx").write_text("b")
+    d = c.post("/api/documents", json={"path": str(q / "B.docx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()
+    resp = c.post("/api/files/release", json={"paths": [str(q / "A.docx"), str(q / "B.docx")]})
+    r = resp.json()["results"]
+    assert r[0]["ok"] and r[0]["documentId"] and not r[1]["ok"] and "registered" in r[1]["error"]   # B has a workflow
+    cur = q / "Current_ReadOnly" / "A.docx"
+    assert cur.exists() and not (q / "A.docx").exists()
+    f = next(x for x in c.get("/api/browse", params={"path": str(q / "Current_ReadOnly")}).json()["files"] if x["name"] == "A.docx")
+    assert f["document"]["statusKey"] == "Approved_ReadOnly"                              # shareable now
+    assert d["id"]
+
+
 def test_super_user(env):
     c, sp, q = env
     d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()
@@ -557,7 +571,7 @@ def test_page_approvals_two_stages(tmp_path):
     s.dev_user = "boss@rh.co.il"
     assert c.post(f"/api/approvals/{d['id']}", json={"approve": False}).status_code == 400   # a comment is required
     r = c.post(f"/api/approvals/{d['id']}", json={"approve": True, "comment": "final"}).json()
-    assert r["statusKey"] == "Approved_ReadOnly" and sp.items[d["id"]]["LastApprovedUtc"]
+    assert r["statusKey"] == "Approved_ReadOnly" and sp.items[d["id"]]["lastApprovedUtc"]
     events = [(e["event"], _nosha(e["details"])) for e in sp.audit_events()][:3]
     assert events == [("אושר", "Stage 2: final"), ("אושר", "Stage 1"), ("אושר", "Stage 1: ok")]
 
