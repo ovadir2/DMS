@@ -149,9 +149,9 @@ if ($Share) {
     $shared = "http://$($hostName):$Port/dms/dms-page?lang=$Lang"
     $env:DMS_PAGE_URL = $shared                                   # the links in the emails / Teams
     if (-not (Get-NetFirewallRule -DisplayName "RH DMS $Port" -ErrorAction SilentlyContinue)) {
-        try { New-NetFirewallRule -DisplayName "RH DMS $Port" -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Domain -ErrorAction Stop | Out-Null
-              Write-Host "Firewall: port $Port opened (domain network)." -ForegroundColor Green }
-        catch { Write-Warning "Port $Port is not open in the firewall. Once, in PowerShell as administrator: New-NetFirewallRule -DisplayName 'RH DMS $Port' -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Domain" }
+        try { New-NetFirewallRule -DisplayName "RH DMS $Port" -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Any -ErrorAction Stop | Out-Null
+              Write-Host "Firewall: port $Port opened." -ForegroundColor Green }
+        catch { Write-Warning "Port $Port is not open in the firewall. Once, in PowerShell as administrator: New-NetFirewallRule -DisplayName 'RH DMS $Port' -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Any" }
     }
     Write-Host "Shared: the approvers open $shared" -ForegroundColor Green
     # Setup for the approvers' PCs (no git / VS Code there): the scripts and a ready Setup-DMS.cmd on the share.
