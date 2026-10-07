@@ -1591,6 +1591,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if not current:
             raise HTTPException(409, f"{d.get('documentId')}: the approved file was not found on the file server "
                                      f"({d.get('currentUncPath') or d.get('workingUncPath') or 'no path in the record'})")
+        if os.path.basename(os.path.dirname(current)) != "Current_ReadOnly":
+            raise HTTPException(409, f"{d.get('documentId')}: only a file in Current_ReadOnly can be shared")
         if not user.can(current):
             raise HTTPException(403, f"{d.get('documentId')}: you do not have access to this document")
         rev = str(d.get("currentRevision") or files.parse_revision(os.path.basename(current))[1] or 1).zfill(2)

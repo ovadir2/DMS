@@ -931,7 +931,7 @@ async function shareDialog(id, pre = []) {
   const custOf = x => (x.customer || '').toLowerCase();
   const others = info.others.slice().sort((a, b) => (custOf(b) === custOf(info)) - (custOf(a) === custOf(info)) || String(a.title).localeCompare(String(b.title)));
   const opened = dialog(`${info.hr ? T.shareTitleHr : T.shareTitle}: ${d.documentId} - ${d.title}`,
-    `<div class="msg" style="background:var(--band);margin:0 0 8px">📄 <b>${esc((d.currentUncPath || d.title || '').split(/[\\/]/).pop())}</b> <span class="muted small">${esc(d.documentId)} · Rev ${esc(info.revision || d.currentRevision || '01')}</span></div>
+    `<div class="msg" style="background:var(--band);margin:0 0 8px">📄 <b>${esc((d.currentUncPath || d.title || '').split(/[\\/]/).pop())}</b> <span class="muted small">${esc(d.documentId)} · Rev ${esc(info.revision || d.currentRevision || '01')}</span>${others.filter(x => pre.includes(x.id)).map(x => `<div>📄 <b>${esc(x.title)}</b> <span class="muted small">${esc(x.documentId || '')} · Rev ${esc(x.revision || '01')}</span></div>`).join('')}</div>
      <p class="muted small" style="margin:0">${esc(T.shareNote.replace('{folder}', info.folder))}${info.days ? ' ' + esc(T.shareDays.replace('{n}', info.days)) : ''}${info.shortcut ? ' ' + esc(T.shareShortcut.replace('{name}', 'DMS_' + (info.customer || '<' + T.shareCustomer + '>'))) : ''}</p>
      ${info.hr ? `<label>${T.shareEmployee}<input type="text" name="cust" required placeholder="${esc(T.shareEmployeePh)}"></label>`
        : `<label>${T.shareCustomer}<select name="custsel" required><option value="">${T.choose}</option>${info.customers.map(c =>
@@ -940,9 +940,7 @@ async function shareDialog(id, pre = []) {
      <div class="small" id="sh-there" style="margin:2px 0 6px"></div>
      <label>${info.hr ? T.shareEmailHr : T.shareEmail}<input type="text" class="ltr" name="email" placeholder="name@company.com" required></label>
      <label>${T.shareMsg}<input type="text" name="message"></label>
-     ${others.length ? `<details style="margin-top:8px" ${pre.length ? 'open' : ''}><summary class="link small">＋ ${T.shareMore} (${others.length})</summary><input type="text" id="sh-q" placeholder="${esc(T.shareFilter)}">
-       <div class="ap-list" id="sh-list">${others.map(x => `<label data-k="${esc(((x.documentId || '') + ' ' + x.title + ' ' + (x.customer || '')).toLowerCase())}"><input type="checkbox" value="${x.id}" ${pre.includes(x.id) ? 'checked' : ''}>
-         <span class="ta-t"><span class="ta-n">${esc(x.title)}</span><span class="ta-p">${esc(x.documentId || '')} · Rev ${esc(x.revision || '01')}${x.customer ? ' · ' + esc(x.customer) : ''}</span></span></label>`).join('')}</div></details>` : ''}`,
+`,
     [['cancel', T.cancel, 'light'], ['ok', info.hr ? T.shareHr : T.share]]);
   const form = $('#dlg-form'), sel = form.custsel, other = $('#sh-other');
   const recipient = () => sel && sel.value !== '__other' ? sel.value : form.cust.value.trim();
@@ -959,12 +957,10 @@ async function shareDialog(id, pre = []) {
   if (sel) sel.onchange = () => { const o = sel.value === '__other'; other.style.display = o ? '' : 'none'; form.cust.required = o; there(); };
   form.cust.oninput = there;
   there();
-  const q = $('#sh-q');
-  if (q) q.oninput = () => $('#sh-list').querySelectorAll('label').forEach(l => l.style.display = l.dataset.k.includes(q.value.trim().toLowerCase()) ? '' : 'none');
   let r = await opened;
   while (r.action === 'ok') {
     try {
-      const ids = [...document.querySelectorAll('#sh-list input:checked')].map(c => +c.value);
+      const ids = pre.filter(x => others.some(o => o.id === x));   // the files ticked in the folder
       const x = await api(`/api/documents/${id}/share`, { method:'POST', body:JSON.stringify({ email: r.form.email.value.trim(), message: r.form.message.value,
         customer: recipient(), documentIds: ids }) });
       $('#dlg').close();
