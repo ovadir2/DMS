@@ -10,6 +10,7 @@
   * { box-sizing:border-box; }
   body { margin:0; font:15px/1.45 Roboto, "Segoe UI", Arial, sans-serif; color:var(--ink); background:var(--bg); }
   body.busy, body.busy * { cursor:progress !important; }
+  table.multi td.actions > * { display:none !important; }
   #busybar { position:fixed; top:0; inset-inline:0; height:3px; z-index:9999; display:none; overflow:hidden; background:transparent; }
   body.busy #busybar { display:block; }
   #busybar::after { content:""; position:absolute; top:0; height:100%; width:30%; background:var(--accent, #1d6fb8); animation:busy 1s linear infinite; }
@@ -1188,6 +1189,7 @@ function wireSelection(v) {
   const update = () => {
     const c = chosen(), n = c.length, free = c.some(b => b.dataset.free), doc = c.some(b => b.dataset.doc);
     bar.style.display = n ? 'flex' : 'none'; v.querySelector('#selcount').textContent = `${n} ${T.selected}`; all.checked = n && n === boxes.length;
+    const tbl = boxes.length && boxes[0].closest('table'); if (tbl) tbl.classList.toggle('multi', n > 1);   // several: commands only in the bar
     // dark = applies to the ticked files; grey = does not (e.g. Release for a file already in a workflow)
     [['#sel-wf', free], ['#sel-rel', c.some(b => b.dataset.rel)], ['#sel-del', free], ['#sel-share', doc], ['#sel-dl', n], ['#sel-cp', n]].forEach(([id, on]) => {
       const b = v.querySelector(id); if (!b) return;
