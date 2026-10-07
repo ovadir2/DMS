@@ -1165,7 +1165,17 @@ function wireSelection(v) {
   const boxes = [...v.querySelectorAll('input.sel')], bar = v.querySelector('#selbar'), all = v.querySelector('#sel-all');
   if (!bar) return;
   const chosen = () => boxes.filter(b => b.checked);
-  const update = () => { const n = chosen().length; bar.style.display = n ? 'flex' : 'none'; v.querySelector('#selcount').textContent = `${n} ${T.selected}`; all.checked = n && n === boxes.length; };
+  const update = () => {
+    const c = chosen(), n = c.length, free = c.some(b => b.dataset.free), doc = c.some(b => b.dataset.doc);
+    bar.style.display = n ? 'flex' : 'none'; v.querySelector('#selcount').textContent = `${n} ${T.selected}`; all.checked = n && n === boxes.length;
+    // dark = applies to the ticked files; grey = does not (e.g. Release for a file already in a workflow)
+    [['#sel-wf', free], ['#sel-rel', free], ['#sel-del', free], ['#sel-share', doc], ['#sel-dl', n], ['#sel-cp', n]].forEach(([id, on]) => {
+      const b = v.querySelector(id); if (!b) return;
+      if (id !== '#sel-del') b.classList.toggle('light', !on);   // Delete stays light (red)
+      b.disabled = !on; b.style.opacity = on ? '' : '.45';
+      b.title = on ? '' : (id === '#sel-share' ? T.shareNone : T.relNone);
+    });
+  };
   boxes.forEach(b => b.onchange = update);
   all.onchange = () => { boxes.forEach(b => b.checked = all.checked); update(); };
   const sh = v.querySelector('#sel-share'); if (sh) sh.onclick = () => {
