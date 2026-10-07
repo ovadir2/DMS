@@ -794,8 +794,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         c = s.choices
         if d.get("lifecycleStatus") != c["Working"]:
             raise ValueError("in a workflow (submitted or approved): use its workflow")
-        if os.path.normcase(to_root(s.repository_root, d.get("workingUncPath")) or "") != os.path.normcase(full):
-            raise ValueError("already registered (use its workflow)")
+        cur = to_root(s.repository_root, d.get("currentUncPath"))
+        if cur and os.path.normcase(os.path.normpath(cur)) == os.path.normcase(os.path.normpath(full)):
+            raise ValueError("this is the approved file: use New revision")   # matched as the record's working file otherwise
         if (d.get("ownerEmail") or "").lower() != user.email and not is_admin(user):
             raise ValueError("only the document owner (or a DMS super user) can release it")
         parent = os.path.dirname(full)
