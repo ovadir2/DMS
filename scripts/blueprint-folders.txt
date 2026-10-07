@@ -28,6 +28,7 @@
 01_General\Quality and Standards\נהלי איכות בתפעול\תשתיות איכות\ארכיון
 01_General\RA_Certifications
 01_General\HR
+01_General\HR\Shared
 01_General\Training
 01_General\Finance
 01_General\Legal

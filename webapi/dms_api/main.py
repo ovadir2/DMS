@@ -167,6 +167,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     if s.file_service_seconds > 0:
         from . import file_service
         file_service.start(app.state.sp, s)
+    hr_dir = os.path.join(s.repository_root, "01_General", "HR")
+    if s.shared_log and os.path.isdir(hr_dir):                 # HR shares with potential employees are logged here
+        try:
+            os.makedirs(os.path.join(hr_dir, s.shared_log.replace("\\", "/").split("/")[0]), exist_ok=True)
+        except OSError as e:
+            logger.warning("HR Shared folder not created: %s", e)
     if own_register:
         from . import exchange_expiry
         exchange_expiry.start(app.state.sp, s)
@@ -565,7 +571,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         parts = s.shared_log.replace("\\", "/").split("/")
         if os.path.basename(full).lower() == parts[-1].lower():
             p = rel_parts(full)
-            return len(p) == 2 + len(parts) and p[0].lower() == s.customers_folder.lower()
+            return len(p) == 2 + len(parts) and (p[0].lower() == s.customers_folder.lower()
+                                                  or [x.lower() for x in p[:2]] == ["01_general", "hr"])
         return os.path.isdir(full) and any(os.path.isfile(os.path.join(full, *parts[i:])) for i in range(len(parts)))
 
     def in_shared_folder(full: str) -> bool:
@@ -574,7 +581,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return False
         shared = s.shared_log.replace("\\", "/").split("/")[0].lower()
         p = rel_parts(full)
-        return len(p) >= 3 and p[0].lower() == s.customers_folder.lower() and p[2].lower() == shared
+        return len(p) >= 3 and p[2].lower() == shared and (p[0].lower() == s.customers_folder.lower()
+                                                           or [x.lower() for x in p[:2]] == ["01_general", "hr"])
 
     @app.get("/api/browse")
     def browse(path: str | None = None, user: User = Depends(current_user)):
@@ -1655,7 +1663,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if not customer:
             raise HTTPException(400, "Write the potential employee's name" if hr else "Choose the customer (a folder under " + s.customers_folder + ")")
         kind = "potential employee" if hr else "customer"
-        has_log = customer.lower() in names
+        has_log = hr or customer.lower() in names
         names = [os.path.basename(p) for _, p, _ in docs]
         if len({n.lower() for n in names}) != len(names):
             raise HTTPException(409, "Two of the files have the same name; share them separately")
@@ -1678,10 +1686,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         try:
             if not has_log:                                     # no folder under 02_Customers: Control Audit only
                 raise LookupError
-            shared_log.append(s, customer, [{"Action": "Shared", "Shared by": user.email, "Shared with": email,
+            shared_log.append(s, customer, [{"Action": "Shared", "Shared by": user.email, "Shared with": f"{customer}: {email}" if hr else email,
                                              "Document ID": d.get("documentId"), "Title": d.get("title"), "Revision": rev,
                                              "File": os.path.basename(p), "Exchange link": url, "Available until": until}
-                                            for (d, p, rev), url in zip(docs, r["urls"])])
+                                            for (d, p, rev), url in zip(docs, r["urls"])], hr=hr)
         except LookupError:
             pass
         except OSError as e:

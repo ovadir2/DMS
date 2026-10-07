@@ -38,10 +38,11 @@ def run_once(sp, s: Settings) -> list[dict]:
     from . import shared_log
     for customer in {r["customer"] for r in removed}:
         try:
+            hr = not os.path.isdir(os.path.join(s.repository_root, s.customers_folder, customer)) and shared_log.hr_has(s, customer)
             shared_log.append(s, customer, [{"Action": "Expired - removed from the Exchange site" + (" (folder removed, no access)" if r["folderRemoved"] else ""),
                                              "Shared by": "RH-DMS-Workflow-Service", "Document ID": by_name.get(r["file"].lower()) or "",
-                                             "File": r["file"], "Available until": "expired"}
-                                            for r in removed if r["customer"] == customer])
+                                             "Shared with": f"{customer}:" if hr else "", "File": r["file"], "Available until": "expired"}
+                                            for r in removed if r["customer"] == customer], hr=hr)
         except OSError as e:
             log.warning("Share log of %s: %s", customer, e)
     return removed

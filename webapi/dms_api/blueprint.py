@@ -100,6 +100,8 @@ MANAGEMENT = N({k: (en, he, {}) for k, en, he in (
     ("HR", "HR", "משאבי אנוש"), ("Training", "Training", "הדרכה"), ("Finance", "Finance", "כספים"), ("Legal", "Legal", "משפטי"),
     ("IT", "IT", "מערכות מידע"), ("DB_Management", "Database management", "ניהול בסיסי נתונים"),
     ("Archive", "Archive", "ארכיון"))})
+MANAGEMENT["HR"] = ("HR", "משאבי אנוש", N({"Shared": ("Shared", "משותף", {}, "Files shared with potential employees and the share log",
+                                                     "קבצים ששותפו עם מועמדים לעבודה ויומן השיתופים")}))
 MANAGEMENT["Commercial"] = ("Commercial", "מסחרי", N({"Pricing": ("Pricing", "תמחור", {})}))
 MANAGEMENT["Supply_chain"] = ("Supply chain", "שרשרת אספקה", N({"Planners": ("Planners", "תכנון", {})}))
 MANAGEMENT["Quality and Standards"] = ("Quality and standards", "איכות ותקנים", N({

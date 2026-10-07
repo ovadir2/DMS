@@ -568,6 +568,10 @@ def test_hr_files_are_shared_with_a_potential_employee(tmp_path):
     assert c.post(f"/api/documents/{doc['id']}/share", json={"email": "dana@gmail.com", "customer": "Dana Levi"}).status_code == 200
     assert "potential employee Dana Levi" in c.app.state.sp.audit_events()[0]["details"]
     assert [f["name"] for f in c.get("/api/exchange/files", params={"name": "Dana Levi"}).json()] == ["Offer.docx"]
+    log = (root / "01_General" / "HR" / "Shared" / "DMS-Shared-Log.csv").read_text(encoding="utf-8-sig")
+    assert "Dana Levi: dana@gmail.com" in log and "Offer.docx" in log                   # the HR share log
+    b = c.get("/api/browse", params={"path": str(root / "01_General" / "HR" / "Shared")}).json()
+    assert b["sharedNote"] and not b["canWrite"]                                          # kept by the DMS, read only
 
 
 def test_super_user(env):

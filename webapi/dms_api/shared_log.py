@@ -1,4 +1,5 @@
-"""The share log of each customer: <root>\\02_Customers\\<Customer>\\Shared\\DMS-Shared-Log.csv (DMS_SHARED_LOG).
+"""The share log of each customer: <root>\\02_Customers\\<Customer>\\Shared\\DMS-Shared-Log.csv (DMS_SHARED_LOG), and of HR
+(files shared with potential employees): <root>\\01_General\\HR\\Shared\\DMS-Shared-Log.csv, "Shared with" = name: email.
 One row is appended for every file shared with the customer, by any user, and for every share that expired.
 UTF-8 with BOM, so Excel shows Hebrew correctly. The file is read only for everyone: read-only attribute, and on
 Windows its permissions are Read for users (no rename, no delete, no edit); only the account the DMS runs under
@@ -42,20 +43,34 @@ def protect(p: str) -> None:
         log.warning("Share log permissions of %s: %s", p, e)
 
 
-def path_for(s: Settings, customer: str) -> str | None:
+HR_FOLDER = ("01_General", "HR")                  # the HR area: its Shared folder logs the shares with potential employees
+
+
+def path_for(s: Settings, customer: str, hr: bool = False) -> str | None:
     if not s.shared_log:
         return None
-    return os.path.join(s.repository_root, s.customers_folder, customer, *s.shared_log.replace("\\", "/").split("/"))
+    base = os.path.join(s.repository_root, *HR_FOLDER) if hr else os.path.join(s.repository_root, s.customers_folder, customer)
+    return os.path.join(base, *s.shared_log.replace("\\", "/").split("/"))
 
 
-def append(s: Settings, customer: str, rows: list[dict]) -> str | None:
-    """Append rows (keys as HEADER) to the customer's log; creates the Shared folder and the file if missing."""
-    p = path_for(s, customer)
+def hr_has(s: Settings, name: str) -> bool:
+    """Was this person (a potential employee) shared with? Then the expiry of their files goes to the HR log."""
+    p = path_for(s, "", hr=True)
+    try:
+        with open(p, encoding="utf-8-sig") as f:
+            return any(row[3].lower().startswith(name.lower() + ":") for row in csv.reader(f) if len(row) > 3)
+    except (OSError, TypeError):
+        return False
+
+
+def append(s: Settings, customer: str, rows: list[dict], hr: bool = False) -> str | None:
+    """Append rows (keys as HEADER) to the customer's log (hr: the HR log); creates the Shared folder and the file if missing."""
+    p = path_for(s, customer, hr)
     if not p or not rows:
         return None
-    folder = os.path.join(s.repository_root, s.customers_folder, customer)
+    folder = os.path.join(s.repository_root, *HR_FOLDER) if hr else os.path.join(s.repository_root, s.customers_folder, customer)
     if not os.path.isdir(folder):
-        raise FileNotFoundError(f"The customer folder {customer} was not found under {s.customers_folder}")
+        raise FileNotFoundError(f"The folder {folder} was not found")
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
     with _lock:
         os.makedirs(os.path.dirname(p), exist_ok=True)
