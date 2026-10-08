@@ -2046,3 +2046,26 @@ def test_client_root_for_other_pcs(tmp_path):
     assert files.user_path(f) == f                                                      # the DMS PC keeps its own root
     files.USER_SHORT.reset(t)
     files.set_short_paths("", {})
+
+
+def test_department_groups_on_their_folders_only(tmp_path, monkeypatch):
+    from dms_api import access
+    root = tmp_path / "Root"
+    (root / "01_General" / "HR" / "Shared").mkdir(parents=True)
+    (root / "01_General" / "Finance").mkdir(parents=True)
+    (root / "02_Customers" / "Customer_A" / "Engineering").mkdir(parents=True)
+    granted = []
+    monkeypatch.setattr(access, "GRANT", [lambda p, g, m: m and granted.append((os.path.relpath(p, root), g)) or denied.append(os.path.relpath(p, root))])
+    denied = []
+    groups = {"HR": "RH\\GG_HR", "02_Customers\\<Customer>\\Engineering": "RH\\GG_Eng, RH\\GG_Eng2"}
+    access.apply(str(root), groups, access.folders(str(root)))
+    assert sorted(granted) == sorted([(os.path.join("01_General", "HR"), "RH\\GG_HR"),
+                                      (os.path.join("02_Customers", "Customer_A", "Engineering"), "RH\\GG_Eng"),
+                                      (os.path.join("02_Customers", "Customer_A", "Engineering"), "RH\\GG_Eng2")])
+    assert os.path.join("01_General", "HR", "Shared") in denied and os.path.join("01_General", "Finance") not in denied
+    granted.clear()                                                                     # a new customer gets them at once
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                                       admins=[USER], department_groups=groups)))
+    assert c.post("/api/folders", json={"parent": str(root / "02_Customers"), "name": "Elbit"}).status_code == 201
+    assert granted == [(os.path.join("02_Customers", "Elbit", "Engineering"), "RH\\GG_Eng"),
+                       (os.path.join("02_Customers", "Elbit", "Engineering"), "RH\\GG_Eng2")]
