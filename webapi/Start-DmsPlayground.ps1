@@ -165,9 +165,15 @@ if ($Share) {
         $cust = if ($env:DMS_CUSTOMERS_FOLDER) { $env:DMS_CUSTOMERS_FOLDER } else { '02_Customers' }
         New-Item -ItemType Directory -Path $setup -Force | Out-Null
         foreach ($f in 'Set-DmsDrives.ps1', 'Open-DmsFile.ps1') { Copy-Item -LiteralPath (Join-Path $PSScriptRoot "..\scripts\$f") -Destination $setup -Force }
-        $cmd = "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%~dp0Set-DmsDrives.ps1`" -Root `"$env:DMS_REPOSITORY_ROOT`" -CustomersFolder `"$cust`" -GeneralFolder `"$GeneralFolder`" -DmsUrl `"http://$($hostName):$Port`"`r`npause`r`n"
+        # the root as the approvers reach it: DMS_CLIENT_ROOT (an admin share like \\server\e$ is closed to them)
+        $clientRoot = if ($env:DMS_CLIENT_ROOT) { $env:DMS_CLIENT_ROOT } else { Get-DotEnv 'DMS_CLIENT_ROOT' }
+        if (-not $clientRoot) {
+            $clientRoot = $env:DMS_REPOSITORY_ROOT
+            if ($clientRoot -match '^\\\\[^\\]+\\[a-z]\$') { Write-Warning "The root $clientRoot is an admin share: the approvers cannot open it. Set DMS_CLIENT_ROOT=\\<server>\<share> in .env (the same folder as they reach it)." }
+        }
+        $cmd = "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%~dp0Set-DmsDrives.ps1`" -Root `"$clientRoot`" -CustomersFolder `"$cust`" -GeneralFolder `"$GeneralFolder`" -DmsUrl `"http://$($hostName):$Port`"`r`npause`r`n"
         [IO.File]::WriteAllText((Join-Path $setup 'Setup-DMS.cmd'), $cmd, [Text.Encoding]::Default)
-        Write-Host "  Approvers' PCs: double-click once $(Join-Path $setup 'Setup-DMS.cmd')" -ForegroundColor Green
+        Write-Host "  Approvers' PCs: double-click once $(Join-Path $clientRoot '04_Workflow_System\Setup\Setup-DMS.cmd')" -ForegroundColor Green
     } catch { Write-Warning "Setup for the approvers' PCs not written: $_" }
     Write-Host ("  Each one signs in with their own Windows account (asked once: RH\name + password; no question when " +
                 "http://$hostName is in Local intranet sites). This PC stays you.") -ForegroundColor Green

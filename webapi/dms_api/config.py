@@ -69,6 +69,7 @@ class Settings:
     document_id_prefix: str = "DMS"
     register_cache_seconds: int = 30
     customers_folder: str = "02_Customers"  # under the root: one folder per customer
+    client_root: str = ""                            # the root as other PCs open it (\\server\Shares, not e$)
     short_paths: dict = field(default_factory=dict)  # folder under the root -> shorter path users open and copy
     max_upload_mb: int = 500
     search_limit: int = 200
@@ -146,6 +147,7 @@ class Settings:
             document_id_prefix=e("DMS_DOCUMENT_ID_PREFIX", "DMS"),
             register_cache_seconds=int(e("DMS_REGISTER_CACHE_SECONDS", "30")),
             customers_folder=e("DMS_CUSTOMERS_FOLDER", "02_Customers"),
+            client_root=e("DMS_CLIENT_ROOT", ""),
             short_paths=_short_paths(e("DMS_SHORT_PATHS", "")),
             max_upload_mb=int(e("DMS_MAX_UPLOAD_MB", "500")),
             search_limit=int(e("DMS_SEARCH_LIMIT", "200")),

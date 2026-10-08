@@ -152,7 +152,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     app = FastAPI(title="RH DMS Web API", version="1.1")
     app.state.settings = s
-    files.set_short_paths(s.repository_root, s.short_paths)
+    files.set_short_paths(s.repository_root, s.short_paths, s.client_root)
     own_register = sharepoint is None                            # False in the tests (they pass their own)
     if sharepoint is None and s.sharepoint == "memory":
         from .memory import MemorySharePoint

@@ -98,6 +98,7 @@ def short_path(path: str, force: bool = False) -> str:
 
 SHORT: list[tuple[str, str]] = []          # (long prefix, short prefix), set by the app from DMS_SHORT_PATHS
 ROOT = [""]
+CLIENT_ROOT = [""]                         # DMS_CLIENT_ROOT: the same root as other PCs reach it (not an admin share)
 # this user's own drive letters (the page sends them, X-DMS-Drives), when they differ from DMS_SHORT_PATHS
 USER_SHORT: ContextVar[list | None] = ContextVar("USER_SHORT", default=None)
 
@@ -106,17 +107,19 @@ def _pairs(root: str, mapping: dict) -> list[tuple[str, str]]:
     return sorted(((os.path.join(root, folder), short) for folder, short in mapping.items()), key=lambda x: -len(x[0]))
 
 
-def set_short_paths(root: str, mapping: dict) -> None:
+def set_short_paths(root: str, mapping: dict, client_root: str = "") -> None:
     ROOT[0] = root
+    CLIENT_ROOT[0] = client_root.rstrip("\\/")
     SHORT[:] = _pairs(root, mapping)
 
 
 def user_drives(mapping: dict, local: bool = True):
     """For one request: this user's drive letters first, then DMS_SHORT_PATHS (the drives of the PC that runs the
     DMS - only for requests from that PC; another PC gets the network path). Returns the token to reset."""
+    client = [] if local or not CLIENT_ROOT[0] else [(ROOT[0], CLIENT_ROOT[0])]   # last: what no drive letter covers
     if mapping:
-        return USER_SHORT.set(_pairs(ROOT[0], mapping) + (SHORT if local else []))
-    return USER_SHORT.set(None if local else [])
+        return USER_SHORT.set(_pairs(ROOT[0], mapping) + (SHORT if local else client))
+    return USER_SHORT.set(None if local else client)
 
 
 def user_path(path: str) -> str:

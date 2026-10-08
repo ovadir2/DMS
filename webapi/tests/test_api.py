@@ -2031,3 +2031,18 @@ def test_drive_letters_of_the_dms_pc_only_for_that_pc(tmp_path):
     assert files.user_path(f).startswith("K:")                                          # unless it sent its own letters
     files.USER_SHORT.reset(t)
     files.set_short_paths("", {})
+
+
+def test_client_root_for_other_pcs(tmp_path):
+    files.set_short_paths(str(tmp_path), {"02_Customers": "R:"}, client_root="\\\\srv\\Shares\\")
+    f = os.path.join(str(tmp_path), "01_General", "HR", "q.docx")
+    t = files.user_drives({}, local=False)
+    assert files.user_path(f) == "\\\\srv\\Shares\\01_General\\HR\\q.docx"           # not the admin share
+    files.USER_SHORT.reset(t)
+    t = files.user_drives({"02_Customers": "K:"}, local=False)
+    assert files.user_path(f).startswith("\\\\srv\\Shares\\01_General")              # no letter for 01_General
+    files.USER_SHORT.reset(t)
+    t = files.user_drives({}, local=True)
+    assert files.user_path(f) == f                                                      # the DMS PC keeps its own root
+    files.USER_SHORT.reset(t)
+    files.set_short_paths("", {})
