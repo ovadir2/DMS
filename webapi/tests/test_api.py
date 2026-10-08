@@ -641,6 +641,15 @@ def test_hebrew_name_opens_through_the_pc_handler(tmp_path):
     assert g["officeUri"].startswith("ms-excel:")                                         # English names: as before
 
 
+def test_this_pc_by_its_network_address_is_local():
+    from types import SimpleNamespace
+    from dms_api import ntlm
+    req = lambda client, server: SimpleNamespace(client=SimpleNamespace(host=client), scope={"server": (server, 8080)})  # noqa: E731
+    assert ntlm.is_local(req("10.30.8.20", "10.30.8.20"))                                  # the email link on this PC
+    assert ntlm.is_local(req("127.0.0.1", "127.0.0.1"))
+    assert not ntlm.is_local(req("10.30.8.50", "10.30.8.20"))                              # another PC
+
+
 def test_super_user(env):
     c, sp, q = env
     d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()

@@ -25,7 +25,26 @@ _LOCK = threading.Lock()
 
 
 def is_local(request) -> bool:
-    return (request.client.host if request.client else "") in LOCAL_HOSTS
+    """This PC itself - also when it opens the DMS by its network address (the email links use it): the browser
+    then connects from that same address."""
+    host = request.client.host if request.client else ""
+    server = (request.scope.get("server") or ("", 0))[0]
+    return host in LOCAL_HOSTS or (bool(host) and host == server)
+
+
+_OPENER: list = []
+
+
+def pc_has_opener() -> bool:
+    """The rh-dms: handler is installed on this PC (Set-DmsDrives): for requests from this PC, whatever the address."""
+    if not _OPENER:
+        try:
+            import winreg  # type: ignore[import-not-found]
+            winreg.CloseKey(winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\rh-dms\shell\open\command"))
+            _OPENER.append(True)
+        except (ImportError, OSError):
+            _OPENER.append(False)
+    return _OPENER[0]
 
 
 def connection(request) -> tuple:
