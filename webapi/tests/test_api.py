@@ -650,6 +650,20 @@ def test_this_pc_by_its_network_address_is_local():
     assert not ntlm.is_local(req("10.30.8.50", "10.30.8.20"))                              # another PC
 
 
+def test_approved_file_opens_view_only_and_stays_read_only(env):
+    import os, stat
+    from dms_api import file_service
+    c, sp, q = env
+    (q / "טופס.docx").write_text("v")
+    c.post("/api/files/release", json={"paths": [str(q / "טופס.docx")]})
+    cur = q / "Current_ReadOnly" / "טופס.docx"
+    os.chmod(cur, os.stat(cur).st_mode | stat.S_IWRITE)                                # lost its read-only mark
+    file_service.run_once(sp, c.app.state.settings)
+    assert file_service.is_read_only(str(cur))                                          # set again by the file mover
+    f = c.get("/api/browse", params={"path": str(cur.parent)}, headers={"X-DMS-Opener": "1"}).json()["files"][0]
+    assert f["officeUri"].startswith("rh-dms:ro/")                                       # Open = view only
+
+
 def test_super_user(env):
     c, sp, q = env
     d = c.post("/api/documents", json={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx"), "documentType": "נוהל", "documentArea": "מסחרי"}).json()

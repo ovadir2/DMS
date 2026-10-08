@@ -157,6 +157,8 @@ def run_once(sp, s: Settings) -> dict:
                         report.append({"documentId": doc_id, "result": details})
                         done += 1
                         continue
+                if cur and os.path.isfile(cur) and not is_read_only(cur):   # an approved file must stay read only
+                    _set_read_only(cur, True)
                 report.append({"documentId": doc_id, "result": f"current: {d['currentUncPath']}"})
             continue
         working = to_root(s.repository_root, raw)

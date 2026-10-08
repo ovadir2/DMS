@@ -156,7 +156,7 @@ def office_uri(path: str, edit: bool = False) -> str | None:
         # this PC has the rh-dms: handler (Set-DmsDrives): Office opens the path itself, like a double-click in Explorer
         # (also for Hebrew names: Excel does not decode %D7.. in an ms-excel: link and cannot find the file)
         from urllib.parse import quote
-        return "rh-dms:" + quote(path, safe="")
+        return "rh-dms:" + ("" if edit else "ro/") + quote(path, safe="")   # view: read-only (approved files)
     if url_len(path) > LONG_PATH and BASE_URL.get():
         # too long for Office as a file path (Hebrew names count 6 characters each): the DMS link (WebDAV, like
         # SharePoint) - the original file name, and Save writes back to the same file on the server
