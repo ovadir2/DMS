@@ -9,26 +9,36 @@
         Group        the group's name (sAMAccountName), e.g. GG_DMS_Engineering. Use the same name in dms-access.csv
         Description  shown in AD (which folders it opens)
         Members      user or group accounts (sAMAccountName), ";" between them: dms_approval;dms-lab
-    New groups are Global security groups in -OU. Members are only added; -Exact also removes members that are
+    New groups are Global security groups in -OU (default: OU=DMS at the top of the domain, made if missing). Members are only added; -Exact also removes members that are
     not in the table (for groups the DMS owns only). Without -Apply it only reports.
     Run as a domain admin (or a user allowed to manage groups in -OU), with the ActiveDirectory module (RSAT:
     Settings > Optional features > "RSAT: Active Directory Domain Services"). Supports -WhatIf.
 
 .EXAMPLE
-    .\Set-DmsAdGroups.ps1 -OU 'OU=DMS,OU=Groups,DC=rh,DC=local'                  # report only
-    .\Set-DmsAdGroups.ps1 -OU 'OU=DMS,OU=Groups,DC=rh,DC=local' -Apply -WhatIf
-    .\Set-DmsAdGroups.ps1 -OU 'OU=DMS,OU=Groups,DC=rh,DC=local' -Apply
+    .\Set-DmsAdGroups.ps1                     # report only
+    .\Set-DmsAdGroups.ps1 -Apply -WhatIf
+    .\Set-DmsAdGroups.ps1 -Apply
+    .\Set-DmsAdGroups.ps1 -OU 'OU=DMS,OU=Groups,DC=rh,DC=local' -Apply      # another OU
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [Parameter(Mandatory)] [string] $OU,                     # where new groups are made: OU=DMS,OU=Groups,DC=rh,DC=local
+    [string] $OU,                                            # where new groups are made (default: OU=DMS,<your domain>)
     [string] $Map = (Join-Path $PSScriptRoot 'dms-ad-groups.csv'),
     [switch] $Exact,
     [switch] $Apply
 )
 $ErrorActionPreference = 'Stop'
 Import-Module ActiveDirectory
-try { Get-ADOrganizationalUnit -Identity $OU | Out-Null } catch { throw "OU not found: $OU (Get-ADOrganizationalUnit -Filter * | Select DistinguishedName lists them)" }
+if (-not $OU) {
+    $dn = (Get-ADDomain).DistinguishedName
+    $OU = "OU=DMS,$dn"
+    if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$OU'")) {
+        Write-Host "CREATE    OU $OU" -ForegroundColor Yellow
+        if ($Apply -and $PSCmdlet.ShouldProcess($OU, 'Create OU')) { New-ADOrganizationalUnit -Name DMS -Path $dn -ProtectedFromAccidentalDeletion $true }
+    }
+} elseif (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$OU'")) {
+    throw "OU not found: $OU (Get-ADOrganizationalUnit -Filter * | Select DistinguishedName lists them)"
+}
 
 function Split-List([string]$v) { @("$v" -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
 function Find-Account([string]$n) {
