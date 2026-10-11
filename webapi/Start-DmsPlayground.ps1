@@ -164,7 +164,11 @@ if ($Share) {
         $setup = Join-Path $env:DMS_REPOSITORY_ROOT '04_Workflow_System\Setup'
         $cust = if ($env:DMS_CUSTOMERS_FOLDER) { $env:DMS_CUSTOMERS_FOLDER } else { '02_Customers' }
         New-Item -ItemType Directory -Path $setup -Force | Out-Null
-        foreach ($f in 'Set-DmsDrives.ps1', 'Open-DmsFile.ps1') { Copy-Item -LiteralPath (Join-Path $PSScriptRoot "..\scripts\$f") -Destination $setup -Force }
+        foreach ($f in 'Set-DmsDrives.ps1', 'Open-DmsFile.ps1', 'Set-DmsAdGroups.ps1', 'Set-DmsAccess.ps1', 'Get-DmsAccess.ps1',
+                       'dms-ad-groups.csv', 'dms-access.csv', 'blueprint-folders.txt') { Copy-Item -LiteralPath (Join-Path $PSScriptRoot "..\scripts\$f") -Destination $setup -Force }
+        # the access scripts run on the file server too (no .env there): the DMS account and the customers folder
+        $svc = Get-DotEnv 'DMS_SERVICE_ACCOUNT'; if (-not $svc) { $svc = "$env:USERDOMAIN\$env:USERNAME" }
+        [IO.File]::WriteAllText((Join-Path $setup 'dms.env'), "DMS_SERVICE_ACCOUNT=$svc`r`nDMS_CUSTOMERS_FOLDER=$cust`r`n", [Text.UTF8Encoding]::new($false))
         # the root as the approvers reach it: DMS_CLIENT_ROOT (an admin share like \\server\e$ is closed to them)
         $clientRoot = if ($env:DMS_CLIENT_ROOT) { $env:DMS_CLIENT_ROOT } else { Get-DotEnv 'DMS_CLIENT_ROOT' }
         if (-not $clientRoot) {

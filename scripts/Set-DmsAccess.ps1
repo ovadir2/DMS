@@ -53,16 +53,19 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-# Settings: the parameter, else the environment variable, else webapi\.env (same file the DMS reads)
-$envFile = Join-Path $PSScriptRoot '..\webapi\.env'
+# Settings: the parameter, else the environment variable, else webapi\.env (same file the DMS reads), else dms.env
+# next to this script (on the file server: the copy in $root\04_Workflow_System\Setup)
+$envFiles = @((Join-Path $PSScriptRoot '..\webapi\.env'), (Join-Path $PSScriptRoot 'dms.env'))
 function Get-DmsSetting([string]$Name) {
     $v = [Environment]::GetEnvironmentVariable($Name)
     if ($v) { return $v.Trim() }
-    if (-not (Test-Path -LiteralPath $envFile)) { return '' }
-    $line = Get-Content -LiteralPath $envFile -Encoding UTF8 | Where-Object { $_ -match "^\s*$Name\s*=" } | Select-Object -Last 1
-    if (-not $line) { return '' }
-    (($line -split '=', 2)[1] -replace '\s+#.*$', '').Trim().Trim('"').Trim("'")
+    foreach ($f in $envFiles | Where-Object { Test-Path -LiteralPath $_ }) {
+        $line = Get-Content -LiteralPath $f -Encoding UTF8 | Where-Object { $_ -match "^\s*$Name\s*=" } | Select-Object -Last 1
+        if ($line) { return (($line -split '=', 2)[1] -replace '\s+#.*$', '').Trim().Trim('"').Trim("'") }
+    }
+    ''
 }
+if (-not $Root -and $PSScriptRoot -match '\\04_Workflow_System\\Setup$') { $Root = Split-Path (Split-Path $PSScriptRoot) }   # run on the server
 if (-not $Root) { $Root = Get-DmsSetting 'DMS_REPOSITORY_ROOT' }
 if (-not $Root -or -not (Test-Path -LiteralPath $Root)) { throw "Repository root not found: '$Root'. Set DMS_REPOSITORY_ROOT in webapi\.env or give -Root." }
 $Root = $Root.TrimEnd('\')

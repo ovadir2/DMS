@@ -9,8 +9,10 @@
         Group        the group's name (sAMAccountName), e.g. GG_DMS_Engineering. Use the same name in dms-access.csv
         Description  shown in AD (which folders it opens)
         Members      user or group accounts (sAMAccountName), ";" between them: dms_approval;dms-lab
-    New groups are Global security groups in -OU (default: OU=DMS at the top of the domain, made if missing). Members are only added; -Exact also removes members that are
-    not in the table (for groups the DMS owns only). Without -Apply it only reports.
+    New groups are Global security groups in -OU (default: OU=DMS at the top of the domain, made if missing).
+    Safe for the AD you have: it only creates groups and adds members, inside -OU. It never deletes or changes a
+    user, an OU or a group outside -OU (a group of the same name elsewhere is reported and left as it is). Members are only added; -Exact also removes members that are
+    not in the table (only in the DMS groups of -OU). Without -Apply it only reports.
     Run as a domain admin (or a user allowed to manage groups in -OU), with the ActiveDirectory module (RSAT:
     Settings > Optional features > "RSAT: Active Directory Domain Services"). Supports -WhatIf.
 
@@ -58,11 +60,12 @@ foreach ($r in $rows) {
             New-ADGroup -Name $name -SamAccountName $name -GroupScope Global -GroupCategory Security -Path $OU -Description $r.Description
             $g = Get-ADGroup -Identity $name -Properties Description
         }
+    } elseif (-not $g.DistinguishedName.EndsWith(",$OU", [StringComparison]::OrdinalIgnoreCase)) {
+        # a group of the same name that is not the DMS's: never changed (no member added or removed)
+        Write-Warning "$name already exists outside $OU ($($g.DistinguishedName)): left as it is. Rename the group in the tables."
+        continue
     } else {
         Write-Host "ok        $name" -ForegroundColor Gray
-        if ($r.Description -and $g.Description -ne $r.Description -and $Apply -and $PSCmdlet.ShouldProcess($name, 'Update description')) {
-            Set-ADGroup -Identity $g -Description $r.Description
-        }
     }
     $now = if ($g) { @(Get-ADGroupMember -Identity $g | ForEach-Object { $_.SamAccountName }) } else { @() }
     $want = @()
