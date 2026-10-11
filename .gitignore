@@ -1,3 +1,4 @@
 scripts/logs/
 .vscode/settings.json
 scripts/out/
+scripts/dms-access-report.csv
