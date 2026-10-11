@@ -6,7 +6,8 @@
 
 .DESCRIPTION
     dms-access.csv, one row per department folder under 01_General (edit it, Excel keeps the format):
-        Department       the folder under 01_General (HR, Enginnering, Quality and Standards, ...)
+        Department       the folder under 01_General (HR, Enginnering, Quality and Standards, ...), or a path from the
+                         root for one folder only (02_Customers\Customer_A\Engineering: that customer's, not the others)
         Code             short name of the department: its AD groups are named from it. Rows with the same Code
                          share the groups (Company_Profile and Company_Strategy -> Management)
         CustomerFolders  its parallel folders in every customer, ";" between them (Engineering;DFM;DFT). Empty: none
@@ -147,6 +148,15 @@ if ($Customer) {
     $customers = @(Get-ChildItem -LiteralPath $custRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object Name)
 }
 foreach ($r in $rows) {
+    if ($r.Department -match '\\') {                     # a path from the root: that one folder only (02_Customers\Customer_A\Engineering)
+        $parts = @($r.Department.Trim('\') -split '\\')
+        $isCust = $parts.Count -gt 2 -and $parts[0] -eq $custFolder
+        if ($Customer -and -not ($isCust -and $parts[1] -eq $Customer)) { continue }
+        $key = if ($isCust) { (@('02_Customers', '<Customer>') + $parts[2..($parts.Count - 1)]) -join '\' } else { $parts -join '\' }
+        $above = @($Root) + @(for ($i = 1; $i -lt $parts.Count; $i++) { Join-Path $Root ($parts[0..($i - 1)] -join '\') })
+        Add-Target (Join-Path $Root ($parts -join '\')) $key $r.Code $above
+        continue
+    }
     if (-not $Customer) {
         Add-Target (Join-Path $Root "01_General\$($r.Department)") "01_General\$($r.Department)" $r.Code @($Root, (Join-Path $Root '01_General'))
     }
