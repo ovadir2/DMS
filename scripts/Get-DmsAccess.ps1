@@ -6,7 +6,7 @@
 
 .DESCRIPTION
     Folders: the root's folders, 01_General\*, 02_Customers\* and 02_Customers\<Customer>\* (-Depth 4 also one level
-    below those). One row each, in a CSV that Excel opens (default: dms-access-report.csv next to this script):
+    below those). One row each, in a CSV that Excel opens (default: dms-access-report.csv on your Desktop):
         Folder        path from the root
         Inherits      Yes / No (No = "inheritance disabled" on that folder)
         Own           its own permissions (group: Full / Modify / Read / Open / NoDelete / Other)
@@ -25,7 +25,7 @@
 param(
     [string] $Root,
     [string] $Map = (Join-Path $PSScriptRoot 'dms-access.csv'),
-    [string] $Out = (Join-Path $PSScriptRoot 'dms-access-report.csv'),
+    [string] $Out = (Join-Path ([Environment]::GetFolderPath('Desktop')) 'dms-access-report.csv'),   # your Desktop (also when OneDrive moved it)
     [ValidateRange(2, 5)] [int] $Depth = 3
 )
 $ErrorActionPreference = 'Stop'
@@ -115,6 +115,7 @@ $report = foreach ($f in $folders) {
         Note       = $note
     }
 }
+New-Item -ItemType Directory -Path (Split-Path $Out) -Force | Out-Null
 $report | Export-Csv -LiteralPath $Out -NoTypeInformation -Encoding UTF8
 $report | Format-Table Folder, Inherits, Broad, PlanModify, Note -AutoSize | Out-String -Width 220 | Write-Host
 $open = @($report | Where-Object { $_.Broad }).Count

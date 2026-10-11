@@ -11,10 +11,11 @@
         Members      user or group accounts (sAMAccountName), ";" between them: dms_approval;dms-lab
     New groups are Global security groups in -OU (default: OU=DMS at the top of the domain, made if missing).
     Safe for the AD you have: it only creates groups and adds members, inside -OU. It never deletes or changes a
-    user, an OU or a group outside -OU (a group of the same name elsewhere is reported and left as it is). Members are only added; -Exact also removes members that are
-    not in the table (only in the DMS groups of -OU). Without -Apply it only reports.
-    Run as a domain admin (or a user allowed to manage groups in -OU), with the ActiveDirectory module (RSAT:
-    Settings > Optional features > "RSAT: Active Directory Domain Services"). Supports -WhatIf.
+    user, an OU or a group outside -OU (a group of the same name elsewhere is reported and left as it is).
+    Members are only added; -Exact also removes members that are not in the table (only in the DMS groups of -OU).
+    Without -Apply it only reports. Supports -WhatIf.
+    Talks to AD directly (ADSI, built into Windows): no RSAT / ActiveDirectory module and no administrator window
+    needed - only an account that may create groups in -OU (a domain admin, or one IT delegated the OU to).
 
 .EXAMPLE
     .\Set-DmsAdGroups.ps1                     # report only
@@ -30,61 +31,75 @@ param(
     [switch] $Apply
 )
 $ErrorActionPreference = 'Stop'
-Import-Module ActiveDirectory
-if (-not $OU) {
-    $dn = (Get-ADDomain).DistinguishedName
-    $OU = "OU=DMS,$dn"
-    if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$OU'")) {
-        Write-Host "CREATE    OU $OU" -ForegroundColor Yellow
-        if ($Apply -and $PSCmdlet.ShouldProcess($OU, 'Create OU')) { New-ADOrganizationalUnit -Name DMS -Path $dn -ProtectedFromAccidentalDeletion $true }
+$GLOBAL_SECURITY = -2147483646                               # groupType: Global + Security
+
+function Find-One([string]$filter) {
+    $s = New-Object DirectoryServices.DirectorySearcher([ADSI]"LDAP://$domainDn", $filter)
+    $s.PropertiesToLoad.AddRange(@('distinguishedName', 'sAMAccountName', 'objectClass'))
+    $s.FindOne()
+}
+function Esc([string]$v) { $v -replace '([\\*()])', '\$1' }
+function Exists([string]$dn) { try { [ADSI]::Exists("LDAP://$dn") } catch { $false } }
+
+try { $domainDn = ([ADSI]'LDAP://RootDSE').defaultNamingContext.Value } catch { throw "No domain controller reached from this PC ($($_.Exception.Message))." }
+if (-not $OU) { $OU = "OU=DMS,$domainDn" }
+if (-not (Exists $OU)) {
+    if ($OU -ne "OU=DMS,$domainDn") { throw "OU not found: $OU" }
+    Write-Host "CREATE    OU $OU" -ForegroundColor Yellow
+    if ($Apply -and $PSCmdlet.ShouldProcess($OU, 'Create OU')) {
+        $o = ([ADSI]"LDAP://$domainDn").Create('organizationalUnit', 'OU=DMS')
+        $o.Put('description', 'RH DMS: department groups (Set-DmsAdGroups.ps1)')
+        $o.SetInfo()
     }
-} elseif (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$OU'")) {
-    throw "OU not found: $OU (Get-ADOrganizationalUnit -Filter * | Select DistinguishedName lists them)"
 }
 
-function Split-List([string]$v) { @("$v" -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
-function Find-Account([string]$n) {
-    $n = ($n -split '\\')[-1]
-    Get-ADObject -Filter "sAMAccountName -eq '$n'" -Properties sAMAccountName | Where-Object { $_.ObjectClass -in 'user', 'group', 'computer' } | Select-Object -First 1
-}
-
+function Split-List([string]$v) { @("$v" -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -notlike '<*' }) }
 $rows = @(Import-Csv -LiteralPath $Map -Encoding UTF8 | Where-Object { $_.Group })
 $todo = 0
+Write-Host "Domain: $domainDn   OU: $OU" -ForegroundColor Cyan
 foreach ($r in $rows) {
     $name = $r.Group.Trim()
-    $g = Get-ADGroup -Filter "sAMAccountName -eq '$name'" -Properties Description
-    if (-not $g) {
+    $hit = Find-One "(&(objectClass=group)(sAMAccountName=$(Esc $name)))"
+    $g = $null
+    if (-not $hit) {
         $todo++
         Write-Host "CREATE    $name  ($($r.Description))" -ForegroundColor Yellow
-        if ($Apply -and $PSCmdlet.ShouldProcess($name, "Create Global security group in $OU")) {
-            New-ADGroup -Name $name -SamAccountName $name -GroupScope Global -GroupCategory Security -Path $OU -Description $r.Description
-            $g = Get-ADGroup -Identity $name -Properties Description
+        if ($Apply -and (Exists $OU) -and $PSCmdlet.ShouldProcess($name, "Create Global security group in $OU")) {
+            $g = ([ADSI]"LDAP://$OU").Create('group', "CN=$name")
+            $g.Put('sAMAccountName', $name)
+            $g.Put('groupType', $GLOBAL_SECURITY)
+            if ($r.Description) { $g.Put('description', "$($r.Description)") }
+            $g.SetInfo()
         }
-    } elseif (-not $g.DistinguishedName.EndsWith(",$OU", [StringComparison]::OrdinalIgnoreCase)) {
-        # a group of the same name that is not the DMS's: never changed (no member added or removed)
-        Write-Warning "$name already exists outside $OU ($($g.DistinguishedName)): left as it is. Rename the group in the tables."
-        continue
     } else {
+        $dn = "$($hit.Properties['distinguishedname'][0])"
+        if (-not $dn.EndsWith(",$OU", [StringComparison]::OrdinalIgnoreCase)) {
+            # a group of the same name that is not the DMS's: never changed (no member added or removed)
+            Write-Warning "$name already exists outside $OU ($dn): left as it is. Rename the group in the tables."
+            continue
+        }
         Write-Host "ok        $name" -ForegroundColor Gray
+        $g = [ADSI]"LDAP://$dn"
     }
-    $now = if ($g) { @(Get-ADGroupMember -Identity $g | ForEach-Object { $_.SamAccountName }) } else { @() }
+    $now = @(if ($g -and $g.Properties['member']) { $g.Properties['member'] | ForEach-Object { "$_" } })
     $want = @()
     foreach ($m in Split-List $r.Members) {
-        $a = Find-Account $m
-        if (-not $a) { Write-Warning "  $m not found in AD (not added to $name)"; continue }
-        $want += $a.sAMAccountName
-        if ($a.sAMAccountName -in $now) { continue }
+        $acc = Find-One "(sAMAccountName=$(Esc (($m -split '\\')[-1])))"
+        if (-not $acc) { Write-Warning "  $m not found in AD (not added to $name)"; continue }
+        $mdn = "$($acc.Properties['distinguishedname'][0])"
+        $want += $mdn
+        if ($now -contains $mdn) { continue }
         $todo++
-        Write-Host "  + $($a.sAMAccountName) in $name" -ForegroundColor Yellow
-        if ($Apply -and $g -and $PSCmdlet.ShouldProcess($name, "Add $($a.sAMAccountName)")) { Add-ADGroupMember -Identity $g -Members $a.DistinguishedName }
+        Write-Host "  + $m in $name" -ForegroundColor Yellow
+        if ($Apply -and $g -and $PSCmdlet.ShouldProcess($name, "Add $m")) { $g.Add("LDAP://$mdn") }
     }
-    if ($Exact) {
-        foreach ($m in $now | Where-Object { $_ -notin $want }) {
+    if ($Exact -and $g) {
+        foreach ($mdn in $now | Where-Object { $_ -notin $want }) {
             $todo++
-            Write-Host "  - $m from $name" -ForegroundColor Yellow
-            if ($Apply -and $PSCmdlet.ShouldProcess($name, "Remove $m")) { Remove-ADGroupMember -Identity $g -Members $m -Confirm:$false }
+            Write-Host "  - $mdn from $name" -ForegroundColor Yellow
+            if ($Apply -and $PSCmdlet.ShouldProcess($name, "Remove $mdn")) { $g.Remove("LDAP://$mdn") }
         }
     }
 }
 if (-not $Apply) { Write-Host "`nReport only: $todo change(s). Run again with -Apply (-WhatIf first)." -ForegroundColor Yellow }
-else { Write-Host "`nDone: $todo change(s). Next: .\Set-DmsAccess.ps1 (puts the groups on the folders). People just added sign out and in again." -ForegroundColor Green }
+else { Write-Host "`nDone: $todo change(s). Next: Set-DmsAccess.ps1 (puts the groups on the folders). People just added sign out and in again." -ForegroundColor Green }
