@@ -8,13 +8,15 @@
 .DESCRIPTION
     dms-access.csv, one row per department folder (edit it, Excel keeps the format):
         Department       the folder under 01_General (HR, Enginnering, Quality and Standards, ...), or a path from the
-                         root for one folder only (02_Customers\Customer_A\Engineering: that customer's, not the others)
+                         root for one folder only (02_Customers\Customer_A\Engineering: that customer's, not the others;
+                         02_Customers\Customer_A: the whole customer, all its folders)
         Groups           the AD groups that work there (Modify), ";" between them (RH\HR_Team). A <placeholder>: row skipped
         CustomerFolders  its parallel folders in every customer, ";" between them (Engineering;DFM;DFT). Empty: none
         ReadGroups       AD groups that may only read there, ";" between them. Optional
 
     Each department folder, and its parallel folder in every customer:
-      - does NOT inherit from the folder above (01_General / the customer): only what its row gives
+      - keeps what it inherits from above: a group on an upper folder (01_General, 02_Customers, a customer) has the
+        same rights in every folder below it - an upper folder never gives less than its subfolders
       - SYSTEM, Administrators and the DMS account (-DmsAccount): Full control (the DMS moves the files)
       - Groups: Modify, ReadGroups: Read, on the folder, its subfolders and files
       - Groups may not rename / delete the folder itself nor the blueprint folders below it (their content they may)
@@ -172,13 +174,13 @@ foreach ($path in $targets.Keys) {
     $t = $targets[$path]
     $acl = Read-Acl $path
     $want = Desired-Rules $t.Codes
-    $same = $acl.AreAccessRulesProtected -and
+    $same = -not $acl.AreAccessRulesProtected -and
             (@($want | ForEach-Object { Key-Of $_ } | Sort-Object -Unique) -join ';') -eq (@(Explicit $acl | ForEach-Object { Key-Of $_ } | Sort-Object -Unique) -join ';')
     Write-Host ("{0,-9} {1}  [{2}]" -f $(if ($same) { 'ok' } else { 'CHANGE' }), $path, ($t.Codes -join ', ')) -ForegroundColor $(if ($same) { 'Gray' } else { 'Yellow' })
     if (-not $Apply) { if (-not $same) { $changes++ }; continue }
-    if (-not $same -and $PSCmdlet.ShouldProcess($path, "No inheritance; Full: SYSTEM, Administrators, DMS account; $($t.Codes -join ', ')")) {
+    if (-not $same -and $PSCmdlet.ShouldProcess($path, "Inherits from above, plus Full: SYSTEM, Administrators, DMS account; $($t.Codes -join ', ')")) {
         $new = New-Object Security.AccessControl.DirectorySecurity
-        $new.SetAccessRuleProtection($true, $false)               # nothing from 01_General / the customer above
+        $new.SetAccessRuleProtection($false, $true)               # inherits from above (its own rules are these)
         foreach ($r in $want) { $new.AddAccessRule($r) }
         Write-Acl $path $new
         $changes++
