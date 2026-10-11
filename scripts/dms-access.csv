@@ -1,18 +1,19 @@
 ﻿Department,Groups,CustomerFolders,ReadGroups
-Company_Profile,GG_DMS_Management,,
+Company_Profile,GG_DMS_Management,,Domain Users
 Company_Strategy,GG_DMS_Management,,
-Commercial,GG_DMS_Commercial,Commercial;Customer_Profile,
-Sales_Marketing,GG_DMS_Sales,,
-Enginnering,GG_DMS_Engineering,Engineering;Develop;DFM;DFT;NPI,
-Process_Engineering,GG_DMS_ProcessEng,Process_Engineering,
-Project_Management,GG_DMS_PM,Program,
-Supply_chain,GG_DMS_SupplyChain,Supply_chain,
-Quality and Standards,GG_DMS_Quality,QC;QC_Standards,
-RA_Certifications,GG_DMS_Quality,,
+Commercial,GG_DMS_Commercial,Commercial;Customer_Profile,GG_DMS_Management
+Sales_Marketing,GG_DMS_Sales,,GG_DMS_Management;GG_DMS_Commercial
+Enginnering,GG_DMS_Engineering,Engineering;Develop;DFM;DFT;NPI,GG_DMS_Management
+Process_Engineering,GG_DMS_ProcessEng,Process_Engineering,GG_DMS_Management;GG_DMS_Engineering
+Project_Management,GG_DMS_PM,Program,GG_DMS_Management
+Supply_chain,GG_DMS_SupplyChain,Supply_chain,GG_DMS_Management
+Quality and Standards,GG_DMS_Quality,,Domain Users
+Quality and Standards,GG_DMS_Quality,QC;QC_Standards,GG_DMS_Management
+RA_Certifications,GG_DMS_Quality,,GG_DMS_Management
 HR,GG_DMS_HR,,
-Training,GG_DMS_Training,,
-Finance,GG_DMS_Finance,,
-Legal,GG_DMS_Legal,,
-IT,GG_DMS_IT,IT,
+Training,GG_DMS_Training,,Domain Users
+Finance,GG_DMS_Finance,,GG_DMS_Management
+Legal,GG_DMS_Legal,,GG_DMS_Management
+IT,GG_DMS_IT,IT,GG_DMS_Management
 DB_Management,GG_DMS_IT,,
 02_Customers\Customer_A\Engineering,GG_DMS_Lab_CustomerA,,
