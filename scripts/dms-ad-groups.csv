@@ -1,0 +1,15 @@
+﻿Group,Description,Members
+GG_DMS_Management,DMS: Company_Profile / Company_Strategy,
+GG_DMS_Commercial,DMS: Commercial (and Commercial / Customer_Profile in every customer),
+GG_DMS_Sales,DMS: Sales_Marketing,
+GG_DMS_Engineering,DMS: Enginnering (and Engineering / Develop / DFM / DFT / NPI in every customer),dms_approval
+GG_DMS_ProcessEng,DMS: Process_Engineering (and in every customer),
+GG_DMS_PM,DMS: Project_Management (and Program in every customer),
+GG_DMS_SupplyChain,DMS: Supply_chain (and in every customer),
+GG_DMS_Quality,DMS: Quality and Standards / RA_Certifications (and QC / QC_Standards in every customer),
+GG_DMS_HR,DMS: HR,dms_approval
+GG_DMS_Training,DMS: Training,
+GG_DMS_Finance,DMS: Finance,
+GG_DMS_Legal,DMS: Legal,
+GG_DMS_IT,DMS: IT / DB_Management (and IT in every customer),
+GG_DMS_Lab_CustomerA,DMS: 02_Customers\Customer_A\Engineering only,dms-lab
