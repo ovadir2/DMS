@@ -1,0 +1,17 @@
+﻿Department,Code,CustomerFolders,Members,ReadGroups
+Company_Profile,Management,,,
+Company_Strategy,Management,,,
+Commercial,Commercial,Commercial;Customer_Profile,,
+Sales_Marketing,Sales,,,GG_DMS_Commercial
+Enginnering,Engineering,Engineering;Develop;DFM;DFT;NPI,,
+Process_Engineering,ProcessEng,Process_Engineering,,GG_DMS_Engineering
+Project_Management,PM,Program,,
+Supply_chain,SupplyChain,Supply_chain,,
+Quality and Standards,Quality,QC;QC_Standards,,GG_DMS_Employees
+RA_Certifications,Quality,,,
+HR,HR,,dms_approval,
+Training,Training,,,GG_DMS_Employees
+Finance,Finance,,,
+Legal,Legal,,,
+IT,IT,IT,,
+DB_Management,IT,,,

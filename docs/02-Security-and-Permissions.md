@@ -66,6 +66,10 @@ Pattern `DL_FS_<Scope>_<R|M>` where R = Read and M = Modify.
 
 Disable inheritance at the controlled folders and apply these ACEs (Phase 2 step 4). Keep `CREATOR OWNER` off controlled folders so that authors do not keep implicit rights after a move.
 
+### 3.2.1 Department folders (pilot): `scripts/Set-DmsAccess.ps1`
+
+`scripts/dms-access.csv` lists each department folder under `01_General`, its short `Code` and its parallel folders in every customer (`Enginnering` → `Engineering;Develop;DFM;DFT;NPI`). From it the script creates `GG_DMS_<Code>`, `DL_FS_<Code>_M` and `DL_FS_<Code>_R` (with `-CreateGroups -OU ...`), and sets each department folder and its parallel customer folders: no inheritance from above, Full control for SYSTEM, Administrators, `DL_FS_Admin_F` and the DMS account, Modify for `DL_FS_<Code>_M`, Read for `DL_FS_<Code>_R`, and no rename / delete of the blueprint folders. The folders above get "open this folder only" for those groups. With Access-Based Enumeration on the share, people see only their own folders. Without `-Apply` it only reports. With `DMS_ACCESS_SCRIPT=1` the DMS runs it (`-Customer <name> -Apply`) for every customer it creates.
+
 ### 3.3 Repository permission matrix (blueprint 5.2, expanded)
 
 | Role | Working | Submitted | Current (Approved) | Obsolete | Quarantine Inbound | Quarantine (other) |

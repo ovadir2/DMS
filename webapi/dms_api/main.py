@@ -174,7 +174,6 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         except OSError as e:
             logger.warning("HR Shared folder not created: %s", e)
     if own_register:
-        access.start(s.repository_root, s.department_groups, s.customers_folder)   # department groups on their folders
         from . import exchange_expiry
         exchange_expiry.start(app.state.sp, s)
     app.state.ai = ai or OpenWebUI(s)
@@ -905,8 +904,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             sub = blueprint.leaves(blueprint.PROJECT)
         for rel in sub:
             os.makedirs(os.path.join(path, *rel), exist_ok=True)
-        if sub and s.department_groups:                          # the new customer's department folders
-            access.apply(s.repository_root, s.department_groups, [parts + list(r) for r in sub])
+        if s.access_script and len(parts) == 2 and sub:          # the new customer's department folders: AD groups
+            access.new_customer(s.repository_root, parts[1])
         log(user, "new-folder", f"{path}" + (f" (+{len(sub)} blueprint folders)" if sub else ""))
         return {"name": os.path.basename(path), "path": path, "blueprintFolders": len(sub)}
 
