@@ -13,10 +13,13 @@
         Groups           the AD groups that work there (Modify), ";" between them (RH\HR_Team). A <placeholder>: row skipped
         CustomerFolders  its parallel folders in every customer, ";" between them (Engineering;DFM;DFT). Empty: none
         ReadGroups       AD groups that may only read there, ";" between them. Optional
+        Inherit          No: the folder takes nothing from the folder above (HR: closed to whoever has rights on
+                         01_General). Empty / Yes: it keeps what it inherits. A row "01_General" (or "02_Customers") gives
+                         its groups rights on that whole level: managers on 01_General
 
     Each department folder, and its parallel folder in every customer:
-      - keeps what it inherits from above: a group on an upper folder (01_General, 02_Customers, a customer) has the
-        same rights in every folder below it - an upper folder never gives less than its subfolders
+      - keeps what it inherits from above (unless Inherit = No): a group on an upper folder (01_General, 02_Customers,
+        a customer) has the same rights in every folder below it - an upper folder never gives less than its subfolders
       - SYSTEM, Administrators and the DMS account (-DmsAccount): Full control (the DMS moves the files)
       - Groups: Modify, ReadGroups: Read, on the folder, its subfolders and files
       - Groups may not rename / delete the folder itself nor the blueprint folders below it (their content they may)
@@ -87,9 +90,10 @@ function Add-Parent([string]$p, [string]$c) {
     if (-not $parents.Contains($p)) { $parents[$p] = New-Object Collections.Generic.List[string] }
     if (-not $parents[$p].Contains($c)) { $parents[$p].Add($c) }
 }
-function Add-Target([string]$full, [string]$key, [string[]]$grants, [string[]]$above) {
+function Add-Target([string]$full, [string]$key, [string[]]$grants, [string[]]$above, [bool]$protect) {
     if (-not (Test-Path -LiteralPath $full -PathType Container)) { $script:absent += $full; return }
-    if (-not $targets.Contains($full)) { $targets[$full] = @{ Key = $key; Codes = (New-Object Collections.Generic.List[string]) } }
+    if (-not $targets.Contains($full)) { $targets[$full] = @{ Key = $key; Codes = (New-Object Collections.Generic.List[string]); Protect = $false } }
+    if ($protect) { $targets[$full].Protect = $true }
     foreach ($c in $grants) {
         if (-not $targets[$full].Codes.Contains($c)) { $targets[$full].Codes.Add($c) }
         foreach ($p in $above) { Add-Parent $p $c.Substring(2) }
@@ -103,21 +107,22 @@ if ($Customer) {
     $customers = @(Get-ChildItem -LiteralPath $custRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object Name)
 }
 foreach ($r in $rows) {
-    if ($r.Department -match '\\') {                     # a path from the root: that one folder only (02_Customers\Customer_A\Engineering)
+    $protect = "$($r.Inherit)".Trim() -match '^(no|n|false|0)$'      # Inherit = No: nothing from the folder above
+    if ($r.Department -match '\\' -or $r.Department -in '01_General', $custFolder) {   # a path from the root: that one folder
         $parts = @($r.Department.Trim('\') -split '\\')
         $isCust = $parts.Count -gt 2 -and $parts[0] -eq $custFolder
         if ($Customer -and -not ($isCust -and $parts[1] -eq $Customer)) { continue }
         $key = if ($isCust) { (@('02_Customers', '<Customer>') + $parts[2..($parts.Count - 1)]) -join '\' } else { $parts -join '\' }
         $above = @($Root) + @(for ($i = 1; $i -lt $parts.Count; $i++) { Join-Path $Root ($parts[0..($i - 1)] -join '\') })
-        Add-Target (Join-Path $Root ($parts -join '\')) $key (Grants $r) $above
+        Add-Target (Join-Path $Root ($parts -join '\')) $key (Grants $r) $above $protect
         continue
     }
     if (-not $Customer) {
-        Add-Target (Join-Path $Root "01_General\$($r.Department)") "01_General\$($r.Department)" (Grants $r) @($Root, (Join-Path $Root '01_General'))
+        Add-Target (Join-Path $Root "01_General\$($r.Department)") "01_General\$($r.Department)" (Grants $r) @($Root, (Join-Path $Root '01_General')) $protect
     }
     foreach ($f in Split-List $r.CustomerFolders) {
         foreach ($c in $customers) {
-            Add-Target (Join-Path $custRoot "$c\$f") "02_Customers\<Customer>\$f" (Grants $r) @($Root, $custRoot, (Join-Path $custRoot $c))
+            Add-Target (Join-Path $custRoot "$c\$f") "02_Customers\<Customer>\$f" (Grants $r) @($Root, $custRoot, (Join-Path $custRoot $c)) $protect
         }
     }
 }
@@ -157,8 +162,11 @@ $fixed = @(
     (Sid-Or-Note $DmsAccount)
 ) | Where-Object { $_ }
 
-function Desired-Rules($grants) {
+function Desired-Rules($grants, [string]$path) {
     $rules = @($fixed | ForEach-Object { Rule $_ $FULL $CIOI })
+    if ($parents.Contains($path)) {                        # also above other department folders: they may open it
+        foreach ($g in $parents[$path]) { $sid = Get-Sid $g; if ($sid) { $rules += Rule $sid $READ $NONE } }
+    }
     foreach ($c in $grants) {
         $sid = Sid-Or-Note $c.Substring(2)
         if (-not $sid) { continue }
@@ -173,14 +181,14 @@ $changes = 0
 foreach ($path in $targets.Keys) {
     $t = $targets[$path]
     $acl = Read-Acl $path
-    $want = Desired-Rules $t.Codes
-    $same = -not $acl.AreAccessRulesProtected -and
+    $want = Desired-Rules $t.Codes $path
+    $same = $acl.AreAccessRulesProtected -eq $t.Protect -and
             (@($want | ForEach-Object { Key-Of $_ } | Sort-Object -Unique) -join ';') -eq (@(Explicit $acl | ForEach-Object { Key-Of $_ } | Sort-Object -Unique) -join ';')
     Write-Host ("{0,-9} {1}  [{2}]" -f $(if ($same) { 'ok' } else { 'CHANGE' }), $path, ($t.Codes -join ', ')) -ForegroundColor $(if ($same) { 'Gray' } else { 'Yellow' })
     if (-not $Apply) { if (-not $same) { $changes++ }; continue }
-    if (-not $same -and $PSCmdlet.ShouldProcess($path, "Inherits from above, plus Full: SYSTEM, Administrators, DMS account; $($t.Codes -join ', ')")) {
+    if (-not $same -and $PSCmdlet.ShouldProcess($path, "$(if ($t.Protect) { 'No inheritance' } else { 'Inherits from above' }), Full: SYSTEM, Administrators, DMS account; $($t.Codes -join ', ')")) {
         $new = New-Object Security.AccessControl.DirectorySecurity
-        $new.SetAccessRuleProtection($false, $true)               # inherits from above (its own rules are these)
+        $new.SetAccessRuleProtection($t.Protect, $false)          # Inherit = No: nothing from above; else inherits (its own rules are these)
         foreach ($r in $want) { $new.AddAccessRule($r) }
         Write-Acl $path $new
         $changes++
@@ -207,6 +215,7 @@ foreach ($path in $targets.Keys) {
 
 # the folders above: open (this folder only), so a department can browse down to its folders
 foreach ($p in $parents.Keys) {
+    if ($targets.Contains($p)) { continue }                # set with its own row above
     $acl = Read-Acl $p
     $keys = @(Explicit $acl | ForEach-Object { Key-Of $_ })
     $add = @($parents[$p] | ForEach-Object { Get-Sid $_ } | Where-Object { $_ } |

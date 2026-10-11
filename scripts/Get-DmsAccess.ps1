@@ -48,15 +48,15 @@ $rows = @(Import-Csv -LiteralPath $Map -Encoding UTF8 | Where-Object { $_.Depart
 
 # the plan for one folder (parts from the root), as Set-DmsAccess.ps1 reads the table
 function Plan([string[]]$parts) {
-    $m = @(); $r = @(); $rel = $parts -join '\'
+    $m = @(); $r = @(); $closed = $false; $rel = $parts -join '\'
     foreach ($row in $rows) {
         $hit = $false
-        if ($row.Department -match '\\') { $hit = $row.Department.Trim('\') -eq $rel }
+        if ($row.Department -match '\\' -or $row.Department -in '01_General', $custFolder) { $hit = $row.Department.Trim('\') -eq $rel }
         elseif ($parts.Count -eq 2 -and $parts[0] -eq '01_General') { $hit = $parts[1] -eq $row.Department }
         elseif ($parts.Count -eq 3 -and $parts[0] -eq $custFolder) { $hit = $parts[2] -in (Split-List $row.CustomerFolders) }
-        if ($hit) { $m += Split-List $row.Groups; $r += Split-List $row.ReadGroups }
+        if ($hit) { $m += Split-List $row.Groups; $r += Split-List $row.ReadGroups; if ("$($row.Inherit)".Trim() -match '^(no|n|false|0)$') { $closed = $true } }
     }
-    @{ M = @($m | Select-Object -Unique); R = @($r | Select-Object -Unique) }
+    @{ M = @($m | Select-Object -Unique); R = @($r | Select-Object -Unique); Closed = $closed }
 }
 
 function Short-Rights($rule) {
@@ -107,6 +107,7 @@ $report = foreach ($f in $folders) {
         Broad      = (@($own + $above | Where-Object { & $broad $_.IdentityReference } | ForEach-Object { Name-Of $_.IdentityReference } | Select-Object -Unique) -join '; ')
         PlanModify = $p.M -join '; '
         PlanRead   = $p.R -join '; '
+        PlanInherits = if (-not ($p.M.Count + $p.R.Count)) { '' } elseif ($p.Closed) { 'No' } else { 'Yes' }
         Note       = $note
     }
 }
