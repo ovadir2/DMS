@@ -1,60 +1,49 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Department access on the DMS folders, from scripts\dms-access.csv: AD groups per department folder under
-    01_General, and the same groups on the parallel folders of every customer (02_Customers\<Customer>\...).
+    Department access on the DMS folders: puts your existing AD groups (from scripts\dms-access.csv) on each
+    department folder under 01_General, and on its parallel folders in every customer (02_Customers\<Customer>\...).
+    Groups and members stay managed in AD: this script creates no group and adds no member.
 
 .DESCRIPTION
-    dms-access.csv, one row per department folder under 01_General (edit it, Excel keeps the format):
+    dms-access.csv, one row per department folder (edit it, Excel keeps the format):
         Department       the folder under 01_General (HR, Enginnering, Quality and Standards, ...), or a path from the
                          root for one folder only (02_Customers\Customer_A\Engineering: that customer's, not the others)
-        Code             short name of the department: its AD groups are named from it. Rows with the same Code
-                         share the groups (Company_Profile and Company_Strategy -> Management)
+        Groups           the AD groups that work there (Modify), ";" between them (RH\HR_Team). A <placeholder>: row skipped
         CustomerFolders  its parallel folders in every customer, ";" between them (Engineering;DFM;DFT). Empty: none
-        Members          accounts put in GG_DMS_<Code> by -CreateGroups, ";" between them. Optional
-        ReadGroups       Global groups that may only read there, ";" between them. Optional
-
-    AD groups (docs\02-Security-and-Permissions.md: people -> Global group -> Domain Local group -> NTFS):
-        GG_DMS_<Code>        Global, the people of the department (Members)
-        DL_FS_<Code>_M       Domain Local, Modify: GG_DMS_<Code> + -ModifyAll (Document Control)
-        DL_FS_<Code>_R       Domain Local, Read: ReadGroups + -ReadAll (Management, Auditors)
-        DL_FS_Admin_F        Domain Local, Full control: GG_DMS_ITAdmins
+        ReadGroups       AD groups that may only read there, ";" between them. Optional
 
     Each department folder, and its parallel folder in every customer:
       - does NOT inherit from the folder above (01_General / the customer): only what its row gives
-      - SYSTEM, Administrators, DL_FS_Admin_F and the DMS account (-DmsAccount): Full control (the DMS moves the files)
-      - DL_FS_<Code>_M: Modify, DL_FS_<Code>_R: Read, on the folder, its subfolders and files
-      - DL_FS_<Code>_M may not rename / delete the folder itself nor the blueprint folders below it (their content it may)
-    Above them (the root, 01_General, 02_Customers, each customer): the department groups may open that folder only,
-    so they can browse down to their own folders. Turn on Access-Based Enumeration on the share: everyone then sees
-    only the folders they may open. -RemoveBroad also takes Everyone / Authenticated Users / Domain Users / Users off
+      - SYSTEM, Administrators and the DMS account (-DmsAccount): Full control (the DMS moves the files)
+      - Groups: Modify, ReadGroups: Read, on the folder, its subfolders and files
+      - Groups may not rename / delete the folder itself nor the blueprint folders below it (their content they may)
+    Above them (the root, 01_General, 02_Customers, each customer): those groups may open that folder only, so they
+    can browse down to their own folders. Turn on Access-Based Enumeration on the share: everyone then sees only the
+    folders they may open. -RemoveBroad also takes Everyone / Authenticated Users / Domain Users / Users off
     01_General and 02_Customers (else everyone still sees and reads everything outside the department folders).
 
     Without -Apply it only reports. -Customer <name>: that customer only (the DMS runs it for each new customer,
-    DMS_ACCESS_SCRIPT=1). Run as a domain admin / file server admin; -CreateGroups needs the ActiveDirectory
-    module (RSAT). Supports -WhatIf. Run it again after changing the table: it is idempotent.
+    DMS_ACCESS_SCRIPT=1). Run as a file server admin. Supports -WhatIf. Run it again after changing the table or
+    adding customers: it is idempotent (changes only what differs).
 
 .EXAMPLE
-    .\Set-DmsAccess.ps1                                                             # report only
-    .\Set-DmsAccess.ps1 -CreateGroups -OU 'OU=DMS,OU=Groups,DC=rh,DC=local' -Apply -WhatIf
-    .\Set-DmsAccess.ps1 -CreateGroups -OU 'OU=DMS,OU=Groups,DC=rh,DC=local' -Apply -RemoveBroad
+    .\Set-DmsAccess.ps1                                  # report only
+    .\Set-DmsAccess.ps1 -Apply -WhatIf
+    .\Set-DmsAccess.ps1 -Apply -RemoveBroad
 
 .EXAMPLE
-    .\Set-DmsAccess.ps1 -Customer Customer_B -Apply                                 # one new customer
+    .\Set-DmsAccess.ps1 -Customer Customer_B -Apply      # one new customer
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [string] $Root,                                          # default: DMS_REPOSITORY_ROOT (environment, else webapi\.env)
+    [string] $Root,                                      # default: DMS_REPOSITORY_ROOT (environment, else webapi\.env)
     [string] $Map = (Join-Path $PSScriptRoot 'dms-access.csv'),
-    [string] $Domain = $env:USERDOMAIN,
-    [string] $DmsAccount,                                    # default: DMS_SERVICE_ACCOUNT, else you
+    [string] $Domain = $env:USERDOMAIN,                  # for group names written without "DOMAIN\"
+    [string] $DmsAccount,                                # default: DMS_SERVICE_ACCOUNT, else you
     [string] $Customer,
-    [string[]] $ModifyAll = @('GG_DMS_DocumentControl'),
-    [string[]] $ReadAll = @('GG_DMS_Management', 'GG_DMS_Auditors'),
-    [switch] $CreateGroups,
-    [string] $OU,
     [switch] $RemoveBroad,
-    [switch] $ResetChildren,                                 # subfolders / files with their own permissions inherit again
+    [switch] $ResetChildren,                             # subfolders / files with their own permissions inherit again
     [switch] $Apply
 )
 $ErrorActionPreference = 'Stop'
@@ -75,70 +64,34 @@ $Root = $Root.TrimEnd('\')
 if (-not $DmsAccount) { $DmsAccount = Get-DmsSetting 'DMS_SERVICE_ACCOUNT' }
 if (-not $DmsAccount) { $DmsAccount = "$env:USERDOMAIN\$env:USERNAME"; Write-Warning "No DMS_SERVICE_ACCOUNT: the DMS account is taken to be you ($DmsAccount)." }
 $custFolder = Get-DmsSetting 'DMS_CUSTOMERS_FOLDER'; if (-not $custFolder) { $custFolder = '02_Customers' }
-if ($CreateGroups -and $Apply -and -not $OU) { throw '-CreateGroups needs -OU (where the groups are created), e.g. OU=DMS,OU=Groups,DC=rh,DC=local' }
 
-function Split-List([string]$v) { @("$v" -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+function Split-List([string]$v) { @("$v" -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -notlike '<*' }) }
 function Q([string]$name) { if ($name -match '\\') { $name } else { "$Domain\$name" } }
 function Get-Sid([string]$name) { try { (New-Object Security.Principal.NTAccount (Q $name)).Translate([Security.Principal.SecurityIdentifier]) } catch { $null } }
-function GG([string]$c) { "GG_DMS_$c" }
-function DLM([string]$c) { "DL_FS_$($c)_M" }
-function DLR([string]$c) { "DL_FS_$($c)_R" }
 
-$rows = @(Import-Csv -LiteralPath $Map -Encoding UTF8 | Where-Object { $_.Department -and $_.Code })
-foreach ($r in $rows) { if ($r.Code -notmatch '^[A-Za-z0-9_-]+$') { throw "Code '$($r.Code)' ($($r.Department)): letters, digits, _ and - only" } }
-$codes = @($rows | ForEach-Object { $_.Code } | Select-Object -Unique)
-
-# ---- AD groups --------------------------------------------------------------------------------------------------
-if ($CreateGroups) {
-    Import-Module ActiveDirectory
-    function Find-Group([string]$n) { Get-ADGroup -Filter "SamAccountName -eq '$n'" -ErrorAction SilentlyContinue }
-    function Ensure-Group([string]$n, [string]$scope, [string]$desc) {
-        if (Find-Group $n) { return }
-        if ($Apply -and $PSCmdlet.ShouldProcess($n, "Create AD group ($scope) in $OU")) {
-            New-ADGroup -Name $n -SamAccountName $n -GroupScope $scope -GroupCategory Security -Path $OU -Description $desc
-            Write-Host "  + group $n ($scope)" -ForegroundColor Green
-        } elseif (-not $Apply) { Write-Host "  group to create: $n ($scope)" -ForegroundColor Yellow }
-    }
-    function Ensure-Member([string]$group, [string]$member) {
-        $g = Find-Group $group
-        $has = $g -and (Get-ADGroupMember -Identity $group | Where-Object { $_.SamAccountName -eq $member })
-        if ($has) { return }
-        if ($Apply -and $PSCmdlet.ShouldProcess($group, "Add $member")) {
-            Add-ADGroupMember -Identity $group -Members $member; Write-Host "  + $member in $group" -ForegroundColor Green
-        } elseif (-not $Apply) { Write-Host "  to add: $member in $group" -ForegroundColor Yellow }
-    }
-    Write-Host "AD groups ($OU)" -ForegroundColor Cyan
-    $globals = @($ModifyAll + $ReadAll + 'GG_DMS_ITAdmins' + @($rows | ForEach-Object { Split-List $_.ReadGroups }) | Select-Object -Unique)
-    foreach ($c in $codes) { Ensure-Group (GG $c) Global "DMS: people of $c" }
-    foreach ($n in $globals) { if ($n -notin @($codes | ForEach-Object { GG $_ })) { Ensure-Group $n Global "DMS role group" } }
-    Ensure-Group 'DL_FS_Admin_F' DomainLocal 'DMS folders: Full control'
-    Ensure-Member 'DL_FS_Admin_F' 'GG_DMS_ITAdmins'
-    foreach ($c in $codes) {
-        $deps = ($rows | Where-Object { $_.Code -eq $c } | ForEach-Object { $_.Department }) -join ', '
-        Ensure-Group (DLM $c) DomainLocal "DMS folders of $deps (and in every customer): Modify"
-        Ensure-Group (DLR $c) DomainLocal "DMS folders of $deps (and in every customer): Read"
-        Ensure-Member (DLM $c) (GG $c)
-        foreach ($m in $ModifyAll) { Ensure-Member (DLM $c) $m }
-        foreach ($m in @($ReadAll + @($rows | Where-Object { $_.Code -eq $c } | ForEach-Object { Split-List $_.ReadGroups })) | Select-Object -Unique) { Ensure-Member (DLR $c) $m }
-        foreach ($m in @($rows | Where-Object { $_.Code -eq $c } | ForEach-Object { Split-List $_.Members }) | Select-Object -Unique) { Ensure-Member (GG $c) $m }
-    }
-}
+$rows = @(Import-Csv -LiteralPath $Map -Encoding UTF8 | Where-Object { $_.Department })
+$skipped = @($rows | Where-Object { -not (Split-List $_.Groups).Count } | ForEach-Object Department)
+$rows = @($rows | Where-Object { (Split-List $_.Groups).Count })
+# what a row gives: "M|group" (Modify) and "R|group" (Read)
+function Grants($r) { @(Split-List $r.Groups | ForEach-Object { "M|$(Q $_)" }) + @(Split-List $r.ReadGroups | ForEach-Object { "R|$(Q $_)" }) }
 
 # ---- which folders --------------------------------------------------------------------------------------------
 $bp = @(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'blueprint-folders.txt') -Encoding UTF8 | ForEach-Object { $_.Trim() } |
         Where-Object { $_ -and $_ -notlike '*<Product>*' })
-$targets = [ordered]@{}     # department folder -> @{ Key = its blueprint line; Codes }
-$parents = [ordered]@{}     # folder above -> codes that may open it
+$targets = [ordered]@{}     # department folder -> @{ Key = its blueprint line; Codes = its grants (M|group, R|group) }
+$parents = [ordered]@{}     # folder above -> groups that may open it
 $absent = @()
 function Add-Parent([string]$p, [string]$c) {
     if (-not $parents.Contains($p)) { $parents[$p] = New-Object Collections.Generic.List[string] }
     if (-not $parents[$p].Contains($c)) { $parents[$p].Add($c) }
 }
-function Add-Target([string]$full, [string]$key, [string]$c, [string[]]$above) {
+function Add-Target([string]$full, [string]$key, [string[]]$grants, [string[]]$above) {
     if (-not (Test-Path -LiteralPath $full -PathType Container)) { $script:absent += $full; return }
     if (-not $targets.Contains($full)) { $targets[$full] = @{ Key = $key; Codes = (New-Object Collections.Generic.List[string]) } }
-    if (-not $targets[$full].Codes.Contains($c)) { $targets[$full].Codes.Add($c) }
-    foreach ($p in $above) { Add-Parent $p $c }
+    foreach ($c in $grants) {
+        if (-not $targets[$full].Codes.Contains($c)) { $targets[$full].Codes.Add($c) }
+        foreach ($p in $above) { Add-Parent $p $c.Substring(2) }
+    }
 }
 $custRoot = Join-Path $Root $custFolder
 if ($Customer) {
@@ -154,15 +107,15 @@ foreach ($r in $rows) {
         if ($Customer -and -not ($isCust -and $parts[1] -eq $Customer)) { continue }
         $key = if ($isCust) { (@('02_Customers', '<Customer>') + $parts[2..($parts.Count - 1)]) -join '\' } else { $parts -join '\' }
         $above = @($Root) + @(for ($i = 1; $i -lt $parts.Count; $i++) { Join-Path $Root ($parts[0..($i - 1)] -join '\') })
-        Add-Target (Join-Path $Root ($parts -join '\')) $key $r.Code $above
+        Add-Target (Join-Path $Root ($parts -join '\')) $key (Grants $r) $above
         continue
     }
     if (-not $Customer) {
-        Add-Target (Join-Path $Root "01_General\$($r.Department)") "01_General\$($r.Department)" $r.Code @($Root, (Join-Path $Root '01_General'))
+        Add-Target (Join-Path $Root "01_General\$($r.Department)") "01_General\$($r.Department)" (Grants $r) @($Root, (Join-Path $Root '01_General'))
     }
     foreach ($f in Split-List $r.CustomerFolders) {
         foreach ($c in $customers) {
-            Add-Target (Join-Path $custRoot "$c\$f") "02_Customers\<Customer>\$f" $r.Code @($Root, $custRoot, (Join-Path $custRoot $c))
+            Add-Target (Join-Path $custRoot "$c\$f") "02_Customers\<Customer>\$f" (Grants $r) @($Root, $custRoot, (Join-Path $custRoot $c))
         }
     }
 }
@@ -199,16 +152,16 @@ function Sid-Or-Note([string]$name) {
 $fixed = @(
     (New-Object Security.Principal.SecurityIdentifier 'S-1-5-18'),        # SYSTEM
     (New-Object Security.Principal.SecurityIdentifier 'S-1-5-32-544'),    # Administrators
-    (Sid-Or-Note 'DL_FS_Admin_F'),
     (Sid-Or-Note $DmsAccount)
 ) | Where-Object { $_ }
 
-function Desired-Rules($codesHere) {
+function Desired-Rules($grants) {
     $rules = @($fixed | ForEach-Object { Rule $_ $FULL $CIOI })
-    foreach ($c in $codesHere) {
-        $m = Sid-Or-Note (DLM $c); $r = Sid-Or-Note (DLR $c)
-        if ($m) { $rules += Rule $m $MODIFY $CIOI; $rules += Rule $m $DELETE $NONE 'Deny' }   # no rename / delete of the folder
-        if ($r) { $rules += Rule $r $READ $CIOI }
+    foreach ($c in $grants) {
+        $sid = Sid-Or-Note $c.Substring(2)
+        if (-not $sid) { continue }
+        if ($c.StartsWith('M|')) { $rules += Rule $sid $MODIFY $CIOI; $rules += Rule $sid $DELETE $NONE 'Deny' }   # no rename / delete of the folder
+        else { $rules += Rule $sid $READ $CIOI }
     }
     $rules
 }
@@ -223,7 +176,7 @@ foreach ($path in $targets.Keys) {
             (@($want | ForEach-Object { Key-Of $_ } | Sort-Object -Unique) -join ';') -eq (@(Explicit $acl | ForEach-Object { Key-Of $_ } | Sort-Object -Unique) -join ';')
     Write-Host ("{0,-9} {1}  [{2}]" -f $(if ($same) { 'ok' } else { 'CHANGE' }), $path, ($t.Codes -join ', ')) -ForegroundColor $(if ($same) { 'Gray' } else { 'Yellow' })
     if (-not $Apply) { if (-not $same) { $changes++ }; continue }
-    if (-not $same -and $PSCmdlet.ShouldProcess($path, "No inheritance; Full: SYSTEM, Administrators, DL_FS_Admin_F, DMS account; Modify / Read: $($t.Codes -join ', ')")) {
+    if (-not $same -and $PSCmdlet.ShouldProcess($path, "No inheritance; Full: SYSTEM, Administrators, DMS account; $($t.Codes -join ', ')")) {
         $new = New-Object Security.AccessControl.DirectorySecurity
         $new.SetAccessRuleProtection($true, $false)               # nothing from 01_General / the customer above
         foreach ($r in $want) { $new.AddAccessRule($r) }
@@ -241,7 +194,7 @@ foreach ($path in $targets.Keys) {
         if (-not (Test-Path -LiteralPath $sub -PathType Container)) { continue }
         $sa = Read-Acl $sub
         $keys = @(Explicit $sa | ForEach-Object { Key-Of $_ })
-        $add = @($t.Codes | ForEach-Object { Get-Sid (DLM $_) } | Where-Object { $_ } | ForEach-Object { Rule $_ $DELETE $NONE 'Deny' } |
+        $add = @($t.Codes | Where-Object { $_.StartsWith('M|') } | ForEach-Object { Get-Sid $_.Substring(2) } | Where-Object { $_ } | ForEach-Object { Rule $_ $DELETE $NONE 'Deny' } |
                  Where-Object { (Key-Of $_) -notin $keys })
         if ($add.Count -and $PSCmdlet.ShouldProcess($sub, 'No rename / delete (blueprint folder)')) {
             foreach ($r in $add) { $sa.AddAccessRule($r) }
@@ -254,7 +207,7 @@ foreach ($path in $targets.Keys) {
 foreach ($p in $parents.Keys) {
     $acl = Read-Acl $p
     $keys = @(Explicit $acl | ForEach-Object { Key-Of $_ })
-    $add = @($parents[$p] | ForEach-Object { (Get-Sid (DLM $_)), (Get-Sid (DLR $_)) } | Where-Object { $_ } |
+    $add = @($parents[$p] | ForEach-Object { Get-Sid $_ } | Where-Object { $_ } |
              ForEach-Object { Rule $_ $READ $NONE } | Where-Object { (Key-Of $_) -notin $keys })
     if (-not $add.Count) { continue }
     Write-Host ("{0,-9} {1}  (open only: {2})" -f 'CHANGE', $p, ($parents[$p] -join ', ')) -ForegroundColor Yellow
@@ -286,6 +239,7 @@ if (-not $Customer) {
 }
 
 if ($absent.Count) { Write-Host "`nNot found (no folder, nothing done): $($absent.Count)"; $absent | Select-Object -First 20 | ForEach-Object { Write-Host "    $_" } }
-if ($missingGroups.Count) { Write-Warning "Not in AD (left out): $(@($missingGroups.Keys) -join ', '). Create them with -CreateGroups -OU <OU> -Apply." }
+if ($skipped.Count) { Write-Host "`nNo group filled in yet (skipped): $($skipped -join ', ')" }
+if ($missingGroups.Count) { Write-Warning "Not found in AD (left out): $(@($missingGroups.Keys) -join ', '). Check the names in $Map." }
 if (-not $Apply) { Write-Host "`nReport only: $changes folder(s) to change. Run again with -Apply (-WhatIf first)." -ForegroundColor Yellow }
-else { Write-Host "`nDone: $changes folder(s). Members of a new group must sign out and in again." -ForegroundColor Green }
+else { Write-Host "`nDone: $changes folder(s). Someone just added to a group must sign out and in again." -ForegroundColor Green }

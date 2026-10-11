@@ -1,18 +1,18 @@
-﻿Department,Code,CustomerFolders,Members,ReadGroups
-Company_Profile,Management,,,
-Company_Strategy,Management,,,
-Commercial,Commercial,Commercial;Customer_Profile,,
-Sales_Marketing,Sales,,,GG_DMS_Commercial
-Enginnering,Engineering,Engineering;Develop;DFM;DFT;NPI,dms_approval,
-Process_Engineering,ProcessEng,Process_Engineering,,GG_DMS_Engineering
-Project_Management,PM,Program,,
-Supply_chain,SupplyChain,Supply_chain,,
-Quality and Standards,Quality,QC;QC_Standards,,GG_DMS_Employees
-RA_Certifications,Quality,,,
-HR,HR,,dms_approval,
-Training,Training,,,GG_DMS_Employees
-Finance,Finance,,,
-Legal,Legal,,,
-IT,IT,IT,,
-DB_Management,IT,,,
-02_Customers\Customer_A\Engineering,Lab_CustomerA,,dms-lab,
+﻿Department,Groups,CustomerFolders,ReadGroups
+Company_Profile,<Management group>,,
+Company_Strategy,<Management group>,,
+Commercial,<Commercial group>,Commercial;Customer_Profile,
+Sales_Marketing,<Sales group>,,
+Enginnering,<Engineering group>,Engineering;Develop;DFM;DFT;NPI,
+Process_Engineering,<Process Engineering group>,Process_Engineering,
+Project_Management,<Project Management group>,Program,
+Supply_chain,<Supply chain group>,Supply_chain,
+Quality and Standards,<Quality group>,QC;QC_Standards,
+RA_Certifications,<Quality group>,,
+HR,<HR group>,,
+Training,<Training group>,,
+Finance,<Finance group>,,
+Legal,<Legal group>,,
+IT,<IT group>,IT,
+DB_Management,<IT group>,,
+02_Customers\Customer_A\Engineering,<Customer_A Engineering group>,,
