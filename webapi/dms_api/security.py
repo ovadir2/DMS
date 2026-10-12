@@ -11,7 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 READ, WRITE = "read", "write"
-TOKEN_HEADER = "MS-ASPNETCORE-WINAUTHTOKEN"
+TOKEN_HEADER = "MS-ASPNETCORE-WINAUTHTOKEN"          # the ASP.NET Core module (ANCM) forwards the user's token here
+TOKEN_HEADERS = (TOKEN_HEADER, "X-IIS-WindowsAuthToken")   # HttpPlatformHandler calls the same thing X-IIS-WindowsAuthToken
 
 
 @dataclass

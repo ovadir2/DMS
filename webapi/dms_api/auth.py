@@ -17,7 +17,7 @@ import jwt
 from fastapi import HTTPException, Request
 
 from .config import Settings
-from .security import TOKEN_HEADER, User, user_from_windows_token
+from .security import TOKEN_HEADERS, User, user_from_windows_token
 
 
 @lru_cache(maxsize=4)
@@ -28,9 +28,10 @@ def _jwks(tenant_id: str) -> jwt.PyJWKClient:
 def _resolve(request: Request) -> User:
     s: Settings = request.app.state.settings
     if s.auth_mode == "windows":
-        handle = request.headers.get(TOKEN_HEADER)
+        handle = next((request.headers[h] for h in TOKEN_HEADERS if h in request.headers), None)
         if not handle:
-            raise HTTPException(401, "Windows sign-in is missing. Enable Windows Authentication in IIS.")
+            raise HTTPException(401, "Windows sign-in is missing. Enable Windows Authentication in IIS "
+                                     "(and forwardWindowsAuthToken in web.config).")
         return user_from_windows_token(handle)
     if s.auth_mode == "dev":
         if not s.dev_user:
