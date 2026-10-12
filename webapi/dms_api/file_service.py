@@ -1,4 +1,4 @@
-"""The Workflow Service file moves (scripts/Invoke-DmsWorkflowService.ps1), inside the web service
+"""The Workflow Service file moves, inside the web service
 for the pilot (DMS_FILE_SERVICE_SECONDS > 0). Per Document Register record:
 
   Submitted  file in its own place  -> <folder>\\Submitted, read-only

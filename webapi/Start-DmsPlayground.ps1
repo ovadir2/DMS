@@ -12,7 +12,7 @@
     in to SharePoint once in the browser with the Entra app you use for PnP (-ClientId, i.e. $C) and
     you are the DMS user. The Workflow Service file moves run inside the page service every
     -FileServiceSeconds (Submitted -> Submitted folder, Approved -> Current_ReadOnly, Rejected -> back),
-    so do not also run Invoke-DmsWorkflowService.ps1 at the same time.
+    (the file moves run inside the page service).
 
     -Approvals page (default): approvers approve or reject on the page (Approvals), by the same rules as
     DC-P1 (Approver Matrix: all mandatory approvers, then the final approver). Turn DC-P1 Off in Power
@@ -164,7 +164,7 @@ if ($Share) {
         $setup = Join-Path $env:DMS_REPOSITORY_ROOT '04_Workflow_System\Setup'
         $cust = if ($env:DMS_CUSTOMERS_FOLDER) { $env:DMS_CUSTOMERS_FOLDER } else { '02_Customers' }
         New-Item -ItemType Directory -Path $setup -Force | Out-Null
-        foreach ($f in 'Set-DmsDrives.ps1', 'Open-DmsFile.ps1', 'Set-DmsAdGroups.ps1', 'Set-DmsAccess.ps1', 'Get-DmsAccess.ps1',
+        foreach ($f in 'Set-DmsDrives.ps1', 'Open-DmsFile.ps1', 'Set-DmsAccess.ps1', 'Get-DmsAccess.ps1',
                        'dms-ad-groups.csv', 'dms-access.csv', 'blueprint-folders.txt') { Copy-Item -LiteralPath (Join-Path $PSScriptRoot "..\scripts\$f") -Destination $setup -Force }
         # the access scripts run on the file server too (no .env there): the DMS account and the customers folder
         $svc = Get-DotEnv 'DMS_SERVICE_ACCOUNT'; if (-not $svc) { $svc = "$env:USERDOMAIN\$env:USERNAME" }

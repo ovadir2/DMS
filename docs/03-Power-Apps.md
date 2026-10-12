@@ -335,7 +335,7 @@ translated; support right-to-left layout for Hebrew.
 
 ### 2.5 Opening the app from the file server
 
-`scripts/Install-DmsExplorerMenu.ps1` adds **שלח לתהליך אישור DMS** to the Explorer right-click menu (and to **Send to**). For a file under `dms_RepositoryRoot` it opens the app web link with two parameters: `path` (the UNC path) and `name` (the file name). Install it per user, or deploy it with a GPO logon script or Intune.
+An Explorer entry can open the app web link with two parameters for a file under `dms_RepositoryRoot`: `path` (the UNC path) and `name` (the file name). The pilot does not install one: users work from the DMS page, which the drive letters of `scripts/Set-DmsDrives.ps1` keep short.
 
 In the app, read the parameters and open the new-document form prefilled.
 
@@ -371,7 +371,7 @@ The pilot app **DMS - Document Register** was generated with the newer single-sc
 | `'כותרת המסמך_DataCard1'.Default` | `Coalesce(Param("name"), ThisItem.'כותרת המסמך')` |
 | `RecordsGallery1.Items` (delegable) | `SortByColumns(Filter([@'Document Register'], StartsWith(Title, SearchInput1.Text)), "Modified", SortOrder.Descending)` |
 
-`NewForm(Form1)` alone does not work in this template, because `DefaultMode` overrides it. Without `path` in the URL the app opens the selected record read-only, which is expected. Install the menu with `.\Install-DmsExplorerMenu.ps1 -AppUrl $App -RepositoryRoot $Root -MenuText 'Start workflow'`.
+`NewForm(Form1)` alone does not work in this template, because `DefaultMode` overrides it. Without `path` in the URL the app opens the selected record read-only, which is expected.
 
 The file must already be in a `Working` folder of the controlled repository. The flows validate the path again (DC-01), so the menu is a convenience, not a security control.
 

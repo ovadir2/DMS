@@ -2,7 +2,7 @@
 
 A small web service inside the company network that "wraps" the file server repository, in the style of File Linker. Users sign in with their Windows login (no login screen). They pick a customer and see only what AD allows them, work with files and folders like in Explorer, save files from their PC into the right folder of `$Root`, start the approval workflow and see each file's status.
 
-Everything else stays as it is: SharePoint keeps the records, the approval flow (DC-P1) sends the approvals in Teams, the Workflow Service (`scripts/Invoke-DmsWorkflowService.ps1`) moves the files, and the Explorer right-click still works.
+Everything else stays as it is: SharePoint keeps the records, the approval flow (DC-P1) sends the approvals in Teams, and the page service moves the files.
 
 ## Try it on your PC (playground)
 
@@ -20,11 +20,11 @@ cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C
 
 - Your real folders, the real Document Register and Control Audit on `DocumentControl-TEST`, and the real approval flow: submitting from the page sets the status, and DC-P1 sends the approvals to Teams.
 - A browser window opens once to sign in to SharePoint, with the Entra app you use for PnP (`$C`). The token is cached in `%LOCALAPPDATA%\DMS`. You are the DMS user (no AD checks on the PC). To test other users and AD: add `-Users user1@rh.co.il,user2@rh.co.il` (an "Acting as" list on the page). In the pilot every user's AD / NTFS access to `$Root` is checked, the `-Admins` are not (`-NoAdCheck` turns it off).
-- The Workflow Service file moves run inside the page service every 60 seconds (Submitted -> `Submitted`, Approved -> `Current_ReadOnly`, Rejected -> back). **My workflows > Move files now** runs them at once. Do not run `Invoke-DmsWorkflowService.ps1` at the same time.
+- The Workflow Service file moves run inside the page service every 60 seconds (Submitted -> `Submitted`, Approved -> `Current_ReadOnly`, Rejected -> back). **My workflows > Move files now** runs them at once.
 - **Approvals on the page** (default `-Approvals page`): the header shows **Approvals** with the number waiting; approvers approve (optional comment) or reject (comment required) by the DC-P1 rules (Approver Matrix: every mandatory approver, then the final approver). Turn **DC-P1 Off** in Power Automate for the pilot. `-Approvals flow` keeps the approvals in Teams.
 - **Notifications:** with page approvals, each step is written to the **DMS Notifications** list and sent by email and Teams by the DC-P2 flow (`scripts/New-DmsNotifyFlowPackage.ps1`). The links open the page on Approvals (`?view=approvals`) or My workflows (`?view=workflows`). `DMS_NOTIFY=0` turns them off.
 - `-Admins` (default `roneno@rh.co.il`) are DMS super users: they may submit any document, decide any approval stage and see **All workflows** and **All pending approvals**.
-- For one person to approve everything during the pilot: `..\scripts\Set-DmsTestApprover.ps1 -TenantName rhisrael -DocControlSiteAlias DocumentControl-TEST -ClientId $C -Approver roneno@rh.co.il` (it saves a backup and prints the command to restore the real approvers).
+- For one person to approve everything during the pilot, use the ⋮ menu's **Acting as** list (`-Users`) and the `-Admins` super users: a super user may decide any approval stage.
 
 
 ### Let the approvers try it (from their PCs)
@@ -168,7 +168,7 @@ The server must be joined to the domain, reach `$Root`, and have outbound HTTPS 
    DMS_SP_AUTH=certificate
    DMS_AUTH_MODE=windows
    DMS_APPROVALS=page            # or flow: approvals in Teams with DC-P1 On
-   DMS_FILE_SERVICE_SECONDS=60   # file moves inside the service; do not also run Invoke-DmsWorkflowService.ps1
+   DMS_FILE_SERVICE_SECONDS=60   # file moves inside the service
    DMS_PAGE_URL=https://<server>/dms/dms-page
    DMS_ADMINS=<super user emails, comma separated>
    DMS_EX_SITE_URL=https://rhisrael.sharepoint.com/sites/LargeFileExchange
@@ -193,10 +193,7 @@ The server must be joined to the domain, reach `$Root`, and have outbound HTTPS 
 ## Link it
 
 - **RH Navigator:** a menu link to `https://<server>/dms/dms-page?lang=EN`.
-- **Explorer right-click:**
-  ```powershell
-  .\scripts\Install-DmsExplorerMenu.ps1 -AppUrl 'https://<server>/dms/dms-page?lang=EN' -RepositoryRoot $Root -MenuText 'Start workflow'
-  ```
+- **Each user's PC:** `scripts\Set-DmsDrives.ps1 -Root $Root -DmsUrl https://<server>` maps the drive letters (G: / R:) and installs the `rh-dms:` open handler, so Open and Edit work from the page.
 - From outside the network: `DMS_AUTH_MODE=entra` behind Entra Application Proxy (an Entra app registration with an `access_as_user` scope and a SPA redirect URI). In that mode the AD file checks do not apply.
 
 ## Tests

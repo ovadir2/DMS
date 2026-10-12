@@ -68,15 +68,13 @@ After `Provision-DMS.ps1`, run `scripts/Connect-DmsGroups.ps1`. It creates the E
 
 The on-premises repository tree (docs/01 §4) is built by `scripts/New-DmsFileServerTree.ps1`: the root folders, the 20 management areas and the full customer/project tree from blueprint Appendix A, and per document the `Working / Submitted / Current_ReadOnly / Obsolete_ReadOnly` folders. `-CreateAdGroups` creates the `DL_FS_*` groups and `-ApplyAcl` sets the NTFS permissions from docs/02 §3.2. `-DocumentParent` places a controlled document inside a project folder (e.g. `Development\02_SOW`). It supports `-WhatIf`.
 
-`scripts/Install-DmsExplorerMenu.ps1` adds **שלח לתהליך אישור DMS** to the Explorer right-click menu. It opens the Power App with the selected file's path, so the user registers and submits the document in one form (docs/03 §2.5).
-
 For the pilot, `scripts/New-DmsPilotFlowPackage.ps1` builds `scripts/out/DC-P1-PilotApproval.zip`, a ready-made approval flow (Document Register status "Submitted" → mandatory approvers → final approver → status + Control Audit row). Import it in Power Automate with **My flows > Import > Import Package (Legacy)**.
 
-`scripts/Invoke-DmsWorkflowService.ps1` is the pilot Workflow Service, the on-prem side of the approval. Run it every few minutes on a server that can write to the repository. It moves each document's file to match its status: Submitted → `Submitted` (read-only), Approved → `Current_ReadOnly` (the previous revision → `Obsolete_ReadOnly`, the path and SHA-256 written back to the register), rejected → back to `Working`. Every move writes a Control Audit row. It supports `-WhatIf`.
+The on-prem side of the approval runs inside the DMS itself (`webapi/dms_api/file_service.py`, `DMS_FILE_SERVICE_SECONDS`): it moves each document's file to match its status, Submitted → `Submitted` (read-only), Approved → `Current_ReadOnly` (the previous revision → `Obsolete_ReadOnly`, the path and SHA-256 written back to the register), rejected → back to `Working`. Every move writes a Control Audit row.
 
 `scripts/New-DmsNotifyFlowPackage.ps1` creates the **DMS Notifications** list and builds `scripts/out/DC-P2-PilotNotifications.zip`: with approvals on the DMS page, it sends each step (waiting for approval, approved, rejected, withdrawn) to the right people by email and Teams.
 
-For the pilot, `scripts/Set-DmsTestApprover.ps1` makes one person (e.g. the DMS super user) the mandatory and final approver of every document type, with a backup to restore the real approvers.
+`scripts/Set-DmsAccess.ps1` and `scripts/Get-DmsAccess.ps1` set and report the department access on the repository folders, from `scripts/dms-access.csv` (the groups themselves stay managed in AD by IT). `scripts/new_access_workbook.py` builds `scripts/dms-access-template.xlsx`: every blueprint folder by levels, for IT to fill in.
 
 `webapi/` is **RH - Documents Management System**, a web page and API inside the company network that wraps the file server repository: users sign in with their Windows login, see the customers and folders AD allows them, upload, create, rename and delete files and folders, start the approval workflow with the status shown on each file, follow **My workflows**, and ask **AI Insights** (the RH on-prem RAG LLM) about documents (`/dms/dms-page?lang=EN`). RH Navigator links to it and the Explorer right-click can open it. See [webapi/README.md](webapi/README.md).
 

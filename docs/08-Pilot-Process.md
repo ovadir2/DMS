@@ -10,7 +10,7 @@ Related: [07 - Approval Flow](07-Approval-Flow.md) (the flow inside Power Automa
 | --- | --- | --- |
 | File server (`$Root`) | On-prem, blueprint Appendix A tree | Holds every file. NTFS permissions (AD groups) decide who sees what |
 | DMS page | Company network, `https://<server>/dms/dms-page?lang=EN` (or `HE`), linked from RH Navigator | Browse by customer and the blueprint tree, save files, start the workflow, see status, find files, AI Insights |
-| Explorer right-click | Each PC (`scripts/Install-DmsExplorerMenu.ps1`) | **Start workflow** on a file opens the page with the file filled in |
+| Drive letters and Open | Each PC (`scripts/Set-DmsDrives.ps1`) | G: / R: for short paths, and the `rh-dms:` handler so Open and Edit work from the page |
 | Document Register | SharePoint `DocumentControl` site | One record per controlled document: ID, type, status, owner, paths, SHA-256 |
 | Approver Matrix | SharePoint | Who approves each document type (mandatory approvers, final approver) |
 | Approvals | DMS page (pilot) or DC-P1 in Power Automate (production) | Stage 1 mandatory approvers, stage 2 final approver from the Approver Matrix; sets the result and writes each decision to Control Audit |
@@ -136,10 +136,6 @@ Prerequisites: the tree on `$Root` (`scripts/New-DmsFileServerTree.ps1`), the `D
 **Set up** (once):
 
 ```powershell
-cd C:\dms\scripts; .\Set-DmsTestApprover.ps1 -TenantName rhisrael -DocControlSiteAlias DocumentControl-TEST -ClientId $C -Approver roneno@rh.co.il
-```
-
-```powershell
 cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C
 ```
 
@@ -147,7 +143,7 @@ Sign in as roneno@rh.co.il when the browser asks. His name shows with ★ (super
 
 **Validation scenario** (in this order; tick each line)
 
-Before you start: DC-P1 **Off**, DC-P2 **On** (notifications), roneno is the approver of every type (`Set-DmsTestApprover.ps1`), the Exchange site allows external guests (see "Sharing" below). Keep three windows open: the DMS page, Explorer on `$Root`, and Outlook/Teams of roneno@rh.co.il. Use a new test file, e.g. `Test Quote_Rev1.xlsx`.
+Before you start: DC-P1 **Off**, DC-P2 **On** (notifications), roneno is a super user (so he can decide any approval stage), the Exchange site allows external guests (see "Sharing" below). Keep three windows open: the DMS page, Explorer on `$Root`, and Outlook/Teams of roneno@rh.co.il. Use a new test file, e.g. `Test Quote_Rev1.xlsx`.
 
 | # | Do | Check |
 | --- | --- | --- |
@@ -184,9 +180,9 @@ Before you start: DC-P1 **Off**, DC-P2 **On** (notifications), roneno is the app
 | **H** | **Finding and follow-up** | |
 | 24 | Type "test quote" in the search box (suggestions while typing), then Enter; AI Insights → Ask, and 📚 QMS "נהלי שינוע" | The document is suggested with its status and opens its folder; the answers appear in the panel (QMS with its sources) |
 | 25 | My workflows (counts, history) and **All workflows** | Every step above is in the history, with who and when |
-| 26 | Explorer right-click on a file → **Start workflow** (`Install-DmsExplorerMenu.ps1 -AppUrl 'http://localhost:8080/dms/dms-page?lang=EN'`) | The page opens with the Start workflow form for that file |
+| 26 | On a file in `Current_ReadOnly`: **View**, and on one in `Working`: **Open** (after `Set-DmsDrives.ps1`) | The approved file opens read-only, the working file opens for editing, both from their short path |
 
-**After the pilot**: restore the real approvers with the command `Set-DmsTestApprover.ps1` printed (`-Restore <backup file>`), and stop the page with Ctrl+C.
+**After the pilot**: stop the page with Ctrl+C.
 
 ## 5a. DMS First loading (documents approved in the old repository)
 
