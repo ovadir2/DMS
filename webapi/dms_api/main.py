@@ -146,6 +146,12 @@ def answer_lang(question: str, page_lang: str) -> str:
     return "HE" if page_lang.upper() == "HE" and not any(ch.isascii() and ch.isalpha() for ch in question) else "EN"
 
 
+def cert_days_left(sharepoint) -> int | None:
+    """Days until the SharePoint sign-in certificate expires (None in the tests and in the playground)."""
+    fn = getattr(sharepoint, "cert_days_left", None)
+    return fn() if fn else None
+
+
 def create_app(settings: Settings | None = None, sharepoint: SharePoint | None = None, ai: OpenWebUI | None = None) -> FastAPI:
     s = settings or Settings.from_env()
     if not logging.getLogger().handlers:
@@ -164,6 +170,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if s.auth_mode == "dev" and not s.dev_user and account:
             s.dev_user = account                                # you are the DMS user too
     app.state.sp = sharepoint or SharePoint(s)
+    left = cert_days_left(app.state.sp)
+    if left is not None and left < 45:                      # nobody remembers a date two years out: say it out loud
+        logger.warning("SharePoint certificate expires in %s days (%s). Make a new one with "
+                       "scripts/new_dms_cert.py and upload it to the Entra app.", left, s.cert_path)
     if s.file_service_seconds > 0:
         from . import file_service
         file_service.start(app.state.sp, s)
@@ -326,7 +336,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.get("/api/health")
     def health():
         return {"status": "ok", "version": version, "repositoryRoot": s.repository_root,
-                "rootReachable": os.path.isdir(s.repository_root)}
+                "rootReachable": os.path.isdir(s.repository_root), "certDaysLeft": cert_days_left(app.state.sp)}
 
     @app.get("/api/client-config")
     def client_config():
@@ -389,7 +399,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         from .sharepoint import AUDIT, DECISIONS, DELEGATIONS, MATRIX, NOTIFY, REGISTER
         lists = [sp().list_info(rel) for rel in (REGISTER, AUDIT, MATRIX, NOTIFY, DECISIONS, DELEGATIONS)]
         return {"site": s.site_url if s.sharepoint != "memory" else "memory (playground)", "account": user.email,
-                "auth": s.sp_auth, "lists": lists, "errors": list(app.state.sp_errors),
+                "auth": s.sp_auth, "certDaysLeft": cert_days_left(sp()), "lists": lists, "errors": list(app.state.sp_errors),
                 "notifications": {"on": s.approvals == "page" and s.notify, "approvals": s.approvals, "notify": s.notify,
                                   "pageUrl": s.page_url, "last": list(app.state.notify_log)}}
 
@@ -443,6 +453,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.get("/api/me")
     def me(user: User = Depends(current_user)):
         out = {"email": user.email, "name": user.name, "admin": is_admin(user), "actingFrom": user.acting_from}
+        if is_admin(user):
+            out["certDaysLeft"] = cert_days_left(app.state.sp)  # the page warns before SharePoint stops working
         if is_admin(user) or user.acting_from:                  # super users: "Acting as" in the ⋮ menu
             real = user.acting_from or user.email
             out["actingUsers"] = [real, *[u for u in s.dev_users if u != real]]

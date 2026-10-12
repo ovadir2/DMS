@@ -2063,3 +2063,29 @@ def test_new_customer_gets_the_department_access(tmp_path, monkeypatch):
     ran.clear()                                                                         # not for other folders
     assert c.post("/api/folders", json={"parent": str(root / "02_Customers" / "Elbit"), "name": "Extra"}).status_code == 201
     assert ran == []
+
+
+def test_certificate_expiry_is_reported_before_it_stops_sharepoint(tmp_path):
+    """Nobody remembers a date two years out: the DMS says it (health, /api/me for super users, the check)."""
+    import datetime as dt
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+    from dms_api.sharepoint import SharePoint
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    now = dt.datetime.now(dt.timezone.utc)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "dms-webapi")])
+    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+            .serial_number(1).not_valid_before(now - dt.timedelta(days=1))
+            .not_valid_after(now + dt.timedelta(days=10)).sign(key, hashes.SHA256()))
+    pem = tmp_path / "dms-webapi.pem"
+    pem.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                      serialization.NoEncryption()) + cert.public_bytes(serialization.Encoding.PEM))
+
+    s = Settings(repository_root=str(tmp_path), sp_auth="certificate", cert_path=str(pem), site_url="https://x/sites/y")
+    assert SharePoint(s).cert_days_left() in (9, 10)
+    assert SharePoint(Settings(repository_root=str(tmp_path), sp_auth="interactive")).cert_days_left() is None
+    assert SharePoint(Settings(repository_root=str(tmp_path), sp_auth="certificate",
+                               cert_path=str(tmp_path / "gone.pem"), site_url="https://x/sites/y")).cert_days_left() is None

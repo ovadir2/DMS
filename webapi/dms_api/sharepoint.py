@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import os
 import time
-from json import dumps as json_dumps, loads as json_loads
 from datetime import datetime, timezone
+from json import dumps as json_dumps, loads as json_loads
 from urllib.parse import quote, urlparse
 
 import requests
@@ -74,6 +74,20 @@ class SharePoint:
         self.account_email = (claims.get("preferred_username") or (acc[0]["username"] if acc else "") or "").lower() or None
         self._token = (r["access_token"], time.time() + int(r.get("expires_in", 3600)))
         return self._token[0]
+
+    def cert_days_left(self) -> int | None:
+        """Days until the sign-in certificate expires (None: not certificate mode, or it cannot be read).
+        Nobody remembers a date two years out, so the DMS says it: at start, and in the SharePoint check."""
+        if self.s.sp_auth != "certificate" or not self.s.cert_path:
+            return None
+        try:
+            from cryptography import x509
+            with open(self.s.cert_path, "rb") as f:
+                cert = x509.load_pem_x509_certificate(f.read())
+            end = getattr(cert, "not_valid_after_utc", None) or cert.not_valid_after.replace(tzinfo=timezone.utc)
+            return (end - datetime.now(timezone.utc)).days
+        except Exception:  # noqa: BLE001 - a missing or odd file must not stop the DMS
+            return None
 
     def sign_in(self) -> str | None:
         """Interactive mode: sign in now (opens the browser the first time) and return the account."""
