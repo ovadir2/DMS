@@ -468,6 +468,18 @@ function wireLevels(v) {
     state.view = 'browse'; state.folder = sel.value; render();
   });
 }
+// How a document row opens its file: a text file in the page, a PDF or an image in the browser,
+// an Office file in its application, anything else with the application of that PC (else the path).
+function fileLinks(file, editUri, viewUri, canEdit) {
+  if (!file) return '';
+  if (TEXT_EXT.test(file)) return `<button type="button" class="link" data-tx="${esc(file)}">${canEdit ? '✎ ' + T.editHere : T.open}</button>`;
+  const out = [];
+  if (editUri && canEdit) out.push(`<a class="link" href="${esc(editUri)}">✎ ${T.openEdit}</a>`);
+  if (VIEW_EXT.test(file)) out.push(`<button type="button" class="link" data-vw="${esc(file)}">${T.viewRo}</button>`);
+  else if (viewUri) out.push(`<a class="link" href="${esc(viewUri)}">${T.viewRo}</a>`);
+  else if (!out.length) out.push(`<button type="button" class="link" data-noopen="${esc(file)}">${T.open}</button>`);
+  return out.join('\n');
+}
 const extOf = f => { const m = /\.([A-Za-z0-9]{1,6})$/.exec(f || ''); return m ? m[1].toUpperCase() : ''; };
 const typeCell = (type, file) => extOf(file);          // the kind of file: DOCX, PDF, XLSX
 const hint = l => l ? (lang === 'HE' ? l.hintHe : l.hintEn) : '';
@@ -581,7 +593,7 @@ async function mine(v) {
       <td class="actions">${state.everyone ? `<div class="muted small">${esc(d.ownerName || d.ownerEmail || '')}</div>` : ''}${['Working', 'Rejected'].includes(d.statusKey) ? `<button type="button" class="link" data-sub="${d.id}">${T.submit}</button><button type="button" class="link" data-drn="${d.id}" data-name="${esc((d.workingUncPath || '').split(/[\\/]/).pop())}">${T.rename}</button><button type="button" class="link" data-ddel="${d.id}" style="color:var(--err)">${T.del}</button>` : ''}
         ${d.currentUncPath ? `<button type="button" class="link" data-cp="${esc(d.currentUncPath)}">🔗 ${T.copy}</button>` : ''}
         ${d.workingUncPath ? `<button type="button" class="link" data-cp="${esc(d.workingUncPath)}">🔗 ${T.copyWorking}</button>` : ''}
-        ${d.editUri ? `<a class="link" href="${esc(d.editUri)}">✎ ${T.openEdit}</a>` : d.viewUri ? `<a class="link" href="${esc(d.viewUri)}">${T.viewRo}</a>` : ''}
+        ${fileLinks(d.file, d.editUri, d.viewUri, !!d.editUri)}
         ${d.statusKey === 'Submitted' ? `<button type="button" class="link" data-wd="${d.id}" style="color:var(--err)">${T.withdraw}</button>` : ''}
         ${d.statusKey === 'Approved_ReadOnly' ? `<button type="button" class="link" data-rev="${d.id}">⟳ ${T.newRev}</button><button type="button" class="link" data-share="${d.id}">✉ ${isHr(d.currentUncPath) ? T.shareHrBtn : T.share}</button>` : ''}
         <button type="button" class="link" data-hist="${d.id}">${T.history}</button>
@@ -605,8 +617,7 @@ async function approvalsView(v) {
       <td class="small">${d.stage === 1 ? T.stage1 : T.stage2}${d.approved.length ? `<div class="muted">${T.approvedBy}: ${d.approved.map(a => esc(a.split('@')[0])).join(', ')}</div>` : ''}${(d.returned || []).length ? `<div class="muted">${T.returnedBy}: ${d.returned.map(r => `${esc(r.by.split('@')[0])} - ${esc(r.comment)}`).join('; ')}</div>` : ''}
         ${!d.mine ? `<div class="muted">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')}</div>` : ''}</td>
       <td class="hide-s small muted">${when(d.submittedUtc)}${days(d.submittedUtc) !== null ? `<div>${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}</td>
-      <td class="actions">${d.officeUri ? `<a class="link" href="${esc(d.officeUri)}">${d.editable ? '✎ ' + T.openEdit : T.open}</a>` : (d.file ? (TEXT_EXT.test(d.file) ? `<button type="button" class="link" data-tx="${esc(d.file)}">✎ ${T.editHere}</button>` : `<button type="button" class="link" data-noopen="${esc(d.file)}">${T.open}</button>`) : '')}
-        ${d.viewUri && d.editable ? `<a class="link" href="${esc(d.viewUri)}">${T.viewRo}</a>` : ''}
+      <td class="actions">${fileLinks(d.file, d.officeUri, d.viewUri, d.editable)}
         ${d.file ? `<button type="button" class="link" data-dl="${esc(d.file)}">${T.download}</button><button type="button" class="link" data-cp="${esc(d.file)}">🔗 ${T.copyLink}</button>` : ''}
         <div style="margin-top:6px"><button type="button" class="pillbtn small" data-ok="${d.id}">✔ ${T.approve}${d.mine ? '' : ' (' + T.asSuper + ')'}</button>
         <button type="button" class="pillbtn small light" data-no="${d.id}" style="color:var(--err)">✖ ${T.reject}</button>
