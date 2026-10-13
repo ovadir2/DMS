@@ -160,15 +160,18 @@ def office_uri(path: str, edit: bool = False) -> str | None:
         # (also for Hebrew names: Excel does not decode %D7.. in an ms-excel: link and cannot find the file)
         from urllib.parse import quote
         return "rh-dms:" + ("" if edit else "ro/") + quote(path, safe="")   # view: read-only (approved files)
+    if url_len(path) > LONG_PATH or not path.isascii():
+        # too long for Office as a file path, or a Hebrew name (6 characters each as a URL, and Excel does not
+        # decode them): the 8.3 names of the same path - plain ASCII, short, and nothing to install on the PC
+        short = user_path(short_path(full, force=True))
+        if url_len(short) < url_len(path) or (short.isascii() and not path.isascii()):
+            path = short
     if url_len(path) > LONG_PATH and BASE_URL.get():
-        # too long for Office as a file path (Hebrew names count 6 characters each): the DMS link (WebDAV, like
-        # SharePoint) - the original file name, and Save writes back to the same file on the server
+        # still too long: the DMS link (WebDAV, like SharePoint) - the original file name, and Save writes back
+        # to the same file on the server. The PC needs the WebClient service for this one
         from urllib.parse import quote
         return (f"{app}:{'ofe' if edit else 'ofv'}|u|{BASE_URL.get().rstrip('/')}/api/o/{open_token(full)}/"
                 f"{quote(os.path.basename(full))}")
-    if url_len(path) > LONG_PATH:                              # no DMS address: the 8.3 names, if the volume has them
-        short = user_path(short_path(full, force=True))
-        path = short if url_len(short) < url_len(path) else short_path(path)
     url = "file:" + path.replace("\\", "/") if path.startswith("\\\\") else "file:///" + path.replace("\\", "/").lstrip("/")
     return f"{app}:{'ofe' if edit else 'ofv'}|u|{url}"
 
