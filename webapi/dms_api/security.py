@@ -41,20 +41,44 @@ class User:
             self.token = None
 
 
-def _windows_access(token, path: str, access: str) -> bool:
-    import ntsecuritycon as nsc  # type: ignore[import-not-found]
-    import pywintypes  # type: ignore[import-not-found]
-    import win32security  # type: ignore[import-not-found]
+FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE, FILE_ALL_ACCESS = 0x120089, 0x120116, 0x1200A0, 0x1F01FF
 
-    info = (win32security.OWNER_SECURITY_INFORMATION | win32security.GROUP_SECURITY_INFORMATION
-            | win32security.DACL_SECURITY_INFORMATION)
+
+def _windows_access(token, path: str, access: str) -> bool:
+    """Does this user's token allow read / write on this path? Win32 AccessCheck, the same answer as
+    Explorer's "Effective Access". Called through ctypes: win32security.AccessCheck is missing from
+    some pywin32 builds, and the DMS must not depend on which build is installed."""
+    import ctypes
+    from ctypes import wintypes
+
+    class GENERIC_MAPPING(ctypes.Structure):
+        _fields_ = [("GenericRead", wintypes.DWORD), ("GenericWrite", wintypes.DWORD),
+                    ("GenericExecute", wintypes.DWORD), ("GenericAll", wintypes.DWORD)]
+
+    class PRIVILEGE_SET(ctypes.Structure):                  # room for one privilege: AccessCheck asks for none
+        _fields_ = [("PrivilegeCount", wintypes.DWORD), ("Control", wintypes.DWORD),
+                    ("Privilege", wintypes.BYTE * 12)]
+
+    adv = ctypes.WinDLL("advapi32", use_last_error=True)
+    info = 0x1 | 0x2 | 0x4                                  # owner, group, DACL
     try:
-        sd = win32security.GetFileSecurity(path, info)
-        mapping = (nsc.FILE_GENERIC_READ, nsc.FILE_GENERIC_WRITE, nsc.FILE_GENERIC_EXECUTE, nsc.FILE_ALL_ACCESS)
-        wanted = nsc.FILE_GENERIC_READ if access == READ else nsc.FILE_GENERIC_WRITE
-        granted, _ = win32security.AccessCheck(sd, token, wanted, mapping)
-        return bool(granted)
-    except pywintypes.error:
+        need = wintypes.DWORD()
+        adv.GetFileSecurityW(path, info, None, 0, ctypes.byref(need))
+        if not need.value:
+            return False
+        sd = ctypes.create_string_buffer(need.value)
+        if not adv.GetFileSecurityW(path, info, sd, need, ctypes.byref(need)):
+            return False
+        mapping = GENERIC_MAPPING(FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE, FILE_ALL_ACCESS)
+        wanted = wintypes.DWORD(FILE_GENERIC_READ if access == READ else FILE_GENERIC_WRITE)
+        adv.MapGenericMask(ctypes.byref(wanted), ctypes.byref(mapping))
+        privileges, size = PRIVILEGE_SET(), wintypes.DWORD(ctypes.sizeof(PRIVILEGE_SET))
+        granted, allowed = wintypes.DWORD(), wintypes.BOOL()
+        ok = adv.AccessCheck(sd, wintypes.HANDLE(int(token)), wanted, ctypes.byref(mapping),
+                             ctypes.byref(privileges), ctypes.byref(size),
+                             ctypes.byref(granted), ctypes.byref(allowed))
+        return bool(ok and allowed.value)
+    except OSError:
         return False
 
 
