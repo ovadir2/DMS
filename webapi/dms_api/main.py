@@ -640,7 +640,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             elif (f.get("officeUri") and not f.get("readOnly") and not files.in_workflow_folder(s.repository_root, f["path"])
                   and (not d or d.get("lifecycleStatus") == s.choices["Working"]) and user.can(f["path"], "write")):
                 # not yet registered (or still in Working): opens in Word / Excel / PowerPoint for editing
-                f.update(officeUri=files.open_uri(f["path"], edit=True), editable=True)
+                f.update(officeUri=files.open_uri(f["path"], edit=True), viewUri=files.open_uri(f["path"]), editable=True)
         if in_shared_folder(os.path.join(result["path"], "x")):
             result.update(noWorkflow=True, canWrite=False, sharedNote=True)
         return result
@@ -1173,6 +1173,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 out.append({**with_key(d), **st, "submittedUtc": submitted["utc"] if submitted else None,
                             "submittedBy": submitted["actor"] if submitted else None, "file": file,
                             "officeUri": files.open_uri(file, edit=s.submitted_editable) if file else None,
+                            "viewUri": files.open_uri(file) if file else None,          # read only: just look at it
                             "editable": s.submitted_editable, "mine": user.email in st["pending"]})
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
 
