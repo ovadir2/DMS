@@ -26,7 +26,13 @@ _LOCK = threading.Lock()
 
 def is_local(request) -> bool:
     """This PC itself - also when it opens the DMS by its network address (the email links use it): the browser
-    then connects from that same address."""
+    then connects from that same address. Behind IIS nobody is local: every request arrives from 127.0.0.1
+    (HttpPlatformHandler passes it on), so the drive letters of the server must not be given to other PCs."""
+    from .security import TOKEN_HEADERS
+
+    names = {h.lower() for h in getattr(request, "headers", {})}
+    if "x-forwarded-for" in names or names & {h.lower() for h in TOKEN_HEADERS}:
+        return False
     host = request.client.host if request.client else ""
     server = (request.scope.get("server") or ("", 0))[0]
     return host in LOCAL_HOSTS or (bool(host) and host == server)
