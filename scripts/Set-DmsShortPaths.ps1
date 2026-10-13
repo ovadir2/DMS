@@ -36,7 +36,8 @@ $volume = (Split-Path -Qualifier $Root)
 
 function UrlLength([string]$p) {
     # what Office counts: the path as a URL (a Hebrew letter is %D7%xx = 6 characters, a space %20 = 3)
-    ([System.Uri]::EscapeDataString($p -replace '\\', '/') -replace '%2F', '/').Length
+    $u = $p -replace '\\', '/'                  # the comma of -replace must not be read as a second argument
+    ([System.Uri]::EscapeDataString($u) -replace '%2F', '/').Length
 }
 
 # ---------------------------------------------------------------- 1. short names for new files
