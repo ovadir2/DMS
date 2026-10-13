@@ -1343,11 +1343,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 doc.update(approval_state(d, events, rules))
             if doc["statusKey"] == "Submitted" and s.submitted_editable:
                 f = submitted_file(d)
-                doc["editUri"] = files.office_uri(f, edit=True) if f else None
+                doc["file"] = f or ""
+                doc["editUri"] = files.open_uri(f, edit=True) if f else None
+                doc["viewUri"] = files.open_uri(f) if f else None
             elif doc["statusKey"] in ("Working", "Rejected") and d.get("workingUncPath"):   # the owner edits (remarks)
-                doc["editUri"] = files.office_uri(d["workingUncPath"], edit=True)
+                doc["file"] = d["workingUncPath"]
+                doc["editUri"] = files.open_uri(d["workingUncPath"], edit=True)
+                doc["viewUri"] = files.open_uri(d["workingUncPath"])
             elif doc["statusKey"] == "Approved_ReadOnly" and d.get("currentUncPath"):
-                doc["viewUri"] = files.office_uri(d["currentUncPath"])
+                doc["file"] = d["currentUncPath"]
+                doc["viewUri"] = files.open_uri(d["currentUncPath"])
             doc.update(submittedUtc=submitted["utc"] if submitted else None, decision=decision,
                        lastEvent=events[0] if events else None, history=list(reversed(events)))
             items.append(doc)
