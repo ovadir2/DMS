@@ -36,6 +36,11 @@ class NewFolderRequest(BaseModel):
     name: str
 
 
+class TextRequest(BaseModel):
+    path: str
+    text: str
+
+
 class RenameRequest(BaseModel):
     path: str
     newName: str
@@ -2043,6 +2048,48 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return Response(status_code=200, headers={**dav, "Content-Length": str(os.path.getsize(full))})
         return FileResponse(full, filename=os.path.basename(full), headers=dav,
                             content_disposition_type="inline")
+
+    TEXT_EXT = (".txt", ".csv", ".md", ".log", ".json", ".xml", ".ini", ".cfg", ".yml", ".yaml")
+    TEXT_MAX = 2_000_000                     # a text file a person reads, not a data dump
+
+    def _text_file(path: str, user: User) -> str:
+        full = files.resolve(s.repository_root, path)
+        if not os.path.isfile(full):
+            raise HTTPException(404, "File not found")
+        if not full.lower().endswith(TEXT_EXT):
+            raise HTTPException(415, "This is not a text file")
+        if not user.can(full):
+            raise HTTPException(403, "You do not have access to this file")
+        return full
+
+    @app.get("/api/files/text")
+    def read_text(path: str, user: User = Depends(current_user)):
+        """A text file, to read and edit on the page itself: nothing has to be installed on the PC."""
+        full = _text_file(path, user)
+        if os.path.getsize(full) > TEXT_MAX:
+            raise HTTPException(413, "The file is too large to edit here: download it")
+        raw = open(full, "rb").read()
+        text = raw.decode("utf-8-sig" if raw[:3] == b"\xef\xbb\xbf" else "utf-8", errors="replace")
+        can_write = (user.can(full, "write") and not files.is_read_only(full)
+                     and not (holds_share_log(full) or in_shared_folder(full)))
+        return {"path": full, "name": os.path.basename(full), "text": text, "canWrite": can_write}
+
+    @app.post("/api/files/text")
+    def write_text(req: TextRequest, user: User = Depends(current_user)):
+        full = _text_file(req.path, user)
+        if not user.can(full, "write"):
+            raise HTTPException(403, "You do not have permission to change this file")
+        if files.is_read_only(full):
+            raise HTTPException(403, "This file is released by the DMS (read only)")
+        if holds_share_log(full) or in_shared_folder(full):
+            raise HTTPException(403, "The Shared folder is kept by the DMS (read only)")
+        if len(req.text.encode("utf-8")) > TEXT_MAX:
+            raise HTTPException(413, "The text is too large")
+        bom = open(full, "rb").read(3) == b"\xef\xbb\xbf"       # keep the file as Windows wrote it
+        with open(full, "w", encoding="utf-8-sig" if bom else "utf-8", newline="") as f:
+            f.write(req.text)
+        log(user, "edit-text", full)
+        return {"path": full, "saved": True}
 
     @app.get("/api/files/download")
     def download(path: str, user: User = Depends(current_user)):

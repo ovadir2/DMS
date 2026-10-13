@@ -86,6 +86,20 @@ def test_paths_outside_root_are_refused(env):
     assert c.get("/api/files/download", params={"path": str(q.parents[4] / "secret.txt")}).status_code == 403
 
 
+def test_text_file_is_read_and_saved_on_the_page(env):
+    """A text file needs no application: the page reads it and writes it back (nothing installed on the PC)."""
+    c, _, q = env
+    note = q / "remarks.txt"
+    note.write_text("first line\n", encoding="utf-8")
+    r = c.get("/api/files/text", params={"path": str(note)})
+    assert r.status_code == 200 and r.json()["text"] == "first line\n" and r.json()["canWrite"] is True
+    assert c.post("/api/files/text", json={"path": str(note), "text": "first line\nand a remark\n"}).status_code == 200
+    assert note.read_text(encoding="utf-8") == "first line\nand a remark\n"
+    # not a text file, and outside the root: refused
+    assert c.get("/api/files/text", params={"path": str(q / "CRU 4 FCT Quote_Rev1.xlsx")}).status_code == 415
+    assert c.get("/api/files/text", params={"path": str(q.parents[4] / "secret.txt")}).status_code == 403
+
+
 def test_register_and_submit(env):
     c, sp, q = env
     path = str(q / "CRU 4 FCT Quote_Rev1.xlsx")
