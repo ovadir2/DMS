@@ -70,7 +70,8 @@ class Settings:
     register_cache_seconds: int = 30
     customers_folder: str = "02_Customers"  # under the root: one folder per customer
     client_root: str = ""                            # the root as other PCs open it (\\server\Shares, not e$)
-    short_paths: dict = field(default_factory=dict)  # folder under the root -> shorter path users open and copy
+    short_paths: dict = field(default_factory=dict)
+    client_short_paths: dict = field(default_factory=dict)   # DMS_CLIENT_SHORT_PATHS: a share of its own for a folder
     access_script: bool = False             # a new customer gets the department groups (scripts/Set-DmsAccess.ps1)
     max_upload_mb: int = 500
     search_limit: int = 200
@@ -149,6 +150,7 @@ class Settings:
             register_cache_seconds=int(e("DMS_REGISTER_CACHE_SECONDS", "30")),
             customers_folder=e("DMS_CUSTOMERS_FOLDER", "02_Customers"),
             client_root=e("DMS_CLIENT_ROOT", ""),
+            client_short_paths=_short_paths(e("DMS_CLIENT_SHORT_PATHS", "")),
             short_paths=_short_paths(e("DMS_SHORT_PATHS", "")),
             access_script=e("DMS_ACCESS_SCRIPT", "").strip().lower() in ("1", "true", "yes", "on"),
             max_upload_mb=int(e("DMS_MAX_UPLOAD_MB", "500")),
