@@ -649,6 +649,12 @@ def test_this_pc_by_its_network_address_is_local():
     behind_iis = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), scope={"server": ("127.0.0.1", 8080)},
                                  headers={"x-iis-windowsauthtoken": "2a4"})
     assert not ntlm.is_local(behind_iis)         # IIS passes every request on from 127.0.0.1: nobody is local
+    import os
+    os.environ["HTTP_PLATFORM_PORT"] = "41234"   # IIS started the process: not local even without the token header
+    try:
+        assert not ntlm.is_local(req("10.30.8.20", "10.30.8.20"))
+    finally:
+        del os.environ["HTTP_PLATFORM_PORT"]
     assert ntlm.is_local(req("127.0.0.1", "127.0.0.1"))
     assert not ntlm.is_local(req("10.30.8.50", "10.30.8.20"))                              # another PC
 

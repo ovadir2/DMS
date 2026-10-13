@@ -24,6 +24,14 @@ _DONE: dict[tuple, tuple[float, str, str]] = {}       # connection -> signed in 
 _LOCK = threading.Lock()
 
 
+def behind_iis() -> bool:
+    """IIS (HttpPlatformHandler) started this process and gave it the port: every request then arrives from
+    127.0.0.1, whoever sent it, so no request may be taken for "the PC that runs the DMS"."""
+    import os
+
+    return bool(os.environ.get("HTTP_PLATFORM_PORT") or os.environ.get("ASPNETCORE_PORT"))
+
+
 def is_local(request) -> bool:
     """This PC itself - also when it opens the DMS by its network address (the email links use it): the browser
     then connects from that same address. Behind IIS nobody is local: every request arrives from 127.0.0.1
@@ -31,7 +39,7 @@ def is_local(request) -> bool:
     from .security import TOKEN_HEADERS
 
     names = {h.lower() for h in getattr(request, "headers", {})}
-    if "x-forwarded-for" in names or names & {h.lower() for h in TOKEN_HEADERS}:
+    if behind_iis() or "x-forwarded-for" in names or names & {h.lower() for h in TOKEN_HEADERS}:
         return False
     host = request.client.host if request.client else ""
     server = (request.scope.get("server") or ("", 0))[0]
