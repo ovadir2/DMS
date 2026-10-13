@@ -1855,6 +1855,11 @@ def test_short_paths_for_open_and_copy(tmp_path):
     c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER, sharepoint="memory",
                                        short_paths=m)))
     assert [p[1] for p in c.get("/api/client-config").json()["shortPaths"]] == [r"\\fs\Customers", r"\\fs\General"]
+    # another PC gets the root as it can open it (DMS_CLIENT_ROOT), never the drive letters of the DMS server
+    c2 = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                                        short_paths=m, client_root=r"\\RHFS02\Shares")))
+    remote = c2.get("/api/client-config", headers={"X-Forwarded-For": "10.30.8.51"}).json()["shortPaths"]
+    assert remote == [[str(tmp_path), r"\\RHFS02\Shares"]]
     f = os.path.join(str(tmp_path), "02_Customers", "Customer_A", "q.docx")
     assert files.user_path(f) == "\\\\fs\\Customers\\Customer_A\\q.docx"
     assert "file://fs/Customers/Customer_A/q.docx" in files.office_uri(f)

@@ -339,8 +339,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 "rootReachable": os.path.isdir(s.repository_root), "certDaysLeft": cert_days_left(app.state.sp)}
 
     @app.get("/api/client-config")
-    def client_config():
-        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "firstLoadApprover": s.first_load_approver, "shareDays": s.ex_days, "customersFolder": s.customers_folder, "root": s.repository_root, "shortPaths": [[os.path.join(s.repository_root, k), v] for k, v in s.short_paths.items()],
+    def client_config(request: Request):
+        from . import ntlm
+        # the drive letters of the PC that runs the DMS belong to that PC only: another PC gets the path it
+        # can open (DMS_CLIENT_ROOT), else the path as it is. Its own letters the page adds itself.
+        short = ([[os.path.join(s.repository_root, k), v] for k, v in s.short_paths.items()] if ntlm.is_local(request)
+                 else ([[s.repository_root, s.client_root.rstrip("\\/")]] if s.client_root else []))
+        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "firstLoadApprover": s.first_load_approver, "shareDays": s.ex_days, "customersFolder": s.customers_folder, "root": s.repository_root, "shortPaths": short,
                 "approvals": s.approvals, "fileLinker": bool(s.fl_check_url and s.fl_update_url),
                 "site": s.site_url if s.sharepoint != "memory" else "", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,
