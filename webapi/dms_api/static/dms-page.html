@@ -469,7 +469,7 @@ function wireLevels(v) {
   });
 }
 const extOf = f => { const m = /\.([A-Za-z0-9]{1,6})$/.exec(f || ''); return m ? m[1].toUpperCase() : ''; };
-const typeCell = (type, file) => `${esc(type || '')}${type && extOf(file) ? ' · ' : ''}${extOf(file) ? `<span class="muted">${extOf(file)}</span>` : ''}`;
+const typeCell = (type, file) => extOf(file);          // the kind of file: DOCX, PDF, XLSX
 const hint = l => l ? (lang === 'HE' ? l.hintHe : l.hintEn) : '';
 function folderTile(f) {
   const l = f.label, title = lbl(l) || f.name;
@@ -600,7 +600,7 @@ async function approvalsView(v) {
   v.innerHTML = `<div class="toolbar"><h2 style="margin:0">${state.apAll ? T.apAll : T.apTitle}</h2><span class="spacer"></span>
       ${me.admin ? `<button type="button" class="pillbtn small light" id="ap-all">${state.apAll ? T.apTitle : T.apAll}</button>` : ''}</div>
     ${list.length ? `<table><tr><th>${T.docId}</th><th>${T.titleF}</th><th class="hide-s">${T.fileType}</th><th>Rev</th><th class="hide-s">${T.owner}</th><th>${T.stage}</th><th class="hide-s">${T.submitted}</th><th></th></tr>
-    ${list.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}</td><td class="hide-s small">${typeCell(d.documentType, d.file)}</td><td class="small">${revOf(d)}</td>
+    ${list.map(d => `<tr><td>${esc(d.documentId)}</td><td>${esc(d.title)}<div class="muted small">${esc(d.documentType || '')}</div></td><td class="hide-s small">${typeCell(d.documentType, d.file)}</td><td class="small">${revOf(d)}</td>
       <td class="hide-s small">${esc((d.ownerName || d.ownerEmail || '').split('@')[0])}</td>
       <td class="small">${d.stage === 1 ? T.stage1 : T.stage2}${d.approved.length ? `<div class="muted">${T.approvedBy}: ${d.approved.map(a => esc(a.split('@')[0])).join(', ')}</div>` : ''}${(d.returned || []).length ? `<div class="muted">${T.returnedBy}: ${d.returned.map(r => `${esc(r.by.split('@')[0])} - ${esc(r.comment)}`).join('; ')}</div>` : ''}
         ${!d.mine ? `<div class="muted">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')}</div>` : ''}</td>
