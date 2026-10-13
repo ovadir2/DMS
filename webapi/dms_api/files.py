@@ -173,6 +173,19 @@ def office_uri(path: str, edit: bool = False) -> str | None:
     return f"{app}:{'ofe' if edit else 'ofv'}|u|{url}"
 
 
+def open_uri(path: str, edit: bool = False) -> str | None:
+    """The link that opens the file on the user's PC, whatever its kind: an Office file in Word / Excel /
+    PowerPoint, every other file with the application Windows associates with that extension (the rh-dms:
+    handler, like a double-click in Explorer). None when this PC has no way to open it from the page: the
+    page then says the format cannot be opened here and offers Download."""
+    uri = office_uri(path, edit)
+    if uri or not OPENER.get():
+        return uri
+    from urllib.parse import quote
+
+    return "rh-dms:" + ("" if edit else "ro/") + quote(user_path(path), safe="")
+
+
 OPENER: ContextVar[bool] = ContextVar("OPENER", default=False)   # the user's PC has the rh-dms: link handler
 BASE_URL: ContextVar[str] = ContextVar("BASE_URL", default="")   # this request's DMS address, for the short Open link
 OPEN_TOKENS: dict[str, str] = {}
@@ -247,7 +260,7 @@ def list_folder(root: str, path: str | None, can: Can = _allow_all) -> dict:
                 folders.append(item)
             else:
                 item.update(size=st.st_size, readOnly=is_read_only(entry.path),
-                            officeUri=office_uri(entry.path))
+                            officeUri=open_uri(entry.path))
                 files.append(item)
     parent = None if _norm(folder) == _norm(root) else os.path.dirname(folder)
     rel = os.path.relpath(folder, root)
@@ -319,7 +332,7 @@ def walk_search(start: str, text: str, can: Can = _allow_all, limit: int = 200,
             if words and all(w in name for w in words) and (is_dir or not folders_only):
                 found += 1
                 yield {"name": entry.name, "path": entry.path, "isFolder": is_dir,
-                       "officeUri": None if is_dir else office_uri(entry.path)}
+                       "officeUri": None if is_dir else open_uri(entry.path)}
                 if found >= limit:
                     return
 

@@ -2,11 +2,13 @@
 <#
 .SYNOPSIS
     The "rh-dms:" link handler on a user's PC (installed by Set-DmsDrives.ps1): opens a file from the DMS page
-    exactly like a double-click in Explorer, so Word / Excel open it from its path (Protected View lets you edit).
+    exactly like a double-click in Explorer: Word / Excel open it from its path (Protected View lets you edit),
+    and every other kind of file opens with whatever application this PC associates with that extension.
 
 .DESCRIPTION
-    The DMS page uses rh-dms:<path> (rh-dms:ro/<path> to view only) when an ms-word: link cannot carry the path.
-    Only Office files under this PC's DMS drives / repository root (HKCU\Software\RH\DMS) are opened.
+    The DMS page uses rh-dms:<path> (rh-dms:ro/<path> to view only) when an ms-word: link cannot carry the path,
+    and for every file that is not an Office file. Only files under this PC's DMS drives / repository root
+    (HKCU\Software\RH\DMS) are opened. A file this PC has no application for says so instead of failing quietly.
 #>
 param([string] $Uri)
 $ErrorActionPreference = 'Stop'
@@ -18,7 +20,11 @@ $ro = $rest -like 'ro/*'                          # rh-dms:ro/<path>: view only 
 if ($ro) { $rest = $rest.Substring(3) }
 $path = [uri]::UnescapeDataString($rest).TrimEnd('/').Replace('/', '\')
 $ext = [IO.Path]::GetExtension($path).ToLower()
-if ($ext -notin '.doc', '.docx', '.docm', '.xls', '.xlsx', '.xlsm', '.ppt', '.pptx', '.pptm') { Fail "Not an Office file: $path" }
+if (-not $ext) { Fail "This file has no extension, so Windows has no application for it: $path" }
+# every kind of file: Windows opens it with the application of that extension, as in Explorer
+if ($ext -in '.exe', '.bat', '.cmd', '.ps1', '.vbs', '.js', '.msi', '.scr', '.com', '.lnk', '.reg') {
+    Fail "The DMS does not run programs: $path"      # a file that would be executed, not opened
+}
 
 $keep = Get-ItemProperty -Path 'HKCU:\Software\RH\DMS' -ErrorAction SilentlyContinue
 $allowed = @()
@@ -32,7 +38,12 @@ if (-not ($allowed | Where-Object { $full.StartsWith($_, [StringComparison]::Ord
     Fail "Not a DMS folder on this PC: $full"
 }
 if (-not (Test-Path -LiteralPath $full)) { Fail "File not found: $full" }
-if (-not $ro) { Invoke-Item -LiteralPath $full; exit 0 }
+if (-not $ro) {
+    try { Invoke-Item -LiteralPath $full -ErrorAction Stop } catch {
+        Fail "No application on this PC opens $ext files. Download the file, or open it from the folder."
+    }
+    exit 0
+}
 try {
     Start-Process -FilePath $full -Verb OpenAsReadOnly -ErrorAction Stop       # Word / Excel / PowerPoint: Read-Only
 } catch {
@@ -41,5 +52,7 @@ try {
     if (Test-Path -LiteralPath $copy) { (Get-Item -LiteralPath $copy).IsReadOnly = $false }
     Copy-Item -LiteralPath $full -Destination $copy -Force
     (Get-Item -LiteralPath $copy).IsReadOnly = $true
-    Invoke-Item -LiteralPath $copy
+    try { Invoke-Item -LiteralPath $copy -ErrorAction Stop } catch {
+        Fail "No application on this PC opens $ext files. Download the file, or open it from the folder."
+    }
 }
