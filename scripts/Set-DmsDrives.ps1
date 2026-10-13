@@ -13,6 +13,9 @@
     The letters chosen are kept in HKCU\Software\RH\DMS (a second run keeps them). -Remove takes them away.
     It also installs the "rh-dms:" link handler (Open-DmsFile.ps1): files with long Hebrew paths open from the
     DMS page like a double-click in Explorer (an ms-word: link cannot carry them).
+    With -DmsUrl it also stops Word asking for a user name and password when it opens a file from the DMS:
+    the address goes into the Local intranet sites, and the WebClient service is allowed to sign in to it
+    with the person's own Windows account (that one needs admin on the PC; without it only the zone is set).
 
 .EXAMPLE
     .\Set-DmsDrives.ps1 -Root $Root -DmsUrl http://localhost:8080
@@ -101,9 +104,34 @@ if ($Remove) {
     Set-ItemProperty -Path $keep -Name Root -Value $Root
     Write-Host "Open handler installed (rh-dms:): long paths open from the DMS page like in Explorer." -ForegroundColor Green
 }
+function Set-DmsTrust([string]$Url) {
+    # Word / Excel open https files through the WebClient service, which signs in on its own: without these two
+    # it asks for a user name and password every time, although the browser is already signed in.
+    $host_ = ([uri]$Url).Host
+    $zone = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\EscDomains\$host_"
+    foreach ($k in @($zone, ($zone -replace '\\EscDomains\\', '\Domains\'))) {
+        New-Item -Path $k -Force | Out-Null
+        Set-ItemProperty -Path $k -Name 'https' -Value 1 -Type DWord        # 1 = Local intranet
+    }
+    Write-Host "$host_ is now a Local intranet site: Windows signs in by itself." -ForegroundColor Green
+    $wc = 'HKLM:\SYSTEM\CurrentControlSet\Services\WebClient\Parameters'
+    try {
+        $list = @(Get-ItemProperty -Path $wc -Name AuthForwardServerList -ErrorAction SilentlyContinue).AuthForwardServerList
+        $list = @($list | Where-Object { $_ }) + "https://$host_" | Select-Object -Unique
+        Set-ItemProperty -Path $wc -Name AuthForwardServerList -Value $list -Type MultiString
+        Restart-Service WebClient -Force -ErrorAction SilentlyContinue
+        Set-Service WebClient -StartupType Automatic -ErrorAction SilentlyContinue
+        Write-Host "Word may sign in to the DMS with your Windows account (WebClient)." -ForegroundColor Green
+    } catch {
+        Write-Warning ("Word will keep asking for a password until this is run as administrator on this PC " +
+                       "(it writes WebClient\Parameters\AuthForwardServerList). IT can push it by GPO.")
+    }
+}
+
 if (-not $Remove) {
     $drives = ($result.Keys | ForEach-Object { "$_=$($result[$_])" }) -join ';'
     if ($DmsUrl) {
+        Set-DmsTrust $DmsUrl
         Start-Process ("$($DmsUrl.TrimEnd('/'))/dms/dms-page?opener=1&drives=" + [uri]::EscapeDataString($drives))   # the page remembers this PC's letters
         Write-Host "`nThe DMS page was opened with this PC's drives ($drives)." -ForegroundColor Cyan
     } else {
