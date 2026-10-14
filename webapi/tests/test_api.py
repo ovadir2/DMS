@@ -758,7 +758,7 @@ def test_page_approvals_reject_and_waiting_for(tmp_path):
     assert wf["statusKey"] == "Submitted" and "editUri" in wf                     # the owner may add remarks
     s.dev_user = "dana@rh.co.il"
     ap = next(i for i in c.get("/api/approvals").json() if i["id"] == d["id"])
-    assert ap["editable"] and (ap["officeUri"] is None or ":ofe|u|" in ap["officeUri"])
+    assert not ap["editable"] and ap["officeUri"] is None      # read only: remarks are attached, the document is not changed
     s.dev_user = USER
     c.post(f"/api/documents/{d['id']}/submit")                                          # new cycle: the old rejection no longer counts
     s.dev_user = "dana@rh.co.il"
@@ -2091,7 +2091,7 @@ def test_review_cycle_all_approvers_return_remarks_then_owner_resubmits(tmp_path
     assert r["returned"] == [{"by": "dana@rh.co.il", "comment": "table 3 is wrong"}]
     s.dev_user = "eli@rh.co.il"
     ap = next(i for i in c.get("/api/approvals").json() if i["id"] == d["id"])
-    assert ap["editable"]                                                                # eli adds remarks in the file too
+    assert not ap["editable"] and ap["viewUri"]                  # eli reads it; his remarks go in a file of his own
     r = c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "add the test limits"}).json()
     assert r["statusKey"] == "Working"                                                   # everyone answered: back to the owner
     s.dev_user = USER

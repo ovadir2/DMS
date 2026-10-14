@@ -1178,13 +1178,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 file = submitted_file(d)
                 out.append({**with_key(d), **st, "submittedUtc": submitted["utc"] if submitted else None,
                             "submittedBy": submitted["actor"] if submitted else None, "file": file,
-                            # the links that hand the file to an application are for people who may reach the
-                            # file server; everyone else gets it from the DMS (View / Edit here / Download)
-                            "officeUri": files.open_uri(file, edit=s.submitted_editable) if file and user.can(file, "write") else None,
+                            # read only, always: an approval never changes the document, and an approver's
+                            # remarks are a file of their own beside it
+                            "officeUri": None,
                             "viewUri": files.open_uri(file) if file and user.can(file) else None,
                             "viaDms": bool(file) and not user.can(file),   # no rights on the file server: the DMS serves it
                             "remarks": remarks_of(d.get("documentId") or ""),
-                            "editable": s.submitted_editable, "mine": user.email in st["pending"]})
+                            "editable": False, "mine": user.email in st["pending"]})
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
 
     def awaiting_approval(user: User) -> set[str]:
