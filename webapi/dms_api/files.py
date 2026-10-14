@@ -169,9 +169,10 @@ def office_uri(path: str, edit: bool = False) -> str | None:
         short = user_path(short_path(full, force=True))
         if url_len(short) < url_len(path) or (short.isascii() and not path.isascii()):
             path = short
-    if url_len(path) > LONG_PATH and BASE_URL.get():
-        # still too long: the DMS link (WebDAV, like SharePoint) - the original file name, and Save writes back
-        # to the same file on the server. The PC needs the WebClient service for this one
+    if (url_len(path) > LONG_PATH or not path.isascii()) and BASE_URL.get():
+        # still too long, or a name Office cannot carry in a file link (Hebrew, and the volume has no 8.3 name
+        # for that file): the DMS link (WebDAV) - the original file name, and Save writes back to the same file.
+        # The PC needs the WebClient service for this one, so Set-DmsShortPaths gives the files short names
         from urllib.parse import quote
         return (f"{app}:{'ofe' if edit else 'ofv'}|u|{BASE_URL.get().rstrip('/')}/api/o/{open_token(full)}/"
                 f"{quote(os.path.basename(full))}")

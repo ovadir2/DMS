@@ -51,24 +51,33 @@ if ($state -match 'DISABLED') {
     Write-Host "8.3 names are already created on $volume." -ForegroundColor Green
 }
 
-# ---------------------------------------------------------------- 2. short names for the folders already there
+# ---------------------------------------------------------------- 2. short names for what is already there
+# Folders AND files: Office cannot open a file whose name is not plain ASCII (a Hebrew name arrives at Word
+# percent-encoded, "we couldn't find ..."), so every part of the path needs an 8.3 name, the file included.
 $made = 0; $had = 0; $failed = 0
-foreach ($d in Get-ChildItem -LiteralPath $Root -Directory -Recurse -Force -ErrorAction SilentlyContinue) {
-    $out = (fsutil file queryshortname "$($d.FullName)") -join ' '
-    if ($out -notmatch 'Short Name\s*:\s*$' -and $out -match 'Short Name\s*:\s*\S') { $had++; continue }
-    # a name that needs one: not plain ASCII, or longer than 8.3 can hold
-    if ($d.Name -match '^[\x20-\x7E]{1,8}(\.[\x20-\x7E]{1,3})?$') { continue }
-    $base = (($d.Name -replace '[^A-Za-z0-9]', '') + 'DMSFLDR').Substring(0, 5).ToUpper()
+function Add-ShortName($item, [string]$stem) {
+    $out = (fsutil file queryshortname "$($item.FullName)") -join ' '
+    if ($out -notmatch 'Short Name\s*:\s*$' -and $out -match 'Short Name\s*:\s*\S') { $script:had++; return }
+    $name = $item.Name
+    if ($name -match '^[\x20-\x7E]{1,8}(\.[\x20-\x7E]{1,3})?$') { return }      # already short and ASCII
+    $ext = if ($item.PSIsContainer) { '' } else { ([IO.Path]::GetExtension($name) -replace '[^A-Za-z0-9.]', '') }
+    $ext = if ($ext.Length -gt 4) { $ext.Substring(0, 4) } else { $ext }            # ".doc" at most, with the dot
+    $base = ((($name -replace '[^A-Za-z0-9]', '') + $stem) + 'XXXXX').Substring(0, 5).ToUpper()
     for ($n = 1; $n -le 999; $n++) {
-        $try = "$base~$n"
-        if ($PSCmdlet.ShouldProcess($d.FullName, "short name $try")) {
-            fsutil file setshortname "$($d.FullName)" $try 2>$null | Out-Null
-            if ($LASTEXITCODE -eq 0) { $made++; break }
-        } else { break }
-        if ($n -eq 999) { $failed++ }
+        $try = "$base~$n$ext"
+        if (-not $PSCmdlet.ShouldProcess($item.FullName, "short name $try")) { return }
+        fsutil file setshortname "$($item.FullName)" $try 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) { $script:made++; return }
     }
+    $script:failed++
 }
-Write-Host "Folders: $made short names added, $had had one already$(if ($failed) { ", $failed could not be set" })." -ForegroundColor Green
+foreach ($d in Get-ChildItem -LiteralPath $Root -Directory -Recurse -Force -ErrorAction SilentlyContinue) {
+    Add-ShortName $d 'DMSFLDR'
+}
+foreach ($f in Get-ChildItem -LiteralPath $Root -File -Recurse -Force -ErrorAction SilentlyContinue) {
+    Add-ShortName $f 'DMSFILE'
+}
+Write-Host "Folders and files: $made short names added, $had had one already$(if ($failed) { ", $failed could not be set" })." -ForegroundColor Green
 
 # ---------------------------------------------------------------- 3. a share of its own for the two big folders
 if ($Shares) {
