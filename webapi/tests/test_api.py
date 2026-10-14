@@ -905,34 +905,34 @@ def test_an_approver_needs_no_rights_on_the_file_server(tmp_path, monkeypatch):
     assert row["viaDms"] is True and row["officeUri"] is None and row["viewUri"] is None   # the DMS serves it
 
 
-def test_an_approver_sends_back_the_copy_they_edited(tmp_path, monkeypatch):
-    """Download, edit on your own PC, upload: the DMS replaces the file under approval, with no rights
-    on the file server, and never anything else."""
+def test_an_approver_attaches_their_remarks_beside_the_document(tmp_path, monkeypatch):
+    """The approver edits a copy on their own PC and attaches it: the submitted file is never touched,
+    each approver has their own file, and it works with no rights at all on the file server."""
     import io
     from dms_api import file_service, security
     from dms_api.memory import MemorySharePoint
     root = tmp_path / "Root"
     q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
     q.mkdir(parents=True)
-    (q / "Quote.docx").write_bytes(b"first")
-    (q / "Other.docx").write_bytes(b"not mine")
+    (q / "Quote.docx").write_bytes(b"as submitted")
     s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page", admins=[USER])
     sp = MemorySharePoint(s)
     c = TestClient(create_app(s, sp))
-    c.post("/api/documents", json={"path": str(q / "Quote.docx"), "documentType": "הצעת מחיר",
-                                   "documentArea": "מסחרי", "submit": True})
+    d = c.post("/api/documents", json={"path": str(q / "Quote.docx"), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
     file_service.run_once(sp, s)
     submitted = q / "Submitted" / "Quote.docx"
 
     monkeypatch.setattr(security.User, "can", lambda self, path, access="read": False)      # nothing in AD
-    send = lambda target, name, data: c.post("/api/files/replace", data={"path": str(target)},
-                                             files={"file": (name, io.BytesIO(data),
-                                                             "application/vnd.openxmlformats-officedocument.wordprocessingml.document")})
-    assert send(submitted, "Quote.docx", b"with my remarks").status_code == 200
-    assert submitted.read_bytes() == b"with my remarks"
-    assert send(submitted, "Quote.txt", b"x").status_code == 400                 # the same kind of file only
-    assert send(q / "Other.docx", "Other.docx", b"x").status_code == 403         # nothing else of the tree
-    assert (q / "Other.docx").read_bytes() == b"not mine"
+    r = c.post(f"/api/documents/{d['id']}/remarks",
+               files={"file": ("Quote.docx", io.BytesIO(b"my remarks"), "application/octet-stream")})
+    assert r.status_code == 201 and r.json()["name"].endswith(" - Quote.docx")
+    assert submitted.read_bytes() == b"as submitted"                       # the approved revision is untouched
+    kept = root / "04_Workflow_System" / "Remarks" / d["documentId"] / r.json()["name"]
+    assert kept.read_bytes() == b"my remarks"
+    assert [x["name"] for x in c.get(f"/api/documents/{d['id']}/remarks").json()] == [r.json()["name"]]
+    assert c.get(f"/api/documents/{d['id']}/remarks/{r.json()['name']}").content == b"my remarks"
+    assert any("Remarks attached by" in (e.get("details") or "") for e in sp.audit_events())
 
 
 def test_new_revision_from_the_approved_copy(tmp_path):

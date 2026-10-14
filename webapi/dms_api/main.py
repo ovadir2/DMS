@@ -1183,6 +1183,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                             "officeUri": files.open_uri(file, edit=s.submitted_editable) if file and user.can(file, "write") else None,
                             "viewUri": files.open_uri(file) if file and user.can(file) else None,
                             "viaDms": bool(file) and not user.can(file),   # no rights on the file server: the DMS serves it
+                            "remarks": remarks_of(d.get("documentId") or ""),
                             "editable": s.submitted_editable, "mine": user.email in st["pending"]})
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
 
@@ -1372,6 +1373,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 doc["statusKey"] = "Rejected"                           # returned to the owner after a rejection
             if s.approvals == "page" and doc["statusKey"] == "Submitted":
                 doc.update(approval_state(d, events, rules))
+            doc["remarks"] = remarks_of(d.get("documentId") or "")     # what the approvers attached
             if doc["statusKey"] == "Submitted" and s.submitted_editable:
                 f = submitted_file(d)
                 doc["file"] = f or ""
@@ -2128,42 +2130,80 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         log(user, "edit-text", full)
         return {"path": full, "saved": True}
 
-    @app.post("/api/files/replace")
-    def replace_file(path: str = Form(...), file: UploadFile = File(...), user: User = Depends(current_user)):
-        """The file under approval, edited on the approver's own PC and sent back (Download, edit, upload).
-        An approver may have no rights at all on the file server: the DMS writes it with its own account,
-        under the same name, and only over the file it is asking that person to approve."""
-        full = files.resolve(s.repository_root, path)
-        if not os.path.isfile(full):
-            raise HTTPException(404, "File not found")
-        if not may_write(user, full):
-            raise HTTPException(403, "You do not have permission to change this file")
-        if files.is_read_only(full):
-            raise HTTPException(403, "This file is released by the DMS (read only)")
+    REMARKS_DIR = os.path.join("04_Workflow_System", "Remarks")
+
+    def remarks_folder(doc_id: str) -> str:
+        return os.path.join(s.repository_root, REMARKS_DIR, (doc_id or "unknown").replace("/", "-"))
+
+    def in_approval(user: User, d: dict) -> bool:
+        """The owner, a super user, or someone who is (or was) asked to approve this document."""
+        if (d.get("ownerEmail") or "").lower() == user.email or is_admin(user):
+            return True
+        events = events_by_doc().get(d.get("documentId") or "", [])
+        if user.email in approval_state(d, events, {})["pending"]:
+            return True
+        return any((e.get("actor") or "").lower() == user.email for e in events)
+
+    def remarks_of(doc_id: str) -> list[dict]:
+        folder = remarks_folder(doc_id)
+        out = []
+        for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+            f = os.path.join(folder, name)
+            if os.path.isfile(f):
+                st = os.stat(f)
+                out.append({"name": name, "size": st.st_size,
+                            "utc": datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat()})
+        return out
+
+    @app.get("/api/documents/{item_id}/remarks")
+    def list_remarks(item_id: int, user: User = Depends(current_user)):
+        """The files approvers attached to this document (their remarks), newest name first."""
+        d = sp().document(item_id)
+        if not in_approval(user, d):
+            raise HTTPException(403, "You have no part in this document")
+        return remarks_of(d.get("documentId") or "")
+
+    @app.post("/api/documents/{item_id}/remarks", status_code=201)
+    def add_remarks(item_id: int, file: UploadFile = File(...), user: User = Depends(current_user)):
+        """An approver edits the document on their own PC and attaches it here as their remarks. The submitted
+        file is never touched: the attachment is kept beside the document, named after the approver, so several
+        approvers can send remarks without overwriting each other and the approved revision stays as it was."""
+        d = sp().document(item_id)
+        if d.get("lifecycleStatus") != s.choices["Submitted"]:
+            raise HTTPException(409, "Remarks can be attached while the document is waiting for approval")
+        if not in_approval(user, d):
+            raise HTTPException(403, "You are not an approver of this document")
         name = os.path.basename((file.filename or "").replace("\\", "/"))
-        if os.path.splitext(name)[1].lower() != os.path.splitext(full)[1].lower():
-            raise HTTPException(400, f"Send back the same kind of file ({os.path.splitext(full)[1]})")
-        size, tmp = 0, full + ".dms-upload"
-        try:
-            with open(tmp, "wb") as out:
-                while chunk := file.file.read(1 << 20):
-                    size += len(chunk)
-                    if size > s.max_upload_mb * 1024 * 1024:
-                        raise HTTPException(413, f"The file is larger than {s.max_upload_mb} MB")
-                    out.write(chunk)
-            os.replace(tmp, full)
-        except HTTPException:
-            if os.path.exists(tmp):
-                os.remove(tmp)
-            raise
-        d = find_registered(full, register_index())
-        log(user, "replace-file", f"{full} ({size} bytes, uploaded from the DMS page)")
-        if d:
-            sp().audit(document_id=d.get("documentId") or "", event=s.choices["StatusChanged"],
-                       from_status=d.get("lifecycleStatus") or "", to_status=d.get("lifecycleStatus") or "",
-                       actor=user.email, details=f"The file was replaced with a copy edited by {user.email} "
-                                                 f"({name}, {size} bytes) - remarks during the approval")
-        return {"path": full, "name": os.path.basename(full), "size": size}
+        if not name or any(c in name for c in '<>:"|?*'):
+            raise HTTPException(400, "Bad file name")
+        who = user.email.split("@")[0]
+        folder = remarks_folder(d.get("documentId") or "")
+        os.makedirs(folder, exist_ok=True)
+        target = os.path.join(folder, f"{who} - {name}")
+        size = 0
+        with open(target, "wb") as out:
+            while chunk := file.file.read(1 << 20):
+                size += len(chunk)
+                if size > s.max_upload_mb * 1024 * 1024:
+                    out.close()
+                    os.remove(target)
+                    raise HTTPException(413, f"The file is larger than {s.max_upload_mb} MB")
+                out.write(chunk)
+        log(user, "remarks", f"{target} ({size} bytes)")
+        sp().audit(document_id=d.get("documentId") or "", event=s.choices["StatusChanged"],
+                   from_status=s.choices["Submitted"], to_status=s.choices["Submitted"], actor=user.email,
+                   details=f"Remarks attached by {user.email}: {name} ({size} bytes)")
+        return {"name": os.path.basename(target), "size": size}
+
+    @app.get("/api/documents/{item_id}/remarks/{name}")
+    def get_remarks(item_id: int, name: str, user: User = Depends(current_user)):
+        d = sp().document(item_id)
+        if not in_approval(user, d):
+            raise HTTPException(403, "You have no part in this document")
+        full = os.path.join(remarks_folder(d.get("documentId") or ""), os.path.basename(name))
+        if not os.path.isfile(full):
+            raise HTTPException(404, "Not found")
+        return FileResponse(full, filename=os.path.basename(full))
 
     @app.get("/api/files/download")
     def download(path: str, user: User = Depends(current_user)):
