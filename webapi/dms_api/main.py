@@ -1178,10 +1178,41 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 file = submitted_file(d)
                 out.append({**with_key(d), **st, "submittedUtc": submitted["utc"] if submitted else None,
                             "submittedBy": submitted["actor"] if submitted else None, "file": file,
-                            "officeUri": files.open_uri(file, edit=s.submitted_editable) if file else None,
-                            "viewUri": files.open_uri(file) if file else None,          # read only: just look at it
+                            # the links that hand the file to an application are for people who may reach the
+                            # file server; everyone else gets it from the DMS (View / Edit here / Download)
+                            "officeUri": files.open_uri(file, edit=s.submitted_editable) if file and user.can(file, "write") else None,
+                            "viewUri": files.open_uri(file) if file and user.can(file) else None,
+                            "viaDms": bool(file) and not user.can(file),   # no rights on the file server: the DMS serves it
                             "editable": s.submitted_editable, "mine": user.email in st["pending"]})
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
+
+    def awaiting_approval(user: User) -> set[str]:
+        """The files this person is asked to approve right now. A document sent to someone for approval is
+        opened, read and (with DMS_SUBMITTED_EDITABLE) written through the DMS itself, by its own account:
+        an approver needs no rights at all on the file server, and the DMS is the one that decides, from the
+        approval state, not from NTFS. It ends when the approval does."""
+        out: set[str] = set()
+        if s.approvals != "page":
+            return out
+        by_doc, rules = events_by_doc(), {}
+        for d in sp().documents():
+            if d.get("lifecycleStatus") != s.choices["Submitted"]:
+                continue
+            st = approval_state(d, by_doc.get(d.get("documentId") or "", []), rules)
+            if user.email not in st["pending"]:
+                continue
+            f = submitted_file(d)
+            if f:
+                out.add(os.path.normcase(os.path.normpath(f)))
+        return out
+
+    def may_read(user: User, full: str) -> bool:
+        """AD says yes, or the DMS is asking this person to approve exactly this file."""
+        return user.can(full) or os.path.normcase(os.path.normpath(full)) in awaiting_approval(user)
+
+    def may_write(user: User, full: str) -> bool:
+        return user.can(full, "write") or (s.submitted_editable
+                                           and os.path.normcase(os.path.normpath(full)) in awaiting_approval(user))
 
     def submitted_file(d: dict) -> str | None:
         """Where the file of a submitted document is now (its Submitted folder, else its working path)."""
@@ -2064,7 +2095,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(404, "File not found")
         if not full.lower().endswith(TEXT_EXT):
             raise HTTPException(415, "This is not a text file")
-        if not user.can(full):
+        if not may_read(user, full):
             raise HTTPException(403, "You do not have access to this file")
         return full
 
@@ -2076,14 +2107,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(413, "The file is too large to edit here: download it")
         raw = open(full, "rb").read()
         text = raw.decode("utf-8-sig" if raw[:3] == b"\xef\xbb\xbf" else "utf-8", errors="replace")
-        can_write = (user.can(full, "write") and not files.is_read_only(full)
+        can_write = (may_write(user, full) and not files.is_read_only(full)
                      and not (holds_share_log(full) or in_shared_folder(full)))
         return {"path": full, "name": os.path.basename(full), "text": text, "canWrite": can_write}
 
     @app.post("/api/files/text")
     def write_text(req: TextRequest, user: User = Depends(current_user)):
         full = _text_file(req.path, user)
-        if not user.can(full, "write"):
+        if not may_write(user, full):
             raise HTTPException(403, "You do not have permission to change this file")
         if files.is_read_only(full):
             raise HTTPException(403, "This file is released by the DMS (read only)")
@@ -2102,8 +2133,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         full = files.resolve(s.repository_root, path)
         if not os.path.isfile(full):
             raise HTTPException(404, "File not found")
-        if not user.can(full):
+        if not may_read(user, full):
             raise HTTPException(403, "You do not have access to this file")
+        log(user, "download", full)
         return FileResponse(full, filename=os.path.basename(full))
 
     return app

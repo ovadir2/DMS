@@ -879,6 +879,32 @@ def _approved_env(tmp_path):
     return c, sp, s, q, d, file_service
 
 
+def test_an_approver_needs_no_rights_on_the_file_server(tmp_path, monkeypatch):
+    """A document waiting for this person's approval is served by the DMS itself: AD may give them nothing
+    on the file server, and nothing else of it becomes reachable."""
+    from dms_api import file_service, security
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("rev1")
+    (q / "Other.xlsx").write_text("not mine")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)
+    submitted = q / "Submitted" / "Quote.xlsx"
+    assert submitted.exists()
+
+    monkeypatch.setattr(security.User, "can", lambda self, path, access="read": False)   # no rights at all in AD
+    assert c.get("/api/files/download", params={"path": str(submitted)}).status_code == 200      # the one to approve
+    assert c.get("/api/files/download", params={"path": str(q / "Other.xlsx")}).status_code == 403
+    row = next(x for x in c.get("/api/approvals").json() if x["id"] == d["id"])
+    assert row["viaDms"] is True and row["officeUri"] is None and row["viewUri"] is None   # the DMS serves it
+
+
 def test_new_revision_from_the_approved_copy(tmp_path):
     c, sp, s, q, d, fs = _approved_env(tmp_path)
     cur = q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx"
