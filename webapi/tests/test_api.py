@@ -318,6 +318,9 @@ def test_save_guide(env):
     cust = q.parents[1]
     kinds = {g["key"]: g for g in c.get("/api/guide").json()}
     assert kinds["quotation"]["needsProject"] is False and kinds["sow"]["needsProject"] is True
+    # the page says what the folder is for, and where it is, while the person is still choosing
+    assert kinds["quotation"]["hintEn"] == "Our quotations to the customer"
+    assert kinds["quotation"]["folder"].endswith("Quotations")
     t = c.get("/api/guide/target", params={"key": "quotation", "customer": str(cust)}).json()
     assert t["path"] == str(q) and t["exists"] and t["canWrite"]
     assert c.get("/api/guide/target", params={"key": "sow", "customer": str(cust)}).status_code == 400

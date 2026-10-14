@@ -674,7 +674,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.get("/api/guide")
     def guide(_: User = Depends(current_user)):
         """"What are you saving?" - the document kinds and where each belongs in the blueprint tree."""
-        return [{"key": k, "en": en, "he": he, "needsProject": t.startswith("{p}")} for k, en, he, t in blueprint.SAVE_GUIDE]
+        out = []
+        for k, en, he, t in blueprint.SAVE_GUIDE:
+            # where it lands, and what that folder is for, so the page can say it before taking anyone there
+            rest = [p for p in t.split("/")[1:] if p]
+            under = [s.customers_folder, "*"] + ([*blueprint.PRODUCTS, "*"] if t.startswith("{p}") else [])
+            label = blueprint.describe(under + rest) or {}
+            out.append({"key": k, "en": en, "he": he, "needsProject": t.startswith("{p}"),
+                        "folder": "\\".join(rest), "hintEn": label.get("hintEn", ""), "hintHe": label.get("hintHe", "")})
+        return out
 
     @app.get("/api/guide/target")
     def guide_target(key: str, customer: str, project: str | None = None, user: User = Depends(current_user)):

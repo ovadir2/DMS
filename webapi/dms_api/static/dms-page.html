@@ -569,7 +569,9 @@ async function wireGuide(v, ctx) {
   kind.innerHTML += guideKinds.map(g => `<option value="${g.key}">${esc(lang === 'HE' ? g.he : g.en)}${g.needsProject ? ' ▸' : ''}</option>`).join('');
   kind.onchange = async () => {
     const g = guideKinds.find(x => x.key === kind.value);
-    go.disabled = !g; go.title = g ? '' : T.chooseKind; msg.textContent = '';
+    go.disabled = !g; go.title = g ? '' : T.chooseKind;
+    // say what that folder is for, and where it is, before taking the person there
+    msg.textContent = !g ? '' : [lang === 'HE' ? g.hintHe : g.hintEn, g.folder].filter(Boolean).join(' · ');
     proj.style.display = 'none';
     if (g && g.needsProject && !ctx.project) {
       const list = await api('/api/projects?customer=' + encodeURIComponent(ctx.customer.path));
