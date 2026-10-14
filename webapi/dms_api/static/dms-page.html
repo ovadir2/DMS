@@ -379,7 +379,9 @@ function wire(v) {
   v.querySelectorAll('[data-hist]').forEach(a => a.onclick = () => { const r = v.querySelector('#h-' + a.dataset.hist); r.hidden = !r.hidden; });
   v.querySelectorAll('[data-wd]').forEach(b => b.onclick = async () => {
     if (!confirm(T.withdrawQ)) return;
-    try { await api(`/api/documents/${b.dataset.wd}/withdraw`, { method:'POST' }); refreshApprovals(); render(); } catch (e) { alert(e.message); }
+    // a refused action usually means the row is out of date (someone approved meanwhile): show it as it is now
+    try { await api(`/api/documents/${b.dataset.wd}/withdraw`, { method:'POST' }); refreshApprovals(); render(); }
+    catch (e) { alert(e.message); render(); }
   });
   const all = v.querySelector('#wf-all'); if (all) all.onclick = () => { state.everyone = !state.everyone; render(); };
   const fs = v.querySelector('#fs-run'); if (fs) fs.onclick = async () => {
