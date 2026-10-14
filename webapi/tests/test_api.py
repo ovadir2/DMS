@@ -905,6 +905,36 @@ def test_an_approver_needs_no_rights_on_the_file_server(tmp_path, monkeypatch):
     assert row["viaDms"] is True and row["officeUri"] is None and row["viewUri"] is None   # the DMS serves it
 
 
+def test_an_approver_sends_back_the_copy_they_edited(tmp_path, monkeypatch):
+    """Download, edit on your own PC, upload: the DMS replaces the file under approval, with no rights
+    on the file server, and never anything else."""
+    import io
+    from dms_api import file_service, security
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.docx").write_bytes(b"first")
+    (q / "Other.docx").write_bytes(b"not mine")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    c.post("/api/documents", json={"path": str(q / "Quote.docx"), "documentType": "הצעת מחיר",
+                                   "documentArea": "מסחרי", "submit": True})
+    file_service.run_once(sp, s)
+    submitted = q / "Submitted" / "Quote.docx"
+
+    monkeypatch.setattr(security.User, "can", lambda self, path, access="read": False)      # nothing in AD
+    send = lambda target, name, data: c.post("/api/files/replace", data={"path": str(target)},
+                                             files={"file": (name, io.BytesIO(data),
+                                                             "application/vnd.openxmlformats-officedocument.wordprocessingml.document")})
+    assert send(submitted, "Quote.docx", b"with my remarks").status_code == 200
+    assert submitted.read_bytes() == b"with my remarks"
+    assert send(submitted, "Quote.txt", b"x").status_code == 400                 # the same kind of file only
+    assert send(q / "Other.docx", "Other.docx", b"x").status_code == 403         # nothing else of the tree
+    assert (q / "Other.docx").read_bytes() == b"not mine"
+
+
 def test_new_revision_from_the_approved_copy(tmp_path):
     c, sp, s, q, d, fs = _approved_env(tmp_path)
     cur = q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx"
@@ -1477,7 +1507,7 @@ def test_people_list_for_choosing_approvers(tmp_path):
 def test_directory_people_from_sharepoint_people_search():
     from dms_api.sharepoint import SharePoint
     sp = SharePoint.__new__(SharePoint)
-    sp.s = Settings(site_url="https://rhisrael.sharepoint.com/sites/DocumentControl-TEST")
+    sp.s = Settings(site_url="https://rhisrael.sharepoint.com/sites/DocumentControl-TEST", sp_auth="interactive")
     cell = lambda **kv: {"Cells": [{"Key": k, "Value": v} for k, v in kv.items()]}  # noqa: E731
     pages = [{"PrimaryQueryResult": {"RelevantResults": {"TotalRows": 3, "Table": {"Rows": [
         cell(PreferredName="Dana Levi", WorkEmail="Dana.Levi@rh.co.il", JobTitle="QA", Department="Quality"),
@@ -1489,6 +1519,29 @@ def test_directory_people_from_sharepoint_people_search():
     assert [p["email"] for p in people] == ["avi@rh.co.il", "dana.levi@rh.co.il"] and people[1]["title"] == "QA · Quality"
     assert "sourceid='b09a7990-05ea-4af9-81ef-edfab16c4e31'" in calls[0]
     assert sp.directory_people() is people                                             # cached
+
+
+def test_directory_people_from_graph_when_the_dms_signs_in_with_a_certificate():
+    """App-only: the SharePoint search API refuses the call, so the directory comes from Microsoft Graph,
+    and from the people of the site when that permission is missing too."""
+    from dms_api.sharepoint import SharePoint, SharePointError
+    sp = SharePoint.__new__(SharePoint)
+    sp.s = Settings(site_url="https://rhisrael.sharepoint.com/sites/DocumentControl-TEST")   # certificate
+    pages = [{"value": [{"displayName": "Dana Levi", "mail": "Dana.Levi@rh.co.il", "jobTitle": "QA", "department": "Quality"},
+                        {"displayName": "No Mail", "mail": None}],
+              "@odata.nextLink": "https://graph.microsoft.com/v1.0/users?$skiptoken=x"},
+             {"value": [{"displayName": "Avi Cohen", "mail": "avi@rh.co.il"}]}]
+    calls = []
+    sp._graph = lambda m, path: (calls.append(path), pages.pop(0))[1]
+    people = sp.directory_people()
+    assert [p["email"] for p in people] == ["avi@rh.co.il", "dana.levi@rh.co.il"]
+    assert people[1]["title"] == "QA · Quality" and calls[1].startswith("users?$skiptoken=")
+
+    sp2 = SharePoint.__new__(SharePoint)
+    sp2.s = sp.s
+    sp2._graph = lambda m, path: (_ for _ in ()).throw(SharePointError("Graph GET users -> 403"))
+    sp2.site_people = lambda: [{"email": "ronen@rh.co.il", "name": "Ronen", "title": ""}]
+    assert [p["email"] for p in sp2.directory_people()] == ["ronen@rh.co.il"]              # the site, not an error
 
 
 def test_notification_log_and_test_notification(tmp_path):

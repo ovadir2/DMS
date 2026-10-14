@@ -2128,6 +2128,43 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         log(user, "edit-text", full)
         return {"path": full, "saved": True}
 
+    @app.post("/api/files/replace")
+    def replace_file(path: str = Form(...), file: UploadFile = File(...), user: User = Depends(current_user)):
+        """The file under approval, edited on the approver's own PC and sent back (Download, edit, upload).
+        An approver may have no rights at all on the file server: the DMS writes it with its own account,
+        under the same name, and only over the file it is asking that person to approve."""
+        full = files.resolve(s.repository_root, path)
+        if not os.path.isfile(full):
+            raise HTTPException(404, "File not found")
+        if not may_write(user, full):
+            raise HTTPException(403, "You do not have permission to change this file")
+        if files.is_read_only(full):
+            raise HTTPException(403, "This file is released by the DMS (read only)")
+        name = os.path.basename((file.filename or "").replace("\\", "/"))
+        if os.path.splitext(name)[1].lower() != os.path.splitext(full)[1].lower():
+            raise HTTPException(400, f"Send back the same kind of file ({os.path.splitext(full)[1]})")
+        size, tmp = 0, full + ".dms-upload"
+        try:
+            with open(tmp, "wb") as out:
+                while chunk := file.file.read(1 << 20):
+                    size += len(chunk)
+                    if size > s.max_upload_mb * 1024 * 1024:
+                        raise HTTPException(413, f"The file is larger than {s.max_upload_mb} MB")
+                    out.write(chunk)
+            os.replace(tmp, full)
+        except HTTPException:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+            raise
+        d = find_registered(full, register_index())
+        log(user, "replace-file", f"{full} ({size} bytes, uploaded from the DMS page)")
+        if d:
+            sp().audit(document_id=d.get("documentId") or "", event=s.choices["StatusChanged"],
+                       from_status=d.get("lifecycleStatus") or "", to_status=d.get("lifecycleStatus") or "",
+                       actor=user.email, details=f"The file was replaced with a copy edited by {user.email} "
+                                                 f"({name}, {size} bytes) - remarks during the approval")
+        return {"path": full, "name": os.path.basename(full), "size": size}
+
     @app.get("/api/files/download")
     def download(path: str, user: User = Depends(current_user)):
         full = files.resolve(s.repository_root, path)

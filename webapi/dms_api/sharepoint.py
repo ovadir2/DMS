@@ -7,6 +7,7 @@ for PnP ($C); the token is cached in %LOCALAPPDATA%\\DMS and refreshed silently.
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -16,6 +17,8 @@ from urllib.parse import quote, urlparse
 import requests
 
 from .config import Settings
+
+logger = logging.getLogger("dms_api")
 
 REGISTER = "Lists/DocumentRegister"
 AUDIT = "Lists/ControlAudit"
@@ -229,11 +232,21 @@ class SharePoint:
     PEOPLE_SOURCE = "b09a7990-05ea-4af9-81ef-edfab16c4e31"     # SharePoint search: Local People Results
 
     def directory_people(self, max_people: int = 5000) -> list[dict]:
-        """All RH Microsoft 365 users with a mailbox (the company directory, through SharePoint people search).
-        Cached for an hour."""
+        """All RH Microsoft 365 users with a mailbox (the company directory). Cached for an hour.
+        Signed in with a certificate (app-only) the SharePoint search API refuses the call ("No User or App
+        Context found"), so the directory comes from Microsoft Graph; without that permission either, the
+        people of the DMS site are offered instead."""
         cached = getattr(self, "_people_cache", None)
         if cached and cached[1] > time.time():
             return cached[0]
+        if self.s.sp_auth != "interactive":
+            try:
+                people = self._graph_people(max_people)
+            except SharePointError as e:
+                logger.info("Company directory from Graph: %s. The people of the site are offered instead.", e)
+                people = self.site_people()
+            self._people_cache = (people, time.time() + 3600)
+            return people
         out: dict[str, dict] = {}
         start = 0
         while start < max_people:
@@ -253,6 +266,23 @@ class SharePoint:
         people = sorted(out.values(), key=lambda p: p["name"].lower())
         self._people_cache = (people, time.time() + 3600)
         return people
+
+    def _graph_people(self, max_people: int = 5000) -> list[dict]:
+        """The company directory through Microsoft Graph (the Entra app needs User.Read.All, Application)."""
+        out: dict[str, dict] = {}
+        path = "users?$select=displayName,mail,jobTitle,department&$top=999"
+        while path and len(out) < max_people:
+            r = self._graph("GET", path)
+            for u in r.get("value") or []:
+                email = (u.get("mail") or "").lower()
+                if email and email not in out:
+                    out[email] = {"email": email, "name": u.get("displayName") or email,
+                                  "title": " · ".join(x for x in (u.get("jobTitle"), u.get("department")) if x)}
+            nxt = r.get("@odata.nextLink") or ""
+            path = nxt.split("/v1.0/", 1)[1] if "/v1.0/" in nxt else ""
+        if not out:
+            raise SharePointError("Microsoft Graph returned no users with a mailbox")
+        return sorted(out.values(), key=lambda p: p["name"].lower())
 
     def site_people(self) -> list[dict]:
         """The people (with an email) of the DocumentControl site: the default list to choose approvers from."""
