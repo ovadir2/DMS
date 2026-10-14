@@ -165,10 +165,19 @@ def office_uri(path: str, edit: bool = False) -> str | None:
         return "rh-dms:" + ("" if edit else "ro/") + quote(path, safe="")   # view: read-only (approved files)
     if url_len(path) > LONG_PATH or not path.isascii():
         # too long for Office as a file path, or a Hebrew name (6 characters each as a URL, and Excel does not
-        # decode them): the 8.3 names of the same path - plain ASCII, short, and nothing to install on the PC
-        short = user_path(short_path(full, force=True))
-        if url_len(short) < url_len(path) or (short.isascii() and not path.isascii()):
-            path = short
+        # decode them): the 8.3 names of the same path - plain ASCII, short, and nothing to install on the PC.
+        # The file's own name is kept whenever it can be: an 8.3 name holds three letters, so Quote.xlsx would
+        # arrive as QUOTE~1.XLS and Excel says the format and the extension do not match.
+        folder, _, name = full.replace("/", "\\").rpartition("\\")      # a Windows path, whatever runs this
+        folder = short_path(folder, force=True)
+        for candidate in ([user_path(os.path.join(folder, name))] if name.isascii() else []) + [user_path(short_path(full, force=True))]:
+            if url_len(candidate) <= LONG_PATH and candidate.isascii():
+                path = candidate
+                break
+        else:
+            short = user_path(short_path(full, force=True))
+            if url_len(short) < url_len(path) or (short.isascii() and not path.isascii()):
+                path = short
     if (url_len(path) > LONG_PATH or not path.isascii()) and BASE_URL.get():
         # still too long, or a name Office cannot carry in a file link (Hebrew, and the volume has no 8.3 name
         # for that file): the DMS link (WebDAV) - the original file name, and Save writes back to the same file.

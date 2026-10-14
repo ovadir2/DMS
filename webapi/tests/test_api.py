@@ -1941,6 +1941,19 @@ def test_other_pcs_sign_in_with_their_windows_account(tmp_path, monkeypatch):
     assert forged.get("/api/me").status_code == 401
 
 
+def test_a_long_path_keeps_the_file_name_and_shortens_only_the_folders(monkeypatch):
+    """An 8.3 name holds three letters, so Quote.xlsx would reach Excel as QUOTE~1.XLS and it complains that
+    the format and the extension do not match. The file's own name is kept whenever it is plain ASCII."""
+    from dms_api import files
+    long_folder = "\\\\RHFS02\\General\\" + "\\".join(["a long folder name here"] * 8)
+    full = long_folder + "\\Quote.xlsx"
+    monkeypatch.setattr(files, "short_path", lambda p, force=False: "\\\\RHFS02\\General\\ALONGF~1\\ALONGF~2"
+                        + (("\\" + "QUOTE~1.XLS") if p.lower().endswith(".xlsx") else ""))
+    monkeypatch.setattr(files, "user_path", lambda p: p)
+    uri = files.office_uri(full)
+    assert uri.endswith("/ALONGF~2/Quote.xlsx") and "QUOTE~1.XLS" not in uri
+
+
 def test_short_paths_for_open_and_copy(tmp_path):
     from dms_api.config import _short_paths
     m = _short_paths(r"02_Customers=\\fs\Customers; 01_General=\\fs\General\ ")
