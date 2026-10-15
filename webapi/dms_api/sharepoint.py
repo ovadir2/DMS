@@ -20,6 +20,10 @@ from .config import Settings
 
 logger = logging.getLogger("dms_api")
 
+# what Word, Excel and PowerPoint for the web open in the browser; anything else is the file itself
+OFFICE_WEB = (".docx", ".docm", ".doc", ".dotx", ".xlsx", ".xlsm", ".xls", ".csv",
+              ".pptx", ".pptm", ".ppt", ".ppsx")
+
 REGISTER = "Lists/DocumentRegister"
 AUDIT = "Lists/ControlAudit"
 MATRIX = "Lists/ApproverMatrix"
@@ -434,7 +438,17 @@ class SharePoint:
             up = self._call("POST", f"{site}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(current)}')"
                                     f"/Files/AddUsingPath(DecodedUrl='{q(name)}',Overwrite=true)", data=f.read())
         server_relative = up.get("ServerRelativeUrl") or f"{current}/{name}"
-        return {"name": name, "serverRelative": server_relative, "url": self.host + quote(server_relative, safe="/")}
+        return {"name": name, "serverRelative": server_relative, "url": self.office_url(server_relative)}
+
+    def office_url(self, server_relative: str, *, edit: bool = True) -> str:
+        """The address that opens the document in Word / Excel / PowerPoint for the web. The file's own address
+        makes the browser ask whether to download it; this one opens it in the browser, in the right program."""
+        name = server_relative.rsplit("/", 1)[-1]
+        if not name.lower().endswith(OFFICE_WEB):              # a PDF, an image, anything else: the file itself
+            return self.host + quote(server_relative, safe="/")
+        site = self.review_site()
+        return (f"{site}/_layouts/15/WopiFrame.aspx?sourcedoc={quote(server_relative, safe='')}"
+                f"&action={'edit' if edit else 'view'}")
 
     def review_url(self, *, document_id: str, name: str) -> str | None:
         """Where that document is open for approval, if it is already there (after a restart of the DMS, or
@@ -445,7 +459,7 @@ class SharePoint:
             self._call("GET", f"{site}/_api/web/GetFileByServerRelativePath(DecodedUrl='{q(path)}')?$select=Exists")
         except SharePointError:
             return None
-        return self.host + quote(path, safe="/")
+        return self.office_url(path)
 
     def review_share(self, *, document_id: str, name: str, emails: list[str], subject: str, message: str,
                      edit: bool = True) -> None:
