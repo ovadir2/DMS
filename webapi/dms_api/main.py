@@ -971,26 +971,33 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def delete(req: DeleteRequest, user: User = Depends(current_user)):
         """Moves the file or folder to the recycle folder (04_Workflow_System\\Recycle), never erases it."""
         full = files.resolve(s.repository_root, req.path)
-        if not (user.can(full, "write") and user.can(os.path.dirname(full), "write")):
+        # a DMS super user may also remove a released file (Current_ReadOnly / Obsolete_ReadOnly / Submitted):
+        # it goes to the recycle folder like any other deletion, and its record in SharePoint stays
+        boss = is_admin(user) and os.path.isfile(full)
+        if not (user.can(full, "write") and user.can(os.path.dirname(full), "write")) and not boss:
             raise HTTPException(403, "You do not have permission to delete this item")
-        if os.path.exists(full):
+        if os.path.exists(full) and not boss:
             files.check_editable(s.repository_root, full, s.protected_depth)
         if holds_share_log(full) or in_shared_folder(full):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only) and cannot be deleted")
         if (blueprint.describe(rel_parts(full)) or {}).get("kind") not in (None, "project"):   # a project folder is the user's
             raise HTTPException(403, "This folder is part of the company skeleton (blueprint) and cannot be deleted. Its content can.")
         d = registered_inside(full)
-        if d:
+        if d and not boss:
             raise HTTPException(409, f"It holds a controlled document ({d.get('documentId')}) and cannot be deleted")
         try:
-            moved = files.delete_item(s.repository_root, full, s.protected_depth, user.email)
+            moved = files.delete_item(s.repository_root, full, s.protected_depth, user.email, force=boss)
             from . import noworkflow
             noworkflow.moved(s.repository_root, full, None)
         except FileNotFoundError:
             raise HTTPException(404, "Not found") from None
         except PermissionError as e:
             raise HTTPException(409, str(e)) from None
-        log(user, "delete", f"{full} -> {moved}")
+        log(user, "delete", f"{full} -> {moved}" + (" (super user: a released file)" if boss and d else ""))
+        if d:                                                   # the document keeps its record; the file is gone
+            sp().audit(document_id=d.get("documentId") or "", event=s.choices["StatusChanged"],
+                       from_status=d.get("lifecycleStatus") or "", to_status=d.get("lifecycleStatus") or "",
+                       actor=user.email, details=f"The file was deleted by a DMS super user: {full} -> {moved}")
         return {"deleted": full, "recycledTo": moved}
 
     # ------------------------------------------------------------------ approvals on the page (DMS_APPROVALS=page)

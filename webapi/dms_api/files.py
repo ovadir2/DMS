@@ -439,13 +439,17 @@ def rename_item(root: str, path: str, new_name: str, protected_depth: int) -> st
     return target
 
 
-def delete_item(root: str, path: str, protected_depth: int, user: str) -> str:
-    """Move the item to 04_Workflow_System\\Recycle\\<date>\\<user>\\<its path>, so a deletion can be undone."""
-    full = check_editable(root, path, protected_depth)
+def delete_item(root: str, path: str, protected_depth: int, user: str, force: bool = False) -> str:
+    """Move the item to 04_Workflow_System\\Recycle\\<date>\\<user>\\<its path>, so a deletion can be undone.
+    force (a DMS super user): a released file, in a workflow folder, may go too - it is moved to the recycle
+    folder like everything else, and the register keeps its record."""
+    full = resolve(root, path) if force else check_editable(root, path, protected_depth)
     for dirpath, _dirs, names in os.walk(full) if os.path.isdir(full) else [(os.path.dirname(full), [], [os.path.basename(full)])]:
         for n in names:
             if is_read_only(os.path.join(dirpath, n)):
-                raise PermissionError(f"{n} is read-only (controlled) and cannot be deleted")
+                if not force:
+                    raise PermissionError(f"{n} is read-only (controlled) and cannot be deleted")
+                os.chmod(os.path.join(dirpath, n), 0o666)      # a super user may remove a released file
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
     target = os.path.join(root, RECYCLE, stamp, user.split("@")[0], os.path.relpath(full, root))
     if os.path.exists(target):
