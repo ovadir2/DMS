@@ -30,19 +30,28 @@ if (-not (Get-Module -ListAvailable PnP.PowerShell)) {
 }
 Import-Module PnP.PowerShell -ErrorAction Stop
 
+# PnP renamed these cmdlets (AzureAD -> EntraID): use whichever this version has.
+function Get-Cmd([string[]] $names) {
+    foreach ($n in $names) { if (Get-Command $n -ErrorAction SilentlyContinue) { return $n } }
+    throw "None of these cmdlets exist in PnP.PowerShell: $($names -join ', '). Update the module."
+}
+
 foreach ($url in $Site) {
     $url = $url.TrimEnd('/')
     Write-Host "-- $url" -ForegroundColor Cyan
     Connect-PnPOnline -Url $url -Interactive            # sign in as an administrator
-    $have = Get-PnPAzureADAppSitePermission -ErrorAction SilentlyContinue |
+    $get   = Get-Cmd 'Get-PnPEntraIDAppSitePermission', 'Get-PnPAzureADAppSitePermission'
+    $grant = Get-Cmd 'Grant-PnPEntraIDAppSitePermission', 'Grant-PnPAzureADAppSitePermission'
+    $set   = Get-Cmd 'Set-PnPEntraIDAppSitePermission', 'Set-PnPAzureADAppSitePermission'
+    $have = & $get -ErrorAction SilentlyContinue |
             Where-Object { $_.Apps.Id -contains $AppId.Guid }
     if ($have) {
         if ($have.Roles -contains $Permissions) { Write-Host "   already $Permissions" -ForegroundColor DarkGray; continue }
-        Set-PnPAzureADAppSitePermission -PermissionId $have.Id -Permissions $Permissions | Out-Null
+        & $set -PermissionId $have.Id -Permissions $Permissions | Out-Null
         Write-Host "   $($have.Roles) -> $Permissions" -ForegroundColor Green
         continue
     }
-    Grant-PnPAzureADAppSitePermission -AppId $AppId -DisplayName $DisplayName -Site $url -Permissions $Permissions | Out-Null
+    & $grant -AppId $AppId -DisplayName $DisplayName -Site $url -Permissions $Permissions | Out-Null
     Write-Host "   $Permissions granted" -ForegroundColor Green
 }
 Write-Host 'Done. The DMS picks this up at once: no restart.' -ForegroundColor Cyan
