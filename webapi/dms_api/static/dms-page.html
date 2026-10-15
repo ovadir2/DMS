@@ -130,7 +130,7 @@
   th { color:var(--muted); font-weight:500; font-size:13px; }
   td { overflow-wrap:anywhere; }                       /* a long Document ID must not widen the table */
   td.actions { white-space:normal; }                   /* the commands wrap instead of running off the page */
-  td.actions a, td.actions button.link { display:inline-block; white-space:nowrap; margin-inline-end:12px; margin-block:2px; }
+  td.actions a, td.actions button.link { display:inline-block; white-space:nowrap; margin-inline-end:22px; margin-block:5px; padding:3px 0; }
   a.link, button.link { color:var(--info); cursor:pointer; text-decoration:none; background:none; border:none; font:inherit; padding:0; }
   .status { display:inline-block; padding:2px 10px; border-radius:12px; font-size:12.5px; font-weight:500; }
   .Working { background:var(--warnbg); color:var(--warn); } .Submitted { background:var(--infobg); color:var(--info); }
@@ -178,7 +178,7 @@
     tr[hidden] { display:none; }
     tr { border-bottom:1px solid var(--line); padding:8px 2px; }
     td { border:none; padding:2px 0; }
-    td.actions { white-space:normal; display:flex; flex-wrap:wrap; gap:6px 14px; padding-top:6px; }
+    td.actions { white-space:normal; display:flex; flex-wrap:wrap; gap:12px 22px; padding-top:6px; }
     td.actions a, td.actions button.link { margin:0; }
     .flform .row { flex-direction:column; align-items:stretch; }
     .dlg-f { flex-wrap:wrap; } .dlg-f .pillbtn { flex:1 1 auto; }
@@ -393,7 +393,7 @@ function bridgeActions(f) {
   return out.join('\n');
 }
 function fileActions(f) {
-  return `${f.bridge ? bridgeActions(f) : f.officeUri ? `<button type="button" class="link" data-ext="${esc(f.officeUri)}" data-f="${esc(f.path)}">${f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open)}</button>${f.editable && f.viewUri ? `<button type="button" class="link" data-ext="${esc(f.viewUri)}" data-f="${esc(f.path)}">${T.viewRo}</button>` : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">✎ ${T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cp="${esc(f.path)}">🔗 ${T.copyLink}</button>`
+  return `${f.bridge ? bridgeActions(f) : f.officeUri ? `${openBtn(f.officeUri, f.path, f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open))}${f.editable && f.viewUri ? openBtn(f.viewUri, f.path, T.viewRo) : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">✎ ${T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cp="${esc(f.path)}">🔗 ${T.copyLink}</button>`
     + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button><button type="button" class="link" data-drn="${f.document.id}" data-name="${esc(f.name)}">${T.rename}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
         + (f.document.statusKey === 'Submitted' && !f.document.nextRevision ? `<button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button>` : '')
         + (f.document.statusKey === 'Approved_ReadOnly' && samePath(f.path, f.document.currentUncPath) ? `${f.document.nextRevision ? '' : `<button type="button" class="link" data-rev="${f.document.id}">⟳ ${T.newRev}</button>`}<button type="button" class="link" data-share="${f.document.id}">✉ ${isHr(f.path) ? T.shareHrBtn : T.share}</button>` : '')
@@ -559,13 +559,19 @@ const remarksLine = (id, list) => !list || !list.length ? '' :
   `<div class="small">${T.remarksFiles}: ${list.map(x => `<a class="link" href="/api/documents/${id}/remarks/${encodeURIComponent(x.name)}">${esc(x.name)}</a>`).join(', ')}</div>`;
 // How a document row opens its file: a text file in the page, a PDF or an image in the browser,
 // an Office file in its application, anything else with the application of that PC (else the path).
+// A SharePoint address is an ordinary link and opens in a tab of its own; only an application link
+// (ms-word:, rh-dms:) goes through openExternal, which navigates this page.
+const webLink = u => /^https?:/i.test(u || '');
+const openBtn = (uri, file, label) => webLink(uri)
+  ? `<a class="link" href="${esc(uri)}" target="_blank" rel="noopener">${label}</a>`
+  : `<button type="button" class="link" data-ext="${esc(uri)}" data-f="${esc(file)}">${label}</button>`;
 function fileLinks(file, editUri, viewUri, canEdit, viaDms) {
   if (!file) return '';
   if (TEXT_EXT.test(file)) return `<button type="button" class="link" data-tx="${esc(file)}">${canEdit ? '✎ ' + T.editHere : T.open}</button>`;
   const out = [];
-  if (editUri && canEdit) out.push(`<button type="button" class="link" data-ext="${esc(editUri)}" data-f="${esc(file)}">✎ ${T.openEdit}</button>`);
+  if (editUri && canEdit) out.push(openBtn(editUri, file, '✎ ' + T.openEdit));
   if (VIEW_EXT.test(file)) out.push(`<button type="button" class="link" data-vw="${esc(file)}">${T.viewRo}</button>`);
-  else if (viewUri) out.push(`<button type="button" class="link" data-ext="${esc(viewUri)}" data-f="${esc(file)}">${T.viewRo}</button>`);
+  else if (viewUri) out.push(openBtn(viewUri, file, T.viewRo));
   else if (!out.length && !viaDms) out.push(`<button type="button" class="link" data-noopen="${esc(file)}">${T.open}</button>`);
   return out.join('\n');
 }
@@ -711,7 +717,7 @@ async function approvalsView(v) {
         ${!d.mine ? `<div class="muted">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')}</div>` : ''}</td>
       <td class="hide-s small muted">${when(d.submittedUtc)}${days(d.submittedUtc) !== null ? `<div>${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}</td>
       <td class="actions">${fileLinks(d.file, d.officeUri, d.viewUri, d.editable, d.viaDms)}
-        ${d.file && !TEXT_EXT.test(d.file) ? `<button type="button" class="link" data-up="${d.id}">⬆ ${T.uploadEdited}</button>` : ''}
+        ${d.file && !TEXT_EXT.test(d.file) && !d.editable ? `<button type="button" class="link" data-up="${d.id}">⬆ ${T.uploadEdited}</button>` : ''}
         ${remarksLine(d.id, d.remarks)}
         ${d.file ? `<button type="button" class="link" data-dl="${esc(d.file)}">${T.download}</button>${d.viaDms ? '' : `<button type="button" class="link" data-cp="${esc(d.file)}">🔗 ${T.copyLink}</button>`}` : ''}
         <div style="margin-top:6px"><button type="button" class="pillbtn small" data-ok="${d.id}">✔ ${T.approve}${d.mine ? '' : ' (' + T.asSuper + ')'}</button>
