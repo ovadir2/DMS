@@ -1210,19 +1210,54 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             if user.email in st["pending"] or (everyone and is_admin(user)):
                 submitted = next((e for e in events if e["event"] == s.choices["SubmittedEvent"]), None)
                 file = submitted_file(d)
+                kept = review_ensure(d) or {}
+                if file and kept.get("name"):   # closed in Word for the web: it is back here before the row is drawn
+                    review_pull(d.get("documentId") or "", kept["name"], file)
                 out.append({**with_key(d), **st, "submittedUtc": submitted["utc"] if submitted else None,
                             "submittedBy": submitted["actor"] if submitted else None, "file": file,
                             # read only, always: an approval never changes the document, and an approver's
                             # remarks are a file of their own beside it
                             # in SharePoint while it is approved: Office Online opens it with the person's own
                             # Microsoft account, so nobody needs rights on the file server
-                            "officeUri": (review_ensure(d) or {}).get("url"),
-                            "viewUri": files.open_uri(file) if file and user.can(file) else None,
+                            "officeUri": (office := kept.get("url")),
+                            # View is the same copy in SharePoint, opened read only; without the bridge it is
+                            # the file itself, for someone who has rights on the file server
+                            "viewUri": read_only_uri(office) or (files.open_uri(file) if file and user.can(file) else None),
                             "viaDms": bool(file) and not user.can(file),   # no rights on the file server: the DMS serves it
                             "remarks": remarks_of(d.get("documentId") or ""),
                             "editable": bool((REVIEW.get(d.get("documentId") or "") or {}).get("url")),   # in SharePoint: they edit it there
                             "mine": user.email in st["pending"]})
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
+
+    def review_pull(key: str, name: str, target: str, *, by: str = "") -> bool:
+        """What is in SharePoint comes back to the file server as soon as it is newer than the file here, so a
+        document closed in Word for the web is in the DMS at the next look, without waiting for the approval
+        to end. Returns True when something came back."""
+        if not review_on() or not target or not os.path.isfile(target):
+            return False
+        try:
+            info = sp().review_info(document_id=key, name=name)
+            when = (info or {}).get("modified")
+            if not when:
+                return False
+            there = datetime.fromisoformat(when.replace("Z", "+00:00"))
+            here = datetime.fromtimestamp(os.path.getmtime(target), timezone.utc)
+            if there <= here + timedelta(seconds=2):                 # nobody wrote it there since it came from here
+                return False
+            data = sp().review_get(document_id=key, name=name)
+            if not data:
+                return False
+            with open(target, "wb") as f:
+                f.write(data)
+            logger.info("%s came back from SharePoint (%d bytes)", target, len(data))
+            return True
+        except Exception as e:  # noqa: BLE001 - a listing must never fail on this
+            logger.info("%s did not come back from SharePoint: %s", target, e)
+            return False
+
+    def read_only_uri(uri: str | None) -> str | None:
+        """The same address in SharePoint, opened for reading: View and Open to edit are one mechanism."""
+        return uri.replace("action=edit", "action=view") if uri and "action=edit" in uri else None
 
     def review_on() -> bool:
         """The SharePoint review is on when a library is named and this SharePoint can do it (the playground

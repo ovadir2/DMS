@@ -450,6 +450,18 @@ class SharePoint:
         return (f"{site}/_layouts/15/WopiFrame.aspx?sourcedoc={quote(server_relative, safe='')}"
                 f"&action={'edit' if edit else 'view'}")
 
+    def review_info(self, *, document_id: str, name: str) -> dict | None:
+        """When that copy was last written in SharePoint, and how large it is: the DMS brings it back as soon
+        as someone has changed it there. None when it is not there."""
+        site, q = self.review_site(), lambda p: quote(p.replace("'", "''"), safe="/")
+        path = f"{self._review_folder(document_id)}/{name}"
+        try:
+            r = self._call("GET", f"{site}/_api/web/GetFileByServerRelativePath(DecodedUrl='{q(path)}')"
+                                  f"?$select=TimeLastModified,Length")
+        except SharePointError:
+            return None
+        return {"modified": r.get("TimeLastModified"), "length": int(r.get("Length") or 0)}
+
     def review_url(self, *, document_id: str, name: str) -> str | None:
         """Where that document is open for approval, if it is already there (after a restart of the DMS, or
         when it was submitted before the SharePoint review was turned on). None when it is not."""
