@@ -1663,9 +1663,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.post("/api/file-service/run")
     def file_service_run(user: User = Depends(current_user)):
-        """Run the file moves now (pilot, when the file service runs inside the web service)."""
-        if s.file_service_seconds <= 0:
-            raise HTTPException(404, "The file service does not run inside this web service")
+        """Run the file moves now: every approved document goes to Current_ReadOnly in its own folder (the
+        previous revision to Obsolete_ReadOnly), read only, with its SHA-256 in the record. A super user can
+        run it whenever they like, also when the DMS does not run it on a timer (DMS_FILE_SERVICE_SECONDS)."""
+        if not is_admin(user):
+            raise HTTPException(403, "Only a DMS super user can run the file service")
         from . import file_service
         r = file_service.run_once(sp(), s)
         log(user, "file-service-run", str(r))

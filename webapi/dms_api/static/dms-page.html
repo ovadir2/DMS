@@ -681,7 +681,7 @@ async function mine(v) {
   const days = u => u ? Math.max(0, Math.floor((Date.now() - new Date(u)) / 864e5)) : null;
   v.innerHTML = `<div class="toolbar"><h2 style="margin:0">${state.everyone ? T.allWf : T.myWf}</h2><span class="spacer"></span>
       ${me.admin ? `<button type="button" class="pillbtn small light" id="wf-all">${state.everyone ? T.myWf : T.allWf}</button>` : ''}
-      ${cfg.fileService ? `<button type="button" class="pillbtn small light" id="fs-run">${T.fsRun}</button>` : ''}</div>
+      ${me.admin ? `<button type="button" class="pillbtn small light" id="fs-run">${T.fsRun}</button>` : ''}</div>
     <div class="chips"><button type="button" class="chip ${state.wfFilter ? '' : 'on'}" data-sf="">${T.all} <b>${r.items.length}</b></button>
       ${keys.map(k => `<button type="button" class="chip ${k} ${state.wfFilter === k ? 'on' : ''}" data-sf="${k}">${T[k]} <b>${r.summary[k]}</b></button>`).join('')}</div>
     <table><tr><th>${T.docId}</th><th>${T.titleF}</th><th class="hide-s">${T.fileType}</th><th>Rev</th><th>${T.status}</th><th class="hide-s">${T.submitted}</th><th class="hide-s">${T.lastAction}</th><th></th></tr>
