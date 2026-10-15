@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from . import access, blueprint, files, finder
+from . import access, blueprint, checkout, files, finder
 from .ai import AiError, OpenWebUI
 from .rag import RagError, RagTools
 from .auth import current_user
@@ -39,6 +39,11 @@ class NewFolderRequest(BaseModel):
 class TextRequest(BaseModel):
     path: str
     text: str
+
+
+class CheckoutRequest(BaseModel):
+    path: str
+    edit: bool = True
 
 
 class RenameRequest(BaseModel):
@@ -647,6 +652,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                   and (not d or d.get("lifecycleStatus") == s.choices["Working"]) and user.can(f["path"], "write")):
                 # not yet registered (or still in Working): opens in Word / Excel / PowerPoint for editing
                 f.update(officeUri=files.open_uri(f["path"], edit=True), viewUri=files.open_uri(f["path"]), editable=True)
+        if review_on():
+            # nobody but the DMS has rights on the file server: a document is looked at, and changed, in SharePoint
+            reg = checkout.read(s.repository_root)
+            for f in result["files"]:
+                st = checkout_state(f["path"], user, reg)
+                f["bridge"] = True
+                f["checkedOut"] = st
+                f["canEdit"] = not read_only_file(f["path"]) and may_write(user, f["path"])
+                if st and st.get("url"):
+                    f.update(officeUri=st["url"], editable=bool(st.get("edit")))
         if in_shared_folder(os.path.join(result["path"], "x")):
             result.update(noWorkflow=True, canWrite=False, sharedNote=True)
         return result
@@ -1281,6 +1296,107 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 sp().review_done(document_id=doc_id)
             except Exception as e:  # noqa: BLE001
                 logger.info("Review copy of %s not removed: %s", doc_id, e)
+
+    # ------------------------------------------------ a file taken out to SharePoint, to look at it or change it
+    def read_only_file(full: str) -> bool:
+        """Released by the DMS: Current_ReadOnly / Obsolete_ReadOnly, the read-only flag, or a folder the DMS keeps."""
+        return (files.is_read_only(full)
+                or os.path.basename(os.path.dirname(full)) in WORKFLOW_FOLDERS[2:]
+                or holds_share_log(full) or in_shared_folder(full))
+
+    def checkout_state(full: str, user: User, data: dict | None = None) -> dict | None:
+        """What the page shows on the row: who has the document out for editing, and, for this person's own copy,
+        the address to open it in SharePoint."""
+        root = s.repository_root
+        reg = checkout.read(root) if data is None else data
+        entry = reg.get(checkout.key_of(root, full)) or reg.get(checkout.key_of(root, full, user.email))
+        if not entry:
+            return None
+        own = (entry.get("by") or "").lower() == user.email
+        return {"by": entry.get("by"), "mine": own, "edit": bool(entry.get("edit")),
+                "url": entry.get("url") if own else None, "utc": entry.get("utc")}
+
+    def checkout_return(entry: dict, *, bring_back: bool = True) -> None:
+        """The person is done (or the time ran out): what they changed comes back to the file server, and the copy,
+        with the permission on it, goes away. A document only looked at brings nothing back."""
+        root, path = s.repository_root, entry.get("path") or ""
+        key = entry.get("key") or checkout.key_of(root, path, "" if entry.get("edit") else (entry.get("by") or ""))
+        name = entry.get("name") or os.path.basename(path)
+        try:
+            if bring_back and entry.get("edit") and os.path.isfile(path) and not read_only_file(path):
+                data = sp().review_get(document_id=key, name=name)
+                if data:
+                    with open(path, "wb") as f:
+                        f.write(data)
+                    logger.info("%s came back from SharePoint as %s left it (%d bytes)", path, entry.get("by"), len(data))
+        except Exception as e:  # noqa: BLE001 - the copy must go away even when nothing came back
+            logger.warning("%s did not come back from SharePoint: %s", path, e)
+            sp_error(f"Editing copy of {name} (back)", e)
+        finally:
+            try:
+                sp().review_done(document_id=key)
+            except Exception as e:  # noqa: BLE001
+                logger.info("Editing copy of %s not removed: %s", name, e)
+            checkout.drop(root, key)
+
+    def checkout_sweep() -> None:
+        """Anything forgotten in SharePoint longer than DMS_CHECKOUT_HOURS comes back by itself: no document
+        stays out for ever."""
+        if not review_on():
+            return
+        for entry in checkout.due(s.repository_root, s.checkout_hours):
+            checkout_return(entry)
+
+    @app.post("/api/files/checkout")
+    def take_out(req: CheckoutRequest, user: User = Depends(current_user)):
+        """Open this file in SharePoint, with the person's own Microsoft account: the DMS (the only account with
+        rights on the file server) puts a copy there and gives that one person edit, or read only when the
+        document is released. A released (read-only) document is never opened for editing."""
+        if not review_on():
+            raise HTTPException(503, "Opening a document in SharePoint is not set up here")
+        full = files.resolve(s.repository_root, req.path)
+        if not os.path.isfile(full):
+            raise HTTPException(404, "File not found")
+        if not may_read(user, full):
+            raise HTTPException(403, "You do not have access to this file")
+        checkout_sweep()
+        edit = bool(req.edit)
+        if edit and read_only_file(full):
+            raise HTTPException(403, "This document is released by the DMS (read only): it can be viewed, not edited")
+        if edit and not may_write(user, full):
+            raise HTTPException(403, "You do not have permission to change this file")
+        held = checkout.of(s.repository_root, full)
+        if held and (held.get("by") or "").lower() != user.email:
+            raise HTTPException(409, f"{held.get('by')} has this document out for editing")
+        mine = held if held and edit else checkout.of(s.repository_root, full, user.email)
+        if mine and bool(mine.get("edit")) == edit:
+            return {"path": full, "url": mine.get("url"), "edit": bool(mine.get("edit")), "by": mine.get("by")}
+        key = checkout.key_of(s.repository_root, full, "" if edit else user.email)
+        try:
+            put = sp().review_put(local_path=full, document_id=key)
+            sp().review_share(document_id=key, name=put["name"], emails=[user.email],
+                              subject=os.path.basename(full), message="", edit=edit)
+        except Exception as e:  # noqa: BLE001
+            sp_error(f"Editing copy of {os.path.basename(full)}", e)
+            raise HTTPException(502, f"The document could not be opened in SharePoint: {e}") from None
+        entry = checkout.add(s.repository_root, full, by=user.email, name=put["name"], url=put["url"], edit=edit)
+        log(user, "checkout" if edit else "view-sharepoint", full)
+        return {"path": full, "url": entry["url"], "edit": edit, "by": entry["by"]}
+
+    @app.post("/api/files/checkin")
+    def bring_back(req: CheckoutRequest, user: User = Depends(current_user)):
+        """Done editing: the DMS writes what the person changed back to the file server and removes the copy."""
+        if not review_on():
+            raise HTTPException(503, "Opening a document in SharePoint is not set up here")
+        full = files.resolve(s.repository_root, req.path)
+        entry = checkout.of(s.repository_root, full) or checkout.of(s.repository_root, full, user.email)
+        if not entry:
+            return {"path": full, "out": False}
+        if (entry.get("by") or "").lower() != user.email and not is_admin(user):
+            raise HTTPException(403, f"{entry.get('by')} has this document out: only they (or a DMS super user) can bring it back")
+        checkout_return(entry)
+        log(user, "checkin", full)
+        return {"path": full, "out": False, "saved": bool(entry.get("edit"))}
 
     def awaiting_approval(user: User) -> set[str]:
         """The files this person is asked to approve right now. A document sent to someone for approval is

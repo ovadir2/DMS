@@ -395,9 +395,10 @@ class SharePoint:
         """Where approvers open the document: DMS_REVIEW_SITE_URL, else the Document Control site."""
         return (self.s.review_site_url or self.s.site_url).rstrip("/")
 
-    def _review_folder(self, document_id: str) -> str:
+    def _review_folder(self, key: str) -> str:
+        """A folder of its own per document under approval, or per file taken out for editing."""
         site = urlparse(self.review_site()).path.rstrip("/")
-        return f"{site}/{self.s.review_library}/{document_id}"
+        return f"{site}/{self.s.review_library}/{key}"
 
     def review_put(self, *, local_path: str, document_id: str) -> dict:
         """Copy the submitted file to the review library, under a folder named after the document. Returns the
@@ -429,16 +430,17 @@ class SharePoint:
             return None
         return self.host + quote(path, safe="/")
 
-    def review_share(self, *, document_id: str, name: str, emails: list[str], subject: str, message: str) -> None:
-        """Give each approver edit on that one file, and nothing else on the site. SharePoint sends no mail:
-        the DMS tells them itself, with the same notification as always."""
+    def review_share(self, *, document_id: str, name: str, emails: list[str], subject: str, message: str,
+                     edit: bool = True) -> None:
+        """Give each person edit (or, for a released document, read only) on that one file, and nothing else on
+        the site. SharePoint sends no mail: the DMS tells them itself, with the same notification as always."""
         site = self.review_site()
         url = self.host + quote(f"{self._review_folder(document_id)}/{name}", safe="/")
         people = [{"Key": e, "DisplayText": e, "IsResolved": True, "Description": e, "EntityType": "",
                    "EntityData": {"Email": e, "AccountName": e, "PrincipalType": "UNVALIDATED_EMAIL_ADDRESS"},
                    "MultipleMatches": [], "ProviderName": "", "ProviderDisplayName": ""} for e in emails]
         r = self._call("POST", f"{site}/_api/SP.Web.ShareObject", json={
-            "url": url, "peoplePickerInput": json_dumps(people), "roleValue": "role:1073741827",   # edit
+            "url": url, "peoplePickerInput": json_dumps(people), "roleValue": "role:1073741827" if edit else "role:1073741826",   # edit / read
             "groupId": 0, "propagateAcl": False, "sendEmail": False, "includeAnonymousLinkInEmail": False,
             "emailSubject": subject, "emailBody": message, "useSimplifiedRoles": True})
         if r.get("StatusCode") not in (None, 0) or r.get("ErrorMessage"):

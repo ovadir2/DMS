@@ -2298,3 +2298,111 @@ def test_certificate_expiry_is_reported_before_it_stops_sharepoint(tmp_path):
     assert SharePoint(Settings(repository_root=str(tmp_path), sp_auth="interactive")).cert_days_left() is None
     assert SharePoint(Settings(repository_root=str(tmp_path), sp_auth="certificate",
                                cert_path=str(tmp_path / "gone.pem"), site_url="https://x/sites/y")).cert_days_left() is None
+
+
+def _review_sp(s, store):
+    """A SharePoint that holds the copies the DMS puts there for people to open."""
+    from dms_api.memory import MemorySharePoint
+    sp = MemorySharePoint(s)
+
+    def put(*, local_path, document_id):
+        name = os.path.basename(local_path)
+        store[document_id] = {"name": name, "data": open(local_path, "rb").read()}
+        return {"name": name, "url": f"https://rhisrael.sharepoint.com/sites/DC/Approvals/{document_id}/{name}"}
+
+    sp.review_put = put
+    sp.review_share = lambda **kw: store.setdefault("shares", []).append(kw)
+    sp.review_url = lambda *, document_id, name: None
+    sp.review_get = lambda *, document_id, name: store[document_id]["data"]
+    sp.review_done = lambda *, document_id: store.pop(document_id, None)
+    return sp
+
+
+def test_a_file_is_opened_for_editing_in_sharepoint_and_comes_back(tmp_path, monkeypatch):
+    """Before sending a document the owner wants to see it, or change it. They have no rights on the file
+    server, so the DMS puts a copy in SharePoint, gives them edit on that one file, and "Done editing" writes
+    what they changed back. Nobody else can edit it meanwhile."""
+    from dms_api import security
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    f = q / "Quote.docx"
+    f.write_bytes(b"first draft")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    c = TestClient(create_app(s, _review_sp(s, store)))
+
+    r = c.post("/api/files/checkout", json={"path": str(f), "edit": True}).json()
+    assert r["edit"] and r["url"].endswith("/Quote.docx") and store["shares"][-1]["edit"] is True
+    row = next(x for x in c.get("/api/browse", params={"path": str(q)}).json()["files"] if x["name"] == "Quote.docx")
+    assert row["checkedOut"]["mine"] and row["officeUri"] == r["url"] and row["editable"]
+
+    key = next(k for k in store if k.startswith("edit-"))
+    store[key]["data"] = b"as the owner left it"                      # they edited it in Word Online
+    monkeypatch.setattr(security.User, "can", lambda self, path, access="read": True)
+    assert c.post("/api/files/checkin", json={"path": str(f)}).json()["saved"] is True
+    assert f.read_bytes() == b"as the owner left it" and key not in store   # back, and the copy is gone
+    row = next(x for x in c.get("/api/browse", params={"path": str(q)}).json()["files"] if x["name"] == "Quote.docx")
+    assert row["checkedOut"] is None
+
+
+def test_a_released_document_is_only_ever_opened_for_viewing(tmp_path):
+    """Current_ReadOnly is the approved document: it is viewed in SharePoint, never opened for editing."""
+    root = tmp_path / "Root"
+    cur = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations" / "Current_ReadOnly"
+    cur.mkdir(parents=True)
+    f = cur / "Quote.docx"
+    f.write_bytes(b"approved")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    c = TestClient(create_app(s, _review_sp(s, store)))
+    r = c.post("/api/files/checkout", json={"path": str(f), "edit": True})
+    assert r.status_code == 403 and "read only" in r.json()["detail"]
+    view = c.post("/api/files/checkout", json={"path": str(f), "edit": False}).json()
+    assert view["edit"] is False and store["shares"][-1]["edit"] is False      # read only in SharePoint too
+    row = next(x for x in c.get("/api/browse", params={"path": str(cur)}).json()["files"] if x["name"] == "Quote.docx")
+    assert row["canEdit"] is False and row["checkedOut"]["edit"] is False
+    c.post("/api/files/checkin", json={"path": str(f)})
+    assert f.read_bytes() == b"approved"                                      # a copy only looked at changes nothing
+
+
+def test_a_file_someone_else_has_out_is_not_edited_twice(tmp_path):
+    """One copy open for editing, one person: a second person is told who has it."""
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    f = q / "Quote.docx"
+    f.write_bytes(b"draft")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user="other@rh.co.il", sharepoint="memory",
+                 approvals="page", admins=[USER], review_library="Approvals")
+    store: dict = {}
+    c = TestClient(create_app(s, _review_sp(s, store)))
+    assert c.post("/api/files/checkout", json={"path": str(f), "edit": True}).status_code == 200
+    r = c.post("/api/files/checkout", json={"path": str(f), "edit": True}, headers={"X-DMS-Dev-User": USER})
+    assert r.status_code == 409 and "other@rh.co.il" in r.json()["detail"]
+    row = next(x for x in c.get("/api/browse", params={"path": str(q)},
+                                headers={"X-DMS-Dev-User": USER}).json()["files"] if x["name"] == "Quote.docx")
+    assert row["checkedOut"]["by"] == "other@rh.co.il" and row["checkedOut"]["mine"] is False
+    assert row["checkedOut"]["url"] is None                                   # not their copy to open
+
+
+def test_a_file_forgotten_in_sharepoint_comes_back_by_itself(tmp_path):
+    """Nothing stays out for ever: after DMS_CHECKOUT_HOURS the DMS brings the document back and the next
+    person can edit it."""
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    f = q / "Quote.docx"
+    f.write_bytes(b"draft")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user="other@rh.co.il", sharepoint="memory",
+                 approvals="page", admins=[USER], review_library="Approvals", checkout_hours=0)
+    store: dict = {}
+    c = TestClient(create_app(s, _review_sp(s, store)))
+    c.post("/api/files/checkout", json={"path": str(f), "edit": True})
+    key = next(k for k in store if k.startswith("edit-"))
+    store[key]["data"] = b"left in SharePoint"
+    r = c.post("/api/files/checkout", json={"path": str(f), "edit": True}, headers={"X-DMS-Dev-User": USER})
+    assert r.status_code == 200 and r.json()["by"] == USER           # it was brought back, and is theirs now
+    assert f.read_bytes() == b"left in SharePoint"
