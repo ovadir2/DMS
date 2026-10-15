@@ -116,7 +116,7 @@ class SharePoint:
         return self._token[0]
 
     def _call(self, method: str, url: str, json: dict | None = None, headers: dict | None = None,
-              data: bytes | None = None) -> dict:
+              data: bytes | None = None, raw: bool = False):
         h = {"Authorization": f"Bearer {self._access_token()}", "Accept": "application/json;odata=nometadata",
              "Content-Type": "application/octet-stream" if data is not None else "application/json;odata=nometadata"}
         h.update(headers or {})
@@ -134,6 +134,8 @@ class SharePoint:
             break
         if r.status_code >= 400:
             raise SharePointError(f"{method} {url.split('?')[0]} -> {r.status_code}: {r.text[:300]}")
+        if raw:                                                 # a file's content, not a JSON answer
+            return r.content
         return r.json() if r.content else {}
 
     def _list(self, rel: str) -> str:
@@ -387,6 +389,65 @@ class SharePoint:
             except Exception as e:  # noqa: BLE001 - the share itself succeeded
                 out["shortcutError"] = str(e)[:300]
         return out
+
+    # ------------------------------------------------------------------ the review bridge (approvers work in SharePoint)
+    def review_site(self) -> str:
+        """Where approvers open the document: DMS_REVIEW_SITE_URL, else the Document Control site."""
+        return (self.s.review_site_url or self.s.site_url).rstrip("/")
+
+    def _review_folder(self, document_id: str) -> str:
+        site = urlparse(self.review_site()).path.rstrip("/")
+        return f"{site}/{self.s.review_library}/{document_id}"
+
+    def review_put(self, *, local_path: str, document_id: str) -> dict:
+        """Copy the submitted file to the review library, under a folder named after the document. Returns the
+        address to open it with (Office Online opens a Word or Excel file from this address in the browser)."""
+        site, q = self.review_site(), lambda p: quote(p.replace("'", "''"), safe="/")
+        current = f"{urlparse(site).path.rstrip('/')}/{self.s.review_library}"
+        for part in [document_id]:
+            current = f"{current}/{part}"
+            try:
+                self._call("POST", f"{site}/_api/web/folders/AddUsingPath(DecodedUrl='{q(current)}')")
+            except SharePointError:
+                if not self._folder_exists(site, current):
+                    raise
+        name = os.path.basename(local_path)
+        with open(local_path, "rb") as f:
+            up = self._call("POST", f"{site}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(current)}')"
+                                    f"/Files/AddUsingPath(DecodedUrl='{q(name)}',Overwrite=true)", data=f.read())
+        server_relative = up.get("ServerRelativeUrl") or f"{current}/{name}"
+        return {"name": name, "serverRelative": server_relative, "url": self.host + quote(server_relative, safe="/")}
+
+    def review_share(self, *, document_id: str, name: str, emails: list[str], subject: str, message: str) -> None:
+        """Give each approver edit on that one file, and nothing else on the site. SharePoint sends no mail:
+        the DMS tells them itself, with the same notification as always."""
+        site = self.review_site()
+        url = self.host + quote(f"{self._review_folder(document_id)}/{name}", safe="/")
+        people = [{"Key": e, "DisplayText": e, "IsResolved": True, "Description": e, "EntityType": "",
+                   "EntityData": {"Email": e, "AccountName": e, "PrincipalType": "UNVALIDATED_EMAIL_ADDRESS"},
+                   "MultipleMatches": [], "ProviderName": "", "ProviderDisplayName": ""} for e in emails]
+        r = self._call("POST", f"{site}/_api/SP.Web.ShareObject", json={
+            "url": url, "peoplePickerInput": json_dumps(people), "roleValue": "role:1073741827",   # edit
+            "groupId": 0, "propagateAcl": False, "sendEmail": False, "includeAnonymousLinkInEmail": False,
+            "emailSubject": subject, "emailBody": message, "useSimplifiedRoles": True})
+        if r.get("StatusCode") not in (None, 0) or r.get("ErrorMessage"):
+            raise SharePointError(f"The document could not be shared with the approvers: "
+                                  f"{r.get('ErrorMessage') or r.get('StatusCode')}")
+
+    def review_get(self, *, document_id: str, name: str) -> bytes:
+        """The file as the approvers left it, to bring back to the file server."""
+        site, q = self.review_site(), lambda p: quote(p.replace("'", "''"), safe="/")
+        path = f"{self._review_folder(document_id)}/{name}"
+        return self._call("GET", f"{site}/_api/web/GetFileByServerRelativePath(DecodedUrl='{q(path)}')/$value", raw=True)
+
+    def review_done(self, *, document_id: str) -> None:
+        """The approval is over: the copy and every permission on it go away (to the site's recycle bin)."""
+        site, q = self.review_site(), lambda p: quote(p.replace("'", "''"), safe="/")
+        folder = self._review_folder(document_id)
+        try:
+            self._call("POST", f"{site}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(folder)}')/recycle")
+        except SharePointError as e:
+            logger.info("Review copy of %s was not removed: %s", document_id, e)
 
     def expire_outbound(self, days: int, now: datetime | None = None) -> list[dict]:
         """Shares older than `days`: every file in <library>/<ex_folder>/<Customer>/ last uploaded (shared) more

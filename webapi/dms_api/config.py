@@ -76,6 +76,8 @@ class Settings:
     max_upload_mb: int = 500
     search_limit: int = 200
     approvals: str = "flow"                 # flow (DC-P1 in Teams) | page (approve on the DMS page; turn DC-P1 off)
+    review_site_url: str = ""               # DMS_REVIEW_SITE_URL: the site approvers open the document on (default: the DC site)
+    review_library: str = "Approvals"       # the library there; empty turns the SharePoint review off
     ex_site_url: str = ""                   # Large File Exchange site, for sharing approved files with customers
     ex_library: str = "TemporaryUploads"
     ex_folder: str = "Outbound"
@@ -159,6 +161,8 @@ class Settings:
             sharepoint=e("DMS_SHAREPOINT", "online"),
             sp_auth=e("DMS_SP_AUTH", "certificate"),
             approvals=e("DMS_APPROVALS", "flow"),
+            review_site_url=e("DMS_REVIEW_SITE_URL", "").rstrip("/"),
+            review_library=e("DMS_REVIEW_LIBRARY", "Approvals").strip("/"),
             ex_site_url=e("DMS_EX_SITE_URL", "").rstrip("/"),
             ex_library=e("DMS_EX_LIBRARY", "TemporaryUploads"),
             ex_folder=e("DMS_EX_FOLDER", "Outbound"),

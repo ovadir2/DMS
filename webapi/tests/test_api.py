@@ -938,6 +938,42 @@ def test_an_approver_attaches_their_remarks_beside_the_document(tmp_path, monkey
     assert any("Remarks attached by" in (e.get("details") or "") for e in sp.audit_events())
 
 
+def test_the_document_goes_to_sharepoint_for_its_approvers_and_comes_back(tmp_path, monkeypatch):
+    """Approvers open and edit the document in SharePoint with their own Microsoft account; the DMS, which
+    alone touches the file server, puts the copy there and brings back what they left when the approval ends."""
+    from dms_api import file_service, security
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.docx").write_bytes(b"as submitted")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    sp = MemorySharePoint(s)
+    calls = {}
+    def _put(*, local_path, document_id):
+        calls["put"] = (local_path, document_id)
+        return {"name": "Quote.docx",
+                "url": f"https://rhisrael.sharepoint.com/sites/DC/Approvals/{document_id}/Quote.docx"}
+    sp.review_put = _put
+    sp.review_share = lambda **kw: calls.setdefault("share", kw)
+    sp.review_get = lambda *, document_id, name: b"edited by the approvers"
+    sp.review_done = lambda *, document_id: calls.setdefault("done", document_id)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.docx"), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)
+    assert calls["put"][1] == d["documentId"] and calls["share"]["emails"]                # shared with the approvers
+    monkeypatch.setattr(security.User, "can", lambda self, path, access="read": False)    # no rights on the share
+    row = next(x for x in c.get("/api/approvals").json() if x["id"] == d["id"])
+    assert row["officeUri"].endswith("/Quote.docx") and row["editable"]                   # Open goes to SharePoint
+
+    c.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    c.post(f"/api/approvals/{d['id']}", json={"approve": True})                           # the approval ends
+    assert (q / "Submitted" / "Quote.docx").read_bytes() == b"edited by the approvers"    # what they left comes back
+    assert calls["done"] == d["documentId"]                                               # and the copy is removed
+
+
 def test_new_revision_from_the_approved_copy(tmp_path):
     c, sp, s, q, d, fs = _approved_env(tmp_path)
     cur = q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx"

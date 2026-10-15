@@ -1188,12 +1188,70 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                             "submittedBy": submitted["actor"] if submitted else None, "file": file,
                             # read only, always: an approval never changes the document, and an approver's
                             # remarks are a file of their own beside it
-                            "officeUri": None,
+                            # in SharePoint while it is approved: Office Online opens it with the person's own
+                            # Microsoft account, so nobody needs rights on the file server
+                            "officeUri": (REVIEW.get(d.get("documentId") or "") or {}).get("url"),
                             "viewUri": files.open_uri(file) if file and user.can(file) else None,
                             "viaDms": bool(file) and not user.can(file),   # no rights on the file server: the DMS serves it
                             "remarks": remarks_of(d.get("documentId") or ""),
-                            "editable": False, "mine": user.email in st["pending"]})
+                            "editable": bool((REVIEW.get(d.get("documentId") or "") or {}).get("url")),
+                            "mine": user.email in st["pending"]})
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
+
+    def review_on() -> bool:
+        """The SharePoint review is on when a library is named and this SharePoint can do it (the playground
+        register in memory cannot, and says so by not having the calls)."""
+        return bool(s.review_library) and hasattr(sp(), "review_put")
+
+    REVIEW: dict[str, dict] = {}            # documentId -> {"name": ..., "url": ...} while it is being approved
+
+    def review_start(d: dict, approvers: list[str]) -> None:
+        """A submitted document is opened and edited by its approvers in SharePoint, with their own Microsoft
+        account: the DMS (which alone may touch the file server) puts a copy there, gives those people edit on
+        that one file, and the page's Open link points at it. Nobody needs rights on the file server."""
+        if not review_on():
+            return
+        doc_id, file = d.get("documentId") or "", submitted_file(d)
+        if not doc_id or not file:
+            return
+        try:
+            put = sp().review_put(local_path=file, document_id=doc_id)
+            if approvers:
+                sp().review_share(document_id=doc_id, name=put["name"], emails=approvers,
+                                  subject=f"{doc_id} {d.get('title') or ''}", message="")
+            REVIEW[doc_id] = {"name": put["name"], "url": put["url"]}
+            sp().audit(document_id=doc_id, event=s.choices["StatusChanged"], from_status=s.choices["Submitted"],
+                       to_status=s.choices["Submitted"], actor="DMS",
+                       details=f"Opened for approval in SharePoint: {put['url']} ({', '.join(approvers)})")
+        except Exception as e:  # noqa: BLE001 - the approval itself must not fail on this
+            logger.warning("Review copy of %s: %s", doc_id, e)
+            sp_error(f"Review copy of {doc_id}", e)
+
+    def review_fetch(d: dict) -> None:
+        """The approval ended: what the approvers left in SharePoint comes back to the file server, and the
+        copy (with the permissions on it) goes away."""
+        if not review_on():
+            return
+        doc_id = d.get("documentId") or ""
+        kept, file = REVIEW.pop(doc_id, None), submitted_file(d)
+        if not kept or not file:
+            return
+        try:
+            data = sp().review_get(document_id=doc_id, name=kept["name"])
+            if data:
+                with open(file, "wb") as f:
+                    f.write(data)
+                sp().audit(document_id=doc_id, event=s.choices["StatusChanged"], from_status=s.choices["Submitted"],
+                           to_status=s.choices["Submitted"], actor="DMS",
+                           details=f"The document came back from SharePoint as the approvers left it ({len(data)} bytes)")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("The review copy of %s did not come back: %s", doc_id, e)
+            sp_error(f"Review copy of {doc_id} (back)", e)
+        finally:
+            try:
+                sp().review_done(document_id=doc_id)
+            except Exception as e:  # noqa: BLE001
+                logger.info("Review copy of %s not removed: %s", doc_id, e)
 
     def awaiting_approval(user: User) -> set[str]:
         """The files this person is asked to approve right now. A document sent to someone for approval is
@@ -1294,6 +1352,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                        actor=user.email, details=(f"{tag}: {back_to_owner[0]['comment']}" if one
                                                   else f"{tag}: returned to the owner with remarks - {summary}") + sha)
             file_back(d, c["Working"])
+        ended = back_to_owner is not None or sp().document(item_id).get("lifecycleStatus") == c["Approved_ReadOnly"]
+        if ended:
+            review_fetch(d)                                     # what the approvers left in SharePoint comes back
         log(user, "approve" if req.approve else "reject", f"{doc_id} {tag}")
         original = next((x["from"] for x in st.get("delegated") or [] if x["to"] == user.email), None)
         decision_row(d, user.email, st["stage"] or 1, "Approved" if req.approve else "Rejected", req.comment.strip(),
@@ -1634,6 +1695,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                    details="Submitted from the DMS page" + (f". {CHOSEN}{'; '.join(approvers)}" if approvers else ""))
         after = sp().document(item_id)
         if s.approvals == "page":
+            st = approval_state(after, events_by_doc().get(after.get("documentId") or "", []), {})
+            review_start(after, st["pending"])                  # the approvers open and edit it in SharePoint
             notify_stage(after)
         return with_key(after)
 
@@ -1891,6 +1954,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if doc.get("lifecycleStatus") != c["Submitted"]:
             raise HTTPException(409, "Only a submitted document can be withdrawn")
         waiting = approval_state(doc, events_by_doc().get(doc.get("documentId") or "", []), {})["pending"] if s.approvals == "page" else []
+        review_fetch(doc)                                       # the copy in SharePoint goes away with the approval
         sp().update(item_id, {"LifecycleStatus": c["Working"]})
         notify("withdrawn", doc, waiting)
         sp().audit(document_id=doc.get("documentId") or f"ID {item_id}", event=c["Cancelled"], from_status=c["Submitted"],
