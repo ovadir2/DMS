@@ -663,7 +663,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 st = checkout_state(f["path"], user, reg)
                 f["bridge"] = True
                 f["checkedOut"] = st
-                f["canEdit"] = not read_only_file(f["path"]) and may_write(user, f["path"])
+                f["canEdit"] = (not read_only_file(f["path"]) and not doc_locked(f.get("document"))
+                                and may_write(user, f["path"]))
                 if st and st.get("url"):
                     f.update(officeUri=st["url"], editable=bool(st.get("edit")))
         if in_shared_folder(os.path.join(result["path"], "x")):
@@ -754,7 +755,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                         out.append({"kind": "folder", **hit})
                     elif os.path.normcase(hit["path"]) not in seen:
                         d = find_registered(hit["path"], idx)
-                        out.append({"kind": "file", **hit, **open_fields(hit["path"], user),
+                        out.append({"kind": "file", **hit, **open_fields(hit["path"], user, d),
                                     "document": with_key(d) if d else None})
                 if left <= 0:
                     break
@@ -1256,11 +1257,21 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             logger.info("%s did not come back from SharePoint: %s", target, e)
             return False
 
-    def open_fields(path: str, user: User) -> dict:
+    LOCKED_STATES = ("Approved_ReadOnly", "Submitted", "Archived")   # not the owner's to change from a row
+
+    def doc_locked(doc: dict | None) -> bool:
+        """An approved (or submitted, or archived) document is never edited from a row, whatever the file's own
+        flags say: the approved revision is the record, and a submitted one belongs to its approval."""
+        if not doc:
+            return False
+        key = doc.get("statusKey") or next((k for k, v in s.choices.items() if v == doc.get("lifecycleStatus")), "")
+        return key in LOCKED_STATES
+
+    def open_fields(path: str, user: User, doc: dict | None = None) -> dict:
         """How any row opens its file, by one rule wherever a file is shown (browse, search, suggestions):
         through SharePoint when the bridge is on - a released document read only, never for editing - and
         otherwise the file itself, for someone who has rights on the file server."""
-        released = read_only_file(path)
+        released = read_only_file(path) or doc_locked(doc)
         may_edit = not released and may_write(user, path)
         if review_on():
             return {"bridge": True, "canEdit": may_edit, "checkedOut": checkout_state(path, user)}
@@ -1412,7 +1423,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "You do not have access to this file")
         checkout_sweep()
         edit = bool(req.edit)
-        if edit and read_only_file(full):
+        if edit and (read_only_file(full) or doc_locked(find_registered(full, register_index()))):
             raise HTTPException(403, "This document is released by the DMS (read only): it can be viewed, not edited")
         if edit and not may_write(user, full):
             raise HTTPException(403, "You do not have permission to change this file")
@@ -1653,7 +1664,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 doc["viewUri"] = files.open_uri(d["currentUncPath"])
             if review_on() and doc.get("file"):
                 # the approved document opens read only in SharePoint, like everywhere else: no rights needed
-                doc.update(open_fields(doc["file"], user))
+                doc.update(open_fields(doc["file"], user, doc))
             doc.update(submittedUtc=submitted["utc"] if submitted else None, decision=decision,
                        lastEvent=events[0] if events else None, history=list(reversed(events)))
             items.append(doc)
@@ -1741,7 +1752,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             d = find_registered(path, idx)
             cands.append({"name": os.path.basename(path), "path": path, "relative": os.path.relpath(path, s.repository_root),
                           "modified": datetime.fromtimestamp(mtime, timezone.utc).isoformat(), "score": round(sc, 2),
-                          **open_fields(path, user), "document": with_key(d) if d else None,
+                          **open_fields(path, user, d), "document": with_key(d) if d else None,
                           "documentId": d.get("documentId") if d else None, "status": d.get("lifecycleStatus") if d else None,
                           "folder": os.path.dirname(path), "reason": ""})
             if len(cands) >= 30:
