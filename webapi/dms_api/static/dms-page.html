@@ -694,7 +694,8 @@ async function mine(v) {
       <td class="actions">${state.everyone ? `<div class="muted small">${esc(d.ownerName || d.ownerEmail || '')}</div>` : ''}${['Working', 'Rejected'].includes(d.statusKey) ? `<button type="button" class="link" data-sub="${d.id}">${T.submit}</button><button type="button" class="link" data-drn="${d.id}" data-name="${esc((d.workingUncPath || '').split(/[\\/]/).pop())}">${T.rename}</button><button type="button" class="link" data-ddel="${d.id}" style="color:var(--err)">${T.del}</button>` : ''}
         ${d.currentUncPath ? `<button type="button" class="link" data-cp="${esc(d.currentUncPath)}">🔗 ${T.copy}</button>` : ''}
         ${d.workingUncPath ? `<button type="button" class="link" data-cp="${esc(d.workingUncPath)}">🔗 ${T.copyWorking}</button>` : ''}
-        ${fileLinks(d.file, d.editUri, d.viewUri, !!d.editUri)}
+        ${d.bridge ? bridgeActions({ path: d.file, name: (d.file || '').split(/[\\/]/).pop(), canEdit: d.canEdit, checkedOut: d.checkedOut })
+          : fileLinks(d.file, d.editUri, d.viewUri, !!d.editUri)}
         ${remarksLine(d.id, d.remarks)}
         ${d.statusKey === 'Submitted' ? `<button type="button" class="link" data-wd="${d.id}" style="color:var(--err)">${T.withdraw}</button>` : ''}
         ${d.statusKey === 'Approved_ReadOnly' ? `<button type="button" class="link" data-rev="${d.id}">⟳ ${T.newRev}</button><button type="button" class="link" data-share="${d.id}">✉ ${isHr(d.currentUncPath) ? T.shareHrBtn : T.share}</button>` : ''}

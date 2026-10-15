@@ -1651,6 +1651,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             elif doc["statusKey"] == "Approved_ReadOnly" and d.get("currentUncPath"):
                 doc["file"] = d["currentUncPath"]
                 doc["viewUri"] = files.open_uri(d["currentUncPath"])
+            if review_on() and doc.get("file"):
+                # the approved document opens read only in SharePoint, like everywhere else: no rights needed
+                doc.update(open_fields(doc["file"], user))
             doc.update(submittedUtc=submitted["utc"] if submitted else None, decision=decision,
                        lastEvent=events[0] if events else None, history=list(reversed(events)))
             items.append(doc)
