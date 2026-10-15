@@ -1271,8 +1271,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """How any row opens its file, by one rule wherever a file is shown (browse, search, suggestions):
         through SharePoint when the bridge is on - a released document read only, never for editing - and
         otherwise the file itself, for someone who has rights on the file server."""
-        released = read_only_file(path) or doc_locked(doc)
-        may_edit = not released and may_write(user, path)
+        if not path or not os.path.isfile(path):             # a record pointing at a file that moved, or is gone
+            return {}
+        try:
+            released = read_only_file(path) or doc_locked(doc)
+            may_edit = not released and may_write(user, path)
+        except OSError:                                      # the share answered badly: show it, do not fail the list
+            return {}
         if review_on():
             return {"bridge": True, "canEdit": may_edit, "checkedOut": checkout_state(path, user)}
         return {"officeUri": files.open_uri(path, edit=may_edit), "viewUri": files.open_uri(path),
@@ -1361,9 +1366,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     # ------------------------------------------------ a file taken out to SharePoint, to look at it or change it
     def read_only_file(full: str) -> bool:
-        """Released by the DMS: Current_ReadOnly / Obsolete_ReadOnly, the read-only flag, or a folder the DMS keeps."""
-        return (files.is_read_only(full)
-                or os.path.basename(os.path.dirname(full)) in WORKFLOW_FOLDERS[2:]
+        """Released by the DMS: Current_ReadOnly / Obsolete_ReadOnly, the read-only flag, or a folder the DMS
+        keeps. A file that is not there (a record pointing at an older place) is never ours to edit either."""
+        try:
+            flagged = files.is_read_only(full)
+        except OSError:
+            return True
+        return (flagged or os.path.basename(os.path.dirname(full)) in WORKFLOW_FOLDERS[2:]
                 or holds_share_log(full) or in_shared_folder(full))
 
     def checkout_state(full: str, user: User, data: dict | None = None) -> dict | None:

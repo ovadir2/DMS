@@ -2414,3 +2414,25 @@ def test_a_file_forgotten_in_sharepoint_comes_back_by_itself(tmp_path):
     r = c.post("/api/files/checkout", json={"path": str(f), "edit": True}, headers={"X-DMS-Dev-User": USER})
     assert r.status_code == 200 and r.json()["by"] == USER           # it was brought back, and is theirs now
     assert f.read_bytes() == b"left in SharePoint"
+
+
+def test_my_workflows_survives_a_record_pointing_at_a_file_that_is_not_there(tmp_path):
+    """A record can name a file that has since moved (or a share that answers badly): the list still comes
+    back, with that row simply offering nothing to open."""
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    (q / "Current_ReadOnly").mkdir(parents=True)
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    sp = _review_sp(s, store)
+    c = TestClient(create_app(s, sp))
+    (q / "Quote.docx").write_bytes(b"draft")
+    d = c.post("/api/documents", json={"path": str(q / "Quote.docx"), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": False}).json()
+    sp.update(d["id"], {"LifecycleStatus": s.choices["Approved_ReadOnly"],
+                        "CurrentUncPath": str(q / "Current_ReadOnly" / "Gone.docx"), "WorkingUncPath": ""})
+    r = c.get("/api/my-workflows")
+    assert r.status_code == 200
+    row = next(x for x in r.json()["items"] if x["id"] == d["id"])
+    assert not row.get("canEdit")                        # an approved document is never offered for editing
