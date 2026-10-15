@@ -417,7 +417,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return {"site": s.site_url if s.sharepoint != "memory" else "memory (playground)", "account": user.email,
                 "auth": s.sp_auth, "certDaysLeft": cert_days_left(sp()), "lists": lists, "errors": list(app.state.sp_errors),
                 "notifications": {"on": s.approvals == "page" and s.notify, "approvals": s.approvals, "notify": s.notify,
-                                  "pageUrl": s.page_url, "last": list(app.state.notify_log)}}
+                                  "pageUrl": s.page_url, "last": list(app.state.notify_log)},
+                "review": {"on": review_on(), "library": s.review_library, "site": sp().review_site() if review_on() else "",
+                           "openForApproval": [{"documentId": k, **v} for k, v in REVIEW.items()],
+                           "checkedOut": list(checkout.read(s.repository_root).values()),
+                           "checkoutHours": s.checkout_hours}}
 
     @app.post("/api/diagnostics/clear-errors")
     def clear_errors(user: User = Depends(current_user)):
