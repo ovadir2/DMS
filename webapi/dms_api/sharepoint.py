@@ -400,9 +400,25 @@ class SharePoint:
         site = urlparse(self.review_site()).path.rstrip("/")
         return f"{site}/{self.s.review_library}/{key}"
 
+    def ensure_review_library(self) -> None:
+        """Make the library on the review site if it is not there yet: nothing has to be created by hand."""
+        if getattr(self, "_review_ready", False):
+            return
+        site, title = self.review_site(), self.s.review_library
+        q = title.replace("'", "''")
+        try:
+            self._call("GET", f"{site}/_api/web/lists/GetByTitle('{quote(q)}')?$select=Id")
+        except SharePointError:
+            self._call("POST", f"{site}/_api/web/lists", json={
+                "__metadata": {"type": "SP.List"}, "Title": title, "BaseTemplate": 101,   # 101 = document library
+                "Description": "Documents the DMS puts here for people to open and edit; the DMS removes them again."})
+            logger.info("The review library %s was created on %s", title, site)
+        self._review_ready = True
+
     def review_put(self, *, local_path: str, document_id: str) -> dict:
         """Copy the submitted file to the review library, under a folder named after the document. Returns the
         address to open it with (Office Online opens a Word or Excel file from this address in the browser)."""
+        self.ensure_review_library()
         site, q = self.review_site(), lambda p: quote(p.replace("'", "''"), safe="/")
         current = f"{urlparse(site).path.rstrip('/')}/{self.s.review_library}"
         for part in [document_id]:
