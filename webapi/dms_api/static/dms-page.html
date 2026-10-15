@@ -386,8 +386,8 @@ function bridgeActions(f) {
   if (TEXT_EXT.test(name)) return `<button type="button" class="link" data-tx="${esc(f.path)}">${f.canEdit ? '\u270E ' + T.editHere : T.open}</button>`;
   if (co && co.mine && co.url) {
     out.push(`<a class="link" href="${esc(co.url)}" target="_blank" rel="noopener">${co.edit ? '\u270E ' + T.openEditFile : T.viewRo}</a>`);
-    out.push(`<button type="button" class="link" data-ckin="${esc(f.path)}">\u2713 ${T.doneEditing}</button>`);
-    return out.join('\n');
+    if (co.edit) out.push(`<button type="button" class="link" data-ckin="${esc(f.path)}">\u2713 ${T.doneEditing}</button>`);
+    return out.join('\n');   // a copy only looked at needs no "done": the DMS clears it by itself
   }
   if (co && !co.mine && co.edit) out.push(`<span class="muted small">\uD83D\uDD12 ${esc(T.outWith.replace('{who}', co.by || ''))}</span>`);
   else if (f.canEdit) out.push(`<button type="button" class="link" data-ckout="${esc(f.path)}">\u270E ${T.openEditFile}</button>`);
@@ -913,7 +913,7 @@ function suggestionHtml(x) {
   const loc = x.relative.split(/[\\/]/).slice(0, -1).join(' › ');
   return `<div class="sugg"><div class="sg-n">${esc(x.name)} ${x.document ? statusTag(x.document) : ''}</div>
     <div class="muted small ltr">${esc(loc)}</div>${x.reason ? `<div class="small sg-r">${esc(x.reason)}</div>` : ''}
-    <div class="small sg-a">${x.officeUri ? `<a class="link" href="${esc(x.officeUri)}">${T.open}</a>` : ''}
+    <div class="small sg-a">${x.bridge ? bridgeActions(x) : x.officeUri ? openBtn(x.officeUri, x.path, x.editable ? '✎ ' + T.openEditFile : T.open) : ''}
       <button type="button" class="link" data-f="${esc(x.folder)}">${T.goFolder}</button>
       <button type="button" class="link" data-dl="${esc(x.path)}">${T.download}</button></div></div>`;
 }

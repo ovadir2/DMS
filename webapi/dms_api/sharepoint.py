@@ -420,9 +420,9 @@ class SharePoint:
             logger.info("The review library %s was created on %s", title, site)
         self._review_ready = True
 
-    def review_put(self, *, local_path: str, document_id: str) -> dict:
-        """Copy the submitted file to the review library, under a folder named after the document. Returns the
-        address to open it with (Office Online opens a Word or Excel file from this address in the browser)."""
+    def review_put(self, *, local_path: str, document_id: str, edit: bool = True) -> dict:
+        """Copy the file to the review library, under a folder of its own. Returns the address to open it with:
+        Word, Excel or PowerPoint for the web, for editing, or read only for a released document."""
         self.ensure_review_library()
         site, q = self.review_site(), lambda p: quote(p.replace("'", "''"), safe="/")
         current = f"{urlparse(site).path.rstrip('/')}/{self.s.review_library}"
@@ -438,7 +438,7 @@ class SharePoint:
             up = self._call("POST", f"{site}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(current)}')"
                                     f"/Files/AddUsingPath(DecodedUrl='{q(name)}',Overwrite=true)", data=f.read())
         server_relative = up.get("ServerRelativeUrl") or f"{current}/{name}"
-        return {"name": name, "serverRelative": server_relative, "url": self.office_url(server_relative)}
+        return {"name": name, "serverRelative": server_relative, "url": self.office_url(server_relative, edit=edit)}
 
     def office_url(self, server_relative: str, *, edit: bool = True) -> str:
         """The address that opens the document in Word / Excel / PowerPoint for the web. The file's own address

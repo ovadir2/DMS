@@ -2305,12 +2305,16 @@ def _review_sp(s, store):
     from dms_api.memory import MemorySharePoint
     sp = MemorySharePoint(s)
 
-    def put(*, local_path, document_id):
+    def put(*, local_path, document_id, edit=True):
         name = os.path.basename(local_path)
         store[document_id] = {"name": name, "data": open(local_path, "rb").read()}
-        return {"name": name, "url": f"https://rhisrael.sharepoint.com/sites/DC/Approvals/{document_id}/{name}"}
+        rel = f"/sites/DC/Approvals/{document_id}/{name}"
+        return {"name": name, "serverRelative": rel,
+                "url": f"https://rhisrael.sharepoint.com/sites/DC/_layouts/15/WopiFrame.aspx"
+                       f"?sourcedoc={rel}&action={'edit' if edit else 'view'}"}
 
     sp.review_put = put
+    sp.review_info = lambda *, document_id, name: None      # nothing newer there unless a test says so
     sp.review_share = lambda **kw: store.setdefault("shares", []).append(kw)
     sp.review_url = lambda *, document_id, name: None
     sp.review_get = lambda *, document_id, name: store[document_id]["data"]
@@ -2334,7 +2338,7 @@ def test_a_file_is_opened_for_editing_in_sharepoint_and_comes_back(tmp_path, mon
     c = TestClient(create_app(s, _review_sp(s, store)))
 
     r = c.post("/api/files/checkout", json={"path": str(f), "edit": True}).json()
-    assert r["edit"] and r["url"].endswith("/Quote.docx") and store["shares"][-1]["edit"] is True
+    assert r["edit"] and r["url"].endswith("action=edit") and store["shares"][-1]["edit"] is True
     row = next(x for x in c.get("/api/browse", params={"path": str(q)}).json()["files"] if x["name"] == "Quote.docx")
     assert row["checkedOut"]["mine"] and row["officeUri"] == r["url"] and row["editable"]
 
@@ -2362,6 +2366,10 @@ def test_a_released_document_is_only_ever_opened_for_viewing(tmp_path):
     assert r.status_code == 403 and "read only" in r.json()["detail"]
     view = c.post("/api/files/checkout", json={"path": str(f), "edit": False}).json()
     assert view["edit"] is False and store["shares"][-1]["edit"] is False      # read only in SharePoint too
+    assert view["url"].endswith("action=view")                                 # and it opens read only there
+    hit = next(x for x in c.get("/api/search", params={"q": "Quote", "scope": "quick"}).json()
+               if x.get("kind") == "file")
+    assert hit["bridge"] and hit["canEdit"] is False        # found by search: still no editing a released document
     row = next(x for x in c.get("/api/browse", params={"path": str(cur)}).json()["files"] if x["name"] == "Quote.docx")
     assert row["canEdit"] is False and row["checkedOut"]["edit"] is False
     c.post("/api/files/checkin", json={"path": str(f)})

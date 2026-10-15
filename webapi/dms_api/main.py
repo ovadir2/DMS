@@ -754,7 +754,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                         out.append({"kind": "folder", **hit})
                     elif os.path.normcase(hit["path"]) not in seen:
                         d = find_registered(hit["path"], idx)
-                        out.append({"kind": "file", **hit, "document": with_key(d) if d else None})
+                        out.append({"kind": "file", **hit, **open_fields(hit["path"], user),
+                                    "document": with_key(d) if d else None})
                 if left <= 0:
                     break
         return out[:cap]
@@ -1255,6 +1256,17 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             logger.info("%s did not come back from SharePoint: %s", target, e)
             return False
 
+    def open_fields(path: str, user: User) -> dict:
+        """How any row opens its file, by one rule wherever a file is shown (browse, search, suggestions):
+        through SharePoint when the bridge is on - a released document read only, never for editing - and
+        otherwise the file itself, for someone who has rights on the file server."""
+        released = read_only_file(path)
+        may_edit = not released and may_write(user, path)
+        if review_on():
+            return {"bridge": True, "canEdit": may_edit, "checkedOut": checkout_state(path, user)}
+        return {"officeUri": files.open_uri(path, edit=may_edit), "viewUri": files.open_uri(path),
+                "editable": may_edit}
+
     def read_only_uri(uri: str | None) -> str | None:
         """The same address in SharePoint, opened for reading: View and Open to edit are one mechanism."""
         return uri.replace("action=edit", "action=view") if uri and "action=edit" in uri else None
@@ -1412,7 +1424,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return {"path": full, "url": mine.get("url"), "edit": bool(mine.get("edit")), "by": mine.get("by")}
         key = checkout.key_of(s.repository_root, full, "" if edit else user.email)
         try:
-            put = sp().review_put(local_path=full, document_id=key)
+            put = sp().review_put(local_path=full, document_id=key, edit=edit)
             sp().review_share(document_id=key, name=put["name"], emails=[user.email],
                               subject=os.path.basename(full), message="", edit=edit)
         except Exception as e:  # noqa: BLE001
@@ -1724,7 +1736,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             d = find_registered(path, idx)
             cands.append({"name": os.path.basename(path), "path": path, "relative": os.path.relpath(path, s.repository_root),
                           "modified": datetime.fromtimestamp(mtime, timezone.utc).isoformat(), "score": round(sc, 2),
-                          "officeUri": files.office_uri(path), "document": with_key(d) if d else None,
+                          **open_fields(path, user), "document": with_key(d) if d else None,
                           "documentId": d.get("documentId") if d else None, "status": d.get("lifecycleStatus") if d else None,
                           "folder": os.path.dirname(path), "reason": ""})
             if len(cands) >= 30:
