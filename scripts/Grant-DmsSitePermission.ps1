@@ -27,13 +27,16 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if ($PSVersionTable.PSVersion.Major -lt 7) {
-    throw 'Run this in PowerShell 7 (pwsh), not Windows PowerShell 5.1: PnP.PowerShell needs it.'
+# PnP 1.12 runs on Windows PowerShell 5.1, PnP 2.x only on PowerShell 7 (pwsh): take whichever is here.
+try {
+    Import-Module PnP.PowerShell -ErrorAction Stop
+} catch {
+    throw ("PnP.PowerShell did not load ($($_.Exception.Message)). Install it for this PowerShell " +
+           "(Install-Module PnP.PowerShell -Scope CurrentUser -Force), or, on Windows PowerShell 5.1, the version " +
+           "that runs here: Install-Module PnP.PowerShell -RequiredVersion 1.12.0 -Scope CurrentUser -Force. " +
+           'Modules installed in PowerShell 7 are not visible to 5.1 and the other way round.')
 }
-if (-not (Get-Module -ListAvailable PnP.PowerShell)) {
-    throw 'PnP.PowerShell is missing. In pwsh: Install-Module PnP.PowerShell -Scope CurrentUser -Force'
-}
-Import-Module PnP.PowerShell -ErrorAction Stop
+Write-Host ("PnP.PowerShell {0} on PowerShell {1}" -f (Get-Module PnP.PowerShell).Version, $PSVersionTable.PSVersion) -ForegroundColor DarkGray
 
 # PnP renamed these cmdlets (AzureAD -> EntraID): use whichever this version has.
 function Get-Cmd([string[]] $names) {
