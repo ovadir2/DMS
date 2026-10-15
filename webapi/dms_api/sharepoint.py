@@ -418,6 +418,17 @@ class SharePoint:
         server_relative = up.get("ServerRelativeUrl") or f"{current}/{name}"
         return {"name": name, "serverRelative": server_relative, "url": self.host + quote(server_relative, safe="/")}
 
+    def review_url(self, *, document_id: str, name: str) -> str | None:
+        """Where that document is open for approval, if it is already there (after a restart of the DMS, or
+        when it was submitted before the SharePoint review was turned on). None when it is not."""
+        site, q = self.review_site(), lambda p: quote(p.replace("'", "''"), safe="/")
+        path = f"{self._review_folder(document_id)}/{name}"
+        try:
+            self._call("GET", f"{site}/_api/web/GetFileByServerRelativePath(DecodedUrl='{q(path)}')?$select=Exists")
+        except SharePointError:
+            return None
+        return self.host + quote(path, safe="/")
+
     def review_share(self, *, document_id: str, name: str, emails: list[str], subject: str, message: str) -> None:
         """Give each approver edit on that one file, and nothing else on the site. SharePoint sends no mail:
         the DMS tells them itself, with the same notification as always."""

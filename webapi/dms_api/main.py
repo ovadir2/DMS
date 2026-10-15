@@ -1190,11 +1190,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                             # remarks are a file of their own beside it
                             # in SharePoint while it is approved: Office Online opens it with the person's own
                             # Microsoft account, so nobody needs rights on the file server
-                            "officeUri": (REVIEW.get(d.get("documentId") or "") or {}).get("url"),
+                            "officeUri": (review_ensure(d) or {}).get("url"),
                             "viewUri": files.open_uri(file) if file and user.can(file) else None,
                             "viaDms": bool(file) and not user.can(file),   # no rights on the file server: the DMS serves it
                             "remarks": remarks_of(d.get("documentId") or ""),
-                            "editable": bool((REVIEW.get(d.get("documentId") or "") or {}).get("url")),
+                            "editable": bool((REVIEW.get(d.get("documentId") or "") or {}).get("url")),   # in SharePoint: they edit it there
                             "mine": user.email in st["pending"]})
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
 
@@ -1226,6 +1226,28 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         except Exception as e:  # noqa: BLE001 - the approval itself must not fail on this
             logger.warning("Review copy of %s: %s", doc_id, e)
             sp_error(f"Review copy of {doc_id}", e)
+
+    def review_ensure(d: dict) -> dict | None:
+        """Where this document is open for approval. A document submitted before the SharePoint review existed
+        (or still waiting after the DMS restarted) joins it here, and one already there is never overwritten:
+        the copy in SharePoint is the document while the approval runs."""
+        if not review_on():
+            return None
+        doc_id, file = d.get("documentId") or "", submitted_file(d)
+        if not doc_id or not file:
+            return None
+        if doc_id in REVIEW:
+            return REVIEW[doc_id]
+        try:
+            there = sp().review_url(document_id=doc_id, name=os.path.basename(file))
+        except Exception:  # noqa: BLE001
+            there = None
+        if there:
+            REVIEW[doc_id] = {"name": os.path.basename(file), "url": there}
+            return REVIEW[doc_id]
+        st = approval_state(d, events_by_doc().get(doc_id, []), {})
+        review_start(d, st["pending"])
+        return REVIEW.get(doc_id)
 
     def review_fetch(d: dict) -> None:
         """The approval ended: what the approvers left in SharePoint comes back to the file server, and the

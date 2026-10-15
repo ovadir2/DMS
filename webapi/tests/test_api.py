@@ -957,6 +957,7 @@ def test_the_document_goes_to_sharepoint_for_its_approvers_and_comes_back(tmp_pa
                 "url": f"https://rhisrael.sharepoint.com/sites/DC/Approvals/{document_id}/Quote.docx"}
     sp.review_put = _put
     sp.review_share = lambda **kw: calls.setdefault("share", kw)
+    sp.review_url = lambda *, document_id, name: None            # not there yet: the DMS puts it there
     sp.review_get = lambda *, document_id, name: b"edited by the approvers"
     sp.review_done = lambda *, document_id: calls.setdefault("done", document_id)
     c = TestClient(create_app(s, sp))
@@ -972,6 +973,34 @@ def test_the_document_goes_to_sharepoint_for_its_approvers_and_comes_back(tmp_pa
     c.post(f"/api/approvals/{d['id']}", json={"approve": True})                           # the approval ends
     assert (q / "Submitted" / "Quote.docx").read_bytes() == b"edited by the approvers"    # what they left comes back
     assert calls["done"] == d["documentId"]                                               # and the copy is removed
+
+
+
+def test_a_document_already_open_in_sharepoint_is_not_uploaded_over(tmp_path):
+    """After the DMS restarts, or for a document submitted before the review existed, the copy in SharePoint
+    is the document: the DMS points at it and never writes over the approvers' work."""
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.docx").write_bytes(b"as submitted")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    sp = MemorySharePoint(s)
+    there = "https://rhisrael.sharepoint.com/sites/DC/Approvals/DMS-00001/Quote.docx"
+    sp.review_url = lambda *, document_id, name: there
+    sp.review_put = lambda **kw: pytest.fail("the copy in SharePoint must not be overwritten")
+    sp.review_share = lambda **kw: None
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.docx"), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": False}).json()
+    sp.update(d["id"], {"LifecycleStatus": s.choices["Submitted"]})                 # submitted before, already there
+    sp.audit(document_id=d["documentId"], event=s.choices["SubmittedEvent"], from_status=s.choices["Working"],
+             to_status=s.choices["Submitted"], actor=USER, details="submitted earlier")
+    file_service.run_once(sp, s)
+    row = next(x for x in c.get("/api/approvals").json() if x["id"] == d["id"])
+    assert row["officeUri"] == there
 
 
 def test_new_revision_from_the_approved_copy(tmp_path):
