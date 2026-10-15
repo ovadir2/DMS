@@ -9,7 +9,8 @@
     An app cannot grant itself rights: run this signed in as a SharePoint or Global administrator. It is a
     one-off per site, and running it again on a site that already has the grant changes nothing.
 .EXAMPLE
-    .\Grant-DmsSitePermission.ps1 -AppId b1cf02f1-bba8-4fd5-8ba5-94f2fb4a26c3 `
+    # in PowerShell 7 (pwsh), with the tenant's PnP app for the sign-in
+    .\Grant-DmsSitePermission.ps1 -AppId b1cf02f1-bba8-4fd5-8ba5-94f2fb4a26c3 -ClientId <PnP app id> `
         -Site https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST
 .EXAMPLE
     # both sites at once
@@ -21,12 +22,16 @@ param(
     [Parameter(Mandatory)][guid] $AppId,
     [Parameter(Mandatory)][string[]] $Site,
     [string] $DisplayName = 'RH DMS',
+    [guid] $ClientId = $(if ($env:DMS_PNP_CLIENT_ID) { $env:DMS_PNP_CLIENT_ID } else { [guid]::Empty }),
     [ValidateSet('Read', 'Write', 'Manage', 'FullControl')][string] $Permissions = 'Write'
 )
 
 $ErrorActionPreference = 'Stop'
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    throw 'Run this in PowerShell 7 (pwsh), not Windows PowerShell 5.1: PnP.PowerShell needs it.'
+}
 if (-not (Get-Module -ListAvailable PnP.PowerShell)) {
-    throw 'PnP.PowerShell is missing: Install-Module PnP.PowerShell -Scope CurrentUser'
+    throw 'PnP.PowerShell is missing. In pwsh: Install-Module PnP.PowerShell -Scope CurrentUser -Force'
 }
 Import-Module PnP.PowerShell -ErrorAction Stop
 
@@ -39,7 +44,10 @@ function Get-Cmd([string[]] $names) {
 foreach ($url in $Site) {
     $url = $url.TrimEnd('/')
     Write-Host "-- $url" -ForegroundColor Cyan
-    Connect-PnPOnline -Url $url -Interactive            # sign in as an administrator
+    # PnP no longer has an app of its own: the sign-in goes through the tenant's PnP app (the one
+    # Provision-DMS.ps1 uses), given as -ClientId or in DMS_PNP_CLIENT_ID.
+    if ($ClientId -ne [guid]::Empty) { Connect-PnPOnline -Url $url -Interactive -ClientId $ClientId }
+    else { Connect-PnPOnline -Url $url -Interactive }      # older PnP versions: sign in as an administrator
     $get   = Get-Cmd 'Get-PnPEntraIDAppSitePermission', 'Get-PnPAzureADAppSitePermission'
     $grant = Get-Cmd 'Grant-PnPEntraIDAppSitePermission', 'Grant-PnPAzureADAppSitePermission'
     $set   = Get-Cmd 'Set-PnPEntraIDAppSitePermission', 'Set-PnPAzureADAppSitePermission'
