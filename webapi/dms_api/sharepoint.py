@@ -409,8 +409,9 @@ class SharePoint:
         try:
             self._call("GET", f"{site}/_api/web/lists/GetByTitle('{quote(q)}')?$select=Id")
         except SharePointError:
+            # the DMS talks OData nometadata, which refuses __metadata: the type comes from the url
             self._call("POST", f"{site}/_api/web/lists", json={
-                "__metadata": {"type": "SP.List"}, "Title": title, "BaseTemplate": 101,   # 101 = document library
+                "Title": title, "BaseTemplate": 101,                                     # 101 = document library
                 "Description": "Documents the DMS puts here for people to open and edit; the DMS removes them again."})
             logger.info("The review library %s was created on %s", title, site)
         self._review_ready = True
