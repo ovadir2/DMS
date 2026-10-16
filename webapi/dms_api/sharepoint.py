@@ -492,16 +492,13 @@ class SharePoint:
 
     def review_link(self, *, document_id: str, name: str, edit: bool = True) -> str | None:
         """A link to that one file for anyone in the company, made by the DMS account: whoever the DMS sends it
-        to opens it with their own Microsoft account, and nothing else on the site is opened to them. None when
-        the tenant does not allow such a link - the caller then shares it with the named people instead."""
+        to opens it with their own Microsoft account, and nothing else on the site is opened to them. It raises
+        where the tenant does not allow such a link; the caller then shares it with the named people, and the
+        SharePoint check says why."""
         site = self.review_site()
         url = self.host + quote(f"{self._review_folder(document_id)}/{name}", safe="/")
-        try:
-            r = self._call("POST", f"{site}/_api/SP.Web.CreateOrganizationSharingLink",
-                           json={"url": url, "isEditLink": bool(edit)})
-        except SharePointError as e:
-            logger.info("No company link for %s: %s", name, e)
-            return None
+        r = self._call("POST", f"{site}/_api/SP.Web.CreateOrganizationSharingLink",
+                       json={"url": url, "isEditLink": bool(edit)})
         link = (r.get("sharingLinkInfo") or {}).get("Url") or r.get("Url") or r.get("value")
         return link or None
 

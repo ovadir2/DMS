@@ -1306,6 +1306,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             link = sp().review_link(document_id=key, name=name, edit=edit)
         except Exception as e:  # noqa: BLE001
             logger.info("No company link for %s: %s", name, e)
+            sp_error(f"Company link for {name}", e)      # the SharePoint check says why the link was refused
             link = None
         if not link and people:
             sp().review_share(document_id=key, name=name, emails=people, subject=subject, message="", edit=edit)
