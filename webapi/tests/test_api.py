@@ -740,7 +740,9 @@ def test_page_approvals_two_stages(tmp_path):
     assert c.post(f"/api/approvals/{d['id']}", json={"approve": False}).status_code == 400   # a comment is required
     r = c.post(f"/api/approvals/{d['id']}", json={"approve": True, "comment": "final"}).json()
     assert r["statusKey"] == "Approved_ReadOnly" and sp.items[d["id"]]["lastApprovedUtc"]
-    events = [(e["event"], _nosha(e["details"])) for e in sp.audit_events()][:3]
+    # the file moves to Current_ReadOnly as part of the approval; its own audit line is not a decision
+    events = [(e["event"], _nosha(e["details"])) for e in sp.audit_events()
+              if e["event"] != s.choices["FileDone"]][:3]
     assert events == [("אושר", "Stage 2: final"), ("אושר", "Stage 1"), ("אושר", "Stage 1: ok")]
 
 
@@ -775,7 +777,8 @@ def test_super_user_can_decide_any_stage(tmp_path):
     assert c.get("/api/approvals", params={"everyone": True}).json()[0]["mine"] is False
     assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["stage"] == 2
     assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).json()["statusKey"] == "Approved_ReadOnly"
-    assert _nosha(sp.audit_events()[0]["details"]) == "Stage 2 (super user)"
+    decisions = [e for e in sp.audit_events() if e["event"] != s.choices["FileDone"]]
+    assert _nosha(decisions[0]["details"]) == "Stage 2 (super user)"
 
 
 def test_flow_mode_keeps_teams(env):
@@ -971,7 +974,8 @@ def test_the_document_goes_to_sharepoint_for_its_approvers_and_comes_back(tmp_pa
 
     c.post(f"/api/approvals/{d['id']}", json={"approve": True})
     c.post(f"/api/approvals/{d['id']}", json={"approve": True})                           # the approval ends
-    assert (q / "Submitted" / "Quote.docx").read_bytes() == b"edited by the approvers"    # what they left comes back
+    # what they left comes back, and the approval puts it straight into Current_ReadOnly
+    assert (q / "Current_ReadOnly" / "Quote.docx").read_bytes() == b"edited by the approvers"
     assert calls["done"] == d["documentId"]                                               # and the copy is removed
 
 
@@ -2714,3 +2718,29 @@ def test_a_fresh_copy_in_sharepoint_is_not_a_change(tmp_path):
     file_service.run_once(sp, s)
     c.get("/api/approvals")                                            # the row is drawn: nothing came back
     assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).status_code == 200
+
+
+def test_an_approved_document_lands_in_current_readonly_at_once(tmp_path):
+    """The approval and the move are one thing for the person: the moment the last approver says yes, the file
+    is in Current_ReadOnly, read only, without waiting for the file service to come round."""
+    from dms_api import file_service
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    f = q / "Quote.docx"
+    f.write_bytes(b"as submitted")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    sp = _review_sp(s, store)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(f), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)                                   # submitted: the file waits in Submitted
+    assert (q / "Submitted" / "Quote.docx").is_file()
+    c.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    c.post(f"/api/approvals/{d['id']}", json={"approve": True})    # the last approver says yes
+    landed = q / "Current_ReadOnly" / "Quote.docx"
+    import stat as _stat
+    assert landed.is_file() and not landed.stat().st_mode & _stat.S_IWRITE   # there already, and read only
+    assert not (q / "Submitted" / "Quote.docx").exists()

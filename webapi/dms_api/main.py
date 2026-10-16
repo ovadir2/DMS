@@ -1653,6 +1653,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         ended = back_to_owner is not None or sp().document(item_id).get("lifecycleStatus") == c["Approved_ReadOnly"]
         if ended:
             review_fetch(d)                                     # what the approvers left in SharePoint comes back
+        if sp().document(item_id).get("lifecycleStatus") == c["Approved_ReadOnly"]:
+            try:        # the file goes to Current_ReadOnly now, not at the next pass of the file service
+                from . import file_service
+                file_service.run_once(sp(), s, only=doc_id)
+            except Exception as e:  # noqa: BLE001 - the approval stands either way; the next pass tries again
+                logger.warning("%s was approved but not moved to Current_ReadOnly: %s", doc_id, e)
+                sp_error(f"Releasing {doc_id}", e)
         log(user, "approve" if req.approve else "reject", f"{doc_id} {tag}")
         original = next((x["from"] for x in st.get("delegated") or [] if x["to"] == user.email), None)
         decision_row(d, user.email, st["stage"] or 1, "Approved" if req.approve else "Rejected", req.comment.strip(),

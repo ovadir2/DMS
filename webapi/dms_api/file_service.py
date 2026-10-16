@@ -134,14 +134,18 @@ def return_to_working(root: str, working_path: str | None) -> str | None:
     return f"ReturnToWorking: {rel(source)} -> {rel(target)}"
 
 
-def run_once(sp, s: Settings) -> dict:
-    """One pass over the register. Returns the counts and, per record, what was done or why not."""
+def run_once(sp, s: Settings, only: str = "") -> dict:
+    """One pass over the register, or over one document (`only`, its Document ID): the DMS runs it for that
+    document the moment an approval ends, so the file is where the record says without waiting for a pass.
+    Returns the counts and, per record, what was done or why not."""
     c = s.choices
     rel = lambda p: os.path.relpath(p, s.repository_root) if p else p  # noqa: E731 - short paths in the audit
     done, failed, report = 0, 0, []
     for d in sp.documents(refresh=True):
         status, raw = d.get("lifecycleStatus"), d.get("workingUncPath")
         doc_id = d.get("documentId") or f"ID {d.get('id')}"
+        if only and doc_id != only:
+            continue
         if status not in (c["Working"], c["Submitted"], c["Approved_ReadOnly"]):
             continue
         if not raw:
