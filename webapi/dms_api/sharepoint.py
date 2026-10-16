@@ -495,12 +495,35 @@ class SharePoint:
         to opens it with their own Microsoft account, and nothing else on the site is opened to them. It raises
         where the tenant does not allow such a link; the caller then shares it with the named people, and the
         SharePoint check says why."""
+        try:
+            return self._graph_link(document_id, name, edit)      # the DMS account's own way of granting
+        except SharePointError as e:
+            logger.info("No company link through Graph for %s: %s", name, e)
         site = self.review_site()
         url = self.host + quote(f"{self._review_folder(document_id)}/{name}", safe="/")
         r = self._call("POST", f"{site}/_api/SP.Web.CreateOrganizationSharingLink",
                        json={"url": url, "isEditLink": bool(edit)})
         link = (r.get("sharingLinkInfo") or {}).get("Url") or r.get("Url") or r.get("value")
         return link or None
+
+    def _graph_link(self, document_id: str, name: str, edit: bool) -> str:
+        """The company link through Microsoft Graph. SharePoint's own sharing refuses an application that signs
+        in with a certificate ("the caller has no permission to grant permission"); Graph lets it make the link
+        for a file it may write, which is what the DMS has on the review library."""
+        u = urlparse(self.review_site())
+        drives = self._graph("GET", f"sites/{u.netloc}:{u.path.rstrip('/')}:/drives?$select=id,name,webUrl").get("value", [])
+        lib = self.s.review_library.lower()
+        drive = next((d for d in drives if (d.get("webUrl") or "").rstrip("/").rsplit("/", 1)[-1].lower() == lib
+                      or (d.get("name") or "").lower() == lib), None)
+        if not drive:
+            raise SharePointError(f"The library {self.s.review_library} was not found on {self.review_site()}")
+        path = quote(f"{document_id}/{name}")
+        r = self._graph("POST", f"drives/{drive['id']}/root:/{path}:/createLink",
+                        json={"type": "edit" if edit else "view", "scope": "organization"})
+        link = ((r.get("link") or {}).get("webUrl")) or ""
+        if not link:
+            raise SharePointError(f"Graph made no link for {name}")
+        return link
 
     def review_get(self, *, document_id: str, name: str) -> bytes:
         """The file as the approvers left it, to bring back to the file server."""

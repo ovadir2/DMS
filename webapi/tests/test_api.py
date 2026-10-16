@@ -2501,3 +2501,28 @@ def test_without_a_company_link_the_approvers_are_named_one_by_one(tmp_path):
                                    "documentArea": "מסחרי", "submit": True}).json()
     file_service.run_once(sp, s)
     assert store["shares"] and store["shares"][-1]["emails"]            # shared with the approvers by name
+
+
+def test_a_refused_share_does_not_break_the_approvals_list(tmp_path):
+    """SharePoint refuses to let a certificate application grant permission. The list still answers: the
+    document is simply shown without a link, and the SharePoint check says why."""
+    from dms_api import file_service
+    from dms_api.sharepoint import SharePointError
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.docx").write_bytes(b"as submitted")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    sp = _review_sp(s, store)
+    sp.review_link = lambda **kw: (_ for _ in ()).throw(SharePointError("no company link here"))
+    sp.review_share = lambda **kw: (_ for _ in ()).throw(SharePointError("the caller may not grant permission"))
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.docx"), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)
+    r = c.get("/api/approvals")
+    assert r.status_code == 200 and any(x["id"] == d["id"] for x in r.json())
+    errors = c.get("/api/diagnostics/sharepoint").json()["errors"]
+    assert any("Sharing" in (e["what"] or "") for e in errors)        # and the check says what went wrong

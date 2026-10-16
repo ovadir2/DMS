@@ -418,7 +418,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 "auth": s.sp_auth, "certDaysLeft": cert_days_left(sp()), "lists": lists, "errors": list(app.state.sp_errors),
                 "notifications": {"on": s.approvals == "page" and s.notify, "approvals": s.approvals, "notify": s.notify,
                                   "pageUrl": s.page_url, "last": list(app.state.notify_log)},
-                "review": {"on": review_on(), "library": s.review_library, "site": sp().review_site() if review_on() else "",
+                "review": {"on": review_on(), "library": s.review_library, "site": getattr(sp(), "review_site", lambda: "")() if review_on() else "",
                            "openForApproval": [{"documentId": k, **v} for k, v in REVIEW.items()],
                            "checkedOut": list(checkout.read(s.repository_root).values()),
                            "checkoutHours": s.checkout_hours}}
@@ -1309,7 +1309,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             sp_error(f"Company link for {name}", e)      # the SharePoint check says why the link was refused
             link = None
         if not link and people:
-            sp().review_share(document_id=key, name=name, emails=people, subject=subject, message="", edit=edit)
+            try:
+                sp().review_share(document_id=key, name=name, emails=people, subject=subject, message="", edit=edit)
+            except Exception as e:  # noqa: BLE001 - say so in the check, never fail the list the person asked for
+                logger.warning("%s was not shared with %s: %s", name, ", ".join(people), e)
+                sp_error(f"Sharing {name}", e)
         return link
 
     def review_start(d: dict, approvers: list[str]) -> None:
