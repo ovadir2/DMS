@@ -498,11 +498,16 @@ class SharePoint:
         try:
             return self._graph_link(document_id, name, edit)      # the DMS account's own way of granting
         except SharePointError as e:
-            logger.info("No company link through Graph for %s: %s", name, e)
+            graph_said = str(e)
+            logger.info("No company link through Graph for %s: %s", name, graph_said)
         site = self.review_site()
         url = self.host + quote(f"{self._review_folder(document_id)}/{name}", safe="/")
-        r = self._call("POST", f"{site}/_api/SP.Web.CreateOrganizationSharingLink",
-                       json={"url": url, "isEditLink": bool(edit)})
+        try:
+            r = self._call("POST", f"{site}/_api/SP.Web.CreateOrganizationSharingLink",
+                           json={"url": url, "isEditLink": bool(edit)})
+        except SharePointError as e:
+            # both ways refused: the check must show the Graph answer too, it is the one that can be fixed
+            raise SharePointError(f"Graph: {graph_said} | SharePoint: {e}") from None
         link = (r.get("sharingLinkInfo") or {}).get("Url") or r.get("Url") or r.get("value")
         return link or None
 
