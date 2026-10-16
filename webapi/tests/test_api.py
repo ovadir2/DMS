@@ -2663,3 +2663,28 @@ def test_one_copy_at_a_time_in_sharepoint(tmp_path):
     c2.post(f"/api/approvals/{d['id']}", json={"approve": True})
     c2.post(f"/api/approvals/{d['id']}", json={"approve": True})
     assert d["documentId"] not in store                                         # and the copy is still removed
+
+
+def test_the_owner_is_counted_what_came_back_to_them(tmp_path):
+    """Returned with remarks: the owner sees a number on My workflows, as an approver sees what waits for
+    them. It counts only documents that came back and have not been submitted again."""
+    from dms_api import file_service
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    f = q / "Quote.docx"
+    f.write_bytes(b"as submitted")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    sp = _review_sp(s, store)
+    c = TestClient(create_app(s, sp))
+    assert c.get("/api/my-workflows/waiting").json()["returned"] == 0
+    d = c.post("/api/documents", json={"path": str(f), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)
+    assert c.get("/api/my-workflows/waiting").json()["returned"] == 0      # still with the approvers
+    c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "please fix the price"})
+    assert c.get("/api/my-workflows/waiting").json()["returned"] == 1      # back with its owner
+    c.post(f"/api/documents/{d['id']}/submit", json={"approvers": [USER]})
+    assert c.get("/api/my-workflows/waiting").json()["returned"] == 0      # submitted again

@@ -1760,6 +1760,20 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         summary = {k: sum(1 for i in items if i["statusKey"] == k) for k in ("Working", "Submitted", "Approved_ReadOnly", "Rejected")}
         return {"summary": summary, "items": items}
 
+    @app.get("/api/my-workflows/waiting")
+    def waiting_for_me(user: User = Depends(current_user)):
+        """How many of this person's own documents are waiting for them: returned with remarks, or in work
+        after a return. The page shows it on My workflows, the way approvals are counted."""
+        c, by_doc, n = s.choices, events_by_doc(), 0
+        for d in sp().documents():
+            if (d.get("ownerEmail") or "").lower() != user.email or d.get("lifecycleStatus") != c["Working"]:
+                continue
+            events = by_doc.get(d.get("documentId") or "", [])
+            last = next((e for e in events if e["event"] in (c["ApprovedEvent"], c["RejectedEvent"])), None)
+            if last and last["event"] == c["RejectedEvent"]:      # came back from an approval, not yet re-submitted
+                n += 1
+        return {"returned": n}
+
     @app.post("/api/file-service/run")
     def file_service_run(user: User = Depends(current_user)):
         """Run the file moves now: every approved document goes to Current_ReadOnly in its own folder (the
