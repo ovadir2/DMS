@@ -2687,11 +2687,13 @@ def test_the_owner_is_counted_what_came_back_to_them(tmp_path):
     d = c.post("/api/documents", json={"path": str(f), "documentType": "הצעת מחיר",
                                        "documentArea": "מסחרי", "submit": True}).json()
     file_service.run_once(sp, s)
-    assert c.get("/api/my-workflows/waiting").json()["returned"] == 0      # still with the approvers
+    w = c.get("/api/my-workflows/waiting").json()
+    assert w["returned"] == 0 and w["submitted"] == 1 and w["open"] == 1   # still with the approvers
     c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "please fix the price"})
     assert c.get("/api/my-workflows/waiting").json()["returned"] == 1      # back with its owner
     c.post(f"/api/documents/{d['id']}/submit", json={"approvers": [USER]})
-    assert c.get("/api/my-workflows/waiting").json()["returned"] == 0      # submitted again
+    w = c.get("/api/my-workflows/waiting").json()
+    assert w["returned"] == 0 and w["submitted"] == 1                      # submitted again: in the pipeline
 
 
 def test_a_fresh_copy_in_sharepoint_is_not_a_change(tmp_path):
