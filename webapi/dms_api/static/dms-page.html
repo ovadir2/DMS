@@ -778,7 +778,8 @@ async function delegateDialog(d) {
 }
 async function refreshApprovals() {
   if (cfg.approvals !== 'page') return;
-  try { const n = (await api('/api/approvals' + (state.apAll ? '?everyone=true' : ''))).length; $('#ap-n').textContent = n; $('#ap-n').hidden = !n; } catch {}
+  // always what waits for this person, even while the super-user view shows everyone's approvals
+  try { const n = (await apiCall('/api/approvals')).length; $('#ap-n').textContent = n; $('#ap-n').hidden = !n; } catch {}
   refreshWaiting();
 }
 // Returned with remarks: the owner sees it on My workflows the way an approver sees what waits for them
