@@ -1283,6 +1283,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         key = doc.get("statusKey") or next((k for k, v in s.choices.items() if v == doc.get("lifecycleStatus")), "")
         return key in LOCKED_STATES
 
+    def may_change(user: User, path: str, doc: dict | None = None) -> bool:
+        """Who may change this document. Rights on the file server say yes, and so does being its owner: with
+        the SharePoint bridge the DMS is the one that writes the file, and an owner who has no rights on
+        \\\\RHFS02 still owns their document - otherwise a document returned to them could never be fixed."""
+        if may_write(user, path):
+            return True
+        return bool(doc) and ((doc.get("ownerEmail") or "").lower() == user.email or is_admin(user))
+
     WORKING_STATES = ("Working", "Rejected")        # back with its owner: theirs to change and submit again
 
     def doc_in_work(doc: dict | None) -> bool:
@@ -1303,7 +1311,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             # a document returned to its owner is theirs to change, even when the file still carries the
             # read-only flag it was given while it was submitted: the DMS clears that when they open it
             released = doc_locked(doc) or (read_only_file(path) and not doc_in_work(doc))
-            may_edit = not released and may_write(user, path)
+            may_edit = not released and may_change(user, path, doc)
             if review_on():
                 return {"bridge": True, "canEdit": may_edit, "checkedOut": checkout_state(path, user)}
             return {"officeUri": files.open_uri(path, edit=may_edit), "viewUri": files.open_uri(path),
@@ -1487,11 +1495,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         reg = find_registered(full, register_index())
         if edit and (doc_locked(reg) or (read_only_file(full) and not doc_in_work(reg))):
             raise HTTPException(403, "This document is released by the DMS (read only): it can be viewed, not edited")
+        if edit and not may_change(user, full, reg):
+            raise HTTPException(403, "You do not have permission to change this file")
         if edit and doc_in_work(reg) and files.is_read_only(full):
             from .file_service import _set_read_only
             _set_read_only(full, False)        # it came back from an approval: its owner edits it again
-        if edit and not may_write(user, full):
-            raise HTTPException(403, "You do not have permission to change this file")
         held = checkout.of(s.repository_root, full)
         if held and (held.get("by") or "").lower() != user.email:
             raise HTTPException(409, f"{held.get('by')} has this document out for editing")

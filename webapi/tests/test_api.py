@@ -2608,3 +2608,28 @@ def test_a_returned_document_opens_for_editing_even_with_a_leftover_read_only_fl
     assert row["canEdit"]                              # the owner is offered editing all the same
     r = c.post("/api/files/checkout", json={"path": str(f), "edit": True})
     assert r.status_code == 200 and os.access(str(f), os.W_OK)      # and the flag is cleared on the way
+
+
+def test_the_owner_may_fix_their_returned_document_without_rights_on_the_file_server(tmp_path, monkeypatch):
+    """With the SharePoint bridge the DMS writes the file, so an owner who has no rights on \\\\RHFS02 still
+    owns their document: a document returned to them is theirs to open for editing and submit again."""
+    from dms_api import file_service, security
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    f = q / "Quote.docx"
+    f.write_bytes(b"as submitted")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=["boss@rh.co.il"], review_library="Approvals")
+    store: dict = {}
+    sp = _review_sp(s, store)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(f), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)
+    c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "please fix the price"})
+    monkeypatch.setattr(security.User, "can",                       # no rights at all on the file server
+                        lambda self, path, access="read": access == "read")
+    row = next(x for x in c.get("/api/my-workflows").json()["items"] if x["id"] == d["id"])
+    assert row["canEdit"]
+    assert c.post("/api/files/checkout", json={"path": str(f), "edit": True}).status_code == 200
