@@ -2526,3 +2526,35 @@ def test_a_refused_share_does_not_break_the_approvals_list(tmp_path):
     assert r.status_code == 200 and any(x["id"] == d["id"] for x in r.json())
     errors = c.get("/api/diagnostics/sharepoint").json()["errors"]
     assert any("Sharing" in (e["what"] or "") for e in errors)        # and the check says what went wrong
+
+
+def test_an_approver_who_changed_the_document_cannot_approve_it(tmp_path, monkeypatch):
+    """What an approver writes into the document is a proposal, not an approval: once the copy in SharePoint
+    was changed, the document goes back to its owner with the remarks, and the owner submits the new version."""
+    from datetime import datetime, timedelta, timezone
+
+    from dms_api import file_service, security
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.docx").write_bytes(b"as submitted")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    sp = _review_sp(s, store)
+    later = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+    sp.review_info = lambda *, document_id, name: {"modified": later, "length": 9}
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.docx"), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)
+    key = next(k for k in store if k != "shares")
+    store[key]["data"] = b"as the approver changed it"
+    monkeypatch.setattr(security.User, "can", lambda self, path, access="read": False)
+    c.get("/api/approvals")                                  # the change comes back and is written to the audit
+    assert (q / "Submitted" / "Quote.docx").read_bytes() == b"as the approver changed it"
+
+    r = c.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    assert r.status_code == 409 and "changed during the approval" in r.json()["detail"]
+    back = c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "my changes are inside"})
+    assert back.status_code == 200 and back.json()["statusKey"] in ("Working", "Rejected")

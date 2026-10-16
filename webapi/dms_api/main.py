@@ -1214,7 +1214,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 file = submitted_file(d)
                 kept = review_ensure(d) or {}
                 if file and kept.get("name"):   # closed in Word for the web: it is back here before the row is drawn
-                    review_pull(d.get("documentId") or "", kept["name"], file)
+                    review_pull(d.get("documentId") or "", kept["name"], file, doc_id=d.get("documentId") or "")
                 out.append({**with_key(d), **st, "submittedUtc": submitted["utc"] if submitted else None,
                             "submittedBy": submitted["actor"] if submitted else None, "file": file,
                             # read only, always: an approval never changes the document, and an approver's
@@ -1232,7 +1232,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                             "mine": user.email in st["pending"]})
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
 
-    def review_pull(key: str, name: str, target: str, *, by: str = "") -> bool:
+    CHANGED_IN_REVIEW = "The document was changed in SharePoint while it was being approved"
+
+    def review_pull(key: str, name: str, target: str, *, by: str = "", doc_id: str = "") -> bool:
         """What is in SharePoint comes back to the file server as soon as it is newer than the file here, so a
         document closed in Word for the web is in the DMS at the next look, without waiting for the approval
         to end. Returns True when something came back."""
@@ -1253,6 +1255,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             with open(target, "wb") as f:
                 f.write(data)
             logger.info("%s came back from SharePoint (%d bytes)", target, len(data))
+            if doc_id:              # a document under approval: the change is part of its record, and it
+                try:                # cannot be approved as it stands - it goes back to its owner
+                    sp().audit(document_id=doc_id, event=s.choices["StatusChanged"],
+                               from_status=s.choices["Submitted"], to_status=s.choices["Submitted"],
+                               actor=by or "DMS", details=f"{CHANGED_IN_REVIEW} ({len(data)} bytes)")
+                except Exception as e:  # noqa: BLE001
+                    logger.info("The change of %s was not written to Control Audit: %s", doc_id, e)
             return True
         except Exception as e:  # noqa: BLE001 - a listing must never fail on this
             logger.info("%s did not come back from SharePoint: %s", target, e)
@@ -1561,6 +1570,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "You are not an approver of this stage")
         if not req.approve and not req.comment.strip():
             raise HTTPException(400, "Please write why the document is rejected")
+        # A document somebody changed while it was being approved is not approved as it stands: what the
+        # approvers wrote is theirs to propose, and the owner's to accept. It goes back with their remarks.
+        events_now = events_by_doc().get(d.get("documentId") or "", [])
+        submitted_at = next((e["utc"] for e in events_now if e["event"] == c["SubmittedEvent"]), "")
+        changed = any((e.get("details") or "").startswith(CHANGED_IN_REVIEW) and (e.get("utc") or "") > submitted_at
+                      for e in events_now)
+        if req.approve and changed:
+            raise HTTPException(409, "The document was changed during the approval: it cannot be approved as it "
+                                     "stands. Return it with remarks, and its owner submits the new version.")
         tag = f"Stage {st['stage']}" + (" (super user)" if su else "")
         sha = f" [file SHA-256 {file_sha(submitted_file(d))}]"    # the exact content this decision was made on
         doc_id = d.get("documentId") or f"ID {item_id}"
