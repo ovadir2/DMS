@@ -2436,3 +2436,22 @@ def test_my_workflows_survives_a_record_pointing_at_a_file_that_is_not_there(tmp
     assert r.status_code == 200
     row = next(x for x in r.json()["items"] if x["id"] == d["id"])
     assert not row.get("canEdit")                        # an approved document is never offered for editing
+
+
+def test_a_record_naming_the_file_by_another_route_does_not_break_a_list(tmp_path):
+    """A record can name the file through a share (\\\\server\\e$\\Shares\\...) while the DMS works from its own
+    root (E:\\Shares): the row still opens, and no list fails."""
+    from dms_api import checkout
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    f = q / "Quote.docx"
+    f.write_bytes(b"draft")
+    assert checkout.key_of(str(root), r"\\server\e$\Shares\Quote.docx").startswith("edit-")   # no ValueError
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    c = TestClient(create_app(s, _review_sp(s, store)))
+    d = c.post("/api/documents", json={"path": str(f), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": False}).json()
+    assert c.get("/api/my-workflows").status_code == 200 and d["documentId"]

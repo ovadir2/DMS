@@ -43,7 +43,10 @@ def key_of(root: str, path: str, by: str = "") -> str:
     """A short, stable name for the folder in SharePoint. Without a person it names the file itself: that is the
     one copy open for editing, and only one may exist. With a person it names a copy that person is only reading,
     so several people can look at the same document at once."""
-    rel = os.path.normcase(os.path.relpath(path, root))
+    try:
+        rel = os.path.normcase(os.path.relpath(path, root))
+    except ValueError:   # a record naming the file by another route (a UNC share, another drive): take it as it is
+        rel = os.path.normcase(path)
     if by:
         return "view-" + hashlib.sha1((rel + "|" + by.lower()).encode("utf-8")).hexdigest()[:12]
     return "edit-" + hashlib.sha1(rel.encode("utf-8")).hexdigest()[:12]

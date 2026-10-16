@@ -1271,18 +1271,20 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """How any row opens its file, by one rule wherever a file is shown (browse, search, suggestions):
         through SharePoint when the bridge is on - a released document read only, never for editing - and
         otherwise the file itself, for someone who has rights on the file server."""
+        from .file_service import to_root
+        path = to_root(s.repository_root, path) or path      # a record may name the file by another route
         if not path or not os.path.isfile(path):             # a record pointing at a file that moved, or is gone
             return {}
         try:
             released = read_only_file(path) or doc_locked(doc)
             may_edit = not released and may_write(user, path)
+            if review_on():
+                return {"bridge": True, "canEdit": may_edit, "checkedOut": checkout_state(path, user)}
+            return {"officeUri": files.open_uri(path, edit=may_edit), "viewUri": files.open_uri(path),
+                    "editable": may_edit}
         except Exception as e:  # noqa: BLE001 - the share or the rights answered badly: never fail a whole list
             logger.info("How to open %s could not be decided: %s", path, e)
             return {}
-        if review_on():
-            return {"bridge": True, "canEdit": may_edit, "checkedOut": checkout_state(path, user)}
-        return {"officeUri": files.open_uri(path, edit=may_edit), "viewUri": files.open_uri(path),
-                "editable": may_edit}
 
     def read_only_uri(uri: str | None) -> str | None:
         """The same address in SharePoint, opened for reading: View and Open to edit are one mechanism."""
