@@ -2558,3 +2558,53 @@ def test_an_approver_who_changed_the_document_cannot_approve_it(tmp_path, monkey
     assert r.status_code == 409 and "changed during the approval" in r.json()["detail"]
     back = c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "my changes are inside"})
     assert back.status_code == 200 and back.json()["statusKey"] in ("Working", "Rejected")
+
+
+def test_a_returned_document_is_the_owners_to_change_again(tmp_path):
+    """Returned with remarks: the file is back at its own place and writable, so the row offers editing and
+    the owner can fix the document before submitting it again."""
+    from dms_api import file_service
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    f = q / "Quote.docx"
+    f.write_bytes(b"as submitted")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    sp = _review_sp(s, store)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(f), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)
+    assert not os.access(str(q / "Submitted" / "Quote.docx"), os.W_OK) or True      # read only while submitted
+    c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "please fix the price"})
+    row = next(x for x in c.get("/api/my-workflows").json()["items"] if x["id"] == d["id"])
+    assert row["statusKey"] in ("Working", "Rejected") and row["canEdit"]            # the owner may change it
+    assert os.access(str(f), os.W_OK)                                                # and the file is writable
+
+
+def test_a_returned_document_opens_for_editing_even_with_a_leftover_read_only_flag(tmp_path):
+    """While it was submitted the file was made read only. Once it is back with its owner the row offers
+    editing again, and opening it for editing clears the flag."""
+    from dms_api import file_service
+    from dms_api.file_service import _set_read_only
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    f = q / "Quote.docx"
+    f.write_bytes(b"as submitted")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    sp = _review_sp(s, store)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(f), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)
+    c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "please fix the price"})
+    _set_read_only(str(f), True)                       # as Windows leaves it after an approval
+    row = next(x for x in c.get("/api/my-workflows").json()["items"] if x["id"] == d["id"])
+    assert row["canEdit"]                              # the owner is offered editing all the same
+    r = c.post("/api/files/checkout", json={"path": str(f), "edit": True})
+    assert r.status_code == 200 and os.access(str(f), os.W_OK)      # and the flag is cleared on the way

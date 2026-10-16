@@ -1031,12 +1031,18 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def file_back(d: dict, status: str) -> None:
         """Withdrawn or rejected: the file returns to its place now (not at the next file service run),
         so it can be edited and submitted again under the same name."""
-        from .file_service import return_to_working
+        from .file_service import _set_read_only, return_to_working, to_root
         try:
             details = return_to_working(s.repository_root, d.get("workingUncPath"))
         except OSError as e:
             logger.warning("file not returned to Working for %s: %s", d.get("documentId"), e)
             return
+        working = to_root(s.repository_root, d.get("workingUncPath"))
+        if working and os.path.isfile(working):
+            try:                                            # back with the owner: theirs to change again
+                _set_read_only(working, False)
+            except OSError as e:
+                logger.info("%s stayed read only: %s", working, e)
         if details:
             sp().audit(document_id=d.get("documentId") or f"ID {d.get('id')}", event=s.choices["FileDone"], from_status=status,
                        to_status=status, actor="RH-DMS-Workflow-Service", details=details, source=s.choices["WorkflowService"])
@@ -1277,6 +1283,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         key = doc.get("statusKey") or next((k for k, v in s.choices.items() if v == doc.get("lifecycleStatus")), "")
         return key in LOCKED_STATES
 
+    WORKING_STATES = ("Working", "Rejected")        # back with its owner: theirs to change and submit again
+
+    def doc_in_work(doc: dict | None) -> bool:
+        if not doc:
+            return False
+        key = doc.get("statusKey") or next((k for k, v in s.choices.items() if v == doc.get("lifecycleStatus")), "")
+        return key in WORKING_STATES
+
     def open_fields(path: str, user: User, doc: dict | None = None) -> dict:
         """How any row opens its file, by one rule wherever a file is shown (browse, search, suggestions):
         through SharePoint when the bridge is on - a released document read only, never for editing - and
@@ -1286,7 +1300,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if not path or not os.path.isfile(path):             # a record pointing at a file that moved, or is gone
             return {}
         try:
-            released = read_only_file(path) or doc_locked(doc)
+            # a document returned to its owner is theirs to change, even when the file still carries the
+            # read-only flag it was given while it was submitted: the DMS clears that when they open it
+            released = doc_locked(doc) or (read_only_file(path) and not doc_in_work(doc))
             may_edit = not released and may_write(user, path)
             if review_on():
                 return {"bridge": True, "canEdit": may_edit, "checkedOut": checkout_state(path, user)}
@@ -1468,8 +1484,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "You do not have access to this file")
         checkout_sweep()
         edit = bool(req.edit)
-        if edit and (read_only_file(full) or doc_locked(find_registered(full, register_index()))):
+        reg = find_registered(full, register_index())
+        if edit and (doc_locked(reg) or (read_only_file(full) and not doc_in_work(reg))):
             raise HTTPException(403, "This document is released by the DMS (read only): it can be viewed, not edited")
+        if edit and doc_in_work(reg) and files.is_read_only(full):
+            from .file_service import _set_read_only
+            _set_read_only(full, False)        # it came back from an approval: its owner edits it again
         if edit and not may_write(user, full):
             raise HTTPException(403, "You do not have permission to change this file")
         held = checkout.of(s.repository_root, full)
