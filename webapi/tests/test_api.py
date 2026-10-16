@@ -2683,14 +2683,15 @@ def test_the_owner_is_counted_what_came_back_to_them(tmp_path):
     store: dict = {}
     sp = _review_sp(s, store)
     c = TestClient(create_app(s, sp))
-    assert c.get("/api/my-workflows/waiting").json()["returned"] == 0
+    assert c.get("/api/my-workflows/waiting").json()["open"] == 0
     d = c.post("/api/documents", json={"path": str(f), "documentType": "הצעת מחיר",
                                        "documentArea": "מסחרי", "submit": True}).json()
     file_service.run_once(sp, s)
     w = c.get("/api/my-workflows/waiting").json()
     assert w["returned"] == 0 and w["submitted"] == 1 and w["open"] == 1   # still with the approvers
     c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "please fix the price"})
-    assert c.get("/api/my-workflows/waiting").json()["returned"] == 1      # back with its owner
+    w = c.get("/api/my-workflows/waiting").json()
+    assert w["returned"] == 1 and w["working"] == 0 and w["open"] == 1     # back with its owner
     c.post(f"/api/documents/{d['id']}/submit", json={"approvers": [USER]})
     w = c.get("/api/my-workflows/waiting").json()
     assert w["returned"] == 0 and w["submitted"] == 1                      # submitted again: in the pipeline

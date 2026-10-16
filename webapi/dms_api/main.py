@@ -1774,7 +1774,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def waiting_for_me(user: User = Depends(current_user)):
         """How many of this person's own documents are waiting for them: returned with remarks, or in work
         after a return. The page shows it on My workflows, the way approvals are counted."""
-        c, by_doc, returned, submitted = s.choices, events_by_doc(), 0, 0
+        c, by_doc, returned, submitted, working = s.choices, events_by_doc(), 0, 0, 0
         for d in sp().documents():
             if (d.get("ownerEmail") or "").lower() != user.email:
                 continue
@@ -1782,13 +1782,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             if status == c["Submitted"]:                          # in the pipeline: with its approvers
                 submitted += 1
                 continue
-            if status != c["Working"]:
+            if status != c["Working"]:                            # approved or archived: finished
                 continue
             events = by_doc.get(d.get("documentId") or "", [])
             last = next((e for e in events if e["event"] in (c["ApprovedEvent"], c["RejectedEvent"])), None)
             if last and last["event"] == c["RejectedEvent"]:      # came back from an approval, not yet re-submitted
                 returned += 1
-        return {"returned": returned, "submitted": submitted, "open": returned + submitted}
+            else:
+                working += 1                                      # in work, never submitted yet
+        return {"returned": returned, "submitted": submitted, "working": working,
+                "open": returned + submitted + working}
 
     @app.post("/api/file-service/run")
     def file_service_run(user: User = Depends(current_user)):
