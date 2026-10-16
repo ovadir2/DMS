@@ -1276,7 +1276,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         try:
             released = read_only_file(path) or doc_locked(doc)
             may_edit = not released and may_write(user, path)
-        except OSError:                                      # the share answered badly: show it, do not fail the list
+        except Exception as e:  # noqa: BLE001 - the share or the rights answered badly: never fail a whole list
+            logger.info("How to open %s could not be decided: %s", path, e)
             return {}
         if review_on():
             return {"bridge": True, "canEdit": may_edit, "checkedOut": checkout_state(path, user)}
