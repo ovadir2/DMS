@@ -2455,3 +2455,49 @@ def test_a_record_naming_the_file_by_another_route_does_not_break_a_list(tmp_pat
     d = c.post("/api/documents", json={"path": str(f), "documentType": "הצעת מחיר",
                                        "documentArea": "מסחרי", "submit": False}).json()
     assert c.get("/api/my-workflows").status_code == 200 and d["documentId"]
+
+
+def test_the_link_opens_for_anyone_in_the_company(tmp_path, monkeypatch):
+    """The DMS sends a link by mail; whoever opens it is a person the DMS chose, not someone the site knows.
+    The DMS account makes a company link for that one copy, so the person opens it with their own Microsoft
+    account. Where the tenant refuses such a link, the named people are given it one by one instead."""
+    from dms_api import file_service, security
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.docx").write_bytes(b"as submitted")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    sp = _review_sp(s, store)
+    links = []
+    sp.review_link = lambda *, document_id, name, edit=True: (
+        links.append(edit) or f"https://rhisrael.sharepoint.com/:w:/s/DC/{document_id}?e={'edit' if edit else 'view'}")
+    sp.review_share = lambda **kw: pytest.fail("a company link was made: nobody has to be named")
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.docx"), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)
+    monkeypatch.setattr(security.User, "can", lambda self, path, access="read": False)   # no rights anywhere
+    row = next(x for x in c.get("/api/approvals").json() if x["id"] == d["id"])
+    assert row["officeUri"].endswith("e=edit") and row["viewUri"].endswith("e=view")
+    assert links == [True, False]                      # one link to edit it, one to read it
+
+
+def test_without_a_company_link_the_approvers_are_named_one_by_one(tmp_path):
+    """A tenant that does not allow company links still works: the DMS gives each approver that one file."""
+    from dms_api import file_service
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.docx").write_bytes(b"as submitted")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    sp = _review_sp(s, store)
+    sp.review_link = lambda *, document_id, name, edit=True: None       # the tenant refuses
+    c = TestClient(create_app(s, sp))
+    c.post("/api/documents", json={"path": str(q / "Quote.docx"), "documentType": "הצעת מחיר",
+                                   "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)
+    assert store["shares"] and store["shares"][-1]["emails"]            # shared with the approvers by name

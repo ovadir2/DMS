@@ -1224,7 +1224,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                             "officeUri": (office := kept.get("url")),
                             # View is the same copy in SharePoint, opened read only; without the bridge it is
                             # the file itself, for someone who has rights on the file server
-                            "viewUri": read_only_uri(office) or (files.open_uri(file) if file and user.can(file) else None),
+                            "viewUri": (kept.get("viewUrl") or read_only_uri(office)
+                                        or (files.open_uri(file) if file and user.can(file) else None)),
                             "viaDms": bool(file) and not user.can(file),   # no rights on the file server: the DMS serves it
                             "remarks": remarks_of(d.get("documentId") or ""),
                             "editable": bool((REVIEW.get(d.get("documentId") or "") or {}).get("url")),   # in SharePoint: they edit it there
@@ -1297,6 +1298,19 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     REVIEW: dict[str, dict] = {}            # documentId -> {"name": ..., "url": ...} while it is being approved
 
+    def share_link(key: str, name: str, people: list[str], *, edit: bool, subject: str = "") -> str | None:
+        """Open that one copy to whoever the DMS sends to it. The DMS account makes a company link, so anyone
+        in RH who gets the link from the DMS opens the document with their own Microsoft account and needs
+        nothing on the site; where the tenant does not allow such a link, the named people get it instead."""
+        try:
+            link = sp().review_link(document_id=key, name=name, edit=edit)
+        except Exception as e:  # noqa: BLE001
+            logger.info("No company link for %s: %s", name, e)
+            link = None
+        if not link and people:
+            sp().review_share(document_id=key, name=name, emails=people, subject=subject, message="", edit=edit)
+        return link
+
     def review_start(d: dict, approvers: list[str]) -> None:
         """A submitted document is opened and edited by its approvers in SharePoint, with their own Microsoft
         account: the DMS (which alone may touch the file server) puts a copy there, gives those people edit on
@@ -1308,10 +1322,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return
         try:
             put = sp().review_put(local_path=file, document_id=doc_id)
-            if approvers:
-                sp().review_share(document_id=doc_id, name=put["name"], emails=approvers,
-                                  subject=f"{doc_id} {d.get('title') or ''}", message="")
-            REVIEW[doc_id] = {"name": put["name"], "url": put["url"]}
+            link = share_link(doc_id, put["name"], approvers, edit=True, subject=f"{doc_id} {d.get('title') or ''}")
+            view = share_link(doc_id, put["name"], [], edit=False) if link else None   # the same copy, to read
+            REVIEW[doc_id] = {"name": put["name"], "url": link or put["url"], "viewUrl": view}
             sp().audit(document_id=doc_id, event=s.choices["StatusChanged"], from_status=s.choices["Submitted"],
                        to_status=s.choices["Submitted"], actor="DMS",
                        details=f"Opened for approval in SharePoint: {put['url']} ({', '.join(approvers)})")
@@ -1448,12 +1461,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         key = checkout.key_of(s.repository_root, full, "" if edit else user.email)
         try:
             put = sp().review_put(local_path=full, document_id=key, edit=edit)
-            sp().review_share(document_id=key, name=put["name"], emails=[user.email],
-                              subject=os.path.basename(full), message="", edit=edit)
+            link = share_link(key, put["name"], [user.email], edit=edit, subject=os.path.basename(full))
         except Exception as e:  # noqa: BLE001
             sp_error(f"Editing copy of {os.path.basename(full)}", e)
             raise HTTPException(502, f"The document could not be opened in SharePoint: {e}") from None
-        entry = checkout.add(s.repository_root, full, by=user.email, name=put["name"], url=put["url"], edit=edit)
+        entry = checkout.add(s.repository_root, full, by=user.email, name=put["name"],
+                             url=link or put["url"], edit=edit)
         log(user, "checkout" if edit else "view-sharepoint", full)
         return {"path": full, "url": entry["url"], "edit": edit, "by": entry["by"]}
 
