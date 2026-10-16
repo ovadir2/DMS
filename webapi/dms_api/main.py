@@ -1348,7 +1348,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         except Exception:  # noqa: BLE001
             there = None
         if there:
-            REVIEW[doc_id] = {"name": os.path.basename(file), "url": there}
+            # already in SharePoint (put there before, or before the DMS restarted): open it to the company now,
+            # so the people the DMS sends the link to can open it even when the copy is older than this
+            name = os.path.basename(file)
+            st = approval_state(d, events_by_doc().get(doc_id, []), {})
+            link = share_link(doc_id, name, st["pending"], edit=True, subject=f"{doc_id} {d.get('title') or ''}")
+            view = share_link(doc_id, name, [], edit=False) if link else None
+            REVIEW[doc_id] = {"name": name, "url": link or there, "viewUrl": view}
             return REVIEW[doc_id]
         st = approval_state(d, events_by_doc().get(doc_id, []), {})
         review_start(d, st["pending"])
