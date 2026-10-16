@@ -2633,3 +2633,33 @@ def test_the_owner_may_fix_their_returned_document_without_rights_on_the_file_se
     row = next(x for x in c.get("/api/my-workflows").json()["items"] if x["id"] == d["id"])
     assert row["canEdit"]
     assert c.post("/api/files/checkout", json={"path": str(f), "edit": True}).status_code == 200
+
+
+def test_one_copy_at_a_time_in_sharepoint(tmp_path):
+    """A document is in SharePoint once. A file its owner took out for editing comes back before the copy for
+    the approvers is made, and the copy for the approvers is removed when the approval ends even if the DMS
+    was restarted meanwhile and no longer remembers it."""
+    from dms_api import file_service
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    f = q / "Quote.docx"
+    f.write_bytes(b"first draft")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    sp = _review_sp(s, store)
+    c = TestClient(create_app(s, sp))
+
+    c.post("/api/files/checkout", json={"path": str(f), "edit": True})          # the owner looks at it first
+    assert any(k.startswith("edit-") for k in store)
+    d = c.post("/api/documents", json={"path": str(f), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)
+    assert not any(k.startswith("edit-") for k in store)                        # the owner's copy went back
+    assert d["documentId"] in store                                             # only the approvers' copy is there
+
+    c2 = TestClient(create_app(s, sp))                                          # the DMS restarts: nothing remembered
+    c2.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    c2.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    assert d["documentId"] not in store                                         # and the copy is still removed

@@ -1358,6 +1358,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         doc_id, file = d.get("documentId") or "", submitted_file(d)
         if not doc_id or not file:
             return
+        out = checkout.of(s.repository_root, file)       # taken out for editing: it comes back before it is
+        if out:                                          # copied for the approvers, so only one copy exists
+            checkout_return(out)
         try:
             put = sp().review_put(local_path=file, document_id=doc_id)
             link = share_link(doc_id, put["name"], approvers, edit=True, subject=f"{doc_id} {d.get('title') or ''}")
@@ -1405,10 +1408,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return
         doc_id = d.get("documentId") or ""
         kept, file = REVIEW.pop(doc_id, None), submitted_file(d)
-        if not kept or not file:
+        if not file:
             return
+        # after a restart the DMS no longer remembers the copy, but SharePoint still holds it: the name of the
+        # file says where it is, so it still comes back and is still removed - no copy is ever left behind
+        name = (kept or {}).get("name") or os.path.basename(file)
         try:
-            data = sp().review_get(document_id=doc_id, name=kept["name"])
+            data = sp().review_get(document_id=doc_id, name=name)
             if data:
                 with open(file, "wb") as f:
                     f.write(data)
