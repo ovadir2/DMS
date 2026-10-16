@@ -1253,7 +1253,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 return False
             there = datetime.fromisoformat(when.replace("Z", "+00:00"))
             here = datetime.fromtimestamp(os.path.getmtime(target), timezone.utc)
-            if there <= here + timedelta(seconds=2):                 # nobody wrote it there since it came from here
+            # the clock of SharePoint is not the clock of this server, and writing the copy takes a moment:
+            # a minute of slack, so only a real edit counts as newer
+            if there <= here + timedelta(seconds=120):
                 return False
             data = sp().review_get(document_id=key, name=name)
             if not data:
@@ -1363,6 +1365,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             checkout_return(out)
         try:
             put = sp().review_put(local_path=file, document_id=doc_id)
+            os.utime(file, None)    # the copy was written in SharePoint just now: from here on, "newer there"
             link = share_link(doc_id, put["name"], approvers, edit=True, subject=f"{doc_id} {d.get('title') or ''}")
             view = share_link(doc_id, put["name"], [], edit=False) if link else None   # the same copy, to read
             REVIEW[doc_id] = {"name": put["name"], "url": link or put["url"], "viewUrl": view}

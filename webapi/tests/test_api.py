@@ -2688,3 +2688,29 @@ def test_the_owner_is_counted_what_came_back_to_them(tmp_path):
     assert c.get("/api/my-workflows/waiting").json()["returned"] == 1      # back with its owner
     c.post(f"/api/documents/{d['id']}/submit", json={"approvers": [USER]})
     assert c.get("/api/my-workflows/waiting").json()["returned"] == 0      # submitted again
+
+
+def test_a_fresh_copy_in_sharepoint_is_not_a_change(tmp_path):
+    """The copy is written in SharePoint after the file was last written here, so it is always 'newer there'.
+    That is not somebody's edit: a document nobody touched is approved normally, also when it is submitted
+    again after a return."""
+    from datetime import datetime, timedelta, timezone
+
+    from dms_api import file_service
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    f = q / "Quote.docx"
+    f.write_bytes(b"as submitted")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    sp = _review_sp(s, store)
+    just_now = (datetime.now(timezone.utc) + timedelta(seconds=20)).isoformat().replace("+00:00", "Z")
+    sp.review_info = lambda *, document_id, name: {"modified": just_now, "length": 12}    # as SharePoint answers
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(f), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)
+    c.get("/api/approvals")                                            # the row is drawn: nothing came back
+    assert c.post(f"/api/approvals/{d['id']}", json={"approve": True}).status_code == 200
