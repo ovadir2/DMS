@@ -36,7 +36,14 @@ if (-not (Get-Module -ListAvailable Microsoft.Graph.Authentication)) {
 }
 Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
 
-if (-not (Get-MgContext)) { Connect-MgGraph -Scopes 'Sites.FullControl.All' -NoWelcome }
+if (-not (Get-MgContext)) {
+    # a server has no browser to sign in with: fall back to the code you type on your own PC
+    try { Connect-MgGraph -Scopes 'Sites.FullControl.All' -NoWelcome -ErrorAction Stop }
+    catch {
+        Write-Host 'No browser here - signing in with a device code instead.' -ForegroundColor Yellow
+        Connect-MgGraph -Scopes 'Sites.FullControl.All' -NoWelcome -UseDeviceAuthentication
+    }
+}
 Write-Host ("Signed in as {0}" -f (Get-MgContext).Account) -ForegroundColor DarkGray
 
 foreach ($url in $Site) {
