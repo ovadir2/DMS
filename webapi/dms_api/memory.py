@@ -61,7 +61,8 @@ class MemorySharePoint:
     def attach(self, audit_id: int, name: str, path: str) -> None:
         self.attachments = getattr(self, "attachments", []) + [{"auditId": audit_id, "name": name, "path": path}]
 
-    def share_with_guest(self, *, local_paths, folder, email, subject, message, shortcut_for=None, shortcut_name=None) -> dict:
+    def share_with_guest(self, *, local_paths, folder, email, subject, message, shortcut_for=None, shortcut_name=None,
+                         request_ids=None) -> dict:
         urls = [f"memory://{self.s.ex_library}/{folder}/{p.replace(chr(92), '/').rsplit('/', 1)[-1]}" for p in local_paths]
         now = datetime.now(timezone.utc).isoformat()
         self.shares = [x for x in getattr(self, "shares", []) if x["url"] not in urls] + [

@@ -349,7 +349,8 @@ class SharePoint:
 
     # ------------------------------------------------------------------ share with a customer (Large File Exchange site)
     def share_with_guest(self, *, local_paths: list[str], folder: str, email: str, subject: str, message: str,
-                         shortcut_for: str | None = None, shortcut_name: str | None = None) -> dict:
+                         shortcut_for: str | None = None, shortcut_name: str | None = None,
+                         request_ids: dict[str, str] | None = None) -> dict:
         """Copy the files straight into the customer folder on the Exchange site (<library>/<folder>/, e.g.
         Outbound/Customer_A) and share that folder with one external person: view only, a specific-people
         invitation sent by SharePoint (B2B guest, no anonymous link). The customer sees every file ever shared
@@ -373,7 +374,16 @@ class SharePoint:
             with open(local_path, "rb") as f:
                 up = self._call("POST", f"{ex}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(current)}')"
                                         f"/Files/AddUsingPath(DecodedUrl='{q(name)}',Overwrite=true)", data=f.read())
-            urls.append(self.host + (up.get("ServerRelativeUrl") or f"{current}/{name}"))
+            landed = up.get("ServerRelativeUrl") or f"{current}/{name}"
+            urls.append(self.host + landed)
+            # the Exchange library asks every file which request it belongs to: for the DMS that is the document
+            request = (request_ids or {}).get(name)
+            if request:
+                try:
+                    self._call("POST", f"{ex}/_api/web/GetFileByServerRelativePath(DecodedUrl='{q(landed)}')/ListItemAllFields",
+                               json={"RequestId": request[:255]}, headers={"X-HTTP-Method": "MERGE", "IF-MATCH": "*"})
+                except SharePointError as e:   # the column is the library's business, not the share's
+                    logger.info("The request of %s could not be written: %s", name, e)
         folder_url = self.host + quote(current, safe="/")
         person = {"Key": email, "DisplayText": email, "IsResolved": True, "Description": email, "EntityType": "",
                   "EntityData": {"SPUserID": email, "Email": email, "IsBlocked": "False", "PrincipalType": "UNVALIDATED_EMAIL_ADDRESS",

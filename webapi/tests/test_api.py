@@ -1180,6 +1180,8 @@ def test_share_payloads():
             self.calls.append((method, url, json, data))
             if "Files/AddUsingPath" in url:
                 return Resp({"ServerRelativeUrl": "/sites/LargeFileExchange-TEST/TemporaryUploads/Outbound/DMS-1_Rev01/Q.xlsx"})
+            if url.endswith("/ListItemAllFields"):
+                return Resp({})
             if url.endswith("SP.Web.ShareObject"):
                 return Resp({"StatusCode": 0, "ErrorMessage": None})
             if "folders/AddUsingPath" in url and url.endswith("/Outbound')"):     # exists; message in Hebrew
@@ -1196,7 +1198,8 @@ def test_share_payloads():
     sess = Sess()
     sp = SharePoint(s, sess)
     sp._access_token = lambda: "t"
-    r = sp.share_with_guest(local_paths=[f], folder="Outbound/Customer A", email="edssrom@gmail.com", subject="S", message="M")
+    r = sp.share_with_guest(local_paths=[f], folder="Outbound/Customer A", email="edssrom@gmail.com", subject="S", message="M",
+                            request_ids={"Q.xlsx": "DMS-7 Rev 03"})
     assert r["url"] == "https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST/TemporaryUploads/Outbound/DMS-1_Rev01/Q.xlsx"
     assert r["folderUrl"] == "https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST/TemporaryUploads/Outbound/Customer%20A"
     share = sess.calls[-1][2]
@@ -1204,6 +1207,8 @@ def test_share_payloads():
     assert share["roleValue"] == "role:1073741826" and share["sendEmail"] is True and share["includeAnonymousLinkInEmail"] is False
     assert j.loads(share["peoplePickerInput"])[0]["Key"] == "edssrom@gmail.com"
     assert [c[3] for c in sess.calls if "Files/AddUsingPath" in c[1]] == [b"x"]       # the file bytes were uploaded
+    said = next(c for c in sess.calls if c[1].endswith("/ListItemAllFields"))
+    assert said[2] == {"RequestId": "DMS-7 Rev 03"}                                  # the library's required column
 
 
 def test_share_invites_the_guest_through_graph():

@@ -2208,6 +2208,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         message = req.message.strip() or (f"RH shares with you: {titles}. The link is personal and opens the "
                                           f"{customer} folder for viewing.")
         r = sp().share_with_guest(local_paths=[p for _, p, _ in docs], folder=f"{s.ex_folder}/{customer}", email=email,
+                                  request_ids={os.path.basename(p): f"{d.get('documentId') or d['id']} Rev {rev}"
+                                               for d, p, rev in docs},
                                   subject=f"RH - {customer}: {titles}"[:250], message=message,
                                   shortcut_for=user.email, shortcut_name=f"DMS_{customer}" if s.ex_shortcut else None)
         for (d, _, rev), url in zip(docs, r["urls"]):
