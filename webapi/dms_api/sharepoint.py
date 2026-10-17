@@ -655,6 +655,25 @@ class SharePoint:
             raise SharePointError(f"The library {self.s.ex_library} was not found on the Exchange site")
         return drive
 
+    def _graph_guest(self, *, email: str, where: str, message: str) -> tuple[str, bool]:
+        """The person as a guest of the company, created if this is the first time. Sharing cannot name somebody
+        the directory has never heard of when the caller is an application signed in with a certificate, so the
+        DMS asks Entra for the guest first (Graph User.Invite.All) and only then grants the folder to that guest.
+        Entra also sends the person the invitation mail, which an application cannot send itself. Returns who
+        they are in the directory, and whether the mail went out."""
+        body = {"invitedUserEmailAddress": email, "inviteRedirectUrl": where, "sendInvitationMessage": True,
+                "invitedUserMessageInfo": {"customizedMessageBody": message[:1000]}}
+        try:
+            r = self._graph("POST", "invitations", json=body)
+        except SharePointError as e:
+            if "Request_BadRequest" not in str(e) and "sendInvitationMessage" not in str(e):
+                raise
+            logger.info("Entra would not send the invitation to %s, inviting without the mail: %s", email, e)
+            r = self._graph("POST", "invitations", json={"invitedUserEmailAddress": email, "inviteRedirectUrl": where,
+                                                         "sendInvitationMessage": False})
+            return ((r.get("invitedUser") or {}).get("id") or "", False)
+        return ((r.get("invitedUser") or {}).get("id") or "", True)
+
     def _graph_invite(self, *, folder: str, email: str, message: str) -> bool:
         """Invite one person outside the company to read that folder, through Microsoft Graph. SharePoint's own
         sharing cannot resolve an address it has never seen when the caller is an application signed in with a
@@ -663,18 +682,13 @@ class SharePoint:
         an application signing in with a certificate is nobody, so it often has no one to send the mail from, and
         then the access is granted all the same and the caller passes the link on itself."""
         drive = self._ex_drive()
-        item = self._graph("GET", f"drives/{drive['id']}/root:/{quote(folder.strip('/'))}?$select=id")
-        body = {"recipients": [{"email": email}], "roles": ["read"], "requireSignIn": True}
-        try:
-            self._graph("POST", f"drives/{drive['id']}/items/{item['id']}/invite",
-                        json=dict(body, message=message[:2000], sendInvitation=True))
-            return True
-        except SharePointError as e:
-            if "sharingFailed" not in str(e):
-                raise
-            logger.info("SharePoint would not send the invitation to %s, granting without it: %s", email, e)
-        self._graph("POST", f"drives/{drive['id']}/items/{item['id']}/invite", json=dict(body, sendInvitation=False))
-        return False
+        item = self._graph("GET", f"drives/{drive['id']}/root:/{quote(folder.strip('/'))}?$select=id,webUrl")
+        where = (item.get("webUrl") or "").strip() or self.s.ex_site_url
+        guest, emailed = self._graph_guest(email=email, where=where, message=message)
+        who = {"objectId": guest} if guest else {"email": email}
+        self._graph("POST", f"drives/{drive['id']}/items/{item['id']}/invite",
+                    json={"recipients": [who], "roles": ["read"], "requireSignIn": True, "sendInvitation": False})
+        return emailed
 
     def onedrive_shortcut(self, folder: str, name: str, user_email: str | None) -> str:
         """'Add shortcut to My files': a shortcut named `name`, inside the OneDrive folder DMS_EX_SHORTCUT_FOLDER

@@ -1223,8 +1223,10 @@ def test_share_invites_the_guest_through_graph():
             if url.endswith("/drives?$select=id,name,webUrl"):
                 return Resp({"value": [{"id": "drv", "name": "TemporaryUploads",
                                         "webUrl": "https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST/TemporaryUploads"}]})
-            if "root:/" in url and url.endswith("?$select=id"):
-                return Resp({"id": "itm"})
+            if "root:/" in url and "$select=id" in url:
+                return Resp({"id": "itm", "webUrl": "https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST/x"})
+            if url.endswith("/invitations"):
+                return Resp({"invitedUser": {"id": "guest-1"}})
             return Resp({})
     import tempfile, os
     f = os.path.join(tempfile.mkdtemp(), "Q.xlsx")
@@ -1236,15 +1238,17 @@ def test_share_invites_the_guest_through_graph():
     sp._access_token = lambda: "t"
     sp._graph_token = lambda: "g"
     sp.share_with_guest(local_paths=[f], folder="Outbound/C", email="someone@gmail.com", subject="S", message="M")
+    ask = next(c for c in sess.calls if c[1].endswith("/invitations"))
+    assert ask[2]["invitedUserEmailAddress"] == "someone@gmail.com" and ask[2]["sendInvitationMessage"] is True
     invite = next(c for c in sess.calls if c[1].endswith("/items/itm/invite"))
-    assert invite[2]["recipients"] == [{"email": "someone@gmail.com"}]
-    assert invite[2]["roles"] == ["read"] and invite[2]["requireSignIn"] is True and invite[2]["sendInvitation"] is True
+    assert invite[2]["recipients"] == [{"objectId": "guest-1"}]                   # the guest Entra just created
+    assert invite[2]["roles"] == ["read"] and invite[2]["requireSignIn"] is True
     assert not [c for c in sess.calls if c[1].endswith("SP.Web.ShareObject")]      # SharePoint was not asked at all
 
 
 def test_share_grants_even_when_no_invitation_can_be_sent():
-    """An application signing in with a certificate is nobody, so SharePoint often has no one to send the
-    invitation from. The access is granted all the same, and the DMS says to pass the link on."""
+    """Where Entra will not send the guest the mail, the guest is created all the same and gets the folder;
+    the DMS then says to pass the link on."""
     from tests.test_sharepoint import Resp
     from dms_api.sharepoint import SharePoint
 
@@ -1259,10 +1263,12 @@ def test_share_grants_even_when_no_invitation_can_be_sent():
             if url.endswith("/drives?$select=id,name,webUrl"):
                 return Resp({"value": [{"id": "drv", "name": "TemporaryUploads",
                                         "webUrl": "https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST/TemporaryUploads"}]})
-            if "root:/" in url and url.endswith("?$select=id"):
-                return Resp({"id": "itm"})
-            if url.endswith("/invite") and (json or {}).get("sendInvitation"):
-                return Resp({"error": {"code": "sharingFailed", "message": "There was a problem sharing"}}, status=400)
+            if "root:/" in url and "$select=id" in url:
+                return Resp({"id": "itm", "webUrl": "https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST/x"})
+            if url.endswith("/invitations"):                                      # Entra will not send the mail
+                if (json or {}).get("sendInvitationMessage"):
+                    return Resp({"error": {"code": "Request_BadRequest", "message": "sendInvitationMessage"}}, status=400)
+                return Resp({"invitedUser": {"id": "guest-1"}})
             return Resp({})
     import tempfile, os
     f = os.path.join(tempfile.mkdtemp(), "Q.xlsx")
@@ -1275,7 +1281,7 @@ def test_share_grants_even_when_no_invitation_can_be_sent():
     sp._graph_token = lambda: "g"
     r = sp.share_with_guest(local_paths=[f], folder="Outbound/C", email="someone@gmail.com", subject="S", message="M")
     assert r["emailed"] is False                                                  # the caller tells the person
-    assert [c[2]["sendInvitation"] for c in sess.calls if c[1].endswith("/invite")] == [True, False]
+    assert [c[2]["sendInvitationMessage"] for c in sess.calls if c[1].endswith("/invitations")] == [True, False]
     assert not [c for c in sess.calls if c[1].endswith("SP.Web.ShareObject")]     # the access was granted by Graph
 
 
