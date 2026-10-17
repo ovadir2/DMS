@@ -684,7 +684,8 @@ class SharePoint:
         drive = self._ex_drive()
         item = self._graph("GET", f"drives/{drive['id']}/root:/{quote(folder.strip('/'))}?$select=id,webUrl")
         where = (item.get("webUrl") or "").strip() or self.s.ex_site_url
-        guest, emailed = self._graph_guest(email=email, where=where, message=message)
+        # the invitation names the organization, not the folder: the link goes in the message, or the person has none
+        guest, emailed = self._graph_guest(email=email, where=where, message=f"{message}\n\n{where}".strip())
         who = {"objectId": guest} if guest else {"email": email}
         self._graph("POST", f"drives/{drive['id']}/items/{item['id']}/invite",
                     json={"recipients": [who], "roles": ["read"], "requireSignIn": True, "sendInvitation": False})
