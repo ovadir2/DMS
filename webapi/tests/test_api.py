@@ -1302,6 +1302,9 @@ def test_share_several_files_outside_customers(tmp_path):
     assert [f["name"] for f in c.get("/api/exchange/files", params={"name": "new customer"}).json()]                 # what is there now
     log = tmp_path / "Root" / "02_Customers" / "New Customer" / "Shared" / "DMS-Shared-Log.csv"
     assert log.is_file()                              # a customer shared with for the first time gets their folder and log
+    import stat as _stat
+    assert not log.stat().st_mode & _stat.S_IWRITE     # and it is read only, like every other share log
+    assert "x@cust.com" in log.read_text(encoding="utf-8-sig")
     r = c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "customer_a", "documentIds": [d["id"]]})
     assert r.status_code == 200, r.text
     assert r.json()["customer"] == "Customer_A" and len(r.json()["documents"]) == 2

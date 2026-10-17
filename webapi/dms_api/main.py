@@ -2200,7 +2200,6 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if not customer:
             raise HTTPException(400, "Write the potential employee's name" if hr else "Choose the customer (a folder under " + s.customers_folder + ")")
         kind = "potential employee" if hr else "customer"
-        has_log = hr or customer.lower() in names
         names = [os.path.basename(p) for _, p, _ in docs]
         if len({n.lower() for n in names}) != len(names):
             raise HTTPException(409, "Two of the files have the same name; share them separately")
@@ -2221,14 +2220,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         until = (datetime.now(timezone.utc) + timedelta(days=s.ex_days)).strftime("%Y-%m-%d") if s.ex_days > 0 else ""
         log_error = None
         try:
-            if hr and not has_log:                              # no HR area: Control Audit only
-                raise LookupError
             shared_log.append(s, customer, [{"Action": "Shared", "Shared by": user.email, "Shared with": f"{customer}: {email}" if hr else email,
                                              "Document ID": d.get("documentId"), "Title": d.get("title"), "Revision": rev,
                                              "File": os.path.basename(p), "Exchange link": url, "Available until": until}
                                             for (d, p, rev), url in zip(docs, r["urls"])], hr=hr)
-        except LookupError:
-            pass
         except OSError as e:
             log_error = str(e)
             logger.warning("Share log of %s: %s", customer, e)
@@ -2238,7 +2233,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 "documents": [{"documentId": d.get("documentId"), "revision": rev} for d, _, rev in docs],
                 "shortcut": r.get("shortcut"), "shortcutError": r.get("shortcutError"), "days": s.ex_days,
                 "emailed": r.get("emailed", True),
-                "log": os.path.relpath(shared_log.path_for(s, customer), s.repository_root) if s.shared_log and not log_error else None,
+                "log": os.path.relpath(shared_log.path_for(s, customer, hr), s.repository_root) if s.shared_log and not log_error else None,
                 "logError": log_error}
 
     # ------------------------------------------------------------------ DMS First loading (super users)
