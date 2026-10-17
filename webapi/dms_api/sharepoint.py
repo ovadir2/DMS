@@ -379,13 +379,19 @@ class SharePoint:
                   "EntityData": {"SPUserID": email, "Email": email, "IsBlocked": "False", "PrincipalType": "UNVALIDATED_EMAIL_ADDRESS",
                                  "AccountName": email, "SIPAddress": email},
                   "MultipleMatches": [], "ProviderName": "", "ProviderDisplayName": ""}
-        r = self._call("POST", f"{ex}/_api/SP.Web.ShareObject", json={
-            "url": folder_url, "peoplePickerInput": json_dumps([person]), "roleValue": "role:1073741826", "groupId": 0,
-            "propagateAcl": False, "sendEmail": True, "includeAnonymousLinkInEmail": False,
-            "emailSubject": subject, "emailBody": message, "useSimplifiedRoles": True})
-        if r.get("StatusCode") not in (None, 0) or r.get("ErrorMessage"):
-            raise SharePointError(f"Sharing refused: {r.get('ErrorMessage') or r.get('StatusCode')} "
-                                  "(check external sharing on the Exchange site and its allowed guest domains)")
+        try:
+            self._graph_invite(folder=folder, email=email, message=message)   # the DMS account's own way of inviting
+        except Exception as e:  # noqa: BLE001 - whatever Graph could not do, SharePoint is asked next
+            graph_said = str(e)
+            logger.info("No guest invitation through Graph for %s: %s", email, graph_said)
+            r = self._call("POST", f"{ex}/_api/SP.Web.ShareObject", json={
+                "url": folder_url, "peoplePickerInput": json_dumps([person]), "roleValue": "role:1073741826", "groupId": 0,
+                "propagateAcl": False, "sendEmail": True, "includeAnonymousLinkInEmail": False,
+                "emailSubject": subject, "emailBody": message, "useSimplifiedRoles": True})
+            if r.get("StatusCode") not in (None, 0) or r.get("ErrorMessage"):
+                raise SharePointError(f"Sharing refused: {r.get('ErrorMessage') or r.get('StatusCode')} "
+                                      f"(check external sharing on the Exchange site and its allowed guest domains) "
+                                      f"| Graph: {graph_said}") from None
         out = {"urls": urls, "url": urls[0] if urls else folder_url, "folderUrl": folder_url, "shortcut": None, "shortcutError": None}
         if shortcut_name:
             try:
@@ -636,11 +642,8 @@ class SharePoint:
             raise SharePointError(f"Graph {method} {path.split('?')[0]} -> {r.status_code}: {r.text[:300]}")
         return r.json() if r.content else {}
 
-    def onedrive_shortcut(self, folder: str, name: str, user_email: str | None) -> str:
-        """'Add shortcut to My files': a shortcut named `name`, inside the OneDrive folder DMS_EX_SHORTCUT_FOLDER
-        (created if missing), to the folder <library>/<folder> on the Exchange site. A user whose OneDrive was
-        never set up gets it set up (it takes a few minutes; the shortcut is added on the next share).
-        Already there -> kept. Returns where the shortcut is."""
+    def _ex_drive(self) -> dict:
+        """The document library of the Large File Exchange site, as Graph sees it."""
         u = urlparse(self.s.ex_site_url)
         drives = self._graph("GET", f"sites/{u.netloc}:{u.path.rstrip('/')}:/drives?$select=id,name,webUrl").get("value", [])
         lib = self.s.ex_library.lower()
@@ -648,6 +651,25 @@ class SharePoint:
                       or (d.get("name") or "").lower() == lib), None)
         if not drive:
             raise SharePointError(f"The library {self.s.ex_library} was not found on the Exchange site")
+        return drive
+
+    def _graph_invite(self, *, folder: str, email: str, message: str) -> None:
+        """Invite one person outside the company to read that folder, through Microsoft Graph. SharePoint's own
+        sharing cannot resolve an address it has never seen when the caller is an application signed in with a
+        certificate ("the user could not be identified"); Graph creates the guest and sends the invitation for a
+        folder the DMS may write, which is what it has on the Exchange site."""
+        drive = self._ex_drive()
+        item = self._graph("GET", f"drives/{drive['id']}/root:/{quote(folder.strip('/'))}?$select=id")
+        self._graph("POST", f"drives/{drive['id']}/items/{item['id']}/invite",
+                    json={"recipients": [{"email": email}], "message": message[:2000], "roles": ["read"],
+                          "requireSignIn": True, "sendInvitation": True, "retainInheritedPermissions": False})
+
+    def onedrive_shortcut(self, folder: str, name: str, user_email: str | None) -> str:
+        """'Add shortcut to My files': a shortcut named `name`, inside the OneDrive folder DMS_EX_SHORTCUT_FOLDER
+        (created if missing), to the folder <library>/<folder> on the Exchange site. A user whose OneDrive was
+        never set up gets it set up (it takes a few minutes; the shortcut is added on the next share).
+        Already there -> kept. Returns where the shortcut is."""
+        drive = self._ex_drive()
         item = self._graph("GET", f"drives/{drive['id']}/root:/{quote(folder.strip('/'))}?$select=id")
         me = "me/drive" if self.s.sp_auth == "interactive" or not user_email else f"users/{quote(user_email)}/drive"
         try:

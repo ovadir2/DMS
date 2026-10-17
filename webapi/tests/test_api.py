@@ -1206,6 +1206,42 @@ def test_share_payloads():
     assert [c[3] for c in sess.calls if "Files/AddUsingPath" in c[1]] == [b"x"]       # the file bytes were uploaded
 
 
+def test_share_invites_the_guest_through_graph():
+    """SharePoint's own sharing cannot identify an address it has never seen when the DMS signs in with a
+    certificate; Graph creates the guest instead, and SharePoint is only asked when Graph cannot."""
+    from tests.test_sharepoint import Resp
+    from dms_api.sharepoint import SharePoint
+
+    class Sess:
+        def __init__(self):
+            self.calls = []
+
+        def request(self, method, url, json=None, data=None, headers=None, timeout=None):
+            self.calls.append((method, url, json, data))
+            if "Files/AddUsingPath" in url:
+                return Resp({"ServerRelativeUrl": "/sites/LargeFileExchange-TEST/TemporaryUploads/Outbound/C/Q.xlsx"})
+            if url.endswith("/drives?$select=id,name,webUrl"):
+                return Resp({"value": [{"id": "drv", "name": "TemporaryUploads",
+                                        "webUrl": "https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST/TemporaryUploads"}]})
+            if "root:/" in url and url.endswith("?$select=id"):
+                return Resp({"id": "itm"})
+            return Resp({})
+    import tempfile, os
+    f = os.path.join(tempfile.mkdtemp(), "Q.xlsx")
+    open(f, "wb").write(b"x")
+    s = Settings(site_url="https://rhisrael.sharepoint.com/sites/DocumentControl-TEST",
+                 ex_site_url="https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST")
+    sess = Sess()
+    sp = SharePoint(s, sess)
+    sp._access_token = lambda: "t"
+    sp._graph_token = lambda: "g"
+    sp.share_with_guest(local_paths=[f], folder="Outbound/C", email="someone@gmail.com", subject="S", message="M")
+    invite = next(c for c in sess.calls if c[1].endswith("/items/itm/invite"))
+    assert invite[2]["recipients"] == [{"email": "someone@gmail.com"}]
+    assert invite[2]["roles"] == ["read"] and invite[2]["requireSignIn"] is True and invite[2]["sendInvitation"] is True
+    assert not [c for c in sess.calls if c[1].endswith("SP.Web.ShareObject")]      # SharePoint was not asked at all
+
+
 def test_share_several_files_outside_customers(tmp_path):
     c, sp, s, q, d, fs = _approved_env(tmp_path)
     other = tmp_path / "Root" / "01_Company" / "QA"
