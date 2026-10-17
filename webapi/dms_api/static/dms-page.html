@@ -1132,9 +1132,10 @@ async function shareDialog(id, pre = []) {
       const x = await api(`/api/documents/${id}/share`, { method:'POST', body:JSON.stringify({ email: r.form.email.value.trim(), message: r.form.message.value,
         customer: recipient(), documentIds: ids }) });
       $('#dlg').close();
-      alert(`${T.shared} ${x.email} - ${x.customer} (${x.documents.length} ${T.shareFiles})\n${x.url}` + (x.days ? `\n${T.shareDays.replace('{n}', x.days)}` : '') + (x.log ? `\n${T.shareLog}: ${x.log}` : '') + (x.logError ? `\n${T.shareLog}: ${x.logError}` : '') +
-        (x.shortcut ? `\n${T.shareShortcut.replace('{name}', x.shortcut)}` : '') + (x.shortcutError ? `\n${T.shortcutFail}: ${x.shortcutError}` : '') +
-        (x.emailed === false ? `\n\n${T.noInvite}\n${x.url}` : ''));
+      // the short answer: it is done, and where. What did not matter to the person goes to the console
+      if (x.logError || x.shortcutError) console.warn('share', x.logError || '', x.shortcutError || '');
+      alert(`${T.shared} ${x.email} - ${x.customer} (${x.documents.length} ${T.shareFiles})\n${x.url}` +
+        (x.emailed === false ? `\n\n${T.noInvite}` : ''));
       render(); return;
     } catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); r = await again(); }
   }
