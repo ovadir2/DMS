@@ -47,9 +47,16 @@ HR_FOLDER = ("01_General", "HR")                  # the HR area: its Shared fold
 
 
 def path_for(s: Settings, customer: str, hr: bool = False) -> str | None:
+    """The log of that customer, under their folder. A customer with no folder of their own (chosen as "other" in
+    the dialog) is logged in one log for all of them, under the customers folder itself; the row says who they are."""
     if not s.shared_log:
         return None
-    base = os.path.join(s.repository_root, *HR_FOLDER) if hr else os.path.join(s.repository_root, s.customers_folder, customer)
+    if hr:
+        base = os.path.join(s.repository_root, *HR_FOLDER)
+    else:
+        base = os.path.join(s.repository_root, s.customers_folder, customer)
+        if customer and not os.path.isdir(base):
+            base = os.path.join(s.repository_root, s.customers_folder)
     return os.path.join(base, *s.shared_log.replace("\\", "/").split("/"))
 
 
@@ -64,13 +71,12 @@ def hr_has(s: Settings, name: str) -> bool:
 
 
 def append(s: Settings, customer: str, rows: list[dict], hr: bool = False) -> str | None:
-    """Append rows (keys as HEADER) to the customer's log (hr: the HR log); creates the customer folder (or the HR
-    area), the Shared folder and the file if missing, so a first share is logged and protected like every other."""
+    """Append rows (keys as HEADER) to the customer's log (hr: the HR log); creates the Shared folder and the
+    file if missing, so a first share is logged and protected like every other."""
     p = path_for(s, customer, hr)
     if not p or not rows:
         return None
-    folder = os.path.join(s.repository_root, *HR_FOLDER) if hr else os.path.join(s.repository_root, s.customers_folder, customer)
-    os.makedirs(folder, exist_ok=True)                # shared with for the first time: the folder is made for them
+    os.makedirs(os.path.dirname(p), exist_ok=True)    # the Shared folder, made on the first share
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
     with _lock:

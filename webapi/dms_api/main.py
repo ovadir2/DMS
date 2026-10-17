@@ -2220,7 +2220,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         until = (datetime.now(timezone.utc) + timedelta(days=s.ex_days)).strftime("%Y-%m-%d") if s.ex_days > 0 else ""
         log_error = None
         try:
-            shared_log.append(s, customer, [{"Action": "Shared", "Shared by": user.email, "Shared with": f"{customer}: {email}" if hr else email,
+            known = not hr and os.path.isdir(os.path.join(s.repository_root, s.customers_folder, customer))
+            shared_log.append(s, customer, [{"Action": "Shared", "Shared by": user.email,
+                                             "Shared with": email if known else f"{customer}: {email}",
                                              "Document ID": d.get("documentId"), "Title": d.get("title"), "Revision": rev,
                                              "File": os.path.basename(p), "Exchange link": url, "Available until": until}
                                             for (d, p, rev), url in zip(docs, r["urls"])], hr=hr)
