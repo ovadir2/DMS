@@ -1242,6 +1242,43 @@ def test_share_invites_the_guest_through_graph():
     assert not [c for c in sess.calls if c[1].endswith("SP.Web.ShareObject")]      # SharePoint was not asked at all
 
 
+def test_share_grants_even_when_no_invitation_can_be_sent():
+    """An application signing in with a certificate is nobody, so SharePoint often has no one to send the
+    invitation from. The access is granted all the same, and the DMS says to pass the link on."""
+    from tests.test_sharepoint import Resp
+    from dms_api.sharepoint import SharePoint
+
+    class Sess:
+        def __init__(self):
+            self.calls = []
+
+        def request(self, method, url, json=None, data=None, headers=None, timeout=None):
+            self.calls.append((method, url, json, data))
+            if "Files/AddUsingPath" in url:
+                return Resp({"ServerRelativeUrl": "/sites/LargeFileExchange-TEST/TemporaryUploads/Outbound/C/Q.xlsx"})
+            if url.endswith("/drives?$select=id,name,webUrl"):
+                return Resp({"value": [{"id": "drv", "name": "TemporaryUploads",
+                                        "webUrl": "https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST/TemporaryUploads"}]})
+            if "root:/" in url and url.endswith("?$select=id"):
+                return Resp({"id": "itm"})
+            if url.endswith("/invite") and (json or {}).get("sendInvitation"):
+                return Resp({"error": {"code": "sharingFailed", "message": "There was a problem sharing"}}, status=400)
+            return Resp({})
+    import tempfile, os
+    f = os.path.join(tempfile.mkdtemp(), "Q.xlsx")
+    open(f, "wb").write(b"x")
+    s = Settings(site_url="https://rhisrael.sharepoint.com/sites/DocumentControl-TEST",
+                 ex_site_url="https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST")
+    sess = Sess()
+    sp = SharePoint(s, sess)
+    sp._access_token = lambda: "t"
+    sp._graph_token = lambda: "g"
+    r = sp.share_with_guest(local_paths=[f], folder="Outbound/C", email="someone@gmail.com", subject="S", message="M")
+    assert r["emailed"] is False                                                  # the caller tells the person
+    assert [c[2]["sendInvitation"] for c in sess.calls if c[1].endswith("/invite")] == [True, False]
+    assert not [c for c in sess.calls if c[1].endswith("SP.Web.ShareObject")]     # the access was granted by Graph
+
+
 def test_share_several_files_outside_customers(tmp_path):
     c, sp, s, q, d, fs = _approved_env(tmp_path)
     other = tmp_path / "Root" / "01_Company" / "QA"

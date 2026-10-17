@@ -379,8 +379,9 @@ class SharePoint:
                   "EntityData": {"SPUserID": email, "Email": email, "IsBlocked": "False", "PrincipalType": "UNVALIDATED_EMAIL_ADDRESS",
                                  "AccountName": email, "SIPAddress": email},
                   "MultipleMatches": [], "ProviderName": "", "ProviderDisplayName": ""}
+        emailed = True
         try:
-            self._graph_invite(folder=folder, email=email, message=message)   # the DMS account's own way of inviting
+            emailed = self._graph_invite(folder=folder, email=email, message=message)   # the DMS account's own way
         except Exception as e:  # noqa: BLE001 - whatever Graph could not do, SharePoint is asked next
             graph_said = str(e)
             logger.info("No guest invitation through Graph for %s: %s", email, graph_said)
@@ -392,7 +393,8 @@ class SharePoint:
                 raise SharePointError(f"Sharing refused: {r.get('ErrorMessage') or r.get('StatusCode')} "
                                       f"(check external sharing on the Exchange site and its allowed guest domains) "
                                       f"| Graph: {graph_said}") from None
-        out = {"urls": urls, "url": urls[0] if urls else folder_url, "folderUrl": folder_url, "shortcut": None, "shortcutError": None}
+        out = {"urls": urls, "url": urls[0] if urls else folder_url, "folderUrl": folder_url, "shortcut": None,
+               "shortcutError": None, "emailed": emailed}
         if shortcut_name:
             try:
                 out["shortcut"] = self.onedrive_shortcut(folder, shortcut_name, shortcut_for)
@@ -653,16 +655,26 @@ class SharePoint:
             raise SharePointError(f"The library {self.s.ex_library} was not found on the Exchange site")
         return drive
 
-    def _graph_invite(self, *, folder: str, email: str, message: str) -> None:
+    def _graph_invite(self, *, folder: str, email: str, message: str) -> bool:
         """Invite one person outside the company to read that folder, through Microsoft Graph. SharePoint's own
         sharing cannot resolve an address it has never seen when the caller is an application signed in with a
-        certificate ("the user could not be identified"); Graph creates the guest and sends the invitation for a
-        folder the DMS may write, which is what it has on the Exchange site."""
+        certificate ("the user could not be identified"); Graph creates the guest and grants it the folder the DMS
+        may write, which is what it has on the Exchange site. Returns whether SharePoint sent the person an email:
+        an application signing in with a certificate is nobody, so it often has no one to send the mail from, and
+        then the access is granted all the same and the caller passes the link on itself."""
         drive = self._ex_drive()
         item = self._graph("GET", f"drives/{drive['id']}/root:/{quote(folder.strip('/'))}?$select=id")
-        self._graph("POST", f"drives/{drive['id']}/items/{item['id']}/invite",
-                    json={"recipients": [{"email": email}], "message": message[:2000], "roles": ["read"],
-                          "requireSignIn": True, "sendInvitation": True, "retainInheritedPermissions": False})
+        body = {"recipients": [{"email": email}], "roles": ["read"], "requireSignIn": True}
+        try:
+            self._graph("POST", f"drives/{drive['id']}/items/{item['id']}/invite",
+                        json=dict(body, message=message[:2000], sendInvitation=True))
+            return True
+        except SharePointError as e:
+            if "sharingFailed" not in str(e):
+                raise
+            logger.info("SharePoint would not send the invitation to %s, granting without it: %s", email, e)
+        self._graph("POST", f"drives/{drive['id']}/items/{item['id']}/invite", json=dict(body, sendInvitation=False))
+        return False
 
     def onedrive_shortcut(self, folder: str, name: str, user_email: str | None) -> str:
         """'Add shortcut to My files': a shortcut named `name`, inside the OneDrive folder DMS_EX_SHORTCUT_FOLDER

@@ -2237,6 +2237,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return {"url": r["folderUrl"], "urls": r["urls"], "email": email, "customer": customer, "revision": docs[0][2],
                 "documents": [{"documentId": d.get("documentId"), "revision": rev} for d, _, rev in docs],
                 "shortcut": r.get("shortcut"), "shortcutError": r.get("shortcutError"), "days": s.ex_days,
+                "emailed": r.get("emailed", True),
                 "log": os.path.relpath(shared_log.path_for(s, customer), s.repository_root) if s.shared_log and not log_error else None,
                 "logError": log_error}
 
