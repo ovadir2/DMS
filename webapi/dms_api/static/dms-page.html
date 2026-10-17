@@ -1095,7 +1095,7 @@ async function shareDialog(id, pre = []) {
   let d, info;
   try {
     [d, info] = await Promise.all([api(`/api/documents/${id}`), api(`/api/documents/${id}/share-info`)]);
-  } catch (e) { note(`${T.err}: ${esc(e.message)}`, 'err'); return; }   // say why, never a button that does nothing
+  } catch (e) { alert(`${T.err}: ${e.message}`); return; }   // the dialog never opened: say it outside it
   const custOf = x => (x.customer || '').toLowerCase();
   const others = info.others.slice().sort((a, b) => (custOf(b) === custOf(info)) - (custOf(a) === custOf(info)) || String(a.title).localeCompare(String(b.title)));
   const opened = dialog(`${info.hr ? T.shareTitleHr : T.shareTitle}: ${d.documentId} - ${d.title}`,
