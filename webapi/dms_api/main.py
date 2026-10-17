@@ -2221,7 +2221,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         until = (datetime.now(timezone.utc) + timedelta(days=s.ex_days)).strftime("%Y-%m-%d") if s.ex_days > 0 else ""
         log_error = None
         try:
-            if not has_log:                                     # no folder under 02_Customers: Control Audit only
+            if hr and not has_log:                              # no HR area: Control Audit only
                 raise LookupError
             shared_log.append(s, customer, [{"Action": "Shared", "Shared by": user.email, "Shared with": f"{customer}: {email}" if hr else email,
                                              "Document ID": d.get("documentId"), "Title": d.get("title"), "Revision": rev,

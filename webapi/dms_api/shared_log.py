@@ -64,13 +64,17 @@ def hr_has(s: Settings, name: str) -> bool:
 
 
 def append(s: Settings, customer: str, rows: list[dict], hr: bool = False) -> str | None:
-    """Append rows (keys as HEADER) to the customer's log (hr: the HR log); creates the Shared folder and the file if missing."""
+    """Append rows (keys as HEADER) to the customer's log (hr: the HR log); creates the customer folder, the Shared
+    folder and the file if missing, so a customer shared with for the first time is logged like any other."""
     p = path_for(s, customer, hr)
     if not p or not rows:
         return None
     folder = os.path.join(s.repository_root, *HR_FOLDER) if hr else os.path.join(s.repository_root, s.customers_folder, customer)
     if not os.path.isdir(folder):
-        raise FileNotFoundError(f"The folder {folder} was not found")
+        if hr:                                        # the HR area is part of the repository: it is not invented here
+            raise FileNotFoundError(f"The folder {folder} was not found")
+        os.makedirs(folder, exist_ok=True)            # a customer shared with for the first time: give them their folder
+
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
     with _lock:
         os.makedirs(os.path.dirname(p), exist_ok=True)
