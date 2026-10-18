@@ -390,10 +390,17 @@ const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${
 function bridgeActions(f) {
   const name = f.name || f.path, co = f.checkedOut, out = [];
   if (TEXT_EXT.test(name)) return `<button type="button" class="link" data-tx="${esc(f.path)}">${f.canEdit ? '\u270E ' + T.editHere : T.open}</button>`;
+  if (co && co.mine && co.url && co.edit) {
+    out.push(`<a class="link" href="${esc(co.url)}" target="_blank" rel="noopener">\u270E ${T.openEditFile}</a>`);
+    out.push(`<button type="button" class="link" data-ckin="${esc(f.path)}">\u2713 ${T.doneEditing}</button>`);
+    return out.join('\n');
+  }
+  // a copy only looked at needs no "done" (the DMS clears it by itself), and it must not stand in the way of
+  // editing: whoever may change the document still gets "open to edit" beside the copy they are reading
   if (co && co.mine && co.url) {
-    out.push(`<a class="link" href="${esc(co.url)}" target="_blank" rel="noopener">${co.edit ? '\u270E ' + T.openEditFile : T.viewRo}</a>`);
-    if (co.edit) out.push(`<button type="button" class="link" data-ckin="${esc(f.path)}">\u2713 ${T.doneEditing}</button>`);
-    return out.join('\n');   // a copy only looked at needs no "done": the DMS clears it by itself
+    if (f.canEdit) out.push(`<button type="button" class="link" data-ckout="${esc(f.path)}">\u270E ${T.openEditFile}</button>`);
+    out.push(`<a class="link" href="${esc(co.url)}" target="_blank" rel="noopener">${T.viewRo}</a>`);
+    return out.join('\n');
   }
   if (co && !co.mine && co.edit) out.push(`<span class="muted small">\uD83D\uDD12 ${esc(T.outWith.replace('{who}', co.by || ''))}</span>`);
   else if (f.canEdit) out.push(`<button type="button" class="link" data-ckout="${esc(f.path)}">\u270E ${T.openEditFile}</button>`);
