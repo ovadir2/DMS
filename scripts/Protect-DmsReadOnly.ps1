@@ -1,24 +1,23 @@
 <#
 .SYNOPSIS
-  A released document cannot be changed by anybody but the DMS.
+  A released document can be read by whoever could read it before, and changed by nobody but the DMS.
 
 .DESCRIPTION
   The DMS refuses to open an approved document for editing, and marks its file read only. Neither stops
-  somebody who reaches the file server directly and has write permission on the folder: the read-only
-  attribute comes off with one click. This script closes that, on the file server itself.
+  somebody who reaches the file server directly and may write in the folder: the read-only attribute comes
+  off with one click. This closes that, on the file server itself.
 
-  In every Current_ReadOnly and Obsolete_ReadOnly folder under the repository it stops inheriting
-  permissions and grants:
-      the DMS account      Modify   (it is the only one that writes there)
-      SYSTEM, Administrators  Full  (backup, restore, IT)
-      everyone else        Read     (whoever the folder above already lets in - visibility does not change)
-  and it puts the read-only attribute back on every file in them.
+  In every Current_ReadOnly and Obsolete_ReadOnly folder under the repository it keeps the permissions the
+  folder already had - the AD groups that may see those documents, exactly as they are - and only takes the
+  writing away from them: each of them is left with Read and Execute. The DMS account keeps Modify, SYSTEM
+  and the administrators keep Full. Nobody is given access who did not have it, and nobody loses sight of a
+  document they could see: an HR folder stays as closed as it was.
 
-  Who may SEE a document does not change: that is still decided by the folders above, through AD.
+  The read-only attribute is put back on every file in those folders as well.
 
 .EXAMPLE
   .\Protect-DmsReadOnly.ps1 -Root E:\Shares -DmsAccount RH\dms_approval -WhatIf
-  Shows what it would change, and changes nothing.
+  Shows the folders and, for each, who is left with what. Changes nothing.
 
 .EXAMPLE
   .\Protect-DmsReadOnly.ps1 -Root E:\Shares -DmsAccount RH\dms_approval
@@ -33,6 +32,12 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath $Root)) { throw "The repository root $Root was not found" }
 
+# These keep what they have; everybody else is left with Read and Execute
+$keep = @($DmsAccount, 'NT AUTHORITY\SYSTEM', 'BUILTIN\Administrators')
+$read = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute
+$both = @([System.Security.AccessControl.InheritanceFlags]::ContainerInherit,
+          [System.Security.AccessControl.InheritanceFlags]::ObjectInherit)
+
 $targets = foreach ($name in $Folders) {
     Get-ChildItem -LiteralPath $Root -Directory -Recurse -Filter $name -ErrorAction SilentlyContinue
 }
@@ -42,19 +47,28 @@ Write-Host "$($targets.Count) folders under $Root" -ForegroundColor Cyan
 $changed = 0
 foreach ($folder in $targets) {
     $path = $folder.FullName
-    if ($PSCmdlet.ShouldProcess($path, 'read only for everyone but the DMS')) {
-        # /inheritance:r drops what the folder above gave, /grant:r replaces whatever that account had
-        $out = & icacls $path /inheritance:r `
-            /grant:r "$($DmsAccount):(OI)(CI)(M)" `
-            "*S-1-5-18:(OI)(CI)(F)" `
-            "*S-1-5-32-544:(OI)(CI)(F)" `
-            "*S-1-5-11:(OI)(CI)(RX)" 2>&1
-        if ($LASTEXITCODE) { Write-Warning "$path : $out"; continue }
+    $acl = Get-Acl -LiteralPath $path
+    $acl.SetAccessRuleProtection($true, $true)        # stop inheriting, but keep a copy of what was inherited
+    $who = @()
+    foreach ($rule in @($acl.Access)) {
+        $name = $rule.IdentityReference.Value
+        if ($keep -contains $name) { continue }
+        if ($rule.AccessControlType -ne 'Allow') { continue }        # a Deny stays exactly as it is
+        $null = $acl.RemoveAccessRule($rule)
+        $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $name, $read, $both, 'None', 'Allow')))
+        $who += $name
+    }
+    $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+        $DmsAccount, 'Modify', $both, 'None', 'Allow')))
+    Write-Verbose "$path : read only for $($who -join ', ')"
+    if ($PSCmdlet.ShouldProcess($path, "read only for $($who -join ', '); $DmsAccount keeps Modify")) {
+        Set-Acl -LiteralPath $path -AclObject $acl
         Get-ChildItem -LiteralPath $path -File -Recurse -ErrorAction SilentlyContinue |
             Where-Object { -not $_.IsReadOnly } |
-            ForEach-Object { $_.IsReadOnly = $true; Write-Verbose "read only: $($_.FullName)" }
+            ForEach-Object { $_.IsReadOnly = $true }
         $changed++
     }
 }
 Write-Host "Done: $changed folders" -ForegroundColor Green
-Write-Host "A released document is now read only on the file server too, not only in the DMS." -ForegroundColor Green
+Write-Host "Whoever could see these documents still can; only the DMS can change them." -ForegroundColor Green

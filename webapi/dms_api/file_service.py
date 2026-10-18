@@ -32,18 +32,36 @@ def _set_read_only(path: str, on: bool) -> None:
 
 
 def _protect(folder: str) -> None:
-    """A folder of released documents, as scripts\\Protect-DmsReadOnly.ps1 leaves it: the DMS account may write,
-    SYSTEM and the administrators have everything, everybody else reads. Who may SEE the documents does not
-    change - that is the folders above, through AD. Created here so a folder made later is protected too."""
+    """A folder of released documents: whoever could see the documents still can, and only the DMS may change
+    them. The permissions the folder inherited - the AD groups that may see this place - are kept exactly as
+    they are and left with Read and Execute; the account the DMS runs under keeps Modify, SYSTEM and the
+    administrators keep Full. Nobody is given access who did not have it, so an HR folder stays as closed as
+    it was. This is what scripts\\Protect-DmsReadOnly.ps1 does to the folders that already exist."""
     if os.name != "nt":
         return
+    ps = r"""
+$ErrorActionPreference = 'Stop'
+$path = $args[0]
+$keep = @((whoami), 'NT AUTHORITY\SYSTEM', 'BUILTIN\Administrators')
+$read = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute
+$both = @([System.Security.AccessControl.InheritanceFlags]::ContainerInherit,
+          [System.Security.AccessControl.InheritanceFlags]::ObjectInherit)
+$acl = Get-Acl -LiteralPath $path
+$acl.SetAccessRuleProtection($true, $true)
+foreach ($rule in @($acl.Access)) {
+  $name = $rule.IdentityReference.Value
+  if ($keep -contains $name -or $rule.AccessControlType -ne 'Allow') { continue }
+  $null = $acl.RemoveAccessRule($rule)
+  $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($name, $read, $both, 'None', 'Allow')))
+}
+$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule((whoami), 'Modify', $both, 'None', 'Allow')))
+Set-Acl -LiteralPath $path -AclObject $acl
+"""
     try:
-        me = subprocess.run(["whoami"], capture_output=True, text=True, timeout=10).stdout.strip()
-        r = subprocess.run(["icacls", folder, "/inheritance:r", "/grant:r", f"{me}:(OI)(CI)(M)",
-                            "*S-1-5-18:(OI)(CI)(F)", "*S-1-5-32-544:(OI)(CI)(F)", "*S-1-5-11:(OI)(CI)(RX)"],
-                           capture_output=True, text=True, timeout=30)
+        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps, "--", folder],
+                           capture_output=True, text=True, timeout=60)
         if r.returncode:
-            log.warning("Permissions of %s: %s", folder, (r.stdout + r.stderr).strip())
+            log.warning("Permissions of %s: %s", folder, (r.stdout + r.stderr).strip()[:300])
     except (OSError, subprocess.SubprocessError) as e:
         log.warning("Permissions of %s: %s", folder, e)
 
