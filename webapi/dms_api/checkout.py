@@ -56,10 +56,10 @@ def of(root: str, path: str, by: str = "") -> dict | None:
     return read(root).get(key_of(root, path, by))
 
 
-def add(root: str, path: str, *, by: str, name: str, url: str, edit: bool) -> dict:
+def add(root: str, path: str, *, by: str, name: str, url: str, edit: bool, library: str = "") -> dict:
     data = read(root)
     key = key_of(root, path, "" if edit else by)
-    entry = {"key": key, "path": path, "by": by, "name": name, "url": url, "edit": edit,
+    entry = {"key": key, "path": path, "by": by, "name": name, "url": url, "edit": edit, "library": library,
              "utc": datetime.now(timezone.utc).isoformat()}
     data[key] = entry
     write(root, data)

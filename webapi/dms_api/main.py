@@ -1513,9 +1513,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if held and (held.get("by") or "").lower() != user.email:
             raise HTTPException(409, f"{held.get('by')} has this document out for editing")
         mine = held if held and edit else checkout.of(s.repository_root, full, user.email)
-        if mine and bool(mine.get("edit")) == edit:
-            return {"path": full, "url": mine.get("url"), "edit": bool(mine.get("edit")), "by": mine.get("by")}
         key = checkout.key_of(s.repository_root, full, "" if edit else user.email)
+        lib = getattr(sp(), "library_of", lambda _: "")(key)
+        # a copy made before the DMS knew which library it belongs in is made again, in the right one
+        if mine and bool(mine.get("edit")) == edit and mine.get("library") == lib:
+            return {"path": full, "url": mine.get("url"), "edit": bool(mine.get("edit")), "by": mine.get("by")}
         try:
             put = sp().review_put(local_path=full, document_id=key, edit=edit)
             link = share_link(key, put["name"], [user.email], edit=edit, subject=os.path.basename(full))
@@ -1523,7 +1525,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             sp_error(f"Editing copy of {os.path.basename(full)}", e)
             raise HTTPException(502, f"The document could not be opened in SharePoint: {e}") from None
         entry = checkout.add(s.repository_root, full, by=user.email, name=put["name"],
-                             url=link or put["url"], edit=edit)
+                             url=link or put["url"], edit=edit, library=lib)
         log(user, "checkout" if edit else "view-sharepoint", full)
         return {"path": full, "url": entry["url"], "edit": edit, "by": entry["by"]}
 

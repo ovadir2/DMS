@@ -417,6 +417,11 @@ class SharePoint:
         """Where approvers open the document: DMS_REVIEW_SITE_URL, else the Document Control site."""
         return (self.s.review_site_url or self.s.site_url).rstrip("/")
 
+    def library_of(self, key: str) -> str:
+        """Which library a copy with that key belongs in (the caller remembers it, so a copy made before this
+        rule existed is made again in the right place)."""
+        return self._library_of(key)
+
     def _library_of(self, key: str) -> str:
         """Which library that copy belongs in. A copy somebody is only reading goes to the view library, where
         nobody has standing rights: a person with Edit on the approvals library would otherwise be able to
