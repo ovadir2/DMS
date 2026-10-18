@@ -1032,7 +1032,9 @@ $('#ai-q').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventD
 // ---------------------------------------------------------------- dialogs
 function dialog(title, body, buttons) {
   $('#dlg-h').textContent = title; $('#dlg-b').innerHTML = body;
-  $('#dlg-f').innerHTML = buttons.map(([v, label, cls]) => `<button class="pillbtn small ${cls || ''}" value="${v}">${label}</button>`).join('');
+  // Cancel must leave even when a required field is empty: without this the browser blocks it like any submit
+  $('#dlg-f').innerHTML = buttons.map(([v, label, cls]) =>
+    `<button class="pillbtn small ${cls || ''}" value="${v}"${v === 'cancel' ? ' formnovalidate' : ''}>${label}</button>`).join('');
   $('#dlg').showModal();
   return new Promise(res => $('#dlg-form').onsubmit = e => { e.preventDefault(); res({ action: e.submitter?.value, form: e.target }); });
 }
