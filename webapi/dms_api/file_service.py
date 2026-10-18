@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import stat
+import subprocess
 import threading
 import time
 from datetime import datetime
@@ -30,6 +31,23 @@ def _set_read_only(path: str, on: bool) -> None:
     os.chmod(path, (mode & ~stat.S_IWRITE & ~stat.S_IWGRP & ~stat.S_IWOTH) if on else (mode | stat.S_IWRITE))
 
 
+def _protect(folder: str) -> None:
+    """A folder of released documents, as scripts\\Protect-DmsReadOnly.ps1 leaves it: the DMS account may write,
+    SYSTEM and the administrators have everything, everybody else reads. Who may SEE the documents does not
+    change - that is the folders above, through AD. Created here so a folder made later is protected too."""
+    if os.name != "nt":
+        return
+    try:
+        me = subprocess.run(["whoami"], capture_output=True, text=True, timeout=10).stdout.strip()
+        r = subprocess.run(["icacls", folder, "/inheritance:r", "/grant:r", f"{me}:(OI)(CI)(M)",
+                            "*S-1-5-18:(OI)(CI)(F)", "*S-1-5-32-544:(OI)(CI)(F)", "*S-1-5-11:(OI)(CI)(RX)"],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode:
+            log.warning("Permissions of %s: %s", folder, (r.stdout + r.stderr).strip())
+    except (OSError, subprocess.SubprocessError) as e:
+        log.warning("Permissions of %s: %s", folder, e)
+
+
 def _move(source: str, target: str, replace: bool = False) -> str:
     """Never overwrites (an existing target gets a timestamp suffix), unless replace: then an older copy
     of the same document at the target is replaced, so the file keeps its name."""
@@ -39,7 +57,11 @@ def _move(source: str, target: str, replace: bool = False) -> str:
     if os.path.exists(target):
         base, ext = os.path.splitext(target)
         target = f"{base}_{datetime.now():%Y%m%d%H%M%S}{ext}"
-    os.makedirs(os.path.dirname(target), exist_ok=True)
+    folder = os.path.dirname(target)
+    fresh = not os.path.isdir(folder)
+    os.makedirs(folder, exist_ok=True)
+    if fresh and os.path.basename(folder) in WORKFLOW_FOLDERS[2:]:
+        _protect(folder)                                  # a released folder is read only for everyone but the DMS
     ro = is_read_only(source)
     if ro:
         _set_read_only(source, False)
