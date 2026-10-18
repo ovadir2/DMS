@@ -1543,6 +1543,17 @@ def test_an_approved_file_is_made_read_only_again(tmp_path):
     assert not cur.stat().st_mode & _stat.S_IWRITE                     # and the next pass puts it back
 
 
+def test_a_copy_to_be_read_goes_to_its_own_library():
+    """A person with Edit on the approvals library could change a released document through the copy made for
+    them to read, so a reading copy lives in a library where nobody has standing rights."""
+    from dms_api.sharepoint import SharePoint
+    s = Settings(site_url="https://rhisrael.sharepoint.com/sites/DocumentControl-TEST")
+    sp = SharePoint(s, None)
+    assert "/Views/view-abc123" in sp._review_folder("view-abc123")        # only to be read
+    assert "/Approvals/edit-abc123" in sp._review_folder("edit-abc123")    # taken out to be changed
+    assert "/Approvals/DMS-00044" in sp._review_folder("DMS-00044")        # under approval
+
+
 def test_a_dry_run_names_the_folders_the_blueprint_does_not_cover(tmp_path):
     """A dry run is there to show the whole picture, so a folder with no rule is reported, not raised."""
     from dms_api.memory import MemorySharePoint

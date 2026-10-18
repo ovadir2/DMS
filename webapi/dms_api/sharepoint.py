@@ -417,16 +417,24 @@ class SharePoint:
         """Where approvers open the document: DMS_REVIEW_SITE_URL, else the Document Control site."""
         return (self.s.review_site_url or self.s.site_url).rstrip("/")
 
-    def _review_folder(self, key: str) -> str:
-        """A folder of its own per document under approval, or per file taken out for editing."""
-        site = urlparse(self.review_site()).path.rstrip("/")
-        return f"{site}/{self.s.review_library}/{key}"
+    def _library_of(self, key: str) -> str:
+        """Which library that copy belongs in. A copy somebody is only reading goes to the view library, where
+        nobody has standing rights: a person with Edit on the approvals library would otherwise be able to
+        change a released document through the copy made for them to read. The key says which it is: the DMS
+        names a reading copy "view-..." and an editing one "edit-..." (an approval goes by its document id)."""
+        return self.s.view_library if (self.s.view_library and key.startswith("view-")) else self.s.review_library
 
-    def ensure_review_library(self) -> None:
+    def _review_folder(self, key: str) -> str:
+        """A folder of its own per document under approval, or per file taken out for editing or reading."""
+        site = urlparse(self.review_site()).path.rstrip("/")
+        return f"{site}/{self._library_of(key)}/{key}"
+
+    def ensure_review_library(self, title: str = "") -> None:
         """Make the library on the review site if it is not there yet: nothing has to be created by hand."""
-        if getattr(self, "_review_ready", False):
+        ready = getattr(self, "_review_ready", set())
+        site, title = self.review_site(), title or self.s.review_library
+        if title in ready:
             return
-        site, title = self.review_site(), self.s.review_library
         q = title.replace("'", "''")
         try:
             self._call("GET", f"{site}/_api/web/lists/GetByTitle('{quote(q)}')?$select=Id")
@@ -436,14 +444,15 @@ class SharePoint:
                 "Title": title, "BaseTemplate": 101,                                     # 101 = document library
                 "Description": "Documents the DMS puts here for people to open and edit; the DMS removes them again."})
             logger.info("The review library %s was created on %s", title, site)
-        self._review_ready = True
+        self._review_ready = ready | {title}
 
     def review_put(self, *, local_path: str, document_id: str, edit: bool = True) -> dict:
         """Copy the file to the review library, under a folder of its own. Returns the address to open it with:
         Word, Excel or PowerPoint for the web, for editing, or read only for a released document."""
-        self.ensure_review_library()
+        lib = self._library_of(document_id)
+        self.ensure_review_library(lib)
         site, q = self.review_site(), lambda p: quote(p.replace("'", "''"), safe="/")
-        current = f"{urlparse(site).path.rstrip('/')}/{self.s.review_library}"
+        current = f"{urlparse(site).path.rstrip('/')}/{lib}"
         for part in [document_id]:
             current = f"{current}/{part}"
             try:
@@ -535,11 +544,11 @@ class SharePoint:
         for a file it may write, which is what the DMS has on the review library."""
         u = urlparse(self.review_site())
         drives = self._graph("GET", f"sites/{u.netloc}:{u.path.rstrip('/')}:/drives?$select=id,name,webUrl").get("value", [])
-        lib = self.s.review_library.lower()
-        drive = next((d for d in drives if (d.get("webUrl") or "").rstrip("/").rsplit("/", 1)[-1].lower() == lib
-                      or (d.get("name") or "").lower() == lib), None)
+        want = self._library_of(document_id).lower()
+        drive = next((d for d in drives if (d.get("webUrl") or "").rstrip("/").rsplit("/", 1)[-1].lower() == want
+                      or (d.get("name") or "").lower() == want), None)
         if not drive:
-            raise SharePointError(f"The library {self.s.review_library} was not found on {self.review_site()}")
+            raise SharePointError(f"The library {self._library_of(document_id)} was not found on {self.review_site()}")
         path = quote(f"{document_id}/{name}")
         r = self._graph("POST", f"drives/{drive['id']}/root:/{path}:/createLink",
                         json={"type": "edit" if edit else "view", "scope": "organization"})

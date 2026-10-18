@@ -78,6 +78,7 @@ class Settings:
     approvals: str = "flow"                 # flow (DC-P1 in Teams) | page (approve on the DMS page; turn DC-P1 off)
     review_site_url: str = ""               # DMS_REVIEW_SITE_URL: the site approvers open the document on (default: the DC site)
     review_library: str = "Approvals"       # the library there; empty turns the SharePoint review off
+    view_library: str = "Views"             # where a copy only to be read goes: no standing rights for anybody
     checkout_hours: int = 8                 # DMS_CHECKOUT_HOURS: a file left out for editing comes back by itself
     ex_site_url: str = ""                   # Large File Exchange site, for sharing approved files with customers
     ex_library: str = "TemporaryUploads"
@@ -164,6 +165,7 @@ class Settings:
             approvals=e("DMS_APPROVALS", "flow"),
             review_site_url=e("DMS_REVIEW_SITE_URL", "").rstrip("/"),
             review_library=e("DMS_REVIEW_LIBRARY", "Approvals").strip("/"),
+            view_library=e("DMS_VIEW_LIBRARY", "Views").strip("/"),
             checkout_hours=int(e("DMS_CHECKOUT_HOURS", "8") or 8),
             ex_site_url=e("DMS_EX_SITE_URL", "").rstrip("/"),
             ex_library=e("DMS_EX_LIBRARY", "TemporaryUploads"),
