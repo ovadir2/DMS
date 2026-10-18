@@ -388,25 +388,19 @@ const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${
 // Microsoft account. The DMS puts the copy there, takes it back on "Done editing", and a released (read only)
 // document is only ever opened for viewing.
 function bridgeActions(f) {
+  // One way in. The DMS already knows whether this person may change this document, so the button says which
+  // it is - "open to edit" or "view" - instead of asking the person to pick and refusing afterwards.
   const name = f.name || f.path, co = f.checkedOut, out = [];
   if (TEXT_EXT.test(name)) return `<button type="button" class="link" data-tx="${esc(f.path)}">${f.canEdit ? '\u270E ' + T.editHere : T.open}</button>`;
-  if (co && co.mine && co.url && co.edit) {
-    out.push(`<a class="link" href="${esc(co.url)}" target="_blank" rel="noopener">\u270E ${T.openEditFile}</a>`);
-    out.push(`<button type="button" class="link" data-ckin="${esc(f.path)}">\u2713 ${T.doneEditing}</button>`);
+  if (co && !co.mine && co.edit) return `<span class="muted small">\uD83D\uDD0F ${esc(T.outWith.replace('{who}', co.by || ''))}</span>`;
+  if (co && co.mine && co.url && co.edit === !!f.canEdit) {        // already open the way it should be: go back to it
+    out.push(`<a class="link" href="${esc(co.url)}" target="_blank" rel="noopener">${co.edit ? '\u270E ' + T.openEditFile : T.viewRo}</a>`);
+    if (co.edit) out.push(`<button type="button" class="link" data-ckin="${esc(f.path)}">\u2713 ${T.doneEditing}</button>`);
     return out.join('\n');
   }
-  // a copy only looked at needs no "done" (the DMS clears it by itself), and it must not stand in the way of
-  // editing: whoever may change the document still gets "open to edit" beside the copy they are reading
-  if (co && co.mine && co.url) {
-    if (f.canEdit) out.push(`<button type="button" class="link" data-ckout="${esc(f.path)}">\u270E ${T.openEditFile}</button>`);
-    out.push(`<a class="link" href="${esc(co.url)}" target="_blank" rel="noopener">${T.viewRo}</a>`);
-    return out.join('\n');
-  }
-  if (co && !co.mine && co.edit) out.push(`<span class="muted small">\uD83D\uDD12 ${esc(T.outWith.replace('{who}', co.by || ''))}</span>`);
-  else if (f.canEdit) out.push(`<button type="button" class="link" data-ckout="${esc(f.path)}">\u270E ${T.openEditFile}</button>`);
-  if (VIEW_EXT.test(name)) out.push(`<button type="button" class="link" data-vw="${esc(f.path)}">${T.viewRo}</button>`);
-  else out.push(`<button type="button" class="link" data-ckview="${esc(f.path)}">${T.viewRo}</button>`);
-  return out.join('\n');
+  if (f.canEdit) return `<button type="button" class="link" data-ckout="${esc(f.path)}">\u270E ${T.openEditFile}</button>`;
+  if (VIEW_EXT.test(name)) return `<button type="button" class="link" data-vw="${esc(f.path)}">${T.viewRo}</button>`;
+  return `<button type="button" class="link" data-ckview="${esc(f.path)}">${T.viewRo}</button>`;
 }
 function fileActions(f) {
   return `${f.bridge ? bridgeActions(f) : f.officeUri ? `${openBtn(f.officeUri, f.path, f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open))}${f.editable && f.viewUri ? openBtn(f.viewUri, f.path, T.viewRo) : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">✎ ${T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cp="${esc(f.path)}">🔗 ${T.copyLink}</button>`
