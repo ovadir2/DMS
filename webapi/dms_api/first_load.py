@@ -123,7 +123,12 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
                 row["result"] = "skipped - already loaded"
                 L(f"    skipped: already registered at {it['current']}")
             elif not ftype or not farea:
-                raise ValueError("no document type or area: this folder does not set them in the blueprint; choose them for the run")
+                # a dry run is there to show the whole picture: say which folder the blueprint does not cover and go on
+                row["result"] = "missing - no document type or area for this folder in the blueprint"
+                L("    missing: the blueprint sets no type or area for this folder")
+                if not dry_run:
+                    raise ValueError("no document type or area: this folder does not set them in the blueprint; "
+                                     "choose them for the run")
             elif dry_run:
                 where = "in the target" if os.path.isfile(it["moved"]) else ("copy from the source" if copy_missing else "MISSING in the target")
                 row["result"] = f"plan - {where} -> Current_ReadOnly"
@@ -182,6 +187,13 @@ def run(job: dict, sp, s: Settings, linker, actor: str, *, source: str, target: 
         key = r["result"].split(" - ")[0]
         counts[key] = counts.get(key, 0) + 1
     L(f"Finished: {len(items)} files - " + ", ".join(f"{k}: {v}" for k, v in sorted(counts.items())))
+    uncovered = sorted({os.path.dirname(r["target"]) for r in job["rows"] if r["result"].startswith("missing")})
+    if uncovered:
+        L(f"  folders the blueprint does not cover ({len(uncovered)}): choose a type and an area for the run, "
+          "or add them to the blueprint")
+        for folder in uncovered:
+            L(f"    {folder}")
+        job["uncovered"] = uncovered
     L(f"  File Linker: {sum(1 for r in job['rows'] if r['fileLinker'] == 'updated')} updated, "
       f"{sum(1 for r in job['rows'] if r['fileLinker'].startswith('error'))} errors")
     L(f"  CSV report: {job['report']}")

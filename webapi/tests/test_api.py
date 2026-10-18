@@ -1519,6 +1519,26 @@ def test_first_loading_takes_the_type_from_each_folder(tmp_path):
     assert sorted(d["documentType"] for d in sp.documents()) == ["הצעת מחיר", "חוזה / NDA"]
 
 
+def test_a_dry_run_names_the_folders_the_blueprint_does_not_cover(tmp_path):
+    """A dry run is there to show the whole picture, so a folder with no rule is reported, not raised."""
+    from dms_api.memory import MemorySharePoint
+    old = tmp_path / "Old"
+    (old / "Quotations").mkdir(parents=True)
+    (old / "Quotations" / "Q1.xlsx").write_text("q")
+    (old / "Whatever").mkdir()
+    (old / "Whatever" / "W1.docx").write_text("w")
+    root = tmp_path / "Root"
+    target = root / "02_Customers" / "Customer_A" / "Commercial"
+    target.mkdir(parents=True)
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
+    c = TestClient(create_app(s, MemorySharePoint(s)))
+    j = _wait(c, c.post("/api/first-load", json={"source": str(old), "target": str(target), "dryRun": True}).json()["id"])
+    by_name = {os.path.basename(r["source"]): r["result"] for r in j["rows"]}
+    assert by_name["Q1.xlsx"].startswith("plan")                       # the blueprint covers Quotations
+    assert by_name["W1.docx"].startswith("missing")                    # and says nothing about Whatever
+    assert [f for f in j.get("uncovered", []) if "Whatever" in f]      # named, so it can be fixed before the real run
+
+
 def test_withdraw_returns_the_file_with_its_name_and_it_can_be_submitted_again(tmp_path):
     from dms_api import file_service
     from dms_api.memory import MemorySharePoint
