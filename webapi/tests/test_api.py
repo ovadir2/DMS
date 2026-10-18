@@ -1519,6 +1519,30 @@ def test_first_loading_takes_the_type_from_each_folder(tmp_path):
     assert sorted(d["documentType"] for d in sp.documents()) == ["הצעת מחיר", "חוזה / NDA"]
 
 
+def test_an_approved_file_is_made_read_only_again(tmp_path):
+    """Whoever made the approved file writable - a First loading, a hand, a restore - the service puts it back."""
+    import stat as _stat
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.xlsx").write_text("v1")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.xlsx"), "submit": True}).json()
+    file_service.run_once(sp, s)
+    for _ in range(2):
+        c.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    file_service.run_once(sp, s)
+    cur = q / "Current_ReadOnly" / "Quote.xlsx"
+    assert cur.is_file() and not cur.stat().st_mode & _stat.S_IWRITE
+    os.chmod(cur, cur.stat().st_mode | _stat.S_IWRITE)                 # somebody made it writable again
+    file_service.run_once(sp, s)
+    assert not cur.stat().st_mode & _stat.S_IWRITE                     # and the next pass puts it back
+
+
 def test_a_dry_run_names_the_folders_the_blueprint_does_not_cover(tmp_path):
     """A dry run is there to show the whole picture, so a folder with no rule is reported, not raised."""
     from dms_api.memory import MemorySharePoint
