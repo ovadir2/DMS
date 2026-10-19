@@ -37,8 +37,18 @@ function Get-Dms([string]$url) {
 }
 
 if (-not $Root) {
-    $Root = (Get-Dms "$base/api/options").root
-    Write-Host "Repository root (from the DMS): $Root" -ForegroundColor Cyan
+    try { $Root = (Get-Dms "$base/api/options").root } catch { }
+    if (-not $Root) {        # the DMS did not say: read it where it is configured, on this server
+        $env = Join-Path $PSScriptRoot '..\webapi\.env'
+        if (Test-Path -LiteralPath $env) {
+            $line = Select-String -Path $env -Pattern '^\s*DMS_REPOSITORY_ROOT\s*=' | Select-Object -First 1
+            if ($line) { $Root = ($line.Line -split '=', 2)[1].Trim().Trim('"') }
+        }
+    }
+    if (-not $Root) {
+        throw "The repository root could not be read from the DMS or from webapi\.env. Pass it: -Root E:\Shares"
+    }
+    Write-Host "Repository root: $Root" -ForegroundColor Cyan
 }
 
 # What the DMS leaves out on purpose - not a difference, unless -All asks to see it
