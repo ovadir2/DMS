@@ -451,9 +451,15 @@ class SharePoint:
             logger.info("The review library %s was created on %s", title, site)
         self._review_ready = ready | {title}
 
-    def review_put(self, *, local_path: str, document_id: str, edit: bool = True) -> dict:
+    # What a copy only to be read is turned into, so that nothing can be typed into it at all. A spreadsheet is
+    # left as it is: on paper a wide sheet becomes dozens of unreadable pages, and its filters and sheets are
+    # the document. Anything already flat (a PDF, an image) is shown as it is too.
+    AS_PDF = (".doc", ".docx", ".odt", ".rtf", ".ppt", ".pptx", ".odp")
+
+    def review_put(self, *, local_path: str, document_id: str, edit: bool = True, as_pdf: bool = False) -> dict:
         """Copy the file to the review library, under a folder of its own. Returns the address to open it with:
-        Word, Excel or PowerPoint for the web, for editing, or read only for a released document."""
+        Word, Excel or PowerPoint for the web, for editing, or read only for a released document. as_pdf: the
+        copy is turned into a PDF and the original removed, so a reader has nothing to type into."""
         lib = self._library_of(document_id)
         self.ensure_review_library(lib)
         site, q = self.review_site(), lambda p: quote(p.replace("'", "''"), safe="/")
@@ -470,7 +476,40 @@ class SharePoint:
             up = self._call("POST", f"{site}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(current)}')"
                                     f"/Files/AddUsingPath(DecodedUrl='{q(name)}',Overwrite=true)", data=f.read())
         server_relative = up.get("ServerRelativeUrl") or f"{current}/{name}"
+        if as_pdf and not edit and name.lower().endswith(self.AS_PDF):
+            try:
+                pdf_name, pdf = self._as_pdf(lib, document_id, name)
+                self._call("POST", f"{site}/_api/web/GetFolderByServerRelativePath(DecodedUrl='{q(current)}')"
+                                   f"/Files/AddUsingPath(DecodedUrl='{q(pdf_name)}',Overwrite=true)", data=pdf)
+                try:   # the document people read is the PDF; the original has nothing more to do here
+                    self._call("POST", f"{site}/_api/web/GetFileByServerRelativePath"
+                                       f"(DecodedUrl='{q(server_relative)}')/recycle()")
+                except SharePointError as e:
+                    logger.info("The original of %s stayed beside its PDF: %s", name, e)
+                name, server_relative = pdf_name, f"{current}/{pdf_name}"
+            except SharePointError as e:   # still readable as it is: say so in the log and carry on
+                logger.info("%s was not turned into a PDF: %s", name, e)
         return {"name": name, "serverRelative": server_relative, "url": self.office_url(server_relative, edit=edit)}
+
+    def _drive_of(self, library: str) -> dict:
+        """That library of the review site, as Graph sees it."""
+        u = urlparse(self.review_site())
+        drives = self._graph("GET", f"sites/{u.netloc}:{u.path.rstrip('/')}:/drives?$select=id,name,webUrl").get("value", [])
+        want = library.lower()
+        drive = next((d for d in drives if (d.get("webUrl") or "").rstrip("/").rsplit("/", 1)[-1].lower() == want
+                      or (d.get("name") or "").lower() == want), None)
+        if not drive:
+            raise SharePointError(f"The library {library} was not found on {self.review_site()}")
+        return drive
+
+    def _as_pdf(self, library: str, folder: str, name: str) -> tuple[str, bytes]:
+        """That file as a PDF, converted by Microsoft Graph: nothing has to be installed on the DMS server."""
+        drive = self._drive_of(library)
+        path = quote(f"{folder}/{name}")
+        data = self._graph_bytes("GET", f"drives/{drive['id']}/root:/{path}:/content?format=pdf")
+        if not data:
+            raise SharePointError(f"Graph returned no PDF for {name}")
+        return os.path.splitext(name)[0] + ".pdf", data
 
     def office_url(self, server_relative: str, *, edit: bool = True) -> str:
         """The address that opens the document in Word / Excel / PowerPoint for the web. The file's own address
@@ -547,13 +586,7 @@ class SharePoint:
         """The company link through Microsoft Graph. SharePoint's own sharing refuses an application that signs
         in with a certificate ("the caller has no permission to grant permission"); Graph lets it make the link
         for a file it may write, which is what the DMS has on the review library."""
-        u = urlparse(self.review_site())
-        drives = self._graph("GET", f"sites/{u.netloc}:{u.path.rstrip('/')}:/drives?$select=id,name,webUrl").get("value", [])
-        want = self._library_of(document_id).lower()
-        drive = next((d for d in drives if (d.get("webUrl") or "").rstrip("/").rsplit("/", 1)[-1].lower() == want
-                      or (d.get("name") or "").lower() == want), None)
-        if not drive:
-            raise SharePointError(f"The library {self._library_of(document_id)} was not found on {self.review_site()}")
+        drive = self._drive_of(self._library_of(document_id))
         path = quote(f"{document_id}/{name}")
         r = self._graph("POST", f"drives/{drive['id']}/root:/{path}:/createLink",
                         json={"type": "edit" if edit else "view", "scope": "organization"})
@@ -660,6 +693,15 @@ class SharePoint:
                                   "(the Entra app needs Graph Files.ReadWrite.All)")
         self._gtoken = (r["access_token"], time.time() + int(r.get("expires_in", 3600)))
         return self._gtoken[0]
+
+    def _graph_bytes(self, method: str, path: str) -> bytes:
+        """A Graph call that answers with a file, not with JSON (the PDF of a document). Graph answers the
+        conversion with a redirect to where the converted file waits, so redirects are followed here."""
+        r = self.http.request(method, f"{self.GRAPH}/{path.lstrip('/')}", timeout=120, allow_redirects=True,
+                              headers={"Authorization": f"Bearer {self._graph_token()}"})
+        if r.status_code >= 400:
+            raise SharePointError(f"Graph {method} {path.split('?')[0]} -> {r.status_code}: {r.text[:300]}")
+        return r.content
 
     def _graph(self, method: str, path: str, json: dict | None = None) -> dict:
         r = self.http.request(method, f"{self.GRAPH}/{path.lstrip('/')}", json=json, timeout=30,

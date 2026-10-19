@@ -954,7 +954,7 @@ def test_the_document_goes_to_sharepoint_for_its_approvers_and_comes_back(tmp_pa
                  admins=[USER], review_library="Approvals")
     sp = MemorySharePoint(s)
     calls = {}
-    def _put(*, local_path, document_id):
+    def _put(*, local_path, document_id, **kw):
         calls["put"] = (local_path, document_id)
         return {"name": "Quote.docx",
                 "url": f"https://rhisrael.sharepoint.com/sites/DC/Approvals/{document_id}/Quote.docx"}
@@ -1541,6 +1541,42 @@ def test_an_approved_file_is_made_read_only_again(tmp_path):
     os.chmod(cur, cur.stat().st_mode | _stat.S_IWRITE)                 # somebody made it writable again
     file_service.run_once(sp, s)
     assert not cur.stat().st_mode & _stat.S_IWRITE                     # and the next pass puts it back
+
+
+def test_a_document_only_to_be_read_goes_up_as_a_pdf():
+    """Nothing to type into: a document opened only to be read is converted, and the original is taken away
+    again. A spreadsheet is left as it is - on paper it stops being a spreadsheet."""
+    from tests.test_sharepoint import Resp
+    from dms_api.sharepoint import SharePoint
+    import tempfile
+
+    calls = []
+
+    class Sess:
+        def request(self, method, url, json=None, data=None, headers=None, timeout=None, allow_redirects=None):
+            calls.append((method, url, data))
+            if url.endswith("?$select=Id") or "/lists" in url:
+                return Resp({"Id": "1"})
+            if "Files/AddUsingPath" in url:
+                return Resp({"ServerRelativeUrl": "/sites/DocumentControl-TEST/Views/view-1/"
+                                                  + url.split("DecodedUrl='")[1].split("'")[0].split("/")[-1]})
+            if url.endswith("/drives?$select=id,name,webUrl"):
+                return Resp({"value": [{"id": "drv", "name": "Views",
+                                        "webUrl": "https://rhisrael.sharepoint.com/sites/DocumentControl-TEST/Views"}]})
+            if "content?format=pdf" in url:
+                return Resp(b"%PDF-1.7 the document as a page")
+            return Resp({})
+
+    s = Settings(site_url="https://rhisrael.sharepoint.com/sites/DocumentControl-TEST")
+    sp = SharePoint(s, Sess())
+    sp._access_token = lambda: "t"
+    sp._graph_token = lambda: "g"
+    f = os.path.join(tempfile.mkdtemp(), "QP-16.1.docx")
+    open(f, "w").write("the procedure")
+    r = sp.review_put(local_path=f, document_id="view-1", edit=False, as_pdf=True)
+    assert r["name"] == "QP-16.1.pdf"                                   # what the person opens
+    assert [c for c in calls if c[1].endswith("/recycle()")]            # and the document itself is gone again
+    assert b"%PDF" in next(c[2] for c in calls if "QP-16.1.pdf" in c[1])
 
 
 def test_a_copy_only_being_read_goes_away_sooner(tmp_path):
@@ -2470,7 +2506,7 @@ def _review_sp(s, store):
     from dms_api.memory import MemorySharePoint
     sp = MemorySharePoint(s)
 
-    def put(*, local_path, document_id, edit=True):
+    def put(*, local_path, document_id, edit=True, as_pdf=False):
         name = os.path.basename(local_path)
         store[document_id] = {"name": name, "data": open(local_path, "rb").read()}
         rel = f"/sites/DC/Approvals/{document_id}/{name}"

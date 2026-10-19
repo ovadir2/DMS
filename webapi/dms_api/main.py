@@ -1520,7 +1520,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if mine and bool(mine.get("edit")) == edit and mine.get("library") == lib:
             return {"path": full, "url": mine.get("url"), "edit": bool(mine.get("edit")), "by": mine.get("by")}
         try:
-            put = sp().review_put(local_path=full, document_id=key, edit=edit)
+            # only to be read: it goes up as a PDF, so there is nothing to type into even by mistake
+            put = sp().review_put(local_path=full, document_id=key, edit=edit, as_pdf=not edit)
             link = share_link(key, put["name"], [user.email], edit=edit, subject=os.path.basename(full))
         except Exception as e:  # noqa: BLE001
             sp_error(f"Editing copy of {os.path.basename(full)}", e)

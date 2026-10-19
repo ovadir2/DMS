@@ -10,6 +10,9 @@ from dms_api.sharepoint import SharePoint
 class Resp:
     def __init__(self, body, status=200):
         self.status_code, self._b = status, body
+        if isinstance(body, bytes):                       # a file, not JSON (a document converted to a PDF)
+            self.content, self.text = body, ""
+            return
         self.content = json.dumps(body).encode() if body is not None else b""
         self.text = self.content.decode()
 
