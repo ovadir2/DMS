@@ -1820,6 +1820,25 @@ def test_main_search_covers_folders_file_names_and_document_ids(tmp_path):
     assert ("file", "CRU 4 FCT Quote_Rev1.xlsx") not in names("quote fct")              # not listed twice
 
 
+def test_a_record_follows_its_file_into_the_workflow_folders(tmp_path):
+    """An approval moves the file to Current_ReadOnly while the record still names the place it came from:
+    the row followed the record, found nothing and offered no way in at all."""
+    from dms_api.file_service import find_file
+    root = tmp_path
+    folder = root / "01_General" / "Procedures"
+    (folder / "Current_ReadOnly").mkdir(parents=True)
+    (folder / "Working").mkdir()
+    recorded = str(folder / "QP-1.docx")
+    assert find_file(str(root), recorded) is None                      # nowhere yet
+    approved = folder / "Current_ReadOnly" / "QP-1.docx"
+    approved.write_bytes(b"x")
+    assert find_file(str(root), recorded) == str(approved)             # it was approved
+    working = folder / "Working" / "QP-1.docx"
+    working.write_bytes(b"x")
+    assert find_file(str(root), recorded) == str(working)              # back in work: that one first
+    assert find_file(str(root), str(approved)) == str(approved)        # a path that is there is kept
+
+
 def test_a_long_path_is_still_found(tmp_path):
     """Over about 260 characters Windows says the file is not there, and a few Hebrew folder names reach that
     on their own: the DMS then found no file and offered a link to it instead of the SharePoint copy."""

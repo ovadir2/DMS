@@ -21,7 +21,7 @@ import time
 from datetime import datetime
 
 from .config import WORKFLOW_FOLDERS, Settings
-from .files import exists as _exists, is_read_only
+from .files import exists as _exists, is_file, is_read_only
 
 log = logging.getLogger("dms_api.file_service")
 
@@ -154,6 +154,31 @@ def relocate(root: str, path: str | None, sha: str | None = None) -> str | None:
             if os.path.isfile(candidate) and (not sha or _sha256(candidate).lower() == sha.lower()):
                 return candidate
     return None
+
+
+def find_file(root: str, path: str | None, sha: str | None = None) -> str | None:
+    """Where the record's file actually is now. A record keeps the path the file had when it was written, and
+    the file moves on its own: an approval takes it to Current_ReadOnly, a submission to Submitted, a return
+    back to Working. The file is looked for at the recorded path, then under each workflow folder of the same
+    place (and without one, for a path that names a workflow folder it has since left), and last by relocate
+    for a repository that was laid out differently."""
+    here = to_root(root, path)
+    if _exists_file(here):
+        return here
+    if here:
+        name, parent = os.path.basename(here), os.path.dirname(here)
+        folder = os.path.dirname(parent) if os.path.basename(parent) in WORKFLOW_FOLDERS else parent
+        for candidate in [os.path.join(folder, w, name) for w in WORKFLOW_FOLDERS] + [os.path.join(folder, name)]:
+            if _exists_file(candidate):
+                return candidate
+        found = find_submitted(folder, name)     # Submitted keeps older runs under a name with a timestamp
+        if found:
+            return found
+    return relocate(root, path, sha)
+
+
+def _exists_file(path: str | None) -> bool:
+    return bool(path) and is_file(path)
 
 
 def find_submitted(folder: str, name: str) -> str | None:

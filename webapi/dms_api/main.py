@@ -1306,10 +1306,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """How any row opens its file, by one rule wherever a file is shown (browse, search, suggestions):
         through SharePoint when the bridge is on - a released document read only, never for editing - and
         otherwise the file itself, for someone who has rights on the file server."""
-        from .file_service import to_root
-        path = to_root(s.repository_root, path) or path      # a record may name the file by another route
-        if not path or not files.is_file(path):             # a record pointing at a file that moved, or is gone
+        from .file_service import find_file
+        # a record keeps the path the file had when it was written, and the file moves on its own: an approval
+        # takes it to Current_ReadOnly, a submission to Submitted. The row follows it rather than losing it.
+        found = find_file(s.repository_root, path)
+        if not found:                                        # a record pointing at a file that is gone
             return {}
+        path = found
         try:
             # a document returned to its owner is theirs to change, even when the file still carries the
             # read-only flag it was given while it was submitted: the DMS clears that when they open it
@@ -1771,6 +1774,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             elif doc["statusKey"] == "Approved_ReadOnly" and d.get("currentUncPath"):
                 doc["file"] = d["currentUncPath"]
                 doc["viewUri"] = files.open_uri(d["currentUncPath"])
+            if doc.get("file"):
+                from .file_service import find_file
+                doc["file"] = find_file(s.repository_root, doc["file"]) or doc["file"]
             if review_on() and doc.get("file"):
                 # the approved document opens read only in SharePoint, like everywhere else: no rights needed.
                 # The links to the file itself go with it: on the bridge SharePoint is the only way in, and a
