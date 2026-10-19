@@ -1604,6 +1604,36 @@ def test_the_markdown_follows_the_revision_in_force(tmp_path):
     assert gone and "revision one" in gone[0].read_text(encoding="utf-8")    # and the old one went with its file
 
 
+def test_a_procedure_comes_out_as_a_procedure(tmp_path):
+    """What a reader sees in Word is what the Markdown should say: the block at the head of a procedure is a
+    list of facts and not a six column grid, a section numbered by hand is a heading, a cell merged across
+    columns keeps the row's shape, and what tracked changes struck out is not part of the text."""
+    import zipfile
+    from dms_api import markdown
+    W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    doc = f"""<?xml version="1.0"?><w:document xmlns:w="{W}"><w:body>
+      <w:tbl>
+        <w:tr><w:tc><w:p><w:r><w:t>מספר נוהל</w:t></w:r></w:p></w:tc>
+               <w:tc><w:tcPr><w:gridSpan w:val="3"/></w:tcPr><w:p><w:r><w:t>QP-16.1</w:t></w:r></w:p></w:tc></w:tr>
+        <w:tr><w:tc><w:p><w:r><w:t>גרסה</w:t></w:r></w:p></w:tc>
+               <w:tc><w:p><w:r><w:t>01</w:t></w:r></w:p></w:tc></w:tr>
+      </w:tbl>
+      <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>מטרה</w:t></w:r></w:p>
+      <w:p><w:r><w:t>3. שיטה</w:t></w:r></w:p>
+      <w:p><w:r><w:t>Advisory notice</w:t></w:r><w:del><w:r><w:delText>םךןחןםום</w:delText></w:r></w:del></w:p>
+      <w:p/><w:p/>
+      <w:p><w:r><w:t>סוף</w:t></w:r></w:p>
+    </w:body></w:document>"""
+    f = tmp_path / "QP.docx"
+    with zipfile.ZipFile(f, "w") as z:
+        z.writestr("word/document.xml", doc)
+    md = markdown.body_of(str(f))
+    assert "- **מספר נוהל**: QP-16.1" in md and "- **גרסה**: 01" in md   # facts, not a grid of merged cells
+    assert "# מטרה" in md and "## 3. שיטה" in md                        # both kinds of heading are headings
+    assert "Advisory notice" in md and "םךןחןםום" not in md             # struck out is not part of the text
+    assert "\n\n\n" not in md                                          # and Word's empty paragraphs are gone
+
+
 def test_a_document_only_to_be_read_goes_up_as_a_pdf():
     """Nothing to type into: a document opened only to be read is converted, and the original is taken away
     again. A spreadsheet is left as it is - on paper it stops being a spreadsheet."""

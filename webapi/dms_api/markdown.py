@@ -22,15 +22,30 @@ log = logging.getLogger("dms_api.markdown")
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
+SKIP = (f"{W}del", f"{W}instrText", f"{W}fldChar", f"{W}proofErr")   # removed by tracked changes, or field code
+
+
 def _runs(el) -> str:
-    out = []
-    for node in el.iter():
-        tag = node.tag.rsplit("}", 1)[-1]
-        if tag == "t" and node.text:
-            out.append(node.text)
-        elif tag in ("tab", "br"):
-            out.append(" ")
+    """The words of a paragraph or a cell. Text struck out by tracked changes and the inside of field codes
+    are not words of the document: left in, they arrive as letters with no sentence around them."""
+    out: list[str] = []
+
+    def walk(node) -> None:
+        for child in node:
+            if child.tag in SKIP:                      # the whole subtree, not only this element
+                continue
+            tag = child.tag.rsplit("}", 1)[-1]
+            if tag == "t" and child.text:
+                out.append(child.text)
+            elif tag in ("tab", "br"):
+                out.append(" ")
+            walk(child)
+
+    walk(el)
     return re.sub(r"[ \t]+", " ", "".join(out)).strip()
+
+
+NUMBERED = re.compile(r"^(\d+(?:\.\d+)*)\.?[\s\u00a0]+(\S.*)$")
 
 
 def _paragraph(p) -> str:
@@ -43,23 +58,59 @@ def _paragraph(p) -> str:
     level = re.search(r"(\d+)$", name)
     if name.lower().startswith("heading") and level:
         return "#" * min(6, int(level.group(1))) + " " + text
+    # A procedure numbers its sections by hand as often as it styles them ("3. שיטה"). A short line that opens
+    # with a number and does not end as a sentence is that section's title, and the depth of the number is its
+    # level - otherwise half the document's headings are headings and half are ordinary lines.
+    m = NUMBERED.match(text)
+    if m and len(text) <= 80 and not text.endswith((".", ":", "،", "؛")) and p.find(f"{W}pPr/{W}numPr") is None:
+        return "#" * min(6, 1 + m.group(1).count(".") + 1) + " " + text
     if p.find(f"{W}pPr/{W}numPr") is not None:
         return "- " + text
     return text
 
 
+def _cells(tr) -> list[str]:
+    """One row. A cell merged across columns fills the columns it covers, so the row keeps its shape; a cell
+    merged with the one above it carries no text of its own and is left empty."""
+    out: list[str] = []
+    for tc in tr.findall(f"{W}tc"):
+        span = tc.find(f"{W}tcPr/{W}gridSpan")
+        wide = int(span.get(f"{W}val", "1")) if span is not None else 1
+        out.append(_runs(tc))
+        out += [""] * (wide - 1)
+    return out
+
+
 def _table(tbl) -> str:
-    rows = []
-    for tr in tbl.findall(f"{W}tr"):
-        rows.append([_runs(tc) or " " for tc in tr.findall(f"{W}tc")])
+    """A Word table as Markdown. The block at the head of a procedure - document number, revision, date, each
+    on its own line - is a table in Word but a list of facts to a reader, so it is written as one: a six column
+    grid of merged cells says nothing to anybody, least of all to the AI this file is for."""
+    rows = [_cells(tr) for tr in tbl.findall(f"{W}tr")]
+    rows = [r for r in rows if any(c.strip() for c in r)]
     if not rows:
         return ""
     width = max(len(r) for r in rows)
-    rows = [r + [" "] * (width - len(r)) for r in rows]
+    rows = [r + [""] * (width - len(r)) for r in rows]
+    keep = [i for i in range(width) if any(r[i].strip() for r in rows)]   # a column nobody wrote in is not one
+    rows = [[r[i] for i in keep] for r in rows]
+    width = len(keep)
+    if width == 0:
+        return ""
+    if width == 1:
+        return "\n".join(r[0] for r in rows if r[0].strip())
+    if width == 2:
+        return "\n".join(f"- **{a.strip()}**: {b.strip()}" for a, b in rows if (a + b).strip())
     head, *body = rows
-    out = ["| " + " | ".join(head) + " |", "|" + "---|" * width]
-    out += ["| " + " | ".join(r) + " |" for r in body]
+    out = ["| " + " | ".join(c.strip() or " " for c in head) + " |", "|" + "---|" * width]
+    out += ["| " + " | ".join(c.strip() or " " for c in r) + " |" for r in body]
     return "\n".join(out)
+
+
+def tidy(text: str) -> str:
+    """One blank line between blocks, none at the edges: Word leaves empty paragraphs everywhere, and each one
+    arrives here as a gap the reader has to climb over."""
+    text = re.sub(r"[ \t]+\n", "\n", text.replace("\r\n", "\n").replace("\u00a0", " "))
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
 def _docx(path: str) -> str:
@@ -105,23 +156,31 @@ def _plain(path: str) -> str:
 
 
 def body_of(path: str) -> str:
-    """The document as Markdown, or an empty string when this kind of file has nothing to read."""
+    """The document as Markdown, or an empty string when this kind of file has nothing to read.
+
+    A procedure is converted here and not by a general purpose tool: those read a Word table as a grid, so the
+    block at the head of every procedure arrives as six columns of merged cells, and they call a section a
+    heading only where Word styled it - half the headings of a hand numbered procedure are then ordinary lines.
+    markitdown is asked only for what this cannot read at all."""
     ext = os.path.splitext(path)[1].lower()
+    try:
+        if ext in (".docx", ".docm"):
+            body = _docx(path).strip()
+        elif ext in (".xlsx", ".xlsm"):
+            body = _xlsx(path).strip()
+        else:
+            body = _plain(path).strip()
+        if body:
+            return body
+    except (OSError, zipfile.BadZipFile, ElementTree.ParseError, ValueError) as e:
+        log.info("%s was not turned into Markdown here: %s", path, e)
     try:
         from markitdown import MarkItDown               # on the server, when IT installed it
         return (MarkItDown().convert(path).text_content or "").strip()
     except ImportError:
-        pass
+        return ""
     except Exception as e:  # noqa: BLE001 - its answer is not worth failing a release for
         log.info("markitdown did not convert %s: %s", path, e)
-    try:
-        if ext in (".docx", ".docm"):
-            return _docx(path).strip()
-        if ext in (".xlsx", ".xlsm"):
-            return _xlsx(path).strip()
-        return _plain(path).strip()
-    except (OSError, zipfile.BadZipFile, ElementTree.ParseError, ValueError) as e:
-        log.info("%s was not turned into Markdown: %s", path, e)
         return ""
 
 
@@ -146,7 +205,7 @@ def write_beside(path: str, doc: dict | None = None) -> str | None:
         if os.path.exists(target):
             os.chmod(target, os.stat(target).st_mode | 0o200)
         with open(target, "w", encoding="utf-8") as f:
-            f.write("\n".join(head) + body + "\n")
+            f.write("\n".join(head) + tidy(body) + "\n")
         os.chmod(target, os.stat(target).st_mode & ~0o222)     # read only, like the document beside it
     except OSError as e:
         log.warning("%s was not written: %s", target, e)
