@@ -89,6 +89,19 @@ def _move(source: str, target: str, replace: bool = False) -> str:
     return target
 
 
+def _move_markdown(source: str, target: str) -> None:
+    """The Markdown written beside a document follows the document. Left in Current_ReadOnly it would say the
+    old revision is the one in force, which is exactly what the company's AI would then answer."""
+    old_md, new_md = os.path.splitext(source)[0] + ".md", os.path.splitext(target)[0] + ".md"
+    if not os.path.isfile(old_md):
+        return
+    try:
+        _move(old_md, new_md, replace=True)
+        _set_read_only(new_md, True)
+    except OSError as e:
+        log.warning("The Markdown of %s stayed behind: %s", source, e)
+
+
 def _sha256(path: str) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -191,12 +204,20 @@ def run_once(sp, s: Settings, only: str = "") -> dict:
         if status == c["Approved_ReadOnly"] and d.get("currentUncPath"):
             # an approved file is read only on the file server, whoever put it there and whichever way
             held = to_root(s.repository_root, d["currentUncPath"])
-            if held and os.path.isfile(held) and not is_read_only(held):
-                try:
-                    _set_read_only(held, True)
-                    log.info("%s: %s was writable and is read only again", doc_id, held)
-                except OSError as e:
-                    log.warning("%s stayed writable: %s", held, e)
+            if held and os.path.isfile(held):
+                if not is_read_only(held):
+                    try:
+                        _set_read_only(held, True)
+                        log.info("%s: %s was writable and is read only again", doc_id, held)
+                    except OSError as e:
+                        log.warning("%s stayed writable: %s", held, e)
+                if not os.path.isfile(os.path.splitext(held)[0] + ".md"):
+                    try:        # the revision in force always has its Markdown, whoever released it
+                        from . import markdown
+                        if markdown.write_beside(held, d):
+                            log.info("%s: Markdown written beside %s", doc_id, held)
+                    except Exception as e:  # noqa: BLE001
+                        log.info("%s has no Markdown beside it: %s", held, e)
         if not raw:
             if status == c["Approved_ReadOnly"] and d.get("currentUncPath"):
                 cur = to_root(s.repository_root, d["currentUncPath"])
@@ -256,6 +277,8 @@ def run_once(sp, s: Settings, only: str = "") -> dict:
                 if _under_root(s.repository_root, old) and os.path.isfile(old):
                     obsolete = _move(old, os.path.join(folder, "Obsolete_ReadOnly", os.path.basename(old)))
                     _set_read_only(obsolete, True)
+                    _move_markdown(old, obsolete)      # its Markdown goes with it: the AI never quotes a
+                                                       # revision that is no longer the one in force
                 current_name = re.sub(r"_DRAFT(?=\.[^.]+$|$)", "", name, flags=re.I)
                 target = _move(source, os.path.join(folder, "Current_ReadOnly", current_name))
                 _set_read_only(target, True)

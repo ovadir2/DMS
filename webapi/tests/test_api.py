@@ -1570,6 +1570,40 @@ def test_an_approved_document_gets_its_markdown_beside_it(tmp_path):
     assert names == ["Quote.txt"]                                              # and not a second row in the folder
 
 
+def test_the_markdown_follows_the_revision_in_force(tmp_path):
+    """What the company's AI reads is the revision in force. When a new one is approved, the Markdown of the
+    old one goes with it to Obsolete_ReadOnly, and the new one gets its own."""
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.txt").write_text("revision one", encoding="utf-8")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.txt"), "submit": True}).json()
+    file_service.run_once(sp, s)
+    for _ in range(2):
+        c.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    file_service.run_once(sp, s)
+    assert "revision one" in (q / "Current_ReadOnly" / "Quote.md").read_text(encoding="utf-8")
+
+    c.post(f"/api/documents/{d['id']}/revise")                              # the next revision, approved too
+    draft = next(p for p in q.iterdir() if p.name.endswith("_DRAFT.txt"))
+    draft.write_text("revision two", encoding="utf-8")
+    c.post(f"/api/documents/{d['id']}/submit")
+    file_service.run_once(sp, s)
+    for _ in range(2):
+        c.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    file_service.run_once(sp, s)
+    now = list((q / "Current_ReadOnly").glob("*.md"))
+    assert len(now) == 1 and "revision two" in now[0].read_text(encoding="utf-8")
+    gone = list((q / "Obsolete_ReadOnly").glob("*.md"))
+    assert gone and "revision one" in gone[0].read_text(encoding="utf-8")    # and the old one went with its file
+
+
 def test_a_document_only_to_be_read_goes_up_as_a_pdf():
     """Nothing to type into: a document opened only to be read is converted, and the original is taken away
     again. A spreadsheet is left as it is - on paper it stops being a spreadsheet."""
