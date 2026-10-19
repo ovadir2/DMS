@@ -33,7 +33,10 @@ $ErrorActionPreference = 'Stop'
 $base = $DmsUrl.TrimEnd('/')
 
 function Get-Dms([string]$url) {
-    Invoke-RestMethod -Uri $url -UseDefaultCredentials -Headers @{ Accept = 'application/json' }
+    # Windows PowerShell reads a JSON answer as Latin-1 unless it says charset=utf-8, and then every Hebrew
+    # name differs from the one on disk by its spelling alone. The bytes are decoded here instead.
+    $r = Invoke-WebRequest -Uri $url -UseDefaultCredentials -Headers @{ Accept = 'application/json' } -UseBasicParsing
+    [Text.Encoding]::UTF8.GetString($r.RawContentStream.ToArray()) | ConvertFrom-Json
 }
 
 if (-not $Root) {
