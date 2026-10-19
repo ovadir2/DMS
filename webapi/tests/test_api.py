@@ -76,7 +76,7 @@ def test_browse_marks_registration(env):
     assert r.status_code == 200
     f = r.json()["files"][0]
     assert f["name"] == "CRU 4 FCT Quote_Rev1.xlsx" and f["document"] is None
-    assert f["officeUri"].startswith("ms-excel:ofe|u|") and f["editable"]               # not registered yet: edit
+    assert f["officeUri"].startswith("ms-excel:ofe|u|file:") and f["editable"]          # not registered yet: edit
 
 
 def test_paths_outside_root_are_refused(env):
@@ -1823,7 +1823,7 @@ def test_main_search_covers_folders_file_names_and_document_ids(tmp_path):
 def test_open_link_uses_the_short_path_only_when_long():
     from dms_api import files
     short = r"\\srv\Shares\02_Customers\A\Quote.xlsx"
-    assert files.office_uri(short) == "ms-excel:ofv|u|\\\\srv\\Shares\\02_Customers\\A\\Quote.xlsx"   # a path, not a file:// URL (Office zone prompt)
+    assert files.office_uri(short) == "ms-excel:ofv|u|file://srv/Shares/02_Customers/A/Quote.xlsx"
     assert files.short_path("\\\\srv\\" + "x" * 300 + ".docx").endswith(".docx")        # unchanged off Windows
 
 
@@ -2332,7 +2332,7 @@ def test_a_long_path_keeps_the_file_name_and_shortens_only_the_folders(monkeypat
                         + (("\\" + "QUOTE~1.XLS") if p.lower().endswith(".xlsx") else ""))
     monkeypatch.setattr(files, "user_path", lambda p: p)
     uri = files.office_uri(full)
-    assert uri.endswith("\\ALONGF~2\\Quote.xlsx") and "QUOTE~1.XLS" not in uri
+    assert uri.endswith("/ALONGF~2/Quote.xlsx") and "QUOTE~1.XLS" not in uri
 
 
 def test_short_paths_for_open_and_copy(tmp_path):
@@ -2349,7 +2349,7 @@ def test_short_paths_for_open_and_copy(tmp_path):
     assert remote == [[str(tmp_path), r"\\RHFS02\Shares"]]
     f = os.path.join(str(tmp_path), "02_Customers", "Customer_A", "q.docx")
     assert files.user_path(f) == "\\\\fs\\Customers\\Customer_A\\q.docx"
-    assert "\\\\fs\\Customers\\Customer_A\\q.docx" in files.office_uri(f)
+    assert "file://fs/Customers/Customer_A/q.docx" in files.office_uri(f)
     other = os.path.join(str(tmp_path), "03_Operations_Staging", "x.docx")
     assert files.user_path(other) == other                                               # not mapped: unchanged
     files.set_short_paths("", {})
@@ -2362,9 +2362,9 @@ def test_user_drive_letters_from_the_page(tmp_path):
     q.mkdir(parents=True)
     (q / "a.docx").write_bytes(b"x")
     uri = lambda h: next(f for f in c.get("/api/browse", params={"path": str(q)}, headers=h).json()["files"])["officeUri"]  # noqa: E731
-    assert "R:\\Customer_A\\a.docx" in uri({})                                        # DMS_SHORT_PATHS
-    assert "K:\\Customer_A\\a.docx" in uri({"X-DMS-Drives": "02_Customers=K:"})        # this PC's letter
-    assert "R:\\Customer_A\\a.docx" in uri({})                                        # only for that request
+    assert "file:///R:/Customer_A/a.docx" in uri({})                                   # DMS_SHORT_PATHS
+    assert "file:///K:/Customer_A/a.docx" in uri({"X-DMS-Drives": "02_Customers=K:"})   # this PC's letter
+    assert "file:///R:/Customer_A/a.docx" in uri({})                                   # only for that request
     files.set_short_paths("", {})
 
 
@@ -2398,7 +2398,7 @@ def test_office_uri_long_hebrew_path_uses_8dot3(tmp_path, monkeypatch):
             f: os.path.join(root, "01_GEN~1", "QUALIT~1", "D7A1~1", "D7A2~1", "a.docx")}
     monkeypatch.setattr(files, "short_path", lambda p, force=False: fake.get(p, p))
     files._SHORT_PREFIX.clear()
-    assert "G:\\QUALIT~1\\D7A1~1\\D7A2~1\\a.docx" in files.office_uri(f)
+    assert "file:///G:/QUALIT~1/D7A1~1/D7A2~1/a.docx" in files.office_uri(f)
     files.set_short_paths("", {})
     files._SHORT_PREFIX.clear()
 

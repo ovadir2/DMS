@@ -201,14 +201,15 @@ def office_uri(path: str, edit: bool = False) -> str | None:
         from urllib.parse import quote
         return (f"{app}:{'ofe' if edit else 'ofv'}|u|{BASE_URL.get().rstrip('/')}/api/o/{open_token(full)}/"
                 f"{quote(os.path.basename(full))}")
-    # The path is given as Windows writes it (\\RHFS02\... or G:\...), not as a file:// URL: Office checks the
-    # zone of a file:// link and says "This content presents a potential security issue" for the file server,
-    # and the answer to that would be a setting on every PC. A plain path is opened as Explorer opens it.
-    # DMS_OFFICE_FILE_URL=1 brings the file:// form back if an Office build ever needs it.
-    native = path.replace("/", "\\")
-    if os.environ.get("DMS_OFFICE_FILE_URL", "").strip().lower() in ("1", "true", "yes", "on"):
-        native = "file:" + path.replace("\\", "/") if path.startswith("\\\\") else "file:///" + path.replace("\\", "/").lstrip("/")
-    return f"{app}:{'ofe' if edit else 'ofv'}|u|{native}"
+    # A file:// URL: Office maps it to a zone by its host, and the file server belongs to the Local intranet.
+    # A bare Windows path (\\RHFS02\...) cannot be mapped to a zone at all and Office then treats it as the
+    # Restricted Sites zone and blocks the file, so the URL form is the one that opens.
+    # DMS_OFFICE_NATIVE_PATH=1 hands Office the path itself instead, for a PC where the URL form is refused.
+    if os.environ.get("DMS_OFFICE_NATIVE_PATH", "").strip().lower() in ("1", "true", "yes", "on"):
+        url = path.replace("/", "\\")
+    else:
+        url = "file:" + path.replace("\\", "/") if path.startswith("\\\\") else "file:///" + path.replace("\\", "/").lstrip("/")
+    return f"{app}:{'ofe' if edit else 'ofv'}|u|{url}"
 
 
 def open_uri(path: str, edit: bool = False) -> str | None:
