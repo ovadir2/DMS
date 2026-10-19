@@ -1611,11 +1611,18 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(400, "Please write why the document is rejected")
         # A document somebody changed while it was being approved is not approved as it stands: what the
         # approvers wrote is theirs to propose, and the owner's to accept. It goes back with their remarks.
-        events_now = events_by_doc().get(d.get("documentId") or "", [])
+        # The copy in SharePoint is read now, at the decision itself: until this ran only drawing the approvals
+        # page noticed a change, so an approver who edited and then approved from a page already open was not
+        # caught - exactly the case this rule exists for.
+        doc_now = d.get("documentId") or ""
+        kept, file_now = review_ensure(d) or {}, submitted_file(d)
+        pulled = bool(file_now and kept.get("name")
+                      and review_pull(doc_now, kept["name"], file_now, by=user.email, doc_id=doc_now))
+        events_now = events_by_doc().get(doc_now, [])
         submitted_at = next((e["utc"] for e in events_now if e["event"] == c["SubmittedEvent"]), "")
         changed = any((e.get("details") or "").startswith(CHANGED_IN_REVIEW) and (e.get("utc") or "") > submitted_at
                       for e in events_now)
-        if req.approve and changed:
+        if req.approve and (changed or pulled):
             raise HTTPException(409, "The document was changed during the approval: it cannot be approved as it "
                                      "stands. Return it with remarks, and its owner submits the new version.")
         tag = f"Stage {st['stage']}" + (" (super user)" if su else "")

@@ -2708,6 +2708,34 @@ def test_an_approver_who_changed_the_document_cannot_approve_it(tmp_path, monkey
     assert back.status_code == 200 and back.json()["statusKey"] in ("Working", "Rejected")
 
 
+def test_an_approver_who_changed_it_cannot_approve_from_a_page_already_open(tmp_path, monkeypatch):
+    """The change used to be noticed only when the approvals page was drawn, so an approver who edited the
+    document and then approved without reloading got it through. The copy is read at the decision itself."""
+    from datetime import datetime, timedelta, timezone
+
+    from dms_api import file_service, security
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.docx").write_bytes(b"as submitted")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER], review_library="Approvals")
+    store: dict = {}
+    sp = _review_sp(s, store)
+    later = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+    sp.review_info = lambda *, document_id, name: {"modified": later, "length": 9}
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.docx"), "documentType": "הצעת מחיר",
+                                       "documentArea": "מסחרי", "submit": True}).json()
+    file_service.run_once(sp, s)
+    key = next(k for k in store if k != "shares")
+    store[key]["data"] = b"as the approver changed it"
+    monkeypatch.setattr(security.User, "can", lambda self, path, access="read": False)
+    r = c.post(f"/api/approvals/{d['id']}", json={"approve": True})      # straight to approve, no page in between
+    assert r.status_code == 409 and "changed during the approval" in r.json()["detail"]
+    assert (q / "Submitted" / "Quote.docx").read_bytes() == b"as the approver changed it"   # and it came back
+
+
 def test_a_returned_document_is_the_owners_to_change_again(tmp_path):
     """Returned with remarks: the file is back at its own place and writable, so the row offers editing and
     the owner can fix the document before submitting it again."""
