@@ -1543,6 +1543,23 @@ def test_an_approved_file_is_made_read_only_again(tmp_path):
     assert not cur.stat().st_mode & _stat.S_IWRITE                     # and the next pass puts it back
 
 
+def test_a_copy_only_being_read_goes_away_sooner(tmp_path):
+    """Somebody editing needs their copy for hours; somebody reading does not need one at all once they have
+    read it, so the DMS takes a reading copy back long before an editing one."""
+    from datetime import datetime, timedelta, timezone
+    from dms_api import checkout
+    root = str(tmp_path)
+    for name, edit in (("w.docx", True), ("r.docx", False)):
+        open(os.path.join(root, name), "w").write("x")
+        checkout.add(root, os.path.join(root, name), by="a@rh.co.il", name=name, url="u", edit=edit)
+    data = checkout.read(root)
+    for entry in data.values():                                  # both taken out an hour ago
+        entry["utc"] = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    checkout.write(root, data)
+    due = checkout.due(root, hours=8, read_hours=0.5)
+    assert [e["edit"] for e in due] == [False]                   # only the one being read
+
+
 def test_a_copy_to_be_read_goes_to_its_own_library():
     """A person with Edit on the approvals library could change a released document through the copy made for
     them to read, so a reading copy lives in a library where nobody has standing rights."""

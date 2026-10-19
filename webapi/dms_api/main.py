@@ -10,6 +10,7 @@ import logging
 import mimetypes
 import os
 import re
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -1484,7 +1485,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         stays out for ever."""
         if not review_on():
             return
-        for entry in checkout.due(s.repository_root, s.checkout_hours):
+        for entry in checkout.due(s.repository_root, s.checkout_hours, s.view_minutes / 60):
             checkout_return(entry)
 
     @app.post("/api/files/checkout")
@@ -2628,6 +2629,21 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "You do not have access to this file")
         log(user, "download", full)
         return FileResponse(full, filename=os.path.basename(full))
+
+    if review_on() and s.file_service_seconds > 0:
+        # A copy nobody is working in does not wait for the next person to take a document out: the DMS looks
+        # by itself, so a reading copy is gone from SharePoint a few minutes after it was opened.
+        import threading
+
+        def sweeper() -> None:
+            while True:
+                time.sleep(max(60, min(s.file_service_seconds, s.view_minutes * 60 // 2 or 60)))
+                try:
+                    checkout_sweep()
+                except Exception as e:  # noqa: BLE001 - it tries again at the next pass
+                    logger.info("The copies in SharePoint were not swept: %s", e)
+
+        threading.Thread(target=sweeper, name="dms-checkout-sweep", daemon=True).start()
 
     return app
 

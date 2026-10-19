@@ -80,15 +80,19 @@ def drop(root: str, key: str) -> None:
         write(root, data)
 
 
-def due(root: str, hours: int) -> list[dict]:
-    """What has been out longer than that: the DMS brings these back by itself."""
-    limit = datetime.now(timezone.utc) - timedelta(hours=hours)
+def due(root: str, hours: int, read_hours: float | None = None) -> list[dict]:
+    """What has been out longer than that: the DMS brings these back by itself. A copy only being read is
+    nobody's work in progress, so it goes sooner (read_hours) - it is a window onto the document, not a
+    place to keep it."""
+    now = datetime.now(timezone.utc)
+    edit_limit = now - timedelta(hours=hours)
+    view_limit = now - timedelta(hours=hours if read_hours is None else read_hours)
     out = []
     for entry in read(root).values():
         try:
             when = datetime.fromisoformat(entry.get("utc") or "")
         except ValueError:
             continue
-        if when < limit:
+        if when < (edit_limit if entry.get("edit") else view_limit):
             out.append(entry)
     return out

@@ -80,6 +80,7 @@ class Settings:
     review_library: str = "Approvals"       # the library there; empty turns the SharePoint review off
     view_library: str = "Views"             # where a copy only to be read goes: no standing rights for anybody
     checkout_hours: int = 8                 # DMS_CHECKOUT_HOURS: a file left out for editing comes back by itself
+    view_minutes: int = 30                  # DMS_VIEW_MINUTES: a copy only being read goes away this soon
     ex_site_url: str = ""                   # Large File Exchange site, for sharing approved files with customers
     ex_library: str = "TemporaryUploads"
     ex_folder: str = "Outbound"
@@ -167,6 +168,7 @@ class Settings:
             review_library=e("DMS_REVIEW_LIBRARY", "Approvals").strip("/"),
             view_library=e("DMS_VIEW_LIBRARY", "Views").strip("/"),
             checkout_hours=int(e("DMS_CHECKOUT_HOURS", "8") or 8),
+            view_minutes=int(e("DMS_VIEW_MINUTES", "30") or 30),
             ex_site_url=e("DMS_EX_SITE_URL", "").rstrip("/"),
             ex_library=e("DMS_EX_LIBRARY", "TemporaryUploads"),
             ex_folder=e("DMS_EX_FOLDER", "Outbound"),
