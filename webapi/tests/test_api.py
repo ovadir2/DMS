@@ -1543,6 +1543,33 @@ def test_an_approved_file_is_made_read_only_again(tmp_path):
     assert not cur.stat().st_mode & _stat.S_IWRITE                     # and the next pass puts it back
 
 
+def test_an_approved_document_gets_its_markdown_beside_it(tmp_path):
+    """The company's AI reads Markdown, not a page of a PDF: on release the DMS writes the document again as
+    Markdown beside it, read only, with what the document is at the top. It is not a second row in the folder."""
+    import stat as _stat
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote.txt").write_text("The quotation\n\nTwo weeks from the order.", encoding="utf-8")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", approvals="page",
+                 admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    d = c.post("/api/documents", json={"path": str(q / "Quote.txt"), "submit": True}).json()
+    file_service.run_once(sp, s)
+    for _ in range(2):
+        c.post(f"/api/approvals/{d['id']}", json={"approve": True})
+    file_service.run_once(sp, s)
+    md = q / "Current_ReadOnly" / "Quote.md"
+    text = md.read_text(encoding="utf-8")
+    assert d["documentId"] in text and "Two weeks from the order." in text     # what it is, and what it says
+    assert not md.stat().st_mode & _stat.S_IWRITE                              # read only, like the document
+    names = [f["name"] for f in c.get("/api/browse", params={"path": str(q / "Current_ReadOnly")}).json()["files"]]
+    assert names == ["Quote.txt"]                                              # and not a second row in the folder
+
+
 def test_a_document_only_to_be_read_goes_up_as_a_pdf():
     """Nothing to type into: a document opened only to be read is converted, and the original is taken away
     again. A spreadsheet is left as it is - on paper it stops being a spreadsheet."""

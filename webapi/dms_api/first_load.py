@@ -35,6 +35,18 @@ REPORT_DIR = os.path.join("04_Workflow_System", "FirstLoading")
 JOBS: dict[str, dict] = {}
 
 
+def _markdown(path: str, doc: dict | None, L) -> None:
+    """Beside the loaded document, the same document as Markdown: a repository loaded this way is readable by
+    the company's AI from the first day, not only the documents approved after it."""
+    try:
+        from . import markdown
+        written = markdown.write_beside(path, doc)
+        if written:
+            L(f"    Markdown: {os.path.basename(written)}")
+    except Exception as e:  # noqa: BLE001 - a loaded document is not held up by its Markdown
+        L(f"    Markdown not written: {e!r}")
+
+
 def _sha256(path: str) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -263,6 +275,7 @@ def _approve_like_the_dms(sp, s: Settings, it: dict, working: str, ftype, farea,
     # 5. the file service releases it: Current_ReadOnly, read-only, register updated
     cur = _move(sub, it["current"])
     _set_read_only(cur, True)
+    _markdown(cur, doc, L)
     sha = _sha256(cur)
     sp.update(doc["id"], {"CurrentUncPath": cur, "CurrentSHA256": sha, "WorkingUncPath": "",
                           "CurrentRevision": rev, "DraftRevision": ""})
@@ -308,6 +321,7 @@ def _save_only(it: dict, row: dict, L, dry_run: bool, copy_missing: bool, update
     _set_read_only(cur, True)
     noworkflow.mark(s.repository_root, cur)
     doc = noworkflow.release(sp, s, cur, actor, f"First loading save only, from {it['source']}", classify)
+    _markdown(cur, doc, L)
     row.update(result="released - approved by DMS", sha256=doc.get("currentSHA256") or _sha256(cur), target=cur,
                documentId=doc.get("documentId") or "", revision=doc.get("currentRevision") or "",
                documentType=doc.get("documentType") or "", documentArea=doc.get("documentArea") or "")

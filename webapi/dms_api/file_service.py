@@ -259,6 +259,11 @@ def run_once(sp, s: Settings, only: str = "") -> dict:
                 current_name = re.sub(r"_DRAFT(?=\.[^.]+$|$)", "", name, flags=re.I)
                 target = _move(source, os.path.join(folder, "Current_ReadOnly", current_name))
                 _set_read_only(target, True)
+                try:        # beside it, the same document as Markdown: what the company's AI reads
+                    from . import markdown
+                    markdown.write_beside(target, d)
+                except Exception as e:  # noqa: BLE001 - a release is not held up by its Markdown
+                    log.info("%s has no Markdown beside it: %s", target, e)
                 sha = _sha256(target)
                 values = {"CurrentUncPath": target, "CurrentSHA256": sha, "WorkingUncPath": ""}
                 if d.get("draftRevision"):

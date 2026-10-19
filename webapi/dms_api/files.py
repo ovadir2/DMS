@@ -23,13 +23,29 @@ SYSTEM_FILES = {"thumbs.db", "desktop.ini", ".ds_store", "ehthumbs.db"}
 
 
 def is_hidden(entry: os.DirEntry) -> bool:
-    """Office lock files, Windows/Mac system files (Thumbs.db, desktop.ini) and hidden or system items."""
+    """Office lock files, Windows/Mac system files (Thumbs.db, desktop.ini), hidden or system items, and the
+    Markdown the DMS writes beside a released document for the company's AI: it is the same document, and a
+    second row for it in the folder only asks people which of the two is the procedure."""
     if entry.name.startswith(("~$", ".")) or entry.name.lower() in SYSTEM_FILES:
+        return True
+    if entry.name.lower().endswith(".md") and _beside_a_document(entry.path):
         return True
     try:
         return bool(getattr(entry.stat(), "st_file_attributes", 0) & 0x6)   # FILE_ATTRIBUTE_HIDDEN | SYSTEM
     except OSError:
         return True
+
+
+def _beside_a_document(path: str) -> bool:
+    """A Markdown file that carries the name of a document in the same folder is that document, not a file of
+    its own. One somebody wrote themselves (notes.md, with nothing beside it) is shown like any other file."""
+    stem = os.path.splitext(path)[0]
+    try:
+        with os.scandir(os.path.dirname(path) or ".") as it:
+            return any(os.path.splitext(e.name)[0] == os.path.basename(stem) and not e.name.lower().endswith(".md")
+                       for e in it if e.is_file())
+    except OSError:
+        return False
 
 
 def is_read_only(path: str) -> bool:
