@@ -578,8 +578,11 @@ const webLink = u => /^https?:/i.test(u || '');
 const openBtn = (uri, file, label) => webLink(uri)
   ? `<a class="link" href="${esc(uri)}" target="_blank" rel="noopener">${label}</a>`
   : `<button type="button" class="link" data-ext="${esc(uri)}" data-f="${esc(file)}">${label}</button>`;
-function fileLinks(file, editUri, viewUri, canEdit, viaDms) {
+function fileLinks(file, editUri, viewUri, canEdit, viaDms, row) {
   if (!file) return '';
+  // On the bridge the file opens through SharePoint, never by a file:// link: Office maps the file server to
+  // a zone of its own and either warns about it or blocks the file, and View in Excel ignores "open to view".
+  if (row && row.bridge) return bridgeActions({ path: file, name: file, canEdit: row.canEdit, checkedOut: row.checkedOut });
   if (TEXT_EXT.test(file)) return `<button type="button" class="link" data-tx="${esc(file)}">${canEdit ? '✎ ' + T.editHere : T.open}</button>`;
   const out = [];
   if (editUri && canEdit) out.push(openBtn(editUri, file, '✎ ' + T.openEdit));
@@ -705,7 +708,7 @@ async function mine(v) {
         ${d.currentUncPath ? `<button type="button" class="link" data-cp="${esc(d.currentUncPath)}">🔗 ${T.copy}</button>` : ''}
         ${d.workingUncPath ? `<button type="button" class="link" data-cp="${esc(d.workingUncPath)}">🔗 ${T.copyWorking}</button>` : ''}
         ${d.bridge ? bridgeActions({ path: d.file, name: (d.file || '').split(/[\\/]/).pop(), canEdit: d.canEdit, checkedOut: d.checkedOut })
-          : fileLinks(d.file, d.editUri, d.viewUri, !!d.editUri)}
+          : fileLinks(d.file, d.editUri, d.viewUri, !!d.editUri, false, d)}
         ${remarksLine(d.id, d.remarks)}
         ${d.statusKey === 'Submitted' ? `<button type="button" class="link" data-wd="${d.id}" style="color:var(--err)">${T.withdraw}</button>` : ''}
         ${d.statusKey === 'Approved_ReadOnly' ? `<button type="button" class="link" data-rev="${d.id}">⟳ ${T.newRev}</button><button type="button" class="link" data-share="${d.id}">✉ ${isHr(d.currentUncPath) ? T.shareHrBtn : T.share}</button>` : ''}
@@ -730,7 +733,7 @@ async function approvalsView(v) {
       <td class="small">${d.stage === 1 ? T.stage1 : T.stage2}${d.approved.length ? `<div class="muted">${T.approvedBy}: ${d.approved.map(a => esc(a.split('@')[0])).join(', ')}</div>` : ''}${(d.returned || []).length ? `<div class="muted">${T.returnedBy}: ${d.returned.map(r => `${esc(r.by.split('@')[0])} - ${esc(r.comment)}`).join('; ')}</div>` : ''}
         ${!d.mine ? `<div class="muted">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')}</div>` : ''}</td>
       <td class="hide-s small muted">${when(d.submittedUtc)}${days(d.submittedUtc) !== null ? `<div>${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}</td>
-      <td class="actions">${fileLinks(d.file, d.officeUri, d.viewUri, d.editable, d.viaDms)}
+      <td class="actions">${fileLinks(d.file, d.officeUri, d.viewUri, d.editable, d.viaDms, d)}
         ${d.file && !TEXT_EXT.test(d.file) && !d.editable ? `<button type="button" class="link" data-up="${d.id}">⬆ ${T.uploadEdited}</button>` : ''}
         ${remarksLine(d.id, d.remarks)}
         ${d.file ? `<button type="button" class="link" data-dl="${esc(d.file)}">${T.download}</button>${d.viaDms ? '' : `<button type="button" class="link" data-cp="${esc(d.file)}">🔗 ${T.copyLink}</button>`}` : ''}
