@@ -1820,6 +1820,17 @@ def test_main_search_covers_folders_file_names_and_document_ids(tmp_path):
     assert ("file", "CRU 4 FCT Quote_Rev1.xlsx") not in names("quote fct")              # not listed twice
 
 
+def test_a_long_path_is_still_found(tmp_path):
+    """Over about 260 characters Windows says the file is not there, and a few Hebrew folder names reach that
+    on their own: the DMS then found no file and offered a link to it instead of the SharePoint copy."""
+    from dms_api import files
+    f = tmp_path / "a.docx"
+    f.write_bytes(b"x")
+    assert files.is_file(str(f)) and files.exists(str(f))
+    assert not files.is_file(str(tmp_path / "no.docx")) and not files.is_file("")
+    assert files.extended(str(f)) == str(f)                  # a \\?\ path only on Windows
+
+
 def test_open_link_uses_the_short_path_only_when_long():
     from dms_api import files
     short = r"\\srv\Shares\02_Customers\A\Quote.xlsx"

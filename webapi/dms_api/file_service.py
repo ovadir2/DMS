@@ -21,7 +21,7 @@ import time
 from datetime import datetime
 
 from .config import WORKFLOW_FOLDERS, Settings
-from .files import is_read_only
+from .files import exists as _exists, is_read_only
 
 log = logging.getLogger("dms_api.file_service")
 
@@ -126,7 +126,7 @@ def to_root(root: str, path: str | None) -> str | None:
         return None
     try:
         real_root, probe = os.path.realpath(root), path
-        while probe and not os.path.exists(probe) and os.path.dirname(probe) != probe:
+        while probe and not _exists(probe) and os.path.dirname(probe) != probe:
             probe = os.path.dirname(probe)
         real_probe = os.path.realpath(probe)
         if _under_root(real_root, real_probe) or os.path.normcase(real_probe) == os.path.normcase(real_root):

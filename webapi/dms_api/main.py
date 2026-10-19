@@ -607,7 +607,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             p = rel_parts(full)
             return len(p) == 2 + len(parts) and (p[0].lower() == s.customers_folder.lower()
                                                   or [x.lower() for x in p[:2]] == ["01_general", "hr"])
-        return os.path.isdir(full) and any(os.path.isfile(os.path.join(full, *parts[i:])) for i in range(len(parts)))
+        return os.path.isdir(full) and any(files.is_file(os.path.join(full, *parts[i:])) for i in range(len(parts)))
 
     def in_shared_folder(full: str) -> bool:
         """Inside a customer's Shared folder (02_Customers\\<c>\\Shared): copies already sent, not workflowed."""
@@ -866,7 +866,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         target = os.path.join(folder, "Current_ReadOnly", name)
         old = to_root(s.repository_root, d.get("currentUncPath"))
         obsolete = None
-        if old and os.path.isfile(old):                           # a new revision: the approved one becomes obsolete
+        if old and files.is_file(old):                           # a new revision: the approved one becomes obsolete
             obsolete = _move(old, os.path.join(folder, "Obsolete_ReadOnly", os.path.basename(old)))
             _set_read_only(obsolete, True)
         if os.path.exists(target):
@@ -903,7 +903,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             full = files.resolve(s.repository_root, p)
             folder, name = os.path.dirname(full), os.path.basename(full)
             try:
-                if not os.path.isfile(full):
+                if not files.is_file(full):
                     raise ValueError("file not found")
                 d = find_registered(full, idx)
                 if d:                                               # In Work or Submitted: released on its own record
@@ -995,7 +995,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         full = files.resolve(s.repository_root, req.path)
         # a DMS super user may also remove a released file (Current_ReadOnly / Obsolete_ReadOnly / Submitted):
         # it goes to the recycle folder like any other deletion, and its record in SharePoint stays
-        boss = is_admin(user) and os.path.isfile(full)
+        boss = is_admin(user) and files.is_file(full)
         if not (user.can(full, "write") and user.can(os.path.dirname(full), "write")) and not boss:
             raise HTTPException(403, "You do not have permission to delete this item")
         if os.path.exists(full) and not boss:
@@ -1039,7 +1039,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             logger.warning("file not returned to Working for %s: %s", d.get("documentId"), e)
             return
         working = to_root(s.repository_root, d.get("workingUncPath"))
-        if working and os.path.isfile(working):
+        if working and files.is_file(working):
             try:                                            # back with the owner: theirs to change again
                 _set_read_only(working, False)
             except OSError as e:
@@ -1245,7 +1245,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """What is in SharePoint comes back to the file server as soon as it is newer than the file here, so a
         document closed in Word for the web is in the DMS at the next look, without waiting for the approval
         to end. Returns True when something came back."""
-        if not review_on() or not target or not os.path.isfile(target):
+        if not review_on() or not target or not files.is_file(target):
             return False
         try:
             info = sp().review_info(document_id=key, name=name)
@@ -1308,7 +1308,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         otherwise the file itself, for someone who has rights on the file server."""
         from .file_service import to_root
         path = to_root(s.repository_root, path) or path      # a record may name the file by another route
-        if not path or not os.path.isfile(path):             # a record pointing at a file that moved, or is gone
+        if not path or not files.is_file(path):             # a record pointing at a file that moved, or is gone
             return {}
         try:
             # a document returned to its owner is theirs to change, even when the file still carries the
@@ -1464,7 +1464,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         key = entry.get("key") or checkout.key_of(root, path, "" if entry.get("edit") else (entry.get("by") or ""))
         name = entry.get("name") or os.path.basename(path)
         try:
-            if bring_back and entry.get("edit") and os.path.isfile(path) and not read_only_file(path):
+            if bring_back and entry.get("edit") and files.is_file(path) and not read_only_file(path):
                 data = sp().review_get(document_id=key, name=name)
                 if data:
                     with open(path, "wb") as f:
@@ -1496,7 +1496,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if not review_on():
             raise HTTPException(503, "Opening a document in SharePoint is not set up here")
         full = files.resolve(s.repository_root, req.path)
-        if not os.path.isfile(full):
+        if not files.is_file(full):
             raise HTTPException(404, "File not found")
         if not may_read(user, full):
             raise HTTPException(403, "You do not have access to this file")
@@ -1581,7 +1581,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return None
         folder = os.path.dirname(path)
         in_sub = os.path.join(folder if os.path.basename(folder) != "Submitted" else os.path.dirname(folder), "Submitted", os.path.basename(path))
-        return in_sub if os.path.isfile(in_sub) else path
+        return in_sub if files.is_file(in_sub) else path
 
     def file_sha(path: str | None) -> str:
         import hashlib
@@ -1772,7 +1772,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 doc["file"] = d["currentUncPath"]
                 doc["viewUri"] = files.open_uri(d["currentUncPath"])
             if review_on() and doc.get("file"):
-                # the approved document opens read only in SharePoint, like everywhere else: no rights needed
+                # the approved document opens read only in SharePoint, like everywhere else: no rights needed.
+                # The links to the file itself go with it: on the bridge SharePoint is the only way in, and a
+                # file:// link is one Office refuses from the file server anyway.
+                doc.pop("editUri", None), doc.pop("viewUri", None)
                 doc.update(open_fields(doc["file"], user, doc))
             doc.update(submittedUtc=submitted["utc"] if submitted else None, decision=decision,
                        lastEvent=events[0] if events else None, history=list(reversed(events)))
@@ -1914,7 +1917,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         path, context = None, ""
         if req.path:
             path = files.resolve(s.repository_root, req.path)
-            if not os.path.isfile(path):
+            if not files.is_file(path):
                 raise HTTPException(404, "File not found")
             if not user.can(path):
                 raise HTTPException(403, "You do not have access to this file")
@@ -1975,7 +1978,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def register(req: RegisterRequest, user: User = Depends(current_user)):
         clean_approvers(req.approvers)                          # a wrong address stops it before anything is created
         path = files.resolve(s.repository_root, req.path)
-        if not os.path.isfile(path):
+        if not files.is_file(path):
             raise HTTPException(404, "File not found")
         if not user.can(path):
             raise HTTPException(403, "You do not have access to this file")
@@ -2031,7 +2034,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if doc.get("lifecycleStatus") != s.choices["Working"]:
             raise HTTPException(409, f"Only a document in {s.choices['Working']} can be submitted")
         file_back(doc, s.choices["Working"])                    # still in Submitted from an earlier cycle
-        if not doc.get("workingUncPath") or not os.path.isfile(files.resolve(s.repository_root, doc["workingUncPath"])):
+        if not doc.get("workingUncPath") or not files.is_file(files.resolve(s.repository_root, doc["workingUncPath"])):
             raise HTTPException(409, "The working file was not found on the file server")
         sp().update(item_id, {"LifecycleStatus": s.choices["Submitted"]})
         sp().audit(document_id=doc["documentId"], event=s.choices["SubmittedEvent"], from_status=s.choices["Working"],
@@ -2104,7 +2107,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         from .file_service import _sha256, to_root
         from .file_service import relocate
         current = to_root(s.repository_root, d.get("currentUncPath"))
-        if current and os.path.isfile(current):
+        if current and files.is_file(current):
             return current
         moved = relocate(s.repository_root, d.get("currentUncPath"), d.get("currentSHA256"))
         if moved:                                               # recorded under an older layout of the repository
@@ -2117,7 +2120,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         parent = os.path.dirname(working)
         folder = os.path.dirname(parent) if os.path.basename(parent) in WORKFLOW_FOLDERS else parent
         landed = os.path.join(folder, "Current_ReadOnly", _re.sub(r"_DRAFT(?=\.[^.]+$|$)", "", os.path.basename(working), flags=_re.I))
-        if not os.path.isfile(landed):
+        if not files.is_file(landed):
             return None
         sp().update(d["id"], {"CurrentUncPath": landed, "CurrentSHA256": _sha256(landed), "WorkingUncPath": ""})
         logger.info("%s: CurrentUncPath corrected to %s", d.get("documentId"), landed)
@@ -2321,7 +2324,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         file_back(d, c["Working"])                              # a copy left in Submitted comes back first
         working = to_root(s.repository_root, d.get("workingUncPath"))
         recycled = None
-        if working and os.path.isfile(working):
+        if working and files.is_file(working):
             if not user.can(working, "write"):
                 raise HTTPException(403, "You do not have permission to delete this file")
             try:
@@ -2353,7 +2356,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, "Only a document in Working can be renamed (withdraw it first)")
         file_back(d, c["Working"])                              # a copy left in Submitted comes back first
         working = to_root(s.repository_root, d.get("workingUncPath"))
-        if not working or not os.path.isfile(working):
+        if not working or not files.is_file(working):
             raise HTTPException(409, "The working file was not found on the file server")
         if not (user.can(working, "write") and user.can(os.path.dirname(working), "write")):
             raise HTTPException(403, "You do not have permission to rename this file")
@@ -2449,7 +2452,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """Open for a path too long for Office (Hebrew names): Word / Excel / PowerPoint open and save the file here."""
         from fastapi.responses import Response
         full = files.open_path(token)
-        if not full or not os.path.isfile(full):
+        if not full or not files.is_file(full):
             raise HTTPException(404, "The link expired: open the file again from the DMS page")
         if name != os.path.basename(full):                     # only this file (not Office's temporary ~$ files)
             raise HTTPException(404 if request.method in ("GET", "HEAD", "PROPFIND") else 403, "Not this file")
@@ -2509,7 +2512,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     def _text_file(path: str, user: User) -> str:
         full = files.resolve(s.repository_root, path)
-        if not os.path.isfile(full):
+        if not files.is_file(full):
             raise HTTPException(404, "File not found")
         if not full.lower().endswith(TEXT_EXT):
             raise HTTPException(415, "This is not a text file")
@@ -2565,7 +2568,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         out = []
         for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
             f = os.path.join(folder, name)
-            if os.path.isfile(f):
+            if files.is_file(f):
                 st = os.stat(f)
                 out.append({"name": name, "size": st.st_size,
                             "utc": datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat()})
@@ -2617,14 +2620,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if not in_approval(user, d):
             raise HTTPException(403, "You have no part in this document")
         full = os.path.join(remarks_folder(d.get("documentId") or ""), os.path.basename(name))
-        if not os.path.isfile(full):
+        if not files.is_file(full):
             raise HTTPException(404, "Not found")
         return FileResponse(full, filename=os.path.basename(full))
 
     @app.get("/api/files/download")
     def download(path: str, user: User = Depends(current_user)):
         full = files.resolve(s.repository_root, path)
-        if not os.path.isfile(full):
+        if not files.is_file(full):
             raise HTTPException(404, "File not found")
         if not may_read(user, full):
             raise HTTPException(403, "You do not have access to this file")

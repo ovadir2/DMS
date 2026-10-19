@@ -112,6 +112,24 @@ def short_path(path: str, force: bool = False) -> str:
         return path
 
 
+def extended(path: str) -> str:
+    """The \\\\?\\ form of a Windows path. Over about 260 characters Windows says the file is not there at all,
+    and a few Hebrew folder names reach that on their own; given this way it is found."""
+    if os.name != "nt" or not path or path.startswith("\\\\?\\"):
+        return path
+    p = os.path.abspath(path)
+    return "\\\\?\\UNC\\" + p[2:] if p.startswith("\\\\") else "\\\\?\\" + p
+
+
+def is_file(path: str | None) -> bool:
+    """os.path.isfile, and the long path too (see extended)."""
+    return bool(path) and (os.path.isfile(path) or (os.name == "nt" and os.path.isfile(extended(path))))
+
+
+def exists(path: str | None) -> bool:
+    return bool(path) and (os.path.exists(path) or (os.name == "nt" and os.path.exists(extended(path))))
+
+
 SHORT: list[tuple[str, str]] = []          # (long prefix, short prefix), set by the app from DMS_SHORT_PATHS
 ROOT = [""]
 CLIENT_ROOT = [""]                         # DMS_CLIENT_ROOT: the same root as other PCs reach it (not an admin share)
