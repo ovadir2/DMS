@@ -1318,7 +1318,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         from .file_service import find_file
         # a record keeps the path the file had when it was written, and the file moves on its own: an approval
         # takes it to Current_ReadOnly, a submission to Submitted. The row follows it rather than losing it.
-        found = find_file(s.repository_root, path)
+        found = find_file(s.repository_root, path) or find_file(s.repository_root, (doc or {}).get("currentUncPath"))
         if not found:                                        # a record pointing at a file that is gone
             return {}
         path = found
@@ -1792,7 +1792,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 doc["viewUri"] = files.open_uri(d["currentUncPath"])
             if doc.get("file"):
                 from .file_service import find_file
-                found = find_file(s.repository_root, doc["file"])
+                # the approved file has another name (approval drops _DRAFT and carries the revision), so a
+                # working path that is gone is answered by the record's own approved path before giving up
+                found = find_file(s.repository_root, doc["file"]) or find_file(s.repository_root, d.get("currentUncPath"))
                 # the record names a file that is in none of the workflow folders of its place: the row says so
                 # instead of offering a way in that leads nowhere
                 doc["fileMissing"] = not found

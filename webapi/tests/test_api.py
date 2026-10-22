@@ -1846,6 +1846,20 @@ def test_view_turns_every_readable_format_into_a_pdf():
         assert not name.endswith(SharePoint.AS_PDF), name
 
 
+def test_a_working_row_falls_back_to_the_approved_file(tmp_path):
+    """Approval renames the file (it drops _DRAFT and carries the revision), so the working path in the record
+    names something that is no longer there. The row then has the record's own approved path to fall back on."""
+    from dms_api.file_service import find_file
+    root = tmp_path
+    folder = root / "01_General" / "Q"
+    (folder / "Current_ReadOnly").mkdir(parents=True)
+    draft = str(folder / "QP-1_Rev02_DRAFT.docx")
+    approved = folder / "Current_ReadOnly" / "QP-1_Rev02.docx"
+    approved.write_bytes(b"x")
+    assert find_file(str(root), draft) is None                      # the name in the record is gone
+    assert find_file(str(root), str(approved)) == str(approved)     # the record's approved path still answers
+
+
 def test_nobody_approves_their_own_document(tmp_path):
     """Writing it and approving it are two people. Choosing yourself as the approver, or delegating the
     approval back to the person who wrote it, is the same thing by another route."""
