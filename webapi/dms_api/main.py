@@ -1229,10 +1229,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                             # in SharePoint while it is approved: Office Online opens it with the person's own
                             # Microsoft account, so nobody needs rights on the file server
                             "officeUri": (office := kept.get("url")),
-                            # View is the same copy in SharePoint, opened read only; without the bridge it is
-                            # the file itself, for someone who has rights on the file server
-                            "viewUri": (kept.get("viewUrl") or read_only_uri(office)
-                                        or (files.open_uri(file) if file and user.can(file) else None)),
+                            # View makes a PDF copy for this reader (the bridge). The copy the approvers edit
+                            # is never View: a standing permission on that library beats the "view" in its
+                            # address, and Excel ignores it outright. Without the bridge it is the file itself,
+                            # for someone who has rights on the file server.
+                            "viewPdf": review_on() and bool(file),
+                            "viewUri": None if (review_on() and file) else (
+                                kept.get("viewUrl") or read_only_uri(office)
+                                or (files.open_uri(file) if file and user.can(file) else None)),
                             "viaDms": bool(file) and not user.can(file),   # no rights on the file server: the DMS serves it
                             "remarks": remarks_of(d.get("documentId") or ""),
                             "editable": bool((REVIEW.get(d.get("documentId") or "") or {}).get("url")),   # in SharePoint: they edit it there

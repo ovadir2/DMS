@@ -2812,7 +2812,8 @@ def test_the_link_opens_for_anyone_in_the_company(tmp_path, monkeypatch):
     file_service.run_once(sp, s)
     monkeypatch.setattr(security.User, "can", lambda self, path, access="read": False)   # no rights anywhere
     row = next(x for x in c.get("/api/approvals").json() if x["id"] == d["id"])
-    assert row["officeUri"].endswith("e=edit") and row["viewUri"].endswith("e=view")
+    # View is a PDF copy the DMS makes for the reader, so the row carries no link of its own to read with
+    assert row["officeUri"].endswith("e=edit") and row["viewPdf"] and row["viewUri"] is None
     assert links == [True, False]                      # one link to edit it, one to read it
 
 

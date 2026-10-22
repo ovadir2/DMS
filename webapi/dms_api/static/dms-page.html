@@ -593,6 +593,9 @@ function fileLinks(file, editUri, viewUri, canEdit, viaDms, row) {
   const out = [];
   if (editUri && canEdit) out.push(openBtn(editUri, file, '✎ ' + T.openEdit));
   if (VIEW_EXT.test(file)) out.push(`<button type="button" class="link" data-vw="${esc(file)}">${T.viewRo}</button>`);
+  // View is a PDF copy the DMS makes for this reader, never the copy the approvers edit: that one opens in
+  // PowerPoint / Word / Excel, and a standing permission on the library beats the "view" in its address.
+  else if (row && row.viewPdf) out.push(`<button type="button" class="link" data-ckview="${esc(file)}">${T.viewRo}</button>`);
   else if (viewUri) out.push(openBtn(viewUri, file, T.viewRo));
   else if (!out.length && !viaDms) out.push(`<button type="button" class="link" data-noopen="${esc(file)}">${T.open}</button>`);
   return out.join('\n');
