@@ -1852,9 +1852,8 @@ def test_the_page_has_an_icon_of_its_own(tmp_path):
     c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER,
                                        sharepoint="memory")))
     page = c.get("/dms/dms-page").text
-    assert 'rel="icon"' in page and "/dms/icon.png" in page
-    assert c.get("/favicon.ico").status_code == 200 and c.get("/dms/icon.png").status_code == 200
-    assert c.get("/dms/logo.png").status_code == 200
+    assert 'rel="icon"' in page and "/dms/logo.png" in page
+    assert c.get("/favicon.ico").status_code == 200 and c.get("/dms/logo.png").status_code == 200
 
 
 def test_markdown_is_written_for_a_document_whose_next_revision_is_in_work(tmp_path):
