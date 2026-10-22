@@ -1792,7 +1792,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 doc["viewUri"] = files.open_uri(d["currentUncPath"])
             if doc.get("file"):
                 from .file_service import find_file
-                doc["file"] = find_file(s.repository_root, doc["file"]) or doc["file"]
+                found = find_file(s.repository_root, doc["file"])
+                # the record names a file that is in none of the workflow folders of its place: the row says so
+                # instead of offering a way in that leads nowhere
+                doc["fileMissing"] = not found
+                doc["file"] = found or doc["file"]
             if review_on() and doc.get("file"):
                 # the approved document opens read only in SharePoint, like everywhere else: no rights needed.
                 # The links to the file itself go with it: on the bridge SharePoint is the only way in, and a
