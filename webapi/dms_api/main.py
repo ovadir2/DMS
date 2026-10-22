@@ -376,11 +376,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return FileResponse(f)
 
     @app.get("/favicon.ico", include_in_schema=False)
+    @app.get("/dms/icon.png", include_in_schema=False)
     def favicon():
-        """The tab's icon: the company logo itself. Without any icon the browser shows whatever it likes -
-        often the icon of the site that tab held before - and the DMS looked like a different system from one
-        window to the next."""
-        f = STATIC / "logo.png"
+        """The tab's icon: the logo on a white square that it fills, the shape a tab icon is drawn in. The wide
+        logo itself is shrunk into a corner of the tab instead. Without any icon the browser shows whatever it
+        likes - often the icon of the site that tab held before."""
+        f = STATIC / "icon.png"
+        if not f.exists():
+            f = STATIC / "logo.png"
         if not f.exists():
             raise HTTPException(404)
         return FileResponse(f, media_type="image/png")
