@@ -392,7 +392,7 @@ function bridgeActions(f) {
   // One way in. The DMS already knows whether this person may change this document, so the button says which
   // it is - "open to edit" or "view" - instead of asking the person to pick and refusing afterwards.
   const name = f.name || f.path, co = f.checkedOut, out = [];
-  if (TEXT_EXT.test(name)) return `<button type="button" class="link" data-tx="${esc(f.path)}">${f.canEdit ? '\u270E ' + T.editHere : T.open}</button>`;
+  if (TEXT_EXT.test(name)) return `<button type="button" class="link" data-tx="${esc(f.path)}">${f.canEdit ? '\u270E ' + T.editHere : T.viewRo}</button>`;
   if (co && !co.mine && co.edit) return `<span class="muted small">\uD83D\uDD0F ${esc(T.outWith.replace('{who}', co.by || ''))}</span>`;
   if (co && co.mine && co.url && co.edit && f.canEdit) {           // already out for editing: go back to that copy
     out.push(`<a class="link" href="${esc(co.url)}" target="_blank" rel="noopener">\u270E ${T.openEditFile}</a>`);
@@ -406,7 +406,7 @@ function bridgeActions(f) {
   return `<button type="button" class="link" data-ckview="${esc(f.path)}">${T.viewRo}</button>`;
 }
 function fileActions(f) {
-  return `${f.bridge ? bridgeActions(f) : f.officeUri ? `${openBtn(f.officeUri, f.path, f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open))}${f.editable && f.viewUri ? openBtn(f.viewUri, f.path, T.viewRo) : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">✎ ${T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cp="${esc(f.path)}">🔗 ${T.copyLink}</button>`
+  return `${f.bridge ? bridgeActions(f) : f.officeUri ? `${openBtn(f.officeUri, f.path, f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open))}${f.editable && f.viewUri ? openBtn(f.viewUri, f.path, T.viewRo) : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">${f.editable === false || f.readOnly ? T.viewRo : '✎ ' + T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cp="${esc(f.path)}">🔗 ${T.copyLink}</button>`
     + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button><button type="button" class="link" data-drn="${f.document.id}" data-name="${esc(f.name)}">${T.rename}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
         + (f.document.statusKey === 'Submitted' && !f.document.nextRevision ? `<button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button>` : '')
         + (f.document.statusKey === 'Approved_ReadOnly' && samePath(f.path, f.document.currentUncPath) ? `${f.document.nextRevision ? '' : `<button type="button" class="link" data-rev="${f.document.id}">⟳ ${T.newRev}</button>`}<button type="button" class="link" data-share="${f.document.id}">✉ ${isHr(f.path) ? T.shareHrBtn : T.share}</button>` : '')
@@ -590,7 +590,7 @@ function fileLinks(file, editUri, viewUri, canEdit, viaDms, row) {
   // On the bridge the file opens through SharePoint, never by a file:// link: Office maps the file server to
   // a zone of its own and either warns about it or blocks the file, and View in Excel ignores "open to view".
   if (row && row.bridge) return bridgeActions({ path: file, name: file, canEdit: row.canEdit, checkedOut: row.checkedOut });
-  if (TEXT_EXT.test(file)) return `<button type="button" class="link" data-tx="${esc(file)}">${canEdit ? '✎ ' + T.editHere : T.open}</button>`;
+  if (TEXT_EXT.test(file)) return `<button type="button" class="link" data-tx="${esc(file)}">${canEdit ? '✎ ' + T.editHere : T.viewRo}</button>`;
   const out = [];
   if (editUri && canEdit) out.push(openBtn(editUri, file, '✎ ' + T.openEdit));
   if (VIEW_EXT.test(file)) out.push(`<button type="button" class="link" data-vw="${esc(file)}">${T.viewRo}</button>`);
@@ -1431,7 +1431,7 @@ async function editText(path) {
   let r;
   try { r = await api('/api/files/text?path=' + encodeURIComponent(path)); }
   catch (e) { return alert(`${T.err}: ${e.message}`); }
-  const res = await dialog(`${T.textEditor} - ${esc(r.name)}`,
+  const res = await dialog(`${r.canWrite ? T.textEditor : T.viewRo} - ${esc(r.name)}`,
     `<textarea name="text" class="ltr" style="width:100%;height:55vh;font:13px/1.45 Consolas,monospace" ${r.canWrite ? '' : 'readonly'}>${esc(r.text)}</textarea>
      ${r.canWrite ? '' : `<div class="msg">${T.readOnlyHere}</div>`}`,
     r.canWrite ? [['cancel', T.cancel, 'light'], ['ok', T.save]] : [['cancel', T.cancel, 'light']]);
