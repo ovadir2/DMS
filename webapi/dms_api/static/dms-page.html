@@ -393,7 +393,7 @@ function bridgeActions(f) {
   // it is - "open to edit" or "view" - instead of asking the person to pick and refusing afterwards.
   const name = f.name || f.path, co = f.checkedOut, out = [];
   if (TEXT_EXT.test(name)) {
-    return (f.canEdit ? `<button type="button" class="link" data-tx="${esc(f.path)}">\u270E ${T.editHere}</button>\n` : '')
+    return (f.canEdit ? `<button type="button" class="link" data-tx="${esc(f.path)}">\u270E ${T.openEditFile}</button>\n` : '')
       + `<button type="button" class="link" data-txv="${esc(f.path)}">${T.viewRo}</button>`;
   }
   if (co && !co.mine && co.edit) return `<span class="muted small">\uD83D\uDD0F ${esc(T.outWith.replace('{who}', co.by || ''))}</span>`;

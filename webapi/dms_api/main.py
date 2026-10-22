@@ -1726,6 +1726,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(400, "Choose another person")
         if to in st["pending"]:
             raise HTTPException(409, f"{to} is already an approver of this stage")
+        if to == (d.get("ownerEmail") or "").lower():
+            raise HTTPException(403, "The approval cannot be delegated to the person who wrote the document")
         refuse_blind_approvers(d, [to])                        # delegating is not a way past the AD groups
         doc_id = d.get("documentId") or f"ID {item_id}"
         until = valid_to(datetime.now().date())
@@ -2071,6 +2073,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         file_back(doc, s.choices["Working"])                    # still in Submitted from an earlier cycle
         if not doc.get("workingUncPath") or not files.is_file(files.resolve(s.repository_root, doc["workingUncPath"])):
             raise HTTPException(409, "The working file was not found on the file server")
+        owner = (doc.get("ownerEmail") or "").lower()
+        if owner and owner in approvers:
+            raise HTTPException(403, "A document is not approved by the person who wrote it: "
+                                     f"{owner} cannot be one of its approvers")
         refuse_blind_approvers(doc, approvers)                 # AD decides who may see it, not the workflow
         sp().update(item_id, {"LifecycleStatus": s.choices["Submitted"]})
         sp().audit(document_id=doc["documentId"], event=s.choices["SubmittedEvent"], from_status=s.choices["Working"],

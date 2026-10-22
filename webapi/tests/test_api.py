@@ -1846,6 +1846,22 @@ def test_view_turns_every_readable_format_into_a_pdf():
         assert not name.endswith(SharePoint.AS_PDF), name
 
 
+def test_nobody_approves_their_own_document(tmp_path):
+    """Writing it and approving it are two people. Choosing yourself as the approver, or delegating the
+    approval back to the person who wrote it, is the same thing by another route."""
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    (root / "01_General" / "Procedures").mkdir(parents=True)
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
+    c = TestClient(create_app(s, MemorySharePoint(s)))
+    f = root / "01_General" / "Procedures" / "QP-3.docx"
+    f.write_bytes(b"x")
+    d = c.post("/api/documents", json={"path": str(f), "documentType": "נוהל", "documentArea": "איכות"}).json()
+    r = c.post(f"/api/documents/{d['id']}/submit", json={"approvers": [USER]})
+    assert r.status_code == 403 and USER in r.text
+    assert c.post(f"/api/documents/{d['id']}/submit", json={"approvers": ["other@rh.co.il"]}).status_code == 200
+
+
 def test_a_document_is_not_sent_to_someone_ad_keeps_away(tmp_path, monkeypatch):
     """The DMS has rights on the file server where nobody else does, so an approval would otherwise become the
     way in: an HR procedure sent to someone outside the HR group would land in their hands."""
@@ -1861,7 +1877,7 @@ def test_a_document_is_not_sent_to_someone_ad_keeps_away(tmp_path, monkeypatch):
     monkeypatch.setattr("dms_api.security.may_see", lambda email, path, access="read": email != "outsider@rh.co.il")
     r = c.post(f"/api/documents/{d['id']}/submit", json={"approvers": ["outsider@rh.co.il"]})
     assert r.status_code == 403 and "outsider@rh.co.il" in r.text
-    assert c.post(f"/api/documents/{d['id']}/submit", json={"approvers": [USER]}).status_code == 200
+    assert c.post(f"/api/documents/{d['id']}/submit", json={"approvers": ["other@rh.co.il"]}).status_code == 200
 
 
 def test_a_long_path_is_still_found(tmp_path):
@@ -3064,7 +3080,7 @@ def test_the_owner_is_counted_what_came_back_to_them(tmp_path):
     c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "please fix the price"})
     w = c.get("/api/my-workflows/waiting").json()
     assert w["returned"] == 1 and w["working"] == 0 and w["open"] == 1     # back with its owner
-    c.post(f"/api/documents/{d['id']}/submit", json={"approvers": [USER]})
+    c.post(f"/api/documents/{d['id']}/submit", json={"approvers": ["other@rh.co.il"]})
     w = c.get("/api/my-workflows/waiting").json()
     assert w["returned"] == 0 and w["submitted"] == 1                      # submitted again: in the pipeline
 
