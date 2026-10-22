@@ -392,7 +392,10 @@ function bridgeActions(f) {
   // One way in. The DMS already knows whether this person may change this document, so the button says which
   // it is - "open to edit" or "view" - instead of asking the person to pick and refusing afterwards.
   const name = f.name || f.path, co = f.checkedOut, out = [];
-  if (TEXT_EXT.test(name)) return `<button type="button" class="link" data-tx="${esc(f.path)}">${f.canEdit ? '\u270E ' + T.editHere : T.viewRo}</button>`;
+  if (TEXT_EXT.test(name)) {
+    return (f.canEdit ? `<button type="button" class="link" data-tx="${esc(f.path)}">\u270E ${T.editHere}</button>\n` : '')
+      + `<button type="button" class="link" data-txv="${esc(f.path)}">${T.viewRo}</button>`;
+  }
   if (co && !co.mine && co.edit) return `<span class="muted small">\uD83D\uDD0F ${esc(T.outWith.replace('{who}', co.by || ''))}</span>`;
   if (co && co.mine && co.url && co.edit && f.canEdit) {           // already out for editing: go back to that copy
     out.push(`<a class="link" href="${esc(co.url)}" target="_blank" rel="noopener">\u270E ${T.openEditFile}</a>`);
@@ -443,6 +446,7 @@ function wire(v) {
   v.querySelectorAll('[data-dl]').forEach(a => a.onclick = () => download(a.dataset.dl));
   v.querySelectorAll('[data-vw]').forEach(a => a.onclick = () => viewFile(a.dataset.vw));
   v.querySelectorAll('[data-tx]').forEach(a => a.onclick = () => editText(a.dataset.tx));
+  v.querySelectorAll('[data-txv]').forEach(a => a.onclick = () => editText(a.dataset.txv, true));
   v.querySelectorAll('[data-ckout]').forEach(b => b.onclick = () => takeOut(b.dataset.ckout, true));
   v.querySelectorAll('[data-ckview]').forEach(b => b.onclick = () => takeOut(b.dataset.ckview, false));
   v.querySelectorAll('[data-ckin]').forEach(b => b.onclick = () => bringBack(b.dataset.ckin));
@@ -592,7 +596,11 @@ function fileLinks(file, editUri, viewUri, canEdit, viaDms, row) {
   // On the bridge the file opens through SharePoint, never by a file:// link: Office maps the file server to
   // a zone of its own and either warns about it or blocks the file, and View in Excel ignores "open to view".
   if (row && row.bridge) return bridgeActions({ path: file, name: file, canEdit: row.canEdit, checkedOut: row.checkedOut });
-  if (TEXT_EXT.test(file)) return `<button type="button" class="link" data-tx="${esc(file)}">${canEdit ? '✎ ' + T.editHere : T.viewRo}</button>`;
+  // A text file offers the same two ways in as every other kind: edit it (when this person may) and read it.
+  if (TEXT_EXT.test(file)) {
+    return (canEdit ? `<button type="button" class="link" data-tx="${esc(file)}">✎ ${T.openEdit}</button>\n` : '')
+      + `<button type="button" class="link" data-txv="${esc(file)}">${T.viewRo}</button>`;
+  }
   const out = [];
   if (editUri && canEdit) out.push(openBtn(editUri, file, '✎ ' + T.openEdit));
   if (VIEW_EXT.test(file)) out.push(`<button type="button" class="link" data-vw="${esc(file)}">${T.viewRo}</button>`);
@@ -1429,10 +1437,11 @@ async function download(path) {
 const VIEW_EXT = /\.(pdf|png|jpe?g|gif|bmp|svg|txt|log)$/i;
 const TEXT_EXT = /\.(txt|csv|md|log|json|xml|ini|cfg|ya?ml)$/i;
 // A text file is edited on the page itself: no application and nothing to install on the PC.
-async function editText(path) {
+async function editText(path, readOnly = false) {
   let r;
   try { r = await api('/api/files/text?path=' + encodeURIComponent(path)); }
   catch (e) { return alert(`${T.err}: ${e.message}`); }
+  if (readOnly) r = { ...r, canWrite: false };            // View: the same file, with nothing to type into
   const res = await dialog(`${r.canWrite ? T.textEditor : T.viewRo} - ${esc(r.name)}`,
     `<textarea name="text" class="ltr" style="width:100%;height:55vh;font:13px/1.45 Consolas,monospace" ${r.canWrite ? '' : 'readonly'}>${esc(r.text)}</textarea>
      ${r.canWrite ? '' : `<div class="msg">${T.readOnlyHere}</div>`}`,

@@ -1726,6 +1726,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(400, "Choose another person")
         if to in st["pending"]:
             raise HTTPException(409, f"{to} is already an approver of this stage")
+        refuse_blind_approvers(d, [to])                        # delegating is not a way past the AD groups
         doc_id = d.get("documentId") or f"ID {item_id}"
         until = valid_to(datetime.now().date())
         details = f"{DELEGATED}{frm} -> {to}" + f" (until {until:%d/%m/%Y})" \
@@ -2041,6 +2042,21 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         d = sp().document(item_id)
         return {"chosen": last_chosen(d.get("documentId") or ""), "documentType": d.get("documentType") or ""}
 
+    def refuse_blind_approvers(doc: dict, approvers: list[str]) -> None:
+        """An approver must be allowed to see the document in the first place. The DMS has rights on the file
+        server where nobody else does, so without this check a submission would hand an HR procedure to someone
+        AD keeps away from it - the approval itself would become the way in. The answer comes from their AD
+        groups alone (the same as Explorer's "Effective Access"); where it cannot be had, nothing is blocked."""
+        from .security import may_see
+        folder = os.path.dirname(files.resolve(s.repository_root, doc.get("workingUncPath") or "")
+                                 or "") if doc.get("workingUncPath") else ""
+        if not folder:
+            return
+        blind = [a for a in approvers if may_see(a, folder) is False]
+        if blind:
+            raise HTTPException(403, "These people are not allowed to see this document on the file server, "
+                                     f"so it cannot be sent to them for approval: {', '.join(blind)}")
+
     @app.post("/api/documents/{item_id}/submit")
     def submit(item_id: int, req: SubmitRequest | None = None, user: User = Depends(current_user)):
         doc = sp().document(item_id)
@@ -2055,6 +2071,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         file_back(doc, s.choices["Working"])                    # still in Submitted from an earlier cycle
         if not doc.get("workingUncPath") or not files.is_file(files.resolve(s.repository_root, doc["workingUncPath"])):
             raise HTTPException(409, "The working file was not found on the file server")
+        refuse_blind_approvers(doc, approvers)                 # AD decides who may see it, not the workflow
         sp().update(item_id, {"LifecycleStatus": s.choices["Submitted"]})
         sp().audit(document_id=doc["documentId"], event=s.choices["SubmittedEvent"], from_status=s.choices["Working"],
                    to_status=s.choices["Submitted"], actor=user.email,

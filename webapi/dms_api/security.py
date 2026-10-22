@@ -8,6 +8,8 @@ itself reads the file server with its own account. No Kerberos delegation is nee
 """
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass, field
 
 READ, WRITE = "read", "write"
@@ -166,6 +168,18 @@ class AdUser:
             return False
         wanted = 0x120089 if access == READ else 0x120116       # FILE_GENERIC_READ / FILE_GENERIC_WRITE
         return error.value == 0 and (granted.value & wanted) == wanted
+
+
+def may_see(email: str, path: str, access: str = READ) -> bool | None:
+    """May that person read (or write) this path, by their AD groups alone - without their login and without
+    anything on their PC? None when the question cannot be answered here (not Windows, no domain, the account
+    is not in AD): the caller then lets it pass rather than blocking on a check it could not make."""
+    if os.name != "nt" or not email or not path:
+        return None
+    try:
+        return AdUser.get(email).can(path, access)
+    except (PermissionError, OSError, AttributeError):
+        return None
 
 
 _UPN: dict = {}
