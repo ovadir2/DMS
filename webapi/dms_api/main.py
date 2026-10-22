@@ -1002,6 +1002,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             files.check_editable(s.repository_root, full, s.protected_depth)
         if holds_share_log(full) or in_shared_folder(full):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only) and cannot be deleted")
+        # The approved revision in force, and the folder that holds it: not deleted by anyone, a DMS super user
+        # included. A document leaves it only by being replaced - the next revision moves it to Obsolete_ReadOnly.
+        parts = [p.lower() for p in os.path.normpath(full).replace("/", "\\").split("\\")]
+        if "current_readonly" in parts:
+            raise HTTPException(403, "Current_ReadOnly holds the approved revision in force: nothing there can be deleted")
         if (blueprint.describe(rel_parts(full)) or {}).get("kind") not in (None, "project"):   # a project folder is the user's
             raise HTTPException(403, "This folder is part of the company skeleton (blueprint) and cannot be deleted. Its content can.")
         d = registered_inside(full)
