@@ -1846,6 +1846,33 @@ def test_view_turns_every_readable_format_into_a_pdf():
         assert not name.endswith(SharePoint.AS_PDF), name
 
 
+def test_markdown_is_written_for_a_document_whose_next_revision_is_in_work(tmp_path):
+    """The revision in force has its Markdown whatever the document's own status is. A document that went back
+    into work for its next revision kept an approved file with nothing beside it for the AI to read."""
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    folder = root / "01_General" / "Q" / "Current_ReadOnly"
+    folder.mkdir(parents=True)
+    held = folder / "QP-1_Rev01.docx"
+    held.write_bytes(b"x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory")
+    sp = MemorySharePoint(s)
+    doc = sp.create_document(title="QP-1", path=str(held), document_type="נוהל", document_area="איכות",
+                             owner_email=USER, control_mode="", document_id="DMS-00001")
+    sp.update(doc["id"], {"LifecycleStatus": s.choices["Working"], "CurrentUncPath": str(held),
+                          "CurrentRevision": "01", "WorkingUncPath": str(held)})
+    written: list = []
+    import dms_api.markdown as md
+    real = md.write_beside
+    md.write_beside = lambda path, doc=None: written.append(path) or path
+    try:
+        file_service.run_once(sp, s)
+    finally:
+        md.write_beside = real
+    assert written == [str(held)]                      # in work, and its approved revision still gets one
+
+
 def test_a_working_row_falls_back_to_the_approved_file(tmp_path):
     """Approval renames the file (it drops _DRAFT and carries the revision), so the working path in the record
     names something that is no longer there. The row then has the record's own approved path to fall back on."""

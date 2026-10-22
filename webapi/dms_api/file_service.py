@@ -226,17 +226,18 @@ def run_once(sp, s: Settings, only: str = "") -> dict:
             continue
         if status not in (c["Working"], c["Submitted"], c["Approved_ReadOnly"]):
             continue
-        if status == c["Approved_ReadOnly"] and d.get("currentUncPath"):
-            # an approved file is read only on the file server, whoever put it there and whichever way
+        if d.get("currentUncPath"):
+            # The revision in force, whatever the document's own status is: a document whose next revision is
+            # in work still has one, and it is read only on the file server and carries its Markdown too.
             held = to_root(s.repository_root, d["currentUncPath"])
-            if held and os.path.isfile(held):
+            if held and is_file(held):
                 if not is_read_only(held):
                     try:
                         _set_read_only(held, True)
                         log.info("%s: %s was writable and is read only again", doc_id, held)
                     except OSError as e:
                         log.warning("%s stayed writable: %s", held, e)
-                if not os.path.isfile(os.path.splitext(held)[0] + ".md"):
+                if not is_file(os.path.splitext(held)[0] + ".md"):
                     try:        # the revision in force always has its Markdown, whoever released it
                         from . import markdown
                         if markdown.write_beside(held, d):
