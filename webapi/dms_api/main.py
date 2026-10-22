@@ -1519,8 +1519,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         mine = held if held and edit else checkout.of(s.repository_root, full, user.email)
         key = checkout.key_of(s.repository_root, full, "" if edit else user.email)
         lib = getattr(sp(), "library_of", lambda _: "")(key)
+        # a copy to read that is not a PDF was made under an older rule (a spreadsheet used to go up as it is,
+        # and Excel lets a reader type into it): it is made again as a PDF
+        flat = not edit and full.lower().endswith(tuple(getattr(sp(), "AS_PDF", ()))) and not (
+            (mine or {}).get("name") or "").lower().endswith(".pdf")
         # a copy made before the DMS knew which library it belongs in is made again, in the right one
-        if mine and bool(mine.get("edit")) == edit and mine.get("library") == lib:
+        if mine and bool(mine.get("edit")) == edit and mine.get("library") == lib and not flat:
             return {"path": full, "url": mine.get("url"), "edit": bool(mine.get("edit")), "by": mine.get("by")}
         try:
             # only to be read: it goes up as a PDF, so there is nothing to type into even by mistake

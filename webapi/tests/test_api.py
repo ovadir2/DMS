@@ -1839,6 +1839,16 @@ def test_a_record_follows_its_file_into_the_workflow_folders(tmp_path):
     assert find_file(str(root), str(approved)) == str(approved)        # a path that is there is kept
 
 
+def test_view_turns_every_readable_format_into_a_pdf():
+    """View must leave nothing to type into. A spreadsheet used to go up as it is, and Excel ignores "open to
+    view" - the reader could type into the copy, which is what View is there to prevent."""
+    from dms_api.sharepoint import SharePoint
+    for name in ("a.docx", "a.xlsx", "a.xlsm", "a.csv", "a.pptx", "a.rtf", "a.odt"):
+        assert name.endswith(SharePoint.AS_PDF), name
+    for name in ("a.pdf", "a.png", "a.txt", "a.zip"):          # already flat, or nothing to lay out
+        assert not name.endswith(SharePoint.AS_PDF), name
+
+
 def test_a_long_path_is_still_found(tmp_path):
     """Over about 260 characters Windows says the file is not there, and a few Hebrew folder names reach that
     on their own: the DMS then found no file and offered a link to it instead of the SharePoint copy."""

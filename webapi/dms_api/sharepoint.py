@@ -451,10 +451,13 @@ class SharePoint:
             logger.info("The review library %s was created on %s", title, site)
         self._review_ready = ready | {title}
 
-    # What a copy only to be read is turned into, so that nothing can be typed into it at all. A spreadsheet is
-    # left as it is: on paper a wide sheet becomes dozens of unreadable pages, and its filters and sheets are
-    # the document. Anything already flat (a PDF, an image) is shown as it is too.
-    AS_PDF = (".doc", ".docx", ".odt", ".rtf", ".ppt", ".pptx", ".odp")
+    # What a copy only to be read is turned into, so that nothing can be typed into it at all - every format
+    # SharePoint can lay out as pages, a spreadsheet included: Excel ignores "open to view" and lets a reader
+    # type into the copy, which is the whole thing View is there to prevent. Anything already flat (a PDF, an
+    # image, a text file) is shown as it is.
+    AS_PDF = (".doc", ".docx", ".docm", ".dot", ".dotx", ".odt", ".rtf",
+              ".xls", ".xlsx", ".xlsm", ".ods", ".csv",
+              ".ppt", ".pptx", ".pptm", ".pps", ".ppsx", ".pot", ".potx", ".odp")
 
     def review_put(self, *, local_path: str, document_id: str, edit: bool = True, as_pdf: bool = False) -> dict:
         """Copy the file to the review library, under a folder of its own. Returns the address to open it with:
