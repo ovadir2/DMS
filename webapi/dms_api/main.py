@@ -375,6 +375,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(404)
         return FileResponse(f)
 
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon():
+        """The tab's icon. Without it the browser shows whatever it likes - often the icon of the site the tab
+        held before - and the DMS looked like a different system from one tab to the next."""
+        f = STATIC / "logo.png"
+        if not f.exists():
+            raise HTTPException(404)
+        return FileResponse(f, media_type="image/png")
+
     @app.get("/dms/dms-page", include_in_schema=False)
     def page():
         return FileResponse(STATIC / "dms-page.html", media_type="text/html; charset=utf-8")
