@@ -17,6 +17,7 @@ Implementation of **IT-DOC-BP-001 "Enterprise Document Control and Large-File Ex
 | [`docs/06-Copilot-Prompts.md`](docs/06-Copilot-Prompts.md) | Copy-paste Copilot prompts, follow-ups and check lists that build every flow in Power Automate, with the Hebrew choice values |
 | [`docs/07-Approval-Flow.md`](docs/07-Approval-Flow.md) | Pilot approval flow as a diagram, plus the editable Hebrew deck [`docs/presentations/DMS-Approval-Flow.pptx`](docs/presentations/DMS-Approval-Flow.pptx) |
 | [`docs/08-Pilot-Process.md`](docs/08-Pilot-Process.md) | The pilot process end to end: DMS page, approval, file moves, roles, and the step-by-step pilot test with one super user |
+| [`docs/Go-Live.md`](docs/Go-Live.md) | From the pilot to production: the names, the pilot's data, first loading, separating the package from what exists only to try it, and what the pilot taught |
 
 ## Quick start
 
