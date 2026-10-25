@@ -43,7 +43,7 @@ def _register(s: Settings) -> dict:
 
 def run(root: str, write: bool) -> int:
     from . import markdown
-    docs = _register(Settings()) if write else {}     # a dry run asks SharePoint nothing
+    docs = _register(Settings.from_env()) if write else {}     # a dry run asks SharePoint nothing
     done = skipped = failed = 0
     for folder, dirs, names in os.walk(root):
         if os.path.basename(folder).lower() != FOLDER:
@@ -78,7 +78,7 @@ def run(root: str, write: bool) -> int:
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
-    s = Settings()
+    s = Settings.from_env()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--root", default=s.repository_root, help="the repository root (DMS_REPOSITORY_ROOT)")
     p.add_argument("--write", action="store_true", help="write the files (without it, only says what it would do)")
