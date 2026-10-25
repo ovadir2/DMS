@@ -1846,6 +1846,29 @@ def test_view_turns_every_readable_format_into_a_pdf():
         assert not name.endswith(SharePoint.AS_PDF), name
 
 
+def test_backfill_writes_markdown_beside_every_released_file(tmp_path, capsys, monkeypatch):
+    """One pass for the files that were released before the DMS wrote Markdown at all, or released by hand:
+    without it they are in Current_ReadOnly and the AI cannot read them."""
+    from dms_api import backfill
+    root = tmp_path / "Root"
+    cur = root / "01_General" / "Q" / "Current_ReadOnly"
+    cur.mkdir(parents=True)
+    (cur / "QP-1.docx").write_bytes(b"x")
+    (cur / "QP-2.docx").write_bytes(b"x")
+    (cur / "QP-2.md").write_text("already there", encoding="utf-8")
+    (cur / "photo.png").write_bytes(b"x")
+    (root / "01_General" / "Q" / "draft.docx").write_bytes(b"x")          # not released: not its business
+    monkeypatch.setattr(backfill, "_register", lambda s: {})
+    written = []
+    monkeypatch.setattr("dms_api.markdown.write_beside", lambda path, doc=None: written.append(path) or path)
+
+    assert backfill.run(str(root), write=False) == 0 and not written      # a dry run writes nothing
+    assert "would write" in capsys.readouterr().out
+
+    assert backfill.run(str(root), write=True) == 0
+    assert written == [str(cur / "QP-1.docx")]                            # the one that had none
+
+
 def test_the_page_has_an_icon_of_its_own(tmp_path):
     """Without one the browser shows whatever it likes - often the icon of the site that tab held before - and
     the DMS looked like a different system from one tab to the next."""
