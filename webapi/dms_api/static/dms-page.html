@@ -603,23 +603,7 @@ function ctxOpen(host, x, y) {
   }
   // The menu reads in groups, the way a folder window does: what opens the thing, what the workflow does
   // with it, and what you do to the file itself.
-  // Three groups, each in a fixed order: how it opens, what the workflow does with it, and what you do to
-  // the file or folder itself. A name that starts with # is a button of the screen rather than of the row.
-  const GROUP = [
-    ['data-f', 'data-ckout', 'data-ext', 'data-ckview', 'data-vw', 'data-tx', 'data-txv', 'data-ckin', 'data-noopen'],
-    ['data-st', 'data-sub', 'data-ok', 'data-no', 'data-dg', 'data-wd', 'data-rev', 'data-relp', 'data-share',
-     'data-up', 'data-hist'],
-    ['data-dl', 'data-cp', 'data-rn', 'data-drn', 'data-del', 'data-ddel', 'data-mkin', '#mk', '#nd'],
-  ];
   const has = (el, k) => k.charAt(0) === '#' ? el.id === k.slice(1) : el.hasAttribute(k);
-  const place = el => {
-    for (let g = 0; g < GROUP.length; g++) {
-      const i = GROUP[g].findIndex(k => has(el, k));
-      if (i >= 0) return [g, i];
-    }
-    return [2, GROUP[2].length];                // anything the DMS gains later: with the file commands, last
-  };
-  const groupOf = el => place(el)[0];
   const entry = src => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -629,16 +613,45 @@ function ctxOpen(host, x, y) {
     b.onclick = () => { ctxClose(); src.click(); };
     m.appendChild(b);
   };
+  // The same menu everywhere: one line per command the DMS knows, in a fixed order. A command this row does
+  // not offer - because of what it is, where it sits or who you are - is there in grey, so the menu reads the
+  // same way on every file and folder and nobody hunts for a line that moved.
+  const CANON = [
+    [0, ['data-f'], () => T.open],
+    [0, ['data-ckout', 'data-ext', 'data-tx'], () => '\u270E ' + T.openEditFile],
+    [0, ['data-ckview', 'data-vw', 'data-txv'], () => T.viewRo],
+    [0, ['data-ckin'], () => '\u2713 ' + T.doneEditing],
+    [1, ['data-st'], () => T.start],
+    [1, ['data-sub'], () => T.submit],
+    [1, ['data-rev'], () => '\u27F3 ' + T.newRev],
+    [1, ['data-relp'], () => T.relNw],
+    [1, ['data-share'], () => '\u2709 ' + T.share],
+    [1, ['data-up'], () => T.uploadEdited],
+    [1, ['data-hist'], () => T.history],
+    [2, ['data-dl'], () => T.download],
+    [2, ['data-cp'], () => '\uD83D\uDD17 ' + T.copyLink],
+    [2, ['data-rn', 'data-drn'], () => T.rename],
+    [2, ['data-del', 'data-ddel'], () => T.del],
+    [2, ['data-mkin', '#mk'], () => T.newFolder],
+    [2, ['#nd'], () => '+ ' + T.newDoc],
+  ];
   const HEAD = [T.ctxOpenGrp, T.ctxFlowGrp, T.ctxFileGrp];
+  const pool = [...items, ...screen];
   let last = -1;
-  [...items, ...screen].sort((x, y) => { const a = place(x), b = place(y); return a[0] - b[0] || a[1] - b[1]; }).forEach(src => {
-    const g = groupOf(src);
+  CANON.forEach(([g, keys, label]) => {
     if (g !== last) {                                    // every group says what it is, in every menu
       if (last >= 0) m.appendChild(Object.assign(document.createElement('div'), { className: 'ctxsep' }));
       m.appendChild(Object.assign(document.createElement('div'), { className: 'ctxhead', textContent: HEAD[g] }));
+      last = g;
     }
-    last = g;
-    entry(src);
+    const src = pool.find(el => keys.some(k => has(el, k)));
+    if (src) return entry(src);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label();
+    b.disabled = true;
+    b.title = T.notNow;
+    m.appendChild(b);
   });
   document.body.appendChild(m);
   const r = m.getBoundingClientRect(), pad = 8;
