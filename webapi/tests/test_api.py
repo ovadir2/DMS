@@ -1877,6 +1877,17 @@ def test_the_page_is_never_cached(tmp_path):
     assert "no-store" in c.get("/dms/dms-page").headers.get("cache-control", "")
 
 
+def test_the_page_has_a_folder_tree_and_a_detailed_list(tmp_path):
+    """What a file explorer looks like: a tree you open a branch at a time on one side, and the folder's
+    contents in detail - name, status, modified, kind, size - on the other."""
+    c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER,
+                                       sharepoint="memory")))
+    page = c.get("/dms/dms-page").text
+    assert "async function paintTree" in page and "treeOpenTo" in page
+    assert "class=\"xlayout\"" in page or "'xlayout'" in page
+    assert "${kb(f.size)}" in page and "${extOf(f.name)}" in page
+
+
 def test_the_page_offers_the_row_commands_as_a_right_click_menu(tmp_path):
     """File Explorer's way in. The menu is built from the row's own buttons, so a command the DMS decided not
     to offer - delete in Current_ReadOnly, edit for a released document - is not in the menu either."""
