@@ -1480,30 +1480,42 @@ async function actingAsDialog() {
 // same whichever way it arrived. A folder is not taken: a browser hands over files only.
 async function dropFiles(folder, files) {
   const errs = [];
+  let done = 0;
   document.body.classList.add('busy');
   for (const file of files) {
     const fd = new FormData();
+    // released as it arrives: the DMS puts it in Current_ReadOnly of this folder, read only, with its
+    // Markdown beside it - the same thing "save file (no workflow)" does
     fd.set('file', file); fd.set('folder', folder); fd.set('overwrite', 'false'); fd.set('noWorkflow', 'true');
-    try { await api('/api/files/upload', { method: 'POST', body: fd }); }
+    try { await api('/api/files/upload', { method: 'POST', body: fd }); done++; }
     catch (e) { errs.push(`${file.name}: ${e.message}`); }
   }
   document.body.classList.remove('busy');
-  if (errs.length) alert(errs.join('\n'));
+  if (errs.length) alert(`${T.err}:\n` + errs.join('\n'));
+  if (done) { state.folder = folder; state.view = 'browse'; }
   render();
 }
+// Registered once, on the view that stays: the folder is read when the drop happens, not when the screen was
+// drawn. Wiring it on every screen left one listener per screen, each still holding the folder it was drawn
+// for - which is why a drop asked about the wrong folder and then failed.
+const DROP = { folder: '', on: false };
 function wireDrop(v, folder, canWrite) {
-  if (!canWrite) return;
+  DROP.folder = canWrite ? folder : '';
+  if (DROP.on) return;
+  DROP.on = true;
   const stop = e => { e.preventDefault(); e.stopPropagation(); };
   v.addEventListener('dragover', e => {
-    if (![...(e.dataTransfer.types || [])].includes('Files')) return;
+    if (!DROP.folder || ![...(e.dataTransfer.types || [])].includes('Files')) return;
     stop(e); e.dataTransfer.dropEffect = 'copy'; v.classList.add('xdrop');
   });
   v.addEventListener('dragleave', e => { if (e.target === v) v.classList.remove('xdrop'); });
   v.addEventListener('drop', e => {
     const files = [...(e.dataTransfer.files || [])];
-    if (!files.length) return;
-    stop(e); v.classList.remove('xdrop');
-    if (confirm(T.dropQ.replace('{n}', files.length).replace('{folder}', folder.split(/[\\/]/).pop()))) dropFiles(folder, files);
+    v.classList.remove('xdrop');
+    if (!DROP.folder || !files.length) return;
+    stop(e);
+    const where = DROP.folder;
+    if (confirm(T.dropQ.replace('{n}', files.length).replace('{folder}', where.split(/[\\/]/).pop()))) dropFiles(where, files);
   });
 }
 async function uploadDialog(folder) {
