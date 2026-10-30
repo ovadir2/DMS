@@ -237,12 +237,16 @@ def body_of(path: str) -> str:
         log.info("%s was not turned into Markdown here: %s", path, e)
     try:
         from markitdown import MarkItDown               # on the server, when IT installed it
-        return (MarkItDown().convert(path).text_content or "").strip()
+        body = (MarkItDown().convert(path).text_content or "").strip()
+        if body:
+            return body
     except ImportError:
-        return _via_pdf(path)
+        pass                                            # not installed: the PDF is the only way left
     except Exception as e:  # noqa: BLE001 - its answer is not worth failing a release for
         log.info("markitdown did not convert %s: %s", path, e)
-    return _via_pdf(path)        # nothing here could read it: let SharePoint lay it out and read that
+    # Nothing here could read it, and markitdown had nothing to say either (a legacy .doc gives an empty
+    # answer rather than an error): let SharePoint lay it out as pages and read those.
+    return _via_pdf(path)
 
 
 def write_beside(path: str, doc: dict | None = None) -> str | None:
