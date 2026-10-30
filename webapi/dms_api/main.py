@@ -840,6 +840,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             there = os.path.join(target_dir, "Current_ReadOnly", os.path.basename((file.filename or "").replace("\\", "/")))
             if os.path.exists(there) and find_registered(there, register_index()) and not noworkflow.is_marked(s.repository_root, there):
                 raise HTTPException(409, "A controlled document with this name is in Current_ReadOnly: use New revision")
+        # A Current_ReadOnly the upload itself creates has to be made read only like any other: until now only
+        # the ones the workflow made (or Protect-DmsReadOnly.ps1) were, so a folder born of a drag left its
+        # files writable - the flag on the file could simply be cleared by whoever dropped them.
+        fresh = noWorkflow and not os.path.isdir(os.path.join(target_dir, "Current_ReadOnly"))
         try:
             path = files.save_upload(s.repository_root, target_dir, file.filename or "", file.file,
                                      s.max_upload_mb * 1024 * 1024, overwrite, released=noWorkflow)
@@ -847,6 +851,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, "A file with this name already exists in the folder") from None
         except (ValueError, PermissionError) as e:
             raise HTTPException(400, str(e)) from None
+        if fresh:
+            try:
+                from .file_service import _protect
+                _protect(os.path.dirname(path))
+            except Exception as e:  # noqa: BLE001 - the file is saved; say so and let the upkeep pass try again
+                logger.warning("%s was not made read only: %s", os.path.dirname(path), e)
         traced = None
         if noWorkflow:
             noworkflow.mark(s.repository_root, path)               # released as is, read only: no Start workflow for it
