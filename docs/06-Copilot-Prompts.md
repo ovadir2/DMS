@@ -1,5 +1,9 @@
 # 06 - Copilot Prompts for Power Automate
 
+
+> **As built.** These prompts build the Power Automate flows of document 04, which the pilot replaced with
+> the DMS page. Kept for the full flow route.
+
 Ready-to-paste prompts that build every flow from [04 - Power Automate](04-Power-Automate.md) with Copilot in Power Automate. Each flow has one **build prompt**, a few **follow-up prompts** and a **check list** for the parts Copilot usually gets wrong.
 
 ## 1. How to use this page

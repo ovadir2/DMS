@@ -2,6 +2,10 @@
 
 How a document goes from a file on the file server to an approved, read-only version, through the **RH - Documents Management System** page (`webapi/`), the approval flow **DC-P1** and the Workflow Service. It also covers the pilot test with one super user.
 
+> **As built.** This describes the pilot as it was designed. The process is the same, but reading, editing
+> and approving now work as [11 - Project Context](11-Project-Context.md) describes - a PDF the DMS serves
+> and deletes, one editing copy in SharePoint, and a document that comes back when it is closed.
+
 Related: [07 - Approval Flow](07-Approval-Flow.md) (the flow inside Power Automate), [`webapi/README.md`](../webapi/README.md) (the page: install, AD checks, AI Insights), [01 §4](01-Architecture-and-Data-Model.md) (the repository tree).
 
 ## 1. The parts
@@ -10,6 +14,7 @@ Related: [07 - Approval Flow](07-Approval-Flow.md) (the flow inside Power Automa
 | --- | --- | --- |
 | File server (`$Root`) | On-prem, blueprint Appendix A tree | Holds every file. NTFS permissions (AD groups) decide who sees what |
 | DMS page | Company network, `https://<server>/dms/dms-page?lang=EN` (or `HE`), linked from RH Navigator | Browse by customer and the blueprint tree, save files, start the workflow, see status, find files, AI Insights |
+
 | Drive letters and Open | Each PC (`scripts/Set-DmsDrives.ps1`) | G: / R: for short paths, and the `rh-dms:` handler so Open and Edit work from the page |
 | Document Register | SharePoint `DocumentControl` site | One record per controlled document: ID, type, status, owner, paths, SHA-256 |
 | Approver Matrix | SharePoint | Who approves each document type (mandatory approvers, final approver) |

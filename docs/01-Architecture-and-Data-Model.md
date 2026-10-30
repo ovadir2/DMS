@@ -2,6 +2,33 @@
 
 Source: IT-DOC-BP-001 v1.0, sections 3, 4, 6.3, 8 and 9.
 
+> **As built.** This document is the design. What the pilot runs differs in one important way, described
+> here and in [11 - Project Context](11-Project-Context.md): approvals, reading and editing happen through the
+> DMS page and a SharePoint bridge, not through Power Apps and the File System connector.
+
+## 0. The bridge, as built
+
+The file server holds the documents and the DMS account is the only account with rights on it. Everything a
+person does to a document happens through the DMS:
+
+```text
+person ─┬─ read   → SharePoint converts to PDF → the DMS fetches it, deletes the copy, serves the PDF
+        ├─ edit   → a copy in the Approvals library, theirs alone → written back on close → copy removed
+        └─ browse → the DMS lists the file server, checked against that person's own AD token
+```
+
+What the file server carries beside each released document:
+
+| Beside `Current_ReadOnly\<document>` | What it is |
+| --- | --- |
+| the document itself | read only on the file system; the revision in force |
+| `<document>.md` | the same document as Markdown, written as it is released: what the company AI reads. Removed when the revision is replaced |
+
+The workflow folders are unchanged from the design (`Working`, `Submitted`, `Current_ReadOnly`,
+`Obsolete_ReadOnly`), and the upkeep pass (`file_service.py`, `DMS_FILE_SERVICE_SECONDS`) moves files to match
+each document's status, repairs the read-only flag, writes missing Markdown, and brings back a copy whose
+editor has closed it.
+
 ## 1. Guiding principle (from the blueprint)
 
 The Windows file server stores the files. SharePoint stores control metadata. Teams carries interaction. Power Automate orchestrates decisions. On-premises workers move files. PLM/MAE and Priority remain the final authorities.

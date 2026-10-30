@@ -2,6 +2,10 @@
 
 How a document moves from submission to an approved, read-only record in the pilot flow **DC-P1 Pilot Approval** (`scripts/New-DmsPilotFlowPackage.ps1`).
 
+> **As built.** This is the Power Automate pilot flow. What the pilot actually runs is the approval inside
+> the DMS page (`DMS_APPROVALS=page`): the same stages and the same records, decided on the page. See
+> [11 - Project Context](11-Project-Context.md) and [`webapi/README.md`](../webapi/README.md).
+
 The whole pilot process, from saving the file on the DMS page to the approved version in `Current_ReadOnly`, with the pilot test, is in [08 - Pilot Process](08-Pilot-Process.md).
 
 Presentation: [`presentations/DMS-Approval-Flow.pptx`](presentations/DMS-Approval-Flow.pptx) (Hebrew, 3 editable slides: title, swimlane flow, principles). The same diagram as a web page: [`presentations/DMS-Approval-Flow.html`](presentations/DMS-Approval-Flow.html) (open it in a browser).
@@ -11,6 +15,7 @@ Presentation: [`presentations/DMS-Approval-Flow.pptx`](presentations/DMS-Approva
 ```mermaid
 flowchart TB
     A["1. Register the document<br/>Status: Working (בעבודה)"] --> B["2. Submit for approval<br/>Status: Submitted (הוגש לאישור)"]
+
     B --> C["3. Flow trigger detects the change<br/>(checks every minute)"]
     C --> D["4. Read the Approver Matrix rule<br/>for the document type"]
     D --> E{"5. Stage 1<br/>all mandatory approvers"}

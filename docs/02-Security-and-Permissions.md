@@ -2,6 +2,32 @@
 
 Source: IT-DOC-BP-001 sections 5, 7, 8.4 and Phases 2, 4, 5 and 6.
 
+> **As built.** Sections 1-7 are the design. Section 0 is what the pilot enforces today, which went further
+> than the design in several places after it was tried on real documents.
+
+## 0. What the pilot enforces
+
+| Rule | How it is enforced | Where |
+| --- | --- | --- |
+| Nothing is installed or configured on an approver's PC | Everything happens in the browser and in SharePoint; the DMS opens, converts and writes back with its own account | the page, `sharepoint.py` |
+| Approvers have no rights on the file server | The DMS account is the only one with rights there. A person who must read or change a document gets a copy in SharePoint, with their own Microsoft account | `main.take_out`, `review_put` |
+| Visibility follows the AD groups, always | Every listing, search, open and download is checked against the user's own Windows token (Win32 `AccessCheck`), never against the DMS account | `security.py`, `files.py` |
+| A workflow does not grant sight of a document | Submitting or delegating to a person who may not read the document's folder is refused, by name. The answer comes from their AD groups alone (`AuthzInitializeContextFromSid`), without their login | `security.may_see`, `main.refuse_blind_approvers` |
+| Nobody approves their own document | Choosing yourself as an approver, or delegating back to the author, is refused | `main.submit`, `main.delegate` |
+| An approved document cannot be changed | `Current_ReadOnly` and `Obsolete_ReadOnly` are read only on the file system: the AD groups that could see the folder keep Read and Execute, the DMS keeps Modify, SYSTEM and administrators keep Full, and every file carries the read-only flag | `file_service._protect`, `scripts\Protect-DmsReadOnly.ps1` |
+| Nothing in `Current_ReadOnly` is deleted | Not offered on the page and refused by the API, for its owner and for a DMS super user alike. A revision leaves only by being replaced | `main.delete` |
+| Reading leaves nothing to write on | SharePoint converts the document to a PDF, the DMS fetches it and deletes the copy at once, then serves the PDF itself. Nothing is left in the library | `main.view_pdf` |
+| An approver who changed the document cannot approve it | The SharePoint copy is read at the moment of decision; if it changed, the approval is refused | `main.decide` |
+| A link can be shared without exposing the file server | **Copy link** gives a token the DMS resolves (`/dms/go/<token>`), checked against the reader's own rights. **Copy path** still gives the path, for whoever works that way | `main.file_link` |
+| What the AI may read follows the same rules | The Markdown sits beside the document on the file server and inherits its permissions; the indexer sees what its own account may see | `markdown.write_beside` |
+
+Two things this does **not** do, deliberately:
+
+- A person with write permission on a folder outside `Current_ReadOnly` can still change files there with
+  Windows. The DMS controls documents, not the whole file server.
+- Where the AD question cannot be answered (not a domain machine, an account not in AD) nothing is blocked -
+  the pilot must not stall on a check it could not make.
+
 ## 1. Authorization model
 
 ```text

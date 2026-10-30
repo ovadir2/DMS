@@ -1,5 +1,10 @@
 # 04 - Power Automate
 
+
+> **As built.** The pilot runs approvals inside the DMS (`DMS_APPROVALS=page`) and moves files with its own
+> upkeep pass, so most of these flows are not deployed. DC-P1 (approval) and DC-P2 (notifications) exist as
+> importable packages; the rest is the design for the full Power Automate route.
+
 All flows live in the solution `RH Document Control`. The owner is the dedicated application-owner account, with at least two co-owners (Phase 7). **Every flow is metadata-only.** None of them uses *Get file content*, the File System connector, *Create file* on-premises, binary variables or list attachments (blueprint 9.4).
 
 ## 1. Solution plumbing
