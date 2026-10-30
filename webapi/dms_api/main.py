@@ -1086,19 +1086,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def delete(req: DeleteRequest, user: User = Depends(current_user)):
         """Moves the file or folder to the recycle folder (04_Workflow_System\\Recycle), never erases it."""
         full = files.resolve(s.repository_root, req.path)
-        # a DMS super user may also remove a released file (Current_ReadOnly / Obsolete_ReadOnly / Submitted):
-        # it goes to the recycle folder like any other deletion, and its record in SharePoint stays
-        boss = is_admin(user) and files.is_file(full)
-        if not (user.can(full, "write") and user.can(os.path.dirname(full), "write")) and not boss:
-            raise HTTPException(403, "You do not have permission to delete this item")
-        if os.path.exists(full) and not boss:
-            files.check_editable(s.repository_root, full, s.protected_depth)
-        if holds_share_log(full) or in_shared_folder(full):
-            raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only) and cannot be deleted")
         # The approved revision in force. Only the person whose document it is may take it out of there - not a
-        # colleague, and not a DMS super user acting for themselves. The record stays, and so does the audit.
+        # colleague, and not a DMS super user acting for themselves. It is answered first, before the checks that
+        # keep everyone out of a workflow folder: the owner has no write rights there either, and does not need
+        # them, because the DMS is the one that moves the file. The record stays, and so does the audit.
         parts = [p.lower() for p in os.path.normpath(full).replace("/", "\\").split("\\")]
-        if "current_readonly" in parts:
+        if "current_readonly" in parts and files.is_file(full):
+            if not user.can(full, "read"):
+                raise HTTPException(403, "You do not have permission to see this item")
             held = find_registered(full, register_index())
             owner = ((held or {}).get("ownerEmail") or "").lower()
             if not held:
@@ -1107,6 +1102,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             if owner != user.email:
                 raise HTTPException(403, f"Only {owner or 'the document owner'} can delete this approved document")
             return retire(held, full, user)       # not deleted: put aside, where it can still be found
+        # a DMS super user may also remove a released file (Obsolete_ReadOnly / Submitted): it goes to the
+        # recycle folder like any other deletion, and its record in SharePoint stays
+        boss = is_admin(user) and files.is_file(full)
+        if not (user.can(full, "write") and user.can(os.path.dirname(full), "write")) and not boss:
+            raise HTTPException(403, "You do not have permission to delete this item")
+        if os.path.exists(full) and not boss:
+            files.check_editable(s.repository_root, full, s.protected_depth)
+        if holds_share_log(full) or in_shared_folder(full):
+            raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only) and cannot be deleted")
         if (blueprint.describe(rel_parts(full)) or {}).get("kind") not in (None, "project"):   # a project folder is the user's
             raise HTTPException(403, "This folder is part of the company skeleton (blueprint) and cannot be deleted. Its content can.")
         d = registered_inside(full)

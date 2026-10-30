@@ -1023,6 +1023,7 @@ def test_only_the_owner_deletes_an_approved_document(tmp_path):
     assert cur.exists()
 
     sp.update(d["id"], {"OwnerEmail": USER})                             # theirs
+    s.admins = []                                        # a plain owner: no rights of their own in Current_ReadOnly
     r = c.post("/api/items/delete", json={"path": str(cur)})
     assert r.status_code == 200, r.text
     gone = q / "Obsolete_ReadOnly" / cur.name
