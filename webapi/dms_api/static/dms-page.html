@@ -1483,8 +1483,7 @@ async function actingAsDialog() {
 // "failed to fetch". These two read the tree, so a whole folder can be dropped and arrives with its shape.
 const WORKFLOW_NAMES = ['Working', 'Submitted', 'Current_ReadOnly', 'Obsolete_ReadOnly'];
 const DROP_MAX = 300;                                   // a drag, not a migration: that is what the tools are for
-async function dropTree(items) {
-  const entries = [...items].map(i => (i.webkitGetAsEntry ? i.webkitGetAsEntry() : null)).filter(Boolean);
+async function dropTree(entries) {
   const out = [];
   const read = dir => new Promise(ok => {
     const r = dir.createReader(), all = [];
@@ -1504,7 +1503,7 @@ async function dropTree(items) {
     const next = mine ? rel : (rel ? rel + '\\' + entry.name : entry.name);
     for (const kid of await read(entry)) await walk(kid, next);
   };
-  for (const e of entries) await walk(e, '');
+  for (const e of entries.filter(Boolean)) await walk(e, '');
   return out;
 }
 async function dropFiles(folder, files, moveHandles) {
@@ -1571,16 +1570,21 @@ function wireDrop(v, folder, canWrite) {
     if (!DROP.folder || !e.dataTransfer.items || !e.dataTransfer.items.length) return;
     stop(e);
     const where = DROP.folder;
-    // The handles of what was dropped, kept so that a move can remove them afterwards. Only a Chromium
-    // browser gives them; without them the tick is not offered and a drag stays a copy.
-    const handles = await Promise.all([...e.dataTransfer.items]
-      .map(i => (i.getAsFileSystemHandle ? i.getAsFileSystemHandle().catch(() => null) : Promise.resolve(null))));
+    // Everything the DataTransfer holds must be taken now: it is emptied the moment this handler awaits
+    // anything. The entries are what is read; the handles are what a move would remove afterwards, and only
+    // a Chromium browser gives them - without them the tick is not offered and a drag stays a copy.
+    const items0 = [...e.dataTransfer.items];
+    const entries = items0.map(i => (i.webkitGetAsEntry ? i.webkitGetAsEntry() : null));
+    const handlesP = items0.map(i => (i.getAsFileSystemHandle ? i.getAsFileSystemHandle().catch(() => null) : null));
     document.body.classList.add('busy');
-    let items = [];
-    try { items = await dropTree(e.dataTransfer.items); } finally { document.body.classList.remove('busy'); }
+    let items = [], handles = [];
+    try {
+      items = await dropTree(entries);
+      handles = (await Promise.all(handlesP)).filter(Boolean);
+    } finally { document.body.classList.remove('busy'); }
     if (!items.length) return;
     const many = items.length >= DROP_MAX ? `<div class="msg">${esc(T.dropMax.replace('{n}', DROP_MAX))}</div>` : '';
-    const canMove = handles.some(Boolean);
+    const canMove = handles.length > 0;
     const r = await dialog(T.dropTitle,
       `<p>${esc(T.dropQ.replace('{n}', items.length).replace('{folder}', where.split(/[\\/]/).pop()))}</p>${many}
        ${canMove ? `<label class="chk"><input type="checkbox" name="move"> ${esc(T.dropMove)}</label>
@@ -1589,7 +1593,7 @@ function wireDrop(v, folder, canWrite) {
     const move = r.action === 'ok' && r.form.move && r.form.move.checked;
     $('#dlg').close();
     if (r.action !== 'ok') return;
-    dropFiles(where, items, move ? handles.filter(Boolean) : null);
+    dropFiles(where, items, move ? handles : null);
   });
 }
 async function uploadDialog(folder) {
