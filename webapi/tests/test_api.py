@@ -1877,6 +1877,25 @@ def test_the_page_is_never_cached(tmp_path):
     assert "no-store" in c.get("/dms/dms-page").headers.get("cache-control", "")
 
 
+def test_releasing_without_a_workflow_writes_the_markdown_at_once(tmp_path, monkeypatch):
+    """The AI reads the Markdown beside a document, so a document released without a workflow is invisible to
+    it until one exists. It is written as the file is released, not on the next pass of the upkeep."""
+    import dms_api.markdown as md
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    folder = root / "01_General" / "Procedures"
+    folder.mkdir(parents=True)
+    f = folder / "QP-9.docx"
+    f.write_bytes(b"x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
+    c = TestClient(create_app(s, MemorySharePoint(s)))
+    written: list = []
+    monkeypatch.setattr(md, "write_beside", lambda path, doc=None: written.append(path) or path)
+    r = c.post("/api/files/release", json={"paths": [str(f)]})
+    assert r.status_code == 200 and r.json()["results"][0]["ok"], r.text
+    assert written == [str(folder / "Current_ReadOnly" / "QP-9.docx")]
+
+
 def test_a_reading_copy_never_shows_the_revision_before(tmp_path):
     """A copy made to read is a picture of the document as it was. Once the file on the server is newer -
     because the editor finished - the next View must make it again instead of showing what was there."""

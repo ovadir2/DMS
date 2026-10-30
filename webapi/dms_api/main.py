@@ -829,6 +829,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 logger.warning("no-workflow trace failed for %s: %r", path, e)
         log(user, "upload", path + (" (no workflow)" if noWorkflow else ""))
         d = find_registered(path, register_index())
+        if noWorkflow:
+            markdown_beside(path, d)                               # released: the AI can read it from now
         return {"name": os.path.basename(path), "path": path, "document": with_key(d) if d else None,
                 **({"traceError": traced} if traced else {})}
 
@@ -885,10 +887,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if old and files.is_file(old):                           # a new revision: the approved one becomes obsolete
             obsolete = _move(old, os.path.join(folder, "Obsolete_ReadOnly", os.path.basename(old)))
             _set_read_only(obsolete, True)
+            from .file_service import _move_markdown
+            _move_markdown(old, obsolete)      # the AI never quotes a revision that is no longer in force
         if os.path.exists(target):
             raise ValueError("a file with this name is already in Current_ReadOnly")
         target = _move(full, target)
         _set_read_only(target, True)
+        markdown_beside(target, d)
         sha = _sha256(target)
         values = {"LifecycleStatus": c["Approved_ReadOnly"], "CurrentUncPath": target, "WorkingUncPath": "", "CurrentSHA256": sha,
                   "LastApprovedUtc": datetime.now(timezone.utc).isoformat(),
@@ -906,6 +911,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                    source=c["WorkflowService"])
         log(user, "release", target)
         return {"ok": True, "documentId": d.get("documentId"), "target": target}
+
+    def markdown_beside(target: str, d: dict | None = None) -> None:
+        """The document as Markdown, beside it on the file server, at the moment it is released - not on the
+        next pass of the upkeep. Until the file has one, the company's AI cannot read that document at all."""
+        try:
+            from . import markdown
+            markdown.write_beside(target, d or find_registered(target, register_index()) or {})
+        except Exception as e:  # noqa: BLE001 - a release is never held up by its Markdown
+            logger.info("%s has no Markdown beside it: %s", target, e)
 
     @app.post("/api/files/release")
     def release_files(req: ReleaseRequest, user: User = Depends(current_user)):
@@ -944,6 +958,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     if isinstance(e, SharePointError):
                         sp_error("POST /api/files/release", e)       # listed under Last SharePoint errors
                     raise ValueError(f"not registered in SharePoint, the file stays where it was: {e}") from e
+                markdown_beside(target, doc)
                 log(user, "release", target)
                 out.append({"path": p, "ok": True, "documentId": doc.get("documentId"), "target": target})
             except (ValueError, OSError, SharePointError) as e:
