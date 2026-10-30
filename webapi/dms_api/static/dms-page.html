@@ -178,7 +178,14 @@
   .xnode a { color:var(--ink); cursor:pointer; overflow:hidden; text-overflow:ellipsis; }
   .xnode.on > a { color:var(--navy); font-weight:600; }
   @media (max-width:900px) { .xlayout { grid-template-columns:1fr; } .xtree { display:none; } }
-  tr.xfolder td { font-weight:500; }                      /* folders first, the way a file list shows them */
+  tr.xfolder td { font-weight:500; }
+  /* A folder of the company skeleton (blueprint) is not the same thing as a folder someone made: the list
+     says so without a word, the way an explorer distinguishes a system folder from one of yours. */
+  tr.xf-bp svg { fill:var(--navy); }  tr.xf-bp a { color:var(--navy); }
+  tr.xf-wf svg { fill:var(--muted); } tr.xf-wf a { color:var(--muted); }
+  tr.xf-own svg { fill:#e9b949; }
+  .xnode.xf-bp svg { fill:var(--navy); }  .xnode.xf-bp a { color:var(--navy); }
+  .xnode.xf-wf svg { fill:var(--muted); } .xnode.xf-wf a { color:var(--muted); }                      /* folders first, the way a file list shows them */
   body.explorer table tr { cursor:default; }
   /* Explorer view: the row carries no commands of its own, they are all in the right-click menu */
   body.explorer td.actions a.link, body.explorer td.actions button.link,
@@ -488,7 +495,8 @@ async function treeKids(path) {
       const r = await api('/api/browse?path=' + encodeURIComponent(path || ''));
       TREE.kids.set(path, (r.folders || [])
         .filter(f => !['Submitted', 'Working'].includes(f.name))
-        .map(f => ({ name: lbl(f.label) || f.name, path: f.path, lock: !!f.workflowFolder })));
+        .map(f => ({ name: lbl(f.label) || f.name, path: f.path, lock: !!f.workflowFolder,
+                     bp: !!(f.label && f.label.kind !== 'project') })));
     } catch (_) { TREE.kids.set(path, []); }      // a folder this person may not read: nothing under it
   }
   return TREE.kids.get(path);
@@ -496,7 +504,8 @@ async function treeKids(path) {
 function treeNode(n, depth, current) {
   const open = TREE.open.has(n.path), kids = TREE.kids.get(n.path);
   const twisty = kids && !kids.length ? 'leaf' : '';
-  let html = `<div class="xnode ${samePath(n.path, current) ? 'on' : ''}" style="padding-inline-start:${6 + depth * 14}px">`
+  const kind = n.lock ? 'xf-wf' : n.bp ? 'xf-bp' : 'xf-own';
+  let html = `<div class="xnode ${kind} ${samePath(n.path, current) ? 'on' : ''}" style="padding-inline-start:${6 + depth * 14}px">`
     + `<button type="button" class="xtw ${twisty}" data-tt="${esc(n.path)}">${open ? '\u25BE' : '\u25B8'}</button>`
     + `${ICON_FOLDER}<a data-f="${esc(n.path)}" title="${esc(n.path)}">${esc(n.name)}</a></div>`;
   if (open && kids) html += kids.map(k => treeNode(k, depth + 1, current)).join('');
@@ -819,7 +828,7 @@ async function browse(v) {
     ${explorerOn() ? '' : folders.length ? `<div class="grid" style="margin-bottom:16px">${folders.map(f => `<div class="tilewrap">${folderTile(f)}${f.workflowFolder ? `<div class="tileacts muted">🔒 ${T.managed}</div>` : (r.canWrite && (!f.label || f.label.kind === 'project') ? `<div class="tileacts">${editActions(f)}</div>` : f.label ? `<div class="tileacts muted" title="${esc(T.bpLockedTip)}">🔒 ${T.bpLocked}</div>` : '')}</div>`).join('')}</div>` : ''}
     ${r.files.length || (explorerOn() && folders.length) ? `<div class="toolbar" id="selbar" style="display:none"><b id="selcount"></b><span class="spacer"></span>${r.canWrite && !r.managed && !r.noWorkflow ? `<button type="button" class="pillbtn small light" id="sel-wf">${T.start}</button>` : ''}${r.canWrite && !r.managed ? `<button type="button" class="pillbtn small light" id="sel-rel">${T.relNw}</button>` : ''}<button type="button" class="pillbtn small light" id="sel-share">✉ ${isHr(r.path) ? T.shareHrBtn : T.share}</button><button type="button" class="pillbtn small light" id="sel-dl">${T.download}</button><button type="button" class="pillbtn small light" id="sel-cp">🔗 ${T.copyLinks}</button>${r.canWrite && !r.managed ? `<button type="button" class="pillbtn small light" id="sel-del" style="color:var(--err)">${T.del}</button>` : ''}</div>
     <table><tr><th style="width:28px"><input type="checkbox" id="sel-all" title="${esc(T.selAll)}"></th><th>${T.name}</th><th>${T.status}</th><th class="hide-s">${T.modified}</th><th class="hide-s">${T.fileType}</th><th class="hide-s">${T.size}</th><th></th></tr>
-    ${!explorerOn() ? '' : folders.map(f => `<tr class="xfolder"><td></td><td><span style="display:inline-flex;gap:8px;align-items:center">${ICON_FOLDER}<a class="link" data-f="${esc(f.path)}">${esc(lbl(f.label) || f.name)}</a></span></td><td class="muted small">${f.workflowFolder ? '\u{1F512} ' + T.managed : f.label && f.label.kind !== 'project' ? '\u{1F512} ' + T.bpLocked : ''}</td><td class="hide-s muted"></td><td class="hide-s muted small">${T.folders}</td><td class="hide-s muted"></td><td class="actions"><button type="button" class="link" data-f="${esc(f.path)}">${T.open}</button>${!f.workflowFolder && r.canWrite && (!f.label || f.label.kind === 'project') ? editActions(f) : ''}</td></tr>`).join('')}
+    ${!explorerOn() ? '' : folders.map(f => `<tr class="xfolder ${f.workflowFolder ? 'xf-wf' : f.label && f.label.kind !== 'project' ? 'xf-bp' : 'xf-own'}"><td></td><td><span style="display:inline-flex;gap:8px;align-items:center">${ICON_FOLDER}<a class="link" data-f="${esc(f.path)}">${esc(lbl(f.label) || f.name)}</a></span></td><td class="muted small">${f.workflowFolder ? '\u{1F512} ' + T.managed : f.label && f.label.kind !== 'project' ? '\u{1F512} ' + T.bpLocked : ''}</td><td class="hide-s muted"></td><td class="hide-s muted small">${T.folders}</td><td class="hide-s muted"></td><td class="actions"><button type="button" class="link" data-f="${esc(f.path)}">${T.open}</button>${!f.workflowFolder && r.canWrite && (!f.label || f.label.kind === 'project') ? editActions(f) : ''}</td></tr>`).join('')}
     ${r.files.map(f => `<tr><td><input type="checkbox" class="sel" data-path="${esc(f.path)}" data-free="${!f.document ? 1 : ''}" data-rel="${!f.document || (['Working', 'Submitted'].includes(f.document.statusKey) && !f.document.nextRevision) ? 1 : ''}" data-doc="${f.document && f.document.statusKey === 'Approved_ReadOnly' ? f.document.id : ''}"></td><td><span style="display:inline-flex;gap:8px;align-items:center">${ICON_FILE}${esc(f.name)}</span></td><td>${statusTag(f.document)}</td><td class="hide-s muted">${when(f.modified)}</td><td class="hide-s muted small">${extOf(f.name)}</td><td class="hide-s muted small ltr">${kb(f.size)}</td><td class="actions">${fileActions(f)}${inCurrentRo(f.path) ? '' : r.canWrite && !f.document && !f.readOnly ? editActions(f)
       : (me.admin ? `<button type="button" class="link" data-del="${esc(f.path)}" data-released="1" style="color:var(--err)">${T.del}</button>` : '')}</td></tr>`).join('')}
     </table>` : ''}${folders.length + r.files.length ? '' : `<p class="muted">${T.none}</p>`}`;
