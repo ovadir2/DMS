@@ -600,18 +600,21 @@ function ctxOpen(host, x, y) {
   }
   // The menu reads in groups, the way a folder window does: what opens the thing, what the workflow does
   // with it, and what you do to the file itself.
+  // Three groups, each in a fixed order: how it opens, what the workflow does with it, and what you do to
+  // the file or folder itself. A name that starts with # is a button of the screen rather than of the row.
   const GROUP = [
     ['data-f', 'data-ckout', 'data-ext', 'data-ckview', 'data-vw', 'data-tx', 'data-txv', 'data-ckin', 'data-noopen'],
     ['data-st', 'data-sub', 'data-ok', 'data-no', 'data-dg', 'data-wd', 'data-rev', 'data-relp', 'data-share',
-     'data-up', 'data-hist', 'data-drn', 'data-ddel'],
-    ['data-mkin', 'data-dl', 'data-cp', 'data-rn', 'data-del'],
+     'data-up', 'data-hist'],
+    ['data-dl', 'data-cp', 'data-rn', 'data-drn', 'data-del', 'data-ddel', 'data-mkin', '#mk', '#nd'],
   ];
+  const has = (el, k) => k.charAt(0) === '#' ? el.id === k.slice(1) : el.hasAttribute(k);
   const place = el => {
     for (let g = 0; g < GROUP.length; g++) {
-      const i = GROUP[g].findIndex(k => el.hasAttribute(k));
+      const i = GROUP[g].findIndex(k => has(el, k));
       if (i >= 0) return [g, i];
     }
-    return [2, GROUP[2].length];                // new folder, save file, new document: the file system, last
+    return [2, GROUP[2].length];                // anything the DMS gains later: with the file commands, last
   };
   const groupOf = el => place(el)[0];
   const entry = src => {
