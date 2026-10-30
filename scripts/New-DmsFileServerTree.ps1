@@ -81,11 +81,11 @@ param(
     [hashtable] $AreaFolders = [ordered]@{
         MGT = '01_General\Company_Profile'
         COM = '01_General\Sales_Marketing'
-        DEV = '01_General\Enginnering'
+        DEV = '01_General\Engineering'
         MFG = '01_General\Process_Engineering'
-        TST = '01_General\Enginnering'
+        TST = '01_General\Engineering'
         QA  = '01_General\Quality and Standards'
-        CHG = '01_General\Enginnering'
+        CHG = '01_General\Engineering'
         IT  = '01_General\IT'
         SEC = '01_General\IT'
     },

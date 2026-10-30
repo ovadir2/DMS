@@ -1993,6 +1993,19 @@ def test_the_dms_can_add_the_file_for_someone_with_no_rights_of_their_own(tmp_pa
                   files={"file": ("again.txt", b"x")}).status_code == 403
 
 
+def test_engineering_is_part_of_the_skeleton_however_it_was_spelt():
+    """The department was in the blueprint as Enginnering, so a folder named Engineering was nobody's: it
+    came out yellow beside the grey departments and could be renamed or deleted. Both spellings are the
+    same place, and a customer folder is part of the skeleton too."""
+    from dms_api import blueprint
+    for name in ("Engineering", "Enginnering"):
+        d = blueprint.describe(["01_General", name])
+        assert d and d["en"] == "Engineering" and d["kind"] == "area"
+        assert blueprint.classify(["01_General", name]) == {"area": "Development", "type": "Procedure"}
+    assert blueprint.describe(["02_Customers", "Customer_A"])["kind"] == "customer"
+    assert blueprint.describe(["01_General", "Whatever people made"]) is None
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

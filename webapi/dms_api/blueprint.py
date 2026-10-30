@@ -83,7 +83,7 @@ CUSTOMER = N({
 MANAGEMENT = N({k: (en, he, {}) for k, en, he in (
     ("Company_Profile", "Company profile", "פרופיל חברה"), ("Company_Strategy", "Company strategy", "אסטרטגיה"),
     ("Commercial", "Commercial", "מסחרי"), ("Sales_Marketing", "Sales and marketing", "מכירות ושיווק"),
-    ("Enginnering", "Engineering", "הנדסה"), ("Process_Engineering", "Process engineering", "הנדסת תהליך"),
+    ("Engineering", "Engineering", "הנדסה"), ("Process_Engineering", "Process engineering", "הנדסת תהליך"),
     ("Project_Management", "Project management", "ניהול פרויקטים"), ("Supply_chain", "Supply chain", "שרשרת אספקה"),
     ("Quality and Standards", "Quality and standards", "איכות ותקנים"), ("RA_Certifications", "RA and certifications", "רגולציה והסמכות"),
     ("HR", "HR", "משאבי אנוש"), ("Training", "Training", "הדרכה"), ("Finance", "Finance", "כספים"), ("Legal", "Legal", "משפטי"),
@@ -109,12 +109,18 @@ ROOT = N({
 HIDDEN_AT_ROOT = ("03_Operations_Staging", "04_Workflow_System", "05_Exchange_Quarantine")
 
 
+# A folder the skeleton once made under another spelling. It is the same place, so it keeps its label and
+# stays part of the skeleton instead of turning into somebody's own folder; new ones are made spelt properly.
+ALIAS = {"enginnering": "Engineering"}
+
+
 def _node(parts: list[str]):
     """The blueprint node for a folder path (parts relative to the root), or None."""
     node: tuple | None = ("", "", ROOT)
     for p in parts:
         children = node[2] if node else {}
-        node = children.get(p) or next((v for k, v in children.items() if k.lower() == p.lower()), None) or children.get("*")
+        node = (children.get(p) or next((v for k, v in children.items() if k.lower() == p.lower()), None)
+                or children.get(ALIAS.get(p.lower(), "\0")) or children.get("*"))
         if node is None:
             return None
     return node
@@ -195,7 +201,8 @@ CLASSIFY = {
     "01_General/RA_Certifications": ("Quality", None),
     "01_General/Process_Engineering": ("Manufacturing", "Procedure"),
     "01_General/Quality and Standards": ("Quality", "Procedure"),
-    "01_General/Enginnering": ("Development", "Procedure"),
+    "01_General/Engineering": ("Development", "Procedure"),
+    "01_General/Enginnering": ("Development", "Procedure"),      # the folder an older skeleton made
     "01_General/Commercial": ("Commercial", None),
     "01_General/Supply_chain/Planners": ("Manufacturing", None),
     "01_General/Supply_chain": ("Manufacturing", None),

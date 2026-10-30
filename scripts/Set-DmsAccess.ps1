@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Department access on the DMS folders: puts your existing AD groups (from scripts\dms-access.csv) on each
@@ -7,7 +7,7 @@
 
 .DESCRIPTION
     dms-access.csv, one row per department folder (edit it, Excel keeps the format):
-        Department       the folder under 01_General (HR, Enginnering, Quality and Standards, ...), or a path from the
+        Department       the folder under 01_General (HR, Engineering, Quality and Standards, ...), or a path from the
                          root for one folder only (02_Customers\Customer_A\Engineering: that customer's, not the others;
                          02_Customers\Customer_A: the whole customer, all its folders)
         Groups           the AD groups that work there (Modify), ";" between them (RH\HR_Team). A <placeholder>: row skipped

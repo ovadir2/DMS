@@ -993,7 +993,7 @@ const hint = l => l ? (lang === 'HE' ? l.hintHe : l.hintEn) : '';
 function folderTile(f) {
   const l = f.label, title = lbl(l) || f.name;
   // the same colours as the list: yellow is a folder someone made, grey is the skeleton and the DMS's own
-  const kind = f.workflowFolder ? 'xf-wf' : l && l.kind !== 'project' && l.kind !== 'customer' ? 'xf-bp' : 'xf-own';
+  const kind = f.workflowFolder ? 'xf-wf' : l && l.kind !== 'project' ? 'xf-bp' : 'xf-own';
   return `<button type="button" class="tile folder ${kind}" data-f="${esc(f.path)}">${l && l.kind === 'customer' ? ICON_CUST : ICON_FOLDER}
     <span class="tl"><span>${esc(title)}</span>${hint(l) ? `<span class="hint">${esc(hint(l))}</span>` : ''}${title !== f.name ? `<span class="fname ltr">${esc(f.name)}</span>` : ''}</span></button>`;
 }
@@ -1022,7 +1022,7 @@ async function browse(v) {
     ${r.canWrite && !r.managed ? `<div class="dropzone">\u2B07 ${T.dropHere}</div>` : ''}`;
   if (explorerOn()) {
     TREE.kids.set(r.path, folders.map(f => ({ name: lbl(f.label) || f.name, path: f.path,
-      lock: !!f.workflowFolder, bp: !!(f.label && f.label.kind !== 'project' && f.label.kind !== 'customer') })));
+      lock: !!f.workflowFolder, bp: !!(f.label && f.label.kind !== 'project') })));
     // the tree on one side, this folder's contents on the other - the contents are exactly what was drawn
     // above, moved into the second column, so nothing about them changes
     const main = document.createElement('div');
