@@ -1877,6 +1877,16 @@ def test_the_page_is_never_cached(tmp_path):
     assert "no-store" in c.get("/dms/dms-page").headers.get("cache-control", "")
 
 
+def test_files_can_be_dragged_into_a_folder(tmp_path):
+    """Dropping files from Windows is the same call the upload dialog makes, so whatever the DMS does with an
+    arriving file - the trace, the register, Current_ReadOnly - does not depend on how it was handed over."""
+    c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER,
+                                       sharepoint="memory")))
+    page = c.get("/dms/dms-page").text
+    assert "function wireDrop" in page and "async function dropFiles" in page
+    assert "'/api/files/upload'" in page and "dropQ" in page
+
+
 def test_the_page_has_a_folder_tree_and_a_detailed_list(tmp_path):
     """What a file explorer looks like: a tree you open a branch at a time on one side, and the folder's
     contents in detail - name, status, modified, kind, size - on the other."""
