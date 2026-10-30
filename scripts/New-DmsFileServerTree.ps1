@@ -22,7 +22,9 @@
 
 .PARAMETER Root
     Repository root, e.g. \\FILE-SERVER\Corporate_Data or D:\Corporate_Data. For a test use a
-    separate folder, e.g. D:\Corporate_Data_TEST.
+    separate folder, e.g. D:\Corporate_Data_TEST. Left out, it is read from the DMS's own
+    webapi\.env (DMS_REPOSITORY_ROOT): the machine already knows where the repository is, and
+    being asked for it is how a pasted next command becomes the answer.
 
 .PARAMETER Customers
     Customer folder names to create under 02_Customers (optionally with -Projects).
@@ -74,7 +76,7 @@
     Justification = 'Domain is read inside Resolve-Principal through script scope.')]
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [Parameter(Mandatory)] [string] $Root,
+    [string] $Root = '',
 
     # Area code -> folder where that area's controlled documents live (blueprint Appendix A).
     # Documents that belong to a customer project use -DocumentParent instead.
@@ -112,6 +114,18 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# The repository is where the DMS says it is: its own .env already names it, and a script that stops to ask
+# turns whatever is pasted next into the answer.
+if (-not $Root) {
+    $envFile = Join-Path $PSScriptRoot '..\webapi\.env'
+    if (Test-Path -LiteralPath $envFile) {
+        $line = Select-String -LiteralPath $envFile -Pattern '^\s*DMS_REPOSITORY_ROOT\s*=' | Select-Object -First 1
+        if ($line) { $Root = ($line.Line -replace '^\s*DMS_REPOSITORY_ROOT\s*=', '' -replace '\s+#.*$', '').Trim() }
+    }
+    if ($Root) { Write-Host "Repository root from webapi\.env: $Root" -ForegroundColor DarkGray }
+}
+if (-not $Root) { throw "The repository root was not found in webapi\.env: give it with -Root" }
 
 function Write-Step([string]$Message) { Write-Host "`n=== $Message" -ForegroundColor Cyan }
 function Write-Ok([string]$Message)   { Write-Host "  [ok]   $Message" -ForegroundColor Green }
