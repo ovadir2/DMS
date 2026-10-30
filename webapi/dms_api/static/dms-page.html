@@ -1979,6 +1979,10 @@ function wireSelection(v) {
 }
 async function deleteItem(path, released) {
   const name = path.split(/[\\/]/).pop();
+  // Several files ticked: Delete is not done to a handful at once, and doing it to one of them while the
+  // others sit there ticked reads as if it were about all of them.
+  const ticked = document.querySelectorAll('#view input.sel:checked').length;
+  if (ticked > 1) return alert(T.delOne);
   if (released) {
     // It is the approved revision: it is not erased, it is put aside in Obsolete_ReadOnly, and only its owner
     // may do it. Nothing to download first: the file stays where everyone who could read it still can.
