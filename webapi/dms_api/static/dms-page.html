@@ -460,6 +460,12 @@ const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${
 // The person has no rights on the file server: a document is opened, and changed, in SharePoint with their own
 // Microsoft account. The DMS puts the copy there, takes it back on "Done editing", and a released (read only)
 // document is only ever opened for viewing.
+// Reading a document: a PDF, a picture or anything already flat is shown by the DMS itself - the bytes, in
+// a tab, with nothing that writes back. Everything else becomes a PDF copy in SharePoint. Handing a PDF to
+// SharePoint let a reader annotate it and save it there, which is not reading.
+const viewBtn = f => VIEW_EXT.test(f.name || f.path)
+  ? `<button type="button" class="link" data-vw="${esc(f.path)}">${T.viewRo}</button>`
+  : `<button type="button" class="link" data-ckview="${esc(f.path)}">${T.viewRo}</button>`;
 function bridgeActions(f) {
   // One way in. The DMS already knows whether this person may change this document, so the button says which
   // it is - "open to edit" or "view" - instead of asking the person to pick and refusing afterwards.
@@ -472,17 +478,15 @@ function bridgeActions(f) {
   if (co && co.mine && co.url && co.edit && f.canEdit) {           // already out for editing: go back to that copy
     out.push(`<a class="link" href="${esc(co.url)}" target="_blank" rel="noopener">\u270E ${T.openEditFile}</a>`);
     // reading it while it is out is still reading: a copy of its own, and the editing copy is untouched
-    out.push(`<button type="button" class="link" data-ckview="${esc(f.path)}">${T.viewRo}</button>`);
+    out.push(viewBtn(f));
     out.push(`<button type="button" class="link" data-ckin="${esc(f.path)}">\u2713 ${T.doneEditing}</button>`);
     return out.join('\n');
   }
   // A copy only being read is never linked to directly: the DMS decides each time where that copy belongs and
   // whether this person may still read it, and a copy made under an older rule is made again in the right place.
   // Whoever may change a document may also just read it: both ways in, never one instead of the other.
-  if (f.canEdit) return `<button type="button" class="link" data-ckout="${esc(f.path)}">\u270E ${T.openEditFile}</button>\n`
-    + `<button type="button" class="link" data-ckview="${esc(f.path)}">${T.viewRo}</button>`;
-  if (VIEW_EXT.test(name)) return `<button type="button" class="link" data-vw="${esc(f.path)}">${T.viewRo}</button>`;
-  return `<button type="button" class="link" data-ckview="${esc(f.path)}">${T.viewRo}</button>`;
+  if (f.canEdit) return `<button type="button" class="link" data-ckout="${esc(f.path)}">\u270E ${T.openEditFile}</button>\n` + viewBtn(f);
+  return viewBtn(f);
 }
 function fileActions(f) {
   return `${f.bridge ? bridgeActions(f) : f.officeUri ? `${openBtn(f.officeUri, f.path, f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open))}${f.editable && f.viewUri ? openBtn(f.viewUri, f.path, T.viewRo) : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">${f.editable === false || f.readOnly ? T.viewRo : '✎ ' + T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cp="${esc(f.path)}">🔗 ${T.copyLink}</button>`
@@ -1801,10 +1805,18 @@ async function editText(path, readOnly = false) {
 }
 async function viewFile(path) {
   const w = window.open('', '_blank');                     // opened now, so the browser does not block it
+  if (w) try { w.document.write(`<title>${T.viewRo}</title><body style="font:15px system-ui;padding:24px">${T.oneMoment}</body>`); } catch (_) { /* gone already */ }
   const b = await fileBlob(path);
-  if (!b) { if (w) w.close(); return alert(T.err); }
-  const url = URL.createObjectURL(b);
-  if (w) w.location = url; else location.href = url;
+  if (b) {
+    const url = URL.createObjectURL(b);
+    if (w) w.location = url; else location.href = url;
+    return;
+  }
+  // The DMS could not hand over the bytes - this person has no rights on the file server. Then the copy in
+  // SharePoint is the way in, which is what the bridge is for.
+  if (w) w.close();
+  if (explorerOn() || document.querySelector('#view [data-ckview]')) return takeOut(path, false);
+  alert(T.err);
 }
 
 // ---------------------------------------------------------------- start
