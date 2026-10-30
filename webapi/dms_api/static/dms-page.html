@@ -178,12 +178,11 @@
   .xnode a { color:var(--ink); cursor:pointer; overflow:hidden; text-overflow:ellipsis; }
   .xnode.on > a { color:var(--navy); font-weight:600; }
   @media (max-width:900px) { .xlayout { grid-template-columns:1fr; } .xtree { display:none; } }
-  /* A folder of the company skeleton (blueprint) is not the same thing as a folder someone made: the list
-     says so without a word, the way an explorer distinguishes a system folder from one of yours. */
-  tr.xf-bp svg, tr.xf-bp svg path, .xnode.xf-bp svg, .xnode.xf-bp svg path { fill:var(--navy); }
-  tr.xf-wf svg, tr.xf-wf svg path, .xnode.xf-wf svg, .xnode.xf-wf svg path { fill:var(--muted); }
-  tr.xf-bp a, .xnode.xf-bp a { color:var(--navy); }
-  tr.xf-wf a, .xnode.xf-wf a { color:var(--muted); }
+  /* Yellow is a folder someone made and may change. Everything else - the company skeleton and the DMS's own
+     workflow folders - is grey, and grey here means it cannot be renamed or deleted by anyone. */
+  tr.xf-bp svg, tr.xf-bp svg path, .xnode.xf-bp svg, .xnode.xf-bp svg path,
+  tr.xf-wf svg, tr.xf-wf svg path, .xnode.xf-wf svg, .xnode.xf-wf svg path { fill:#9aa6b2; }
+  tr.xf-bp a, .xnode.xf-bp a, tr.xf-wf a, .xnode.xf-wf a { color:var(--muted); }
   tr.xfolder td { font-weight:500; }                     /* folders first, the way a file list shows them */
   body.explorer table tr { cursor:default; }
   /* Explorer view: the row carries no commands of its own, they are all in the right-click menu */
