@@ -579,6 +579,7 @@ function ctxScreen(host, self = false) {
     .filter(b => b.id !== 'pf-b')
     .filter(b => self || b.id !== 'mk')      // a folder row says it itself (inside that folder), a file never does
     .filter(b => self || b.id !== 'up')      // "save file" is what "release without workflow" does, by another name
+    .filter(b => self || b.id !== 'nd')      // making a document happens in a folder, never on top of a file
     .filter(b => self || !b.hasAttribute('data-cp'));   // the row already copies a link - to itself
 }
 function ctxOpen(host, x, y) {
