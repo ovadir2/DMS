@@ -1877,6 +1877,37 @@ def test_the_page_is_never_cached(tmp_path):
     assert "no-store" in c.get("/dms/dms-page").headers.get("cache-control", "")
 
 
+def test_a_reading_copy_never_shows_the_revision_before(tmp_path):
+    """A copy made to read is a picture of the document as it was. Once the file on the server is newer -
+    because the editor finished - the next View must make it again instead of showing what was there."""
+    from dms_api import checkout
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    (root / "01_General").mkdir(parents=True)
+    f = root / "01_General" / "QP-1.docx"
+    f.write_bytes(b"old")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                 review_library="Approvals", approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    made = []
+    sp.review_put = lambda **kw: made.append(kw) or {"name": "QP-1.pdf", "url": "https://sp/QP-1.pdf",
+                                                     "serverRelative": "/x"}
+    sp.review_link = lambda **kw: "https://sp/QP-1.pdf"
+    sp.review_done = lambda **kw: None
+    c = TestClient(create_app(s, sp))
+
+    assert c.post("/api/files/checkout", json={"path": str(f), "edit": False}).status_code == 200
+    assert len(made) == 1
+    c.post("/api/files/checkout", json={"path": str(f), "edit": False})
+    assert len(made) == 1                              # the same copy: the document has not changed
+
+    import time as _t
+    os.utime(str(f), (_t.time() + 60, _t.time() + 60))   # the editor finished and it was written
+    c.post("/api/files/checkout", json={"path": str(f), "edit": False})
+    assert len(made) == 2                              # made again, from the document as it is now
+    assert checkout.of(str(root), str(f), USER)
+
+
 def test_a_document_closed_in_sharepoint_comes_back_by_itself(tmp_path):
     """"Done editing" without being pressed: Office holds a lock while the document is open and lets it go
     when it is closed, so a copy that is unlocked and was changed is work that is finished."""

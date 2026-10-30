@@ -1507,6 +1507,22 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             except Exception as e:  # noqa: BLE001
                 logger.info("Editing copy of %s not removed: %s", name, e)
             checkout.drop(root, key)
+            if entry.get("edit"):
+                drop_reading_copies(path)       # what people were reading is a revision behind now
+
+    def drop_reading_copies(path: str) -> None:
+        """The reading copies of a document that has just changed. A copy made to read is a picture of the
+        document as it was; once the file on the server is newer, that picture is a revision behind, and the
+        next View must make it again rather than show what was there before."""
+        same = os.path.normcase(os.path.normpath(path or ""))
+        for e in list(checkout.read(s.repository_root).values()):
+            if e.get("edit") or os.path.normcase(os.path.normpath(e.get("path") or "")) != same:
+                continue
+            try:
+                sp().review_done(document_id=e.get("key") or "")
+            except Exception as ex:  # noqa: BLE001 - the entry goes either way: the copy expires on its own
+                logger.info("Reading copy of %s not removed: %s", e.get("name"), ex)
+            checkout.drop(s.repository_root, e.get("key") or "")
 
     def checkout_sweep() -> None:
         """Anything forgotten in SharePoint longer than DMS_CHECKOUT_HOURS comes back by itself: no document
@@ -1581,6 +1597,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         # and Excel lets a reader type into it): it is made again as a PDF
         flat = not edit and full.lower().endswith(tuple(getattr(sp(), "AS_PDF", ()))) and not (
             (mine or {}).get("name") or "").lower().endswith(".pdf")
+        # a copy to read that was made before the document last changed shows the revision before it
+        if mine and not edit and not flat:
+            try:
+                put = datetime.fromisoformat((mine.get("utc") or "").replace("Z", "+00:00")).timestamp()
+                flat = os.path.getmtime(full) > put + 5
+            except (ValueError, OSError):
+                pass
         # a copy made before the DMS knew which library it belongs in is made again, in the right one
         if mine and bool(mine.get("edit")) == edit and mine.get("library") == lib and not flat:
             return {"path": full, "url": mine.get("url"), "edit": bool(mine.get("edit")), "by": mine.get("by")}
