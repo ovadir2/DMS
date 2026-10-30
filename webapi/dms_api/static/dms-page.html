@@ -652,8 +652,9 @@ function ctxOpen(host, x, y) {
     [0, ['data-ckout', 'data-ext', 'data-tx'], () => '\u270E ' + T.openEditFile],
     [0, ['data-ckview', 'data-vw', 'data-txv'], () => T.viewRo],
     [0, ['data-ckin'], () => '\u2713 ' + T.doneEditing],
-    [1, ['data-st'], () => T.start],
-    [1, ['data-sub'], () => T.submit],
+    // Starting the approval is one thing, whether the document has a record yet or not: an unregistered file
+    // is registered and sent, a registered one is sent. Two lines for it only made people ask which is which.
+    [1, ['data-st', 'data-sub'], () => T.start],
     [1, ['data-rev'], () => '\u27F3 ' + T.newRev],
     [1, ['data-relp'], () => T.relNw],
     [1, ['data-share'], () => '\u2709 ' + T.share],
