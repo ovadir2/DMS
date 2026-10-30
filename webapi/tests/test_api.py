@@ -1877,6 +1877,37 @@ def test_the_page_is_never_cached(tmp_path):
     assert "no-store" in c.get("/dms/dms-page").headers.get("cache-control", "")
 
 
+def test_a_document_closed_in_sharepoint_comes_back_by_itself(tmp_path):
+    """"Done editing" without being pressed: Office holds a lock while the document is open and lets it go
+    when it is closed, so a copy that is unlocked and was changed is work that is finished."""
+    from dms_api import checkout, file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    (root / "01_General").mkdir(parents=True)
+    f = root / "01_General" / "QP-1.docx"
+    f.write_bytes(b"old")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                 review_library="Approvals", approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    sp.review_put = lambda **kw: {"name": "QP-1.docx", "url": "https://sp/QP-1.docx", "serverRelative": "/x"}
+    sp.review_link = lambda **kw: "https://sp/QP-1.docx"
+    sp.review_get = lambda **kw: b"as the editor left it"
+    sp.review_done = lambda **kw: None
+    lock = {"locked": True, "modified": "2099-01-01T00:00:00Z"}
+    sp.review_lock = lambda **kw: lock
+    c = TestClient(create_app(s, sp))
+    assert c.post("/api/files/checkout", json={"path": str(f), "edit": True}).status_code == 200
+    key = checkout.key_of(str(root), str(f))
+
+    file_service.run_once(sp, s)                       # still open in Office: nothing happens
+    assert checkout.read(str(root)).get(key)
+    assert f.read_bytes() == b"old"
+
+    lock["locked"] = False                             # the editor closed it
+    c.post("/api/files/checkout", json={"path": str(f), "edit": True})   # any call sweeps first
+    assert not checkout.read(str(root)).get(key) or f.read_bytes() == b"as the editor left it"
+
+
 def test_files_can_be_dragged_into_a_folder(tmp_path):
     """Dropping files from Windows is the same call the upload dialog makes, so whatever the DMS does with an
     arriving file - the trace, the register, Current_ReadOnly - does not depend on how it was handed over."""

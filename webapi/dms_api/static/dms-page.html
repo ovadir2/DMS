@@ -476,7 +476,9 @@ function bridgeActions(f) {
   }
   // A copy only being read is never linked to directly: the DMS decides each time where that copy belongs and
   // whether this person may still read it, and a copy made under an older rule is made again in the right place.
-  if (f.canEdit) return `<button type="button" class="link" data-ckout="${esc(f.path)}">\u270E ${T.openEditFile}</button>`;
+  // Whoever may change a document may also just read it: both ways in, never one instead of the other.
+  if (f.canEdit) return `<button type="button" class="link" data-ckout="${esc(f.path)}">\u270E ${T.openEditFile}</button>\n`
+    + `<button type="button" class="link" data-ckview="${esc(f.path)}">${T.viewRo}</button>`;
   if (VIEW_EXT.test(name)) return `<button type="button" class="link" data-vw="${esc(f.path)}">${T.viewRo}</button>`;
   return `<button type="button" class="link" data-ckview="${esc(f.path)}">${T.viewRo}</button>`;
 }

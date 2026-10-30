@@ -536,6 +536,21 @@ class SharePoint:
             return None
         return {"modified": r.get("TimeLastModified"), "length": int(r.get("Length") or 0)}
 
+    def review_lock(self, *, document_id: str, name: str) -> dict | None:
+        """Is that copy open in Office right now? Office for the web holds a short lock while the document is
+        open and lets it go a few minutes after it is closed, so this is how the DMS knows the person has
+        finished without being told. None when the copy is not there or SharePoint would not say."""
+        site, q = self.review_site(), lambda p: quote(p.replace("'", "''"), safe="/")
+        path = f"{self._review_folder(document_id)}/{name}"
+        try:
+            r = self._call("GET", f"{site}/_api/web/GetFileByServerRelativePath(DecodedUrl='{q(path)}')"
+                                  f"?$select=CheckOutType,TimeLastModified,LockedByUser/LoginName&$expand=LockedByUser")
+        except SharePointError:
+            return None
+        who = (r.get("LockedByUser") or {}).get("LoginName") or ""
+        # CheckOutType 0 is "checked out to someone", 2 is "not checked out"; a short lock shows as LockedByUser
+        return {"locked": bool(who) or r.get("CheckOutType") == 0, "by": who, "modified": r.get("TimeLastModified")}
+
     def review_url(self, *, document_id: str, name: str) -> str | None:
         """Where that document is open for approval, if it is already there (after a restart of the DMS, or
         when it was submitted before the SharePoint review was turned on). None when it is not."""

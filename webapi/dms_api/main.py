@@ -1510,11 +1510,44 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     def checkout_sweep() -> None:
         """Anything forgotten in SharePoint longer than DMS_CHECKOUT_HOURS comes back by itself: no document
-        stays out for ever."""
+        stays out for ever. Before that: a document whose editor has closed it comes back at once."""
         if not review_on():
             return
         for entry in checkout.due(s.repository_root, s.checkout_hours, s.view_minutes / 60):
             checkout_return(entry)
+        finished_editing()
+
+    def finished_editing() -> None:
+        """"Done editing" without being pressed. Office for the web holds a lock on the copy while someone has
+        it open and lets it go a few minutes after they close it, so an editing copy that is no longer locked
+        and was changed is work that is finished: it comes back to the file server and the copy goes away.
+        A copy that was opened and not changed is left alone - the person may still be reading it."""
+        changed = getattr(sp(), "review_lock", None)
+        if not changed:
+            return
+        for entry in list(checkout.read(s.repository_root).values()):
+            if not entry.get("edit") or not entry.get("name"):
+                continue
+            try:
+                lock = sp().review_lock(document_id=entry.get("key") or "", name=entry["name"])
+                if not lock or lock.get("locked"):
+                    continue                                   # still open in Office: leave them to it
+                if not _edited_since(entry, lock.get("modified")):
+                    continue                                   # opened and not changed: nothing to bring back
+                logger.info("%s was closed in SharePoint by %s: bringing it back", entry.get("path"), entry.get("by"))
+                checkout_return(entry)
+            except Exception as e:  # noqa: BLE001 - one copy never stops the sweep
+                logger.info("Could not tell whether %s is still open: %s", entry.get("name"), e)
+
+    def _edited_since(entry: dict, modified: str | None) -> bool:
+        """Was the copy written after it was made? SharePoint keeps the time it was last written; the entry
+        keeps the time the DMS put it there."""
+        try:
+            put = datetime.fromisoformat((entry.get("utc") or "").replace("Z", "+00:00"))
+            last = datetime.fromisoformat((modified or "").replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        return last > put + timedelta(seconds=5)
 
     @app.post("/api/files/checkout")
     def take_out(req: CheckoutRequest, user: User = Depends(current_user)):
