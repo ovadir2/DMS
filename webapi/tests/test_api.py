@@ -2116,6 +2116,18 @@ def test_a_dashboard_page_is_a_tool_and_not_a_document(tmp_path):
     assert c.get("/api/files/dashboard", params={"path": str(q / "nope.html")}).status_code == 404
 
 
+def test_a_dashboard_is_known_by_its_name_however_it_was_typed():
+    """"DB_Dashboard .html" - a space before the extension - was not recognised, so it was released into
+    Current_ReadOnly and then could not be taken out of there. A space or a hyphen reads as the underscore
+    the rule is written with; a word that merely contains "dashboard" is still not one."""
+    from dms_api import files
+    for name in ("dashboard_DB.html", "DB_Dashboard .html", "dashboard DB.html", "db-dashboard.html",
+                 "Dashboard.HTML", "my_dashboard_x.htm"):
+        assert files.is_dashboard(name), name
+    for name in ("dashboards.html", "dashboarding.html", "report.html", "dashboard_DB.xlsx"):
+        assert not files.is_dashboard(name), name
+
+
 def test_a_dashboard_released_before_is_put_back(tmp_path):
     """One dropped before the DMS knew what a dashboard is sits in Current_ReadOnly, read only, where nobody
     can move it by hand - the DMS keeps that folder read only. The repair pass moves it back up."""

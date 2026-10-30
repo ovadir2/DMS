@@ -427,8 +427,11 @@ def is_dashboard(name: str) -> bool:
     base = os.path.basename((name or "").replace("\\", "/").rstrip("/")).lower()
     if not base.endswith((".html", ".htm")):
         return False
-    stem = os.path.splitext(base)[0]
-    return "dashboard_" in stem or stem.endswith("_dashboard") or stem == "dashboard"
+    # The name as a person types it: "DB_Dashboard .html", "dashboard DB.html", "db-dashboard.html" are all
+    # the same intention, and a file that misses the rule over a stray space is released and then stuck in a
+    # folder nobody can take it out of.
+    stem = re.sub(r"[\s\-]+", "_", os.path.splitext(base)[0].strip()).strip("_")
+    return stem == "dashboard" or stem.startswith("dashboard_") or stem.endswith("_dashboard") or "_dashboard_" in stem
 
 
 def in_workflow_folder(root: str, path: str) -> bool:
