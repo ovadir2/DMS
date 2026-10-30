@@ -133,19 +133,19 @@ its paces yet.
 | REQ-P10 | A document comes back by itself when it is closed | Office releases its lock when the document is closed; the DMS writes the copy back to the file server and removes it, with "Done editing" kept for when that does not happen | Built |
 | REQ-P11 | A link can be shared without exposing the file server | Copy link gives a token the DMS resolves; Copy path still gives the path for whoever works that way | Built |
 | REQ-P12 | What cannot be done is visible, not hidden | Every menu offers the same lines in the same order, with what does not apply greyed and the reason in its tooltip | Checked |
-| REQ-P13 | Every released document is readable by the AI, whatever it was written in | `.docx` `.xlsx` and text are read by the DMS itself; `.pdf` (with a text layer), `.pptx` and `.xls` through markitdown, with `xlrd` installed for `.xls`. Legacy `.doc` and `.ppt`, and scanned PDFs, are not readable and must be saved in a modern format to reach the AI | Partly: the formats above are covered, the legacy ones are not |
+| REQ-P13 | Every released document is readable by the AI, whatever it was written in | `.docx`, `.xlsx` (every sheet under its own name, each value under its own heading, dates as dates, a formula's worked-out value or the formula itself), `.pptx` (slide by slide, with the speaker notes) and text are read by the DMS itself; `.pdf` with a text layer through pypdf; `.xls` with `xlrd`; a legacy `.doc` or `.ppt` through the PDF SharePoint makes of it. Only a scanned PDF with no text layer stays unreadable | Checked, except a scanned PDF |
 | REQ-P14 | The DMS keeps itself in order without being asked | One pass (`DMS_FILE_SERVICE_SECONDS`) moves files to match each document's status, puts back a read-only flag that was cleared, writes a Markdown that is missing, and brings back a copy whose editor has closed it | Built: the pass exists; it is off until that setting is given a value |
 
 ### Known limits
 
 | Limit | What it means |
 | --- | --- |
-| Formats the AI can read | `.docx` `.xlsx` and text are read by the DMS; `.pdf` (with a text layer), `.pptx` and `.xls` need markitdown (and `xlrd` for `.xls`). `.doc`, `.ppt`, `.rtf` and scanned PDFs are not read at all and are invisible to the AI |
+| Formats the AI can read | `.docx`, `.xlsx`, `.pptx` and text are read by the DMS itself; `.pdf` with a text layer by pypdf; `.xls` needs `xlrd`; `.doc`, `.ppt` and `.rtf` go through the PDF SharePoint makes of them (so they need SharePoint configured). A scanned PDF with no text layer is invisible to the AI |
 | Path length | Beyond about 200 characters Office cannot open a path; the DMS falls back to the Windows short (8.3) name, and Hebrew names reach that limit six times faster |
 | Drag and drop | 300 files per drag, files and folders in, nothing out: a browser cannot hand a file back to Windows |
 | Upload | 500 MB per file (`DMS_MAX_UPLOAD_MB`) |
 | The upkeep pass | Automatic check-in, the read-only repair and the missing Markdown only run when `DMS_FILE_SERVICE_SECONDS` is set. It is `0` by default, which means never |
-| Legacy Office formats | `.xls` needs `xlrd` in the DMS's environment; `.doc`, `.ppt` and scanned PDFs cannot be read at all, so those documents are invisible to the AI |
+| Legacy Office formats | `.xls` needs `xlrd` in the DMS's environment; `.doc`, `.ppt` and `.rtf` are read through SharePoint's PDF of them, so they need SharePoint configured. A scanned PDF with no text layer cannot be read at all |
 
 ## Design decisions beyond the blueprint
 

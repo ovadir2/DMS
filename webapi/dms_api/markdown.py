@@ -178,6 +178,78 @@ def _xls(path: str) -> str:
     return "\n\n".join(out)
 
 
+T_SLIDE, T_NOTES = "Slide", "Notes"      # the two words the DMS adds to a deck, so a section can be cited
+A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+PML = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
+
+
+def _slide_para(p) -> tuple[int, str]:
+    """A paragraph of a slide: how deep it is bulleted, and what it says."""
+    pr = p.find(f"{A}pPr")
+    try:
+        level = int((pr.get("lvl") if pr is not None else "0") or 0)
+    except ValueError:
+        level = 0
+    return level, re.sub(r"[ \t]+", " ", "".join(t.text or "" for t in p.iter(f"{A}t"))).strip()
+
+
+def _slide_table(tbl) -> list[str]:
+    rows = [[" ".join(x for _, x in (_slide_para(p) for p in c.iter(f"{A}p")) if x).strip()
+             for c in tr.iter(f"{A}tc")] for tr in tbl.iter(f"{A}tr")]
+    rows = [r for r in rows if any(r)]
+    if not rows:
+        return []
+    width = max(len(r) for r in rows)
+    rows = [r + [""] * (width - len(r)) for r in rows]
+    head, *body = rows
+    return ["| " + " | ".join(c or " " for c in head) + " |", "|" + "---|" * width] + \
+           ["| " + " | ".join(c or " " for c in r) + " |" for r in body]
+
+
+def _pptx(path: str) -> str:
+    """A deck, slide by slide. Each slide is a section under its own title - a reader (and the AI) can then
+    say which slide an answer came from - with the bullets as a list, the tables as tables and the speaker
+    notes after them, which is often where the sentence behind a bullet actually is."""
+    out: list[str] = []
+    with zipfile.ZipFile(path) as z:
+        names = set(z.namelist())
+        slides = sorted((n for n in names if re.match(r"ppt/slides/slide\d+\.xml$", n)),
+                        key=lambda n: int(re.findall(r"\d+", n)[-1]))
+        for i, n in enumerate(slides, 1):
+            root = ElementTree.fromstring(z.read(n))
+            title, lines = "", []
+            for sp in root.iter(f"{PML}sp"):
+                ph = next(iter(sp.iter(f"{PML}ph")), None)
+                said = [x for x in (_slide_para(p) for p in sp.iter(f"{A}p")) if x[1]]
+                if not said:
+                    continue
+                if not title and ph is not None and (ph.get("type") or "") in ("title", "ctrTitle"):
+                    title = " ".join(t for _, t in said)
+                else:
+                    lines += said
+            body = [("  " * min(level, 4)) + "- " + text for level, text in lines]
+            for tbl in root.iter(f"{A}tbl"):
+                rows = _slide_table(tbl)
+                if rows:
+                    body += [""] + rows
+            notes = ""
+            rel = f"ppt/slides/_rels/{os.path.basename(n)}.rels"
+            if rel in names:
+                for r in ElementTree.fromstring(z.read(rel)):
+                    if (r.get("Type") or "").endswith("/notesSlide"):
+                        t = (r.get("Target") or "").replace("\\", "/").replace("../", "ppt/").lstrip("/")
+                        if t in names:
+                            said = [x for _, x in (_slide_para(p) for p in ElementTree.fromstring(z.read(t)).iter(f"{A}p")) if x]
+                            notes = " ".join(x for x in said if not x.isdigit())    # the slide number is not a note
+            head = f"## {T_SLIDE} {i}" + (f" - {title}" if title else "")
+            if body or notes:
+                out.append("\n\n".join(x for x in [head, "\n".join(body).strip(), f"*{T_NOTES}:* {notes}" if notes else ""] if x))
+            else:
+                out.append(head)
+    return "\n\n".join(out)
+
+
+
 def _plain(path: str) -> str:
     from .doc_text import extract
     return extract(path)
@@ -232,6 +304,8 @@ def body_of(path: str) -> str:
             body = _xlsx(path).strip()
         elif ext == ".xls":
             body = _xls(path).strip()
+        elif ext in (".pptx", ".pptm"):
+            body = _pptx(path).strip()
         else:
             body = _plain(path).strip()
         if body:

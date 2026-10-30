@@ -2033,6 +2033,59 @@ def test_a_workbook_of_several_sheets_keeps_the_names_people_gave_them(tmp_path)
     assert "| Item | Cost |" in out and "| Bolt | 3 |" in out
 
 
+def test_a_deck_comes_out_slide_by_slide(tmp_path):
+    """A presentation used to arrive as one run of text with "[Slide 1]" in the middle of it. Each slide is
+    its own section now, under its title, with the bullets as a list, a table as a table and the speaker
+    notes after them - which is often where the sentence behind a bullet actually is."""
+    pptx = pytest.importorskip("pptx")
+    from pptx.util import Inches
+    from dms_api import markdown as md
+    pr = pptx.Presentation()
+    one = pr.slides.add_slide(pr.slide_layouts[1])
+    one.shapes.title.text = "Scope"
+    tf = one.placeholders[1].text_frame
+    tf.text = "First point"
+    deeper = tf.add_paragraph()
+    deeper.text = "Sub point"
+    deeper.level = 1
+    one.notes_slide.notes_text_frame.text = "Say the quarter out loud"
+    two = pr.slides.add_slide(pr.slide_layouts[5])
+    two.shapes.title.text = "Numbers"
+    table = two.shapes.add_table(2, 2, Inches(1), Inches(2), Inches(4), Inches(1)).table
+    for cell, text in zip([table.cell(0, 0), table.cell(0, 1), table.cell(1, 0), table.cell(1, 1)],
+                          ["Item", "Cost", "Bolt", "3"]):
+        cell.text = text
+    deck = tmp_path / "Kickoff.pptx"
+    pr.save(str(deck))
+
+    out = md.body_of(str(deck))
+    assert "## Slide 1 - Scope" in out and "## Slide 2 - Numbers" in out
+    assert "- First point" in out and "  - Sub point" in out
+    assert "*Notes:* Say the quarter out loud" in out
+    assert "| Item | Cost |" in out and "| Bolt | 3 |" in out
+
+
+def test_a_sheet_keeps_every_value_under_its_own_heading(tmp_path):
+    """Cells were taken in the order they came, so one empty cell moved every value after it a column to the
+    left - a number under the wrong heading. A date was written as the number Excel keeps it as, and a cell
+    the workbook had no worked-out value for said nothing at all."""
+    openpyxl = pytest.importorskip("openpyxl")
+    from datetime import date
+    from dms_api import markdown as md
+    wb = openpyxl.Workbook()
+    sheet = wb.active
+    sheet.title = "Costs"
+    sheet.append(["Item", "Qty", "Unit", "Total", "Due", "Open"])
+    sheet.append(["Bolt", 3, 2.5, "=B2*C2", date(2026, 3, 1), True])
+    sheet["F3"] = "late"                       # the only cell in its row: it belongs under Open, not Item
+    book = tmp_path / "Costs.xlsx"
+    wb.save(str(book))
+
+    out = md.body_of(str(book))
+    assert "| Bolt | 3 | 2.5 | =B2*C2 | 2026-03-01 | TRUE |" in out
+    assert "|   |   |   |   |   | late |" in out        # five empty cells before it, not shifted to the front
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

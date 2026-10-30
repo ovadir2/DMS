@@ -59,23 +59,103 @@ def _office(path: str, ext: str) -> str:
             except (KeyError, ElementTree.ParseError, OSError):
                 titles = {}                      # no names to be had: the part name says which sheet it was
 
+            # Which styles mean a date: a date is kept as a number (45678), and written as one it is not the
+            # date anybody wrote. The style of the cell is the only thing that says otherwise.
+            dates = _date_styles(z, names)
+
             out = []
             for n in sorted(n for n in names if re.match(r"xl/worksheets/sheet\d+\.xml$", n)):
                 rows = []
                 for row in ElementTree.fromstring(z.read(n)).iter():
                     if not row.tag.endswith("}row"):
                         continue
-                    cells = []
+                    cells: list[str] = []
                     for c in row:
-                        v = next((x.text for x in c.iter() if x.tag.endswith("}v") or x.tag.endswith("}t")), None)
-                        if v is None:
+                        if not c.tag.endswith("}c"):
                             continue
-                        cells.append(shared[int(v)] if c.get("t") == "s" and v.isdigit() and int(v) < len(shared) else v)
-                    if cells:
-                        rows.append("\t".join(cells))
+                        # The cell says which column it is in (A1, D1). Taking the cells in the order they
+                        # come puts the value of D under the heading of B as soon as a cell is empty, and a
+                        # number under the wrong heading is worse than no number at all.
+                        at = _column_of(c.get("r"))
+                        if at is not None:
+                            while len(cells) < at:
+                                cells.append("")
+                        cells.append(_cell_text(c, shared, dates))
+                    if any(x.strip() for x in cells):
+                        rows.append("\t".join(cells).rstrip("\t"))
                 out.append(f"[{titles.get(n) or os.path.splitext(os.path.basename(n))[0]}]\n" + "\n".join(rows))
             return "\n\n".join(out)
     return ""
+
+
+def _column_of(ref: str | None) -> int | None:
+    """A1 -> 0, D7 -> 3: where in the row this cell sits."""
+    if not ref:
+        return None
+    letters = "".join(ch for ch in ref if ch.isalpha()).upper()
+    if not letters:
+        return None
+    at = 0
+    for ch in letters:
+        at = at * 26 + (ord(ch) - 64)
+    return at - 1
+
+
+def _date_styles(z, names: set | list) -> set:
+    """The style numbers that mean a date or a time, from the workbook's own formats."""
+    builtin = set(range(14, 23)) | set(range(45, 48))         # Excel's own date and time formats
+    out: set = set()
+    if "xl/styles.xml" not in names:
+        return out
+    try:
+        root = ElementTree.fromstring(z.read("xl/styles.xml"))
+    except ElementTree.ParseError:
+        return out
+    custom = {f.get("numFmtId"): (f.get("formatCode") or "") for f in root.iter() if f.tag.endswith("}numFmt")}
+    dated = {i for i, code in custom.items()
+             if re.search(r"[yY]|[dD]{1,4}|mmm|hh|ss", re.sub(r"\[[^\]]*\]|\"[^\"]*\"", "", code))}
+    xfs = next((e for e in root.iter() if e.tag.endswith("}cellXfs")), None)
+    for i, xf in enumerate(list(xfs) if xfs is not None else []):
+        fmt = xf.get("numFmtId") or "0"
+        if fmt in dated or (fmt.isdigit() and int(fmt) in builtin):
+            out.add(str(i))
+    return out
+
+
+def _serial_date(value: str) -> str:
+    """Excel keeps a date as the days since 1900 (and counts a 29 February 1900 that never was)."""
+    from datetime import datetime, timedelta
+    try:
+        days = float(value)
+    except ValueError:
+        return value
+    if days < 1:                                              # a time of day on no particular date
+        seconds = round(days * 86400)
+        return f"{seconds // 3600:02d}:{seconds % 3600 // 60:02d}"
+    when = datetime(1899, 12, 30) + timedelta(days=days)      # 30 December 1899: the leap-year bug included
+    return when.strftime("%Y-%m-%d") if days == int(days) else when.strftime("%Y-%m-%d %H:%M")
+
+
+def _cell_text(c, shared: list, dates: set) -> str:
+    """What the cell says. A formula contributes the value Excel last worked out for it; when the workbook
+    was written without one, the formula itself is the only thing the cell has to say, and saying nothing
+    would quietly drop a number from the table."""
+    kind = c.get("t") or "n"
+    if kind == "inlineStr":
+        return "".join(t.text or "" for t in c.iter() if t.tag.endswith("}t")).strip()
+    v = next((x.text for x in c.iter() if x.tag.endswith("}v")), None)
+    if v is None:
+        f = next((x.text for x in c.iter() if x.tag.endswith("}f")), None)
+        return ("=" + f.strip()) if f else ""
+    if kind == "s" and v.isdigit() and int(v) < len(shared):
+        return shared[int(v)]
+    if kind == "b":
+        return "TRUE" if v.strip() == "1" else "FALSE"
+    if kind in ("str", "e"):
+        return (v or "").strip()
+    if (c.get("s") or "") in dates:
+        return _serial_date(v)
+    return (v or "").strip()
 
 
 def extract(path: str, max_chars: int = 60000) -> str:
