@@ -39,9 +39,11 @@ def _protect(folder: str) -> None:
     it was. This is what scripts\\Protect-DmsReadOnly.ps1 does to the folders that already exist."""
     if os.name != "nt":
         return
+    # The path comes through the environment, not on the command line: with -Command PowerShell parses what
+    # follows as more script, which is why a folder name arrived as "At line:18 char:4 + -- E:\Shares\..."
     ps = r"""
 $ErrorActionPreference = 'Stop'
-$path = $args[0]
+$path = $env:DMS_PROTECT_PATH
 $keep = @((whoami), 'NT AUTHORITY\SYSTEM', 'BUILTIN\Administrators')
 $read = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute
 $both = @([System.Security.AccessControl.InheritanceFlags]::ContainerInherit,
@@ -58,8 +60,9 @@ $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRul
 Set-Acl -LiteralPath $path -AclObject $acl
 """
     try:
-        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps, "--", folder],
-                           capture_output=True, text=True, timeout=60)
+        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+                           capture_output=True, text=True, timeout=60,
+                           env={**os.environ, "DMS_PROTECT_PATH": folder})
         if r.returncode:
             log.warning("Permissions of %s: %s", folder, (r.stdout + r.stderr).strip()[:300])
     except (OSError, subprocess.SubprocessError) as e:
