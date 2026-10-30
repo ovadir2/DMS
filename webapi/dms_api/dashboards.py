@@ -25,11 +25,17 @@ log = logging.getLogger("dms_api.dashboards")
 def run(root: str, write: bool) -> int:
     from .file_service import _move, _set_read_only
     moved = failed = 0
+    seen: list[str] = []
     for folder, _dirs, names in os.walk(root):
         if os.path.basename(folder).lower() != "current_readonly":
             continue
         for name in names:
             if not files.is_dashboard(name):
+                # Every page in there is named, matching or not: when nothing is moved, the answer is almost
+                # always the name itself (a space or a hyphen where the rule wants dashboard_).
+                if name.lower().endswith((".html", ".htm")):
+                    print(f"not a dashboard  {os.path.join(folder, name)}")
+                    seen.append(name)
                 continue
             here, there = os.path.join(folder, name), os.path.join(os.path.dirname(folder), name)
             if not write:
@@ -51,6 +57,10 @@ def run(root: str, write: bool) -> int:
                 print(f"FAILED       {here}: {e}")
                 failed += 1
     print(f"\n{moved} {'to move' if not write else 'moved'}, {failed} failed")
+    if not moved and seen:
+        print("\nHTML pages that are not named as dashboards (dashboard_<name>.html, <name>_dashboard.html):")
+        for name in sorted(set(seen)):
+            print(f"  {name}")
     return 1 if failed else 0
 
 
