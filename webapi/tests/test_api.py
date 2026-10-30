@@ -1009,8 +1009,8 @@ def test_a_document_already_open_in_sharepoint_is_not_uploaded_over(tmp_path):
 
 def test_only_the_owner_deletes_an_approved_document(tmp_path):
     """Current_ReadOnly holds the revision in force. The person whose document it is may take it out - and
-    nobody else, a DMS super user included - and its Markdown goes with it, so the AI cannot answer from a
-    document that is no longer there."""
+    nobody else, a DMS super user included. It is not erased: it moves to Obsolete_ReadOnly beside it, with
+    its Markdown, read only, where it can still be found."""
     c, sp, s, q, d, fs = _approved_env(tmp_path)
     cur = q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx"
     md = cur.with_suffix(".md")
@@ -1025,9 +1025,12 @@ def test_only_the_owner_deletes_an_approved_document(tmp_path):
     sp.update(d["id"], {"OwnerEmail": USER})                             # theirs
     r = c.post("/api/items/delete", json={"path": str(cur)})
     assert r.status_code == 200, r.text
-    assert not cur.exists() and os.path.isfile(r.json()["recycledTo"])   # moved, never erased
-    assert not md.exists()                                               # and the AI can no longer read it
-    assert sp.document(d["id"])["documentId"] == d["documentId"]         # the record stays
+    gone = q / "Obsolete_ReadOnly" / cur.name
+    assert not cur.exists() and r.json()["movedTo"] == str(gone)
+    assert gone.exists() and fs.is_read_only(str(gone))                  # put aside, read only, never erased
+    assert not md.exists() and gone.with_suffix(".md").read_text(encoding="utf-8") == "what it said"
+    doc = sp.document(d["id"])                                           # the record stays, with no file in force
+    assert doc["documentId"] == d["documentId"] and not doc["currentUncPath"]
 
 
 def test_new_revision_from_the_approved_copy(tmp_path):

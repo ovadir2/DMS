@@ -1059,6 +1059,29 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         log(user, "rename", f"{full} -> {path}")
         return {"name": os.path.basename(path), "path": path}
 
+    def retire(d: dict, full: str, user: User) -> dict:
+        """The owner takes their approved document out of Current_ReadOnly. It is not deleted: it goes to
+        Obsolete_ReadOnly beside it - the folder is made if it is not there - read only, with its Markdown
+        beside it, so the document can still be found and read, but it is no longer the revision in force."""
+        from .file_service import _move, _set_read_only
+        c = s.choices
+        folder = os.path.dirname(os.path.dirname(full))          # the document's own folder, above Current_ReadOnly
+        target = _move(full, os.path.join(folder, "Obsolete_ReadOnly", os.path.basename(full)))
+        _set_read_only(target, True)
+        md = os.path.splitext(full)[0] + ".md"
+        if files.is_file(md):                                    # its Markdown goes with it, so it reads as it did
+            _set_read_only(_move(md, os.path.splitext(target)[0] + ".md"), True)
+        try:
+            sp().update(d["id"], {"CurrentUncPath": "", "LifecycleStatus": c["Archived"]})
+            sp().audit(document_id=d.get("documentId") or "", event=c["StatusChanged"],
+                       from_status=d.get("lifecycleStatus") or "", to_status=c["Archived"], actor=user.email,
+                       details=f"The owner took the approved revision out of Current_ReadOnly: "
+                               f"{full} -> {target}")
+        except Exception as e:                                   # the file has already moved: say so, do not fail
+            logger.warning("retire: the register was not updated for %s: %s", d.get("documentId"), e)
+        log(user, "retire", f"{full} -> {target}")
+        return {"deleted": full, "movedTo": target, "obsolete": True}
+
     @app.post("/api/items/delete")
     def delete(req: DeleteRequest, user: User = Depends(current_user)):
         """Moves the file or folder to the recycle folder (04_Workflow_System\\Recycle), never erases it."""
@@ -1083,6 +1106,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                          "it cannot be deleted from here")
             if owner != user.email:
                 raise HTTPException(403, f"Only {owner or 'the document owner'} can delete this approved document")
+            return retire(held, full, user)       # not deleted: put aside, where it can still be found
         if (blueprint.describe(rel_parts(full)) or {}).get("kind") not in (None, "project"):   # a project folder is the user's
             raise HTTPException(403, "This folder is part of the company skeleton (blueprint) and cannot be deleted. Its content can.")
         d = registered_inside(full)
