@@ -190,6 +190,7 @@
   body.explorer td.actions a.link, body.explorer td.actions button.link,
   body.explorer .tileacts button { display:none; }
   body.explorer table tr:hover > td { background:var(--band); }
+  body.explorer table, .xtree { user-select:none; }   /* a double click opens a row, it does not select text */
   /* Every command lives on the right-click menu, so the row of buttons above the list is gone. It stays
      in the page, unseen: the menu is built from those very buttons and clicks them. */
   body.explorer #view .toolbar { display:none; }
@@ -556,7 +557,7 @@ function ctxScreen(host, self = false) {
   const folder = !!(host && host.classList && host.classList.contains('xfolder'));
   return [...view.querySelectorAll('.toolbar:not(#selbar) .pillbtn, .toolbar:not(#selbar) button.link')]
     .filter(b => b.id !== 'pf-b')
-    .filter(b => folder || self || b.id !== 'mk');     // a new folder is made inside a folder, not beside a file
+    .filter(b => self || b.id !== 'mk');     // a folder row says it itself (inside that folder), a file never does
 }
 function ctxOpen(host, x, y) {
   const items = ctxActions(host), screen = ctxScreen(host);
@@ -576,15 +577,19 @@ function ctxOpen(host, x, y) {
   // The menu reads in groups, the way a folder window does: what opens the thing, what the workflow does
   // with it, and what you do to the file itself.
   const GROUP = [
-    ['data-f', 'data-ckout', 'data-ckview', 'data-tx', 'data-txv', 'data-ckin', 'data-ext', 'data-vw', 'data-noopen'],
-    ['data-sub', 'data-st', 'data-rev', 'data-relp', 'data-share', 'data-wd', 'data-dg', 'data-hist',
-     'data-ok', 'data-no', 'data-up', 'data-drn', 'data-ddel'],
-    ['data-dl', 'data-cp', 'data-rn', 'data-del', 'data-mkin'],
+    ['data-f', 'data-ckout', 'data-ext', 'data-ckview', 'data-vw', 'data-tx', 'data-txv', 'data-ckin', 'data-noopen'],
+    ['data-st', 'data-sub', 'data-ok', 'data-no', 'data-dg', 'data-wd', 'data-rev', 'data-relp', 'data-share',
+     'data-up', 'data-hist', 'data-drn', 'data-ddel'],
+    ['data-mkin', 'data-dl', 'data-cp', 'data-rn', 'data-del'],
   ];
-  const groupOf = el => {
-    const i = GROUP.findIndex(g => g.some(k => el.hasAttribute(k)));
-    return i < 0 ? 2 : i;                       // anything else (new folder, save file, new document) is the file system
+  const place = el => {
+    for (let g = 0; g < GROUP.length; g++) {
+      const i = GROUP[g].findIndex(k => el.hasAttribute(k));
+      if (i >= 0) return [g, i];
+    }
+    return [2, GROUP[2].length];                // new folder, save file, new document: the file system, last
   };
+  const groupOf = el => place(el)[0];
   const entry = src => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -595,7 +600,7 @@ function ctxOpen(host, x, y) {
     m.appendChild(b);
   };
   let last = -1;
-  [...items, ...screen].sort((x, y) => groupOf(x) - groupOf(y)).forEach(src => {
+  [...items, ...screen].sort((x, y) => { const a = place(x), b = place(y); return a[0] - b[0] || a[1] - b[1]; }).forEach(src => {
     const g = groupOf(src);
     if (last >= 0 && g !== last) m.appendChild(Object.assign(document.createElement('div'), { className: 'ctxsep' }));
     last = g;
@@ -621,7 +626,7 @@ document.addEventListener('dblclick', ev => {
   const host = ev.target.closest(CTX_HOST);
   if (!host || ev.target.closest('button, a, input')) return;
   const first = ctxActions(host).find(b => !b.hasAttribute('disabled'));
-  if (first) { ev.preventDefault(); first.click(); }
+  if (first) { ev.preventDefault(); getSelection().removeAllRanges(); first.click(); }
 });
 document.addEventListener('click', e => { if (!e.target.closest('.ctx')) ctxClose(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') ctxClose(); });
@@ -870,6 +875,8 @@ async function browse(v) {
       : (me.admin ? `<button type="button" class="link" data-del="${esc(f.path)}" data-released="1" style="color:var(--err)">${T.del}</button>` : '')}</td></tr>`).join('')}
     </table>` : ''}${folders.length + r.files.length ? '' : `<p class="muted">${T.none}</p>`}`;
   if (explorerOn()) {
+    TREE.kids.set(r.path, folders.map(f => ({ name: lbl(f.label) || f.name, path: f.path,
+      lock: !!f.workflowFolder, bp: !!(f.label && f.label.kind !== 'project' && f.label.kind !== 'customer') })));
     // the tree on one side, this folder's contents on the other - the contents are exactly what was drawn
     // above, moved into the second column, so nothing about them changes
     const main = document.createElement('div');
