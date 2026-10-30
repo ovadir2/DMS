@@ -491,7 +491,7 @@ function bridgeActions(f) {
 function fileActions(f) {
   return `${f.bridge ? bridgeActions(f) : f.officeUri ? `${openBtn(f.officeUri, f.path, f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open))}${f.editable && f.viewUri ? openBtn(f.viewUri, f.path, T.viewRo) : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">${f.editable === false || f.readOnly ? T.viewRo : '✎ ' + T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cp="${esc(f.path)}">🔗 ${T.copyLink}</button>`
     + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button><button type="button" class="link" data-drn="${f.document.id}" data-name="${esc(f.name)}">${T.rename}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
-        + (f.document.statusKey === 'Submitted' && !f.document.nextRevision ? `<button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button>` : '')
+        + (f.document.statusKey === 'Submitted' ? `<button type="button" class="link" data-wd="${f.document.id}" style="color:var(--err)">${T.withdraw}</button>${f.document.nextRevision ? '' : `<button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button>`}` : '')
         + (f.document.statusKey === 'Approved_ReadOnly' && samePath(f.path, f.document.currentUncPath) ? `${f.document.nextRevision ? `<button type="button" class="link" data-rev="${f.document.id}" disabled title="${esc(T.nextRev.replace('{rev}', f.document.nextRevision.revision || '').replace('{status}', f.document.nextRevision.status || ''))}">⟳ ${T.newRev}</button>` : `<button type="button" class="link" data-rev="${f.document.id}">⟳ ${T.newRev}</button>`}<button type="button" class="link" data-share="${f.document.id}">✉ ${isHr(f.path) ? T.shareHrBtn : T.share}</button>` : '')
                   : (f.managed || f.system || f.noWorkflow ? '' : `<button type="button" class="link" data-st="${esc(f.path)}">${T.start}</button><button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button>`));
 }
@@ -635,6 +635,7 @@ function ctxOpen(host, x, y) {
     [1, ['data-relp'], () => T.relNw],
     [1, ['data-share'], () => '\u2709 ' + T.share],
     [1, ['data-up'], () => T.uploadEdited],
+    [1, ['data-wd'], () => T.withdraw],
     [1, ['data-hist'], () => T.history],
     [2, ['data-dl'], () => T.download],
     [2, ['data-cp'], () => '\uD83D\uDD17 ' + T.copyLink],
