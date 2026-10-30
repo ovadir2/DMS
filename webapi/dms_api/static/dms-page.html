@@ -165,7 +165,7 @@
   /* The commands of a row, as a right-click menu: File Explorer's way in. The menu is built from the row's
      own buttons, so whatever the DMS decided for that row - who may edit it, what is read only, what cannot
      be deleted - is what the menu offers. */
-  .ctx { position:fixed; z-index:60; min-width:230px; max-height:80vh; overflow:auto; background:#fff; border:1px solid var(--line);
+  .ctx { position:fixed; z-index:60; min-width:230px; max-height:88vh; overscroll-behavior:contain; overflow:auto; background:#fff; border:1px solid var(--line);
          border-radius:10px; box-shadow:0 12px 34px rgba(31,74,114,.22); padding:6px; }
   .ctx .ctxname { margin:4px 8px 6px; font-size:12px; color:var(--muted); font-weight:600; max-width:340px;
                   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -715,7 +715,13 @@ document.addEventListener('dblclick', ev => {
 });
 document.addEventListener('click', e => { if (!e.target.closest('.ctx')) ctxClose(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') ctxClose(); });
-addEventListener('scroll', ctxClose, true);
+// The page scrolling under it closes the menu; the menu scrolling inside itself does not - a long menu has
+// to be readable to the end.
+addEventListener('scroll', e => {
+  const t = e.target;
+  if (t && t.closest && t.closest('.ctx')) return;
+  ctxClose();
+}, true);
 addEventListener('resize', ctxClose);
 
 // Explorer view: the commands live in the right-click menu only, and the rows are a plain list of files.
