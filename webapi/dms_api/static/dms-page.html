@@ -599,7 +599,10 @@ function ctxOpen(host, x, y) {
   if (!items.length) return false;
   ctxClose();
   host.classList.add('ctx-on');
+  const picked = document.querySelectorAll('#view input.sel:checked').length;
+  const mine = host.querySelector && host.querySelector('input.sel:checked');
   const name = host.id === 'view' ? ((state.folder || '').split(/[\\/]/).pop() || '')
+    : picked > 1 && mine ? `${picked} ${T.selected}`          // several ticked: the menu says so in its title
     : (host.querySelector('td:nth-child(2), .tile') || {}).textContent || '';
   const m = document.createElement('div');
   m.className = 'ctx';
