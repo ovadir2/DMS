@@ -238,6 +238,8 @@ def body_of(path: str) -> str:
     try:
         from markitdown import MarkItDown               # on the server, when IT installed it
         body = (MarkItDown().convert(path).text_content or "").strip()
+        if body.lower() == "none":
+            body = ""                                   # what it says about a file it could not read
         if body:
             return body
     except ImportError:
