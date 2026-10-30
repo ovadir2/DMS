@@ -31,10 +31,17 @@
   .wctl .hbtn { padding:8px 14px; color:var(--muted); border-radius:0; }
   .wctl .hbtn:hover { color:var(--navy); background:var(--band); }
   #fs-close:hover { color:#fff; background:var(--err); }
-  header { padding-right:140px; }             /* room for them: they are in the right corner in both languages */
-  /* In Hebrew the bar reads right to left, which would put the logo under the window buttons. The name of
-     the system stays on the left, where it is in every other application. */
-  [dir=rtl] header .brand { margin-inline-start:auto; }
+  /* The corners belong to the same things in both languages: the rh logo and the system name at the top
+     left, the window buttons at the top right. Everything else lays itself out between them, in the
+     direction of the language. */
+  header { padding-right:140px; padding-left:250px; }
+  header .brand { position:absolute; left:22px; top:12px; margin:0; }
+  .hbreak { display:none; }
+  @media (max-width:900px) {
+    header { padding-left:16px; }
+    header .brand { position:static; }
+    .hbreak { display:block; }
+  }
   body.slim header { min-height:0; padding-block:2px; }
   body.slim header .brand, body.slim header .hbreak, body.slim .hsearch { display:none; }
   .menu { position:relative; }
