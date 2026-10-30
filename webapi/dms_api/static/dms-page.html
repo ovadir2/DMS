@@ -34,12 +34,19 @@
   /* The corners belong to the same things in both languages: the rh logo and the system name at the top
      left, the window buttons at the top right. Everything else lays itself out between them, in the
      direction of the language. */
-  header { padding-right:140px; padding-left:250px; }
-  header .brand { position:absolute; left:22px; top:12px; margin:0; }
+  header { padding-right:140px; padding-left:360px; }
+  header .brand { position:absolute; left:22px; top:12px; margin:0; max-width:320px; }
+  header .welcome { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .hbreak { display:none; }
+  @media (max-width:1250px) {                 /* no room for the name: the logo alone holds the corner */
+    header { padding-left:96px; }
+    header .brand { max-width:64px; }
+    header .brand .sep, header .welcome { display:none; }
+  }
   @media (max-width:900px) {
     header { padding-left:16px; }
-    header .brand { position:static; }
+    header .brand { position:static; max-width:none; }
+    header .brand .sep, header .welcome { display:block; }
     .hbreak { display:block; }
   }
   body.slim header { min-height:0; padding-block:2px; }
