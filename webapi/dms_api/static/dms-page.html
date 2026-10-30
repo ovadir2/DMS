@@ -193,11 +193,11 @@
   .ctx .ctxsep { height:1px; background:var(--line); margin:5px 4px; }
   .ctx .ctxhead { font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
                   color:var(--muted); padding:6px 10px 3px; }
-  /* What you may do is in the DMS's blue; what you may not is grey. One look says which is which. */
+  /* What you may do is in the DMS's blue and in bold; what you may not is a pale grey. One look says which. */
   .ctx button { display:block; width:100%; text-align:start; background:none; border:0; font:inherit; color:var(--navy);
-                font-weight:500; padding:7px 10px; border-radius:7px; cursor:pointer; white-space:nowrap; }
+                font-weight:600; padding:7px 10px; border-radius:7px; cursor:pointer; white-space:nowrap; }
   .ctx button:hover:not([disabled]) { background:var(--band); }
-  .ctx button[disabled] { color:var(--muted); cursor:not-allowed; }
+  .ctx button[disabled] { color:#b9c2cc; font-weight:400; cursor:not-allowed; }
   tr.ctx-on > td, .tilewrap.ctx-on { background:var(--band); }
   /* Explorer: a tree you open on one side, the folder's contents in detail on the other. */
   .xlayout { display:grid; grid-template-columns:276px 1fr; gap:18px; align-items:start; }
