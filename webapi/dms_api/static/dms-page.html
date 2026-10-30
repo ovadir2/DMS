@@ -450,7 +450,7 @@ function taShow() {
   box.querySelectorAll('button').forEach(b => b.onmousedown = e => { e.preventDefault(); taPick(ta.items[+b.dataset.i]); });
   box.hidden = false;
 }
-$('#q').oninput = () => {
+function taAsk(wait = 250, live = true) {
   clearTimeout(ta.timer);
   const text = $('#q').value.trim();
   if (text.length < 2) return taClose();
@@ -461,10 +461,14 @@ $('#q').oninput = () => {
       if (seq !== ta.seq || $('#q').value.trim() !== text) return;
       ta.items = r; ta.pos = -1; taShow();
       // Already looking at the results: they follow what is being typed, instead of waiting for Search.
-      if (state.view === 'search') { state.lastQ = text; render(); }
+      if (live && state.view === 'search') { state.lastQ = text; render(); }
     } catch { taClose(); }
-  }, 250);
-};
+  }, wait);
+}
+$('#q').oninput = () => taAsk();
+// Coming back to a box that still holds the words: the suggestions come back with it, without retyping.
+$('#q').onfocus = () => taAsk(0, false);
+$('#q').onclick = () => { if (taBox().hidden) taAsk(0, false); };
 $('#q').onkeydown = e => {
   const open = !taBox().hidden;
   if (open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
