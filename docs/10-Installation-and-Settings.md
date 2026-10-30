@@ -86,6 +86,10 @@ Start and check it:
 .\scripts\New-DmsMarkdown.ps1 -Write                 # write it
 ```
 
+A format nothing can read on the server - a legacy `.doc`, a `.ppt` - goes through SharePoint: the pass asks
+it for a PDF of the document, reads the pages (pypdf) and removes the copy at once. It needs `.env` filled in
+(section 7) and `DMS_REVIEW_LIBRARY` set; without them such a file is reported as "nothing to read".
+
 Then **First loading** (super users, ⋮ menu) registers what is already on the server, and
 `docs/Go-Live.md` covers the rest.
 

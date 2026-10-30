@@ -36,6 +36,30 @@ REGISTER_FIELDS = ("Id", "Title", "DocumentId", "DocumentType", "DocumentArea", 
                    "DraftRevision", "Modified", "Created")
 
 
+def pdf_bytes(path: str, s: "Settings | None" = None, who: str = "dms") -> bytes:
+    """A document as a PDF, made by SharePoint and fetched back, with the copy removed at once.
+
+    The same route the page uses to show a document read only, as a plain function: a pass that runs outside
+    the web application (the Markdown catch-up) has no app to ask, and a legacy .doc or .ppt reaches the
+    company's AI no other way. Returns no bytes when SharePoint is not configured here."""
+    from .config import Settings as _Settings
+    from . import checkout
+    s = s or _Settings.from_env()
+    if not (s.site_url and s.review_library and s.client_id and s.cert_path):
+        logger.info("A PDF of %s was not made: SharePoint is not configured here", os.path.basename(path))
+        return b""
+    sp = SharePoint(s)
+    key = "pdf-" + checkout.key_of(s.repository_root, path, who)[5:]
+    try:
+        put = sp.review_put(local_path=path, document_id=key, edit=False, as_pdf=True)
+        return sp.review_get(document_id=key, name=put["name"]) or b""
+    finally:
+        try:
+            sp.review_done(document_id=key)
+        except Exception as e:  # noqa: BLE001 - the copy is in the review library, named after this one run
+            logger.info("The reading copy of %s was not removed: %s", os.path.basename(path), e)
+
+
 class SharePointError(Exception):
     pass
 

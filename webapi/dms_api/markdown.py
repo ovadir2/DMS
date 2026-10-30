@@ -202,6 +202,9 @@ def _via_pdf(path: str) -> str:
     try:
         with open(tmp, "wb") as f:
             f.write(data)
+        body = _plain(tmp).strip()                 # the pages read here (pypdf), with nothing to install
+        if body:
+            return body
         from markitdown import MarkItDown
         return (MarkItDown().convert(tmp).text_content or "").strip()
     except Exception as e:  # noqa: BLE001 - a last resort: say why and leave the document without Markdown

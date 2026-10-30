@@ -45,7 +45,13 @@ def _register(s: Settings) -> dict:
 
 def run(root: str, write: bool, report: str = "") -> int:
     from . import markdown
-    docs = _register(Settings.from_env()) if write else {}     # a dry run asks SharePoint nothing
+    s = Settings.from_env()
+    docs = _register(s) if write else {}                       # a dry run asks SharePoint nothing
+    if write and not markdown.PDF_OF[0]:
+        # The web application sets this at startup; this pass runs on its own. Without it a legacy .doc or
+        # .ppt - which nothing here and no markitdown can read - would simply be counted as a failure.
+        from .sharepoint import pdf_bytes
+        markdown.PDF_OF[0] = lambda path: pdf_bytes(path, s)
     done = skipped = failed = 0
     rows: list[tuple] = []
     for folder, dirs, names in os.walk(root):
@@ -72,6 +78,7 @@ def run(root: str, write: bool, report: str = "") -> int:
                     done += 1
                 else:
                     print(f"nothing to read in {path}")
+                    rows.append(("nothing to read", path, "neither the file itself nor its PDF gave any text"))
                     failed += 1
             except Exception as e:  # noqa: BLE001 - one file never stops the pass
                 print(f"FAILED       {path}: {e}")

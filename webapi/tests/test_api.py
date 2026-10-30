@@ -1917,6 +1917,27 @@ def test_backfill_writes_markdown_beside_every_released_file(tmp_path, capsys, m
     assert written == [str(cur / "QP-1.docx"), str(cur / "QP-3.pdf")]     # the ones that had none
 
 
+def test_the_catch_up_pass_reads_a_legacy_doc_through_its_pdf(tmp_path, monkeypatch):
+    """A legacy .doc has no parts to read and markitdown gives nothing for one: SharePoint lays it out as a
+    PDF and the text comes from the pages. The pass runs outside the web application, so it has to set that
+    route up itself - otherwise such a document is simply counted as a failure, run after run."""
+    from dms_api import backfill, markdown as md
+    root = tmp_path / "Root"
+    cur = root / "01_General" / "Q" / "Current_ReadOnly"
+    cur.mkdir(parents=True)
+    old = cur / "QP-1.0E REV 30 Quality Manual.doc"
+    old.write_bytes(b"\xd0\xcf\x11\xe0 an old Word file")
+    monkeypatch.setattr(backfill, "_register", lambda s: {})
+    monkeypatch.setattr(md, "PDF_OF", [None])
+    asked: list[str] = []
+    monkeypatch.setattr("dms_api.sharepoint.pdf_bytes", lambda path, s=None, who="dms": asked.append(path) or b"%PDF-1.4")
+    monkeypatch.setattr(md, "_plain", lambda path: "1. Scope\nThis manual applies to RH." if path.endswith(".pdf") else "")
+
+    assert backfill.run(str(root), write=True) == 0
+    assert asked == [str(old)]                                   # it went through SharePoint, by itself
+    assert "This manual applies to RH." in old.with_suffix(".md").read_text(encoding="utf-8")
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""
