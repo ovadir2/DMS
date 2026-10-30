@@ -2256,7 +2256,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.post("/api/documents/{item_id}/revise")
     def revise(item_id: int, file: UploadFile | None = File(None), submit: bool = Form(False),
-               user: User = Depends(current_user)):
+               approvers: str = Form(""), user: User = Depends(current_user)):
         """Start the next revision of an approved document, on the same record: from a copy of the
         approved version, or from a file uploaded from the user's PC. The draft is saved next to the
         document as <name>_RevNN_DRAFT.<ext>; on approval the file service makes it the current version
@@ -2304,7 +2304,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             noworkflow.moved(s.repository_root, to_root(s.repository_root, d.get("currentUncPath")) or "", None)
         log(user, "revise", f"{d.get('documentId')} -> {target}")
         if submit:
-            return {**submit_doc(item_id, None, user), "draft": target, "officeUri": files.office_uri(target, edit=True)}
+            # sent straight away: with the approvers chosen in the dialog, or the ones the Matrix names
+            chosen = SubmitRequest(approvers=[x for x in approvers.split(";") if x.strip()]) if approvers else None
+            return {**submit_doc(item_id, chosen, user), "draft": target, "officeUri": files.office_uri(target, edit=True)}
         return {**with_key(sp().document(item_id)), "draft": target, "officeUri": files.office_uri(target, edit=True)}
 
     def approved_file(d: dict) -> str | None:

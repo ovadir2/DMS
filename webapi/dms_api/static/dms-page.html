@@ -1590,14 +1590,27 @@ async function newRevision(id) {
      <label style="color:var(--ink)">${T.revFrom}</label>
      <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="radio" name="src" value="copy" checked>${T.revCopy}</label>
      <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="radio" name="src" value="file">${T.revUpload}</label>
-     <input type="file" name="file">
-     <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="submit">${T.revSubmit}</label>`,
+     <input type="file" name="file" disabled>
+     <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="submit">${T.revSubmit}</label>
+     <div id="rev-ap" hidden>${AP_FIELD()}</div>`,
     [['cancel', T.cancel, 'light'], ['ok', T.ok]]);
+  // the file is chosen only when the revision starts from one, and the approvers only when it is sent now
+  const box = $('#dlg-b'), form = box.closest('form') || box;
+  const fileIn = box.querySelector('[name=file]'), apBox = box.querySelector('#rev-ap');
+  const sendNow = box.querySelector('[name=submit]');
+  const pickedAp = wireApprovers(box);
+  box.querySelectorAll('[name=src]').forEach(b => b.onchange = () => { fileIn.disabled = b.value !== 'file'; });
+  sendNow.onchange = () => { apBox.hidden = !sendNow.checked; };
   while (r.action === 'ok') {
     const fd = new FormData();
     const useFile = r.form.src.value === 'file';
     if (useFile) { if (!r.form.file.files.length) { note(T.chooseFile, 'err'); r = await again(); continue; } fd.set('file', r.form.file.files[0]); }
     fd.set('submit', r.form.submit.checked ? 'true' : 'false');
+    if (r.form.submit.checked) {
+      const ap = pickedAp();
+      if (ap && !ap.length) { note(T.apNone, 'err'); r = await again(); continue; }
+      if (ap) fd.set('approvers', ap.join(';'));            // chosen here, as on any other submission
+    }
     try {
       const x = await api(`/api/documents/${id}/revise`, { method:'POST', body:fd });
       $('#dlg').close(); refreshApprovals();

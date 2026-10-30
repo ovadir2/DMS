@@ -1879,6 +1879,35 @@ def test_the_page_is_never_cached(tmp_path):
     assert "no-store" in c.get("/dms/dms-page").headers.get("cache-control", "")
 
 
+def test_a_new_revision_can_name_its_approvers(tmp_path):
+    """Starting the next revision and sending it at once is a submission like any other, so the people who
+    will approve it are chosen there rather than taken from the Matrix without asking."""
+    from dms_api import file_service
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "01_General" / "Procedures"
+    q.mkdir(parents=True)
+    (q / "QP-1.txt").write_text("one", encoding="utf-8")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                 approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    c = TestClient(create_app(s, sp))
+    made = c.post("/api/documents", json={"path": str(q / "QP-1.txt"), "submit": True,
+                                          "documentType": "נוהל", "documentArea": "איכות"})
+    assert made.status_code in (200, 201), made.text
+    d = made.json()
+    doc_id = d.get("id") or d["document"]["id"]
+    file_service.run_once(sp, s)
+    for _ in range(2):
+        c.post(f"/api/approvals/{doc_id}", json={"approve": True})
+    file_service.run_once(sp, s)
+
+    r = c.post(f"/api/documents/{doc_id}/revise", data={"submit": "true", "approvers": "ron@rh.co.il;dana@rh.co.il"})
+    assert r.status_code == 200, r.text
+    said = [e for e in sp.audit_events() if "ron@rh.co.il" in (e.get("details") or "")]
+    assert said, "the submission did not record the approvers chosen for it"
+
+
 def test_reading_leaves_no_copy_to_write_on(tmp_path):
     """SharePoint turns the document into a PDF and the DMS serves that PDF itself, removing the copy at
     once. A copy left in the library is one a reader can annotate and save - which is not reading."""
