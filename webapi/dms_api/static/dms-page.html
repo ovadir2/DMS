@@ -46,6 +46,9 @@
   header { padding-right:150px; direction:ltr; }
   header .brand { position:static; margin:0; }
   header #lang { margin-inline-end:auto; }    /* beside the logo and the name, not pushed to the edge */
+  /* Who is signed in and the menu end the working line, at its right - even when the bar wraps and they
+     are the only two things on a line of their own. */
+  header .menu { margin-left:auto; }
   header .welcome { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; unicode-bidi:plaintext; }
   body.slim header { min-height:0; padding-block:2px; }
   body.slim header .brand, body.slim header .hbreak, body.slim .hsearch { display:none; }
