@@ -20,7 +20,9 @@ from .config import Settings
 
 log = logging.getLogger("dms_api.backfill")
 FOLDER = "current_readonly"
-SKIP = (".md", ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".zip", ".7z", ".rar", ".msg", ".eml")
+# A PDF is read too - it is a document, and what it says is what the AI should answer from. Only what has
+# no text to take (a picture, an archive) and the Markdown itself are passed over.
+SKIP = (".md", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".ico", ".zip", ".7z", ".rar", ".exe", ".dll")
 
 
 def _register(s: Settings) -> dict:

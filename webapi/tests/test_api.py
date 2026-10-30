@@ -1858,6 +1858,7 @@ def test_backfill_writes_markdown_beside_every_released_file(tmp_path, capsys, m
     (cur / "QP-2.docx").write_bytes(b"x")
     (cur / "QP-2.md").write_text("already there", encoding="utf-8")
     (cur / "photo.png").write_bytes(b"x")
+    (cur / "QP-3.pdf").write_bytes(b"x")                                 # a PDF is a document: it gets one too
     (root / "01_General" / "Q" / "draft.docx").write_bytes(b"x")          # not released: not its business
     monkeypatch.setattr(backfill, "_register", lambda s: {})
     written = []
@@ -1867,7 +1868,7 @@ def test_backfill_writes_markdown_beside_every_released_file(tmp_path, capsys, m
     assert "would write" in capsys.readouterr().out
 
     assert backfill.run(str(root), write=True) == 0
-    assert written == [str(cur / "QP-1.docx")]                            # the one that had none
+    assert written == [str(cur / "QP-1.docx"), str(cur / "QP-3.pdf")]     # the ones that had none
 
 
 def test_the_page_is_never_cached(tmp_path):
