@@ -311,7 +311,8 @@ def run_once(sp, s: Settings, only: str = "") -> dict:
                 _set_read_only(target, True)
                 try:        # beside it, the same document as Markdown: what the company's AI reads
                     from . import markdown
-                    markdown.write_beside(target, d)
+                    wrote = markdown.write_beside(target, d)
+                    log.info("%s: Markdown %s", doc_id, wrote or "was not written (nothing to read in the file)")
                 except Exception as e:  # noqa: BLE001 - a release is not held up by its Markdown
                     log.info("%s has no Markdown beside it: %s", target, e)
                 sha = _sha256(target)

@@ -917,7 +917,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         next pass of the upkeep. Until the file has one, the company's AI cannot read that document at all."""
         try:
             from . import markdown
-            markdown.write_beside(target, d or find_registered(target, register_index()) or {})
+            wrote = markdown.write_beside(target, d or find_registered(target, register_index()) or {})
+            logger.info("Markdown %s", wrote or f"was not written beside {target} (nothing to read in the file)")
         except Exception as e:  # noqa: BLE001 - a release is never held up by its Markdown
             logger.info("%s has no Markdown beside it: %s", target, e)
 
