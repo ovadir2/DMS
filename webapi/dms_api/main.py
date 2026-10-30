@@ -2,7 +2,8 @@
 a file and submit it for approval, and see each file's status.
 
 Run:  uvicorn dms_api.main:app --host 0.0.0.0 --port 8080
-Docs: /docs (OpenAPI). Page: /dms/dms-page?lang=EN&path=<UNC>&name=<file>
+Docs: /docs (OpenAPI). Page: /dms/dms-page?lang=EN&path=<folder>&name=<file> (stands there and ticks the
+file; &start=1 opens Start workflow on it, which is what the Explorer right-click sends)
 """
 from __future__ import annotations
 

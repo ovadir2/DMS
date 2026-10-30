@@ -2078,8 +2078,22 @@ async function viewFile(path) {
   $('#ai-log').innerHTML = `<div class="muted small">${T.aiOnPrem}</div>`;
   if (q.get('view') === 'approvals' && cfg.approvals === 'page') state.view = 'approvalsView';   // from a notification link
   else if (q.get('view') === 'workflows') state.view = 'mine';
+  // A DMS link (/dms/go/<token>) names the folder and, for a file, its name: stand there and tick the file.
+  // Only a bare path - the Explorer right-click, which hands over the file itself - starts a workflow.
+  const land = q.get('path'), named = q.get('name');
+  if (land) { state.view = 'browse'; state.folder = land; }
+  // The question marks are taken off the address now: a refresh of the page would otherwise do all of this
+  // again, and Ctrl+F5 on a page that was opened from a link would open the same dialog over and over.
+  if (land || q.get('view')) history.replaceState(null, '', location.pathname + (q.get('lang') ? '?lang=' + encodeURIComponent(q.get('lang')) : ''));
   await render();
-  if (q.get('path')) startWorkflow(q.get('path'), q.get('name'));   // opened from the Explorer right-click
+  if (land && named) {
+    const box = [...document.querySelectorAll('#view input.sel')]
+      .find(b => (b.dataset.path || '').split(/[\\/]/).pop() === named);
+    if (box) { box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true })); box.closest('tr')?.scrollIntoView({ block: 'center' }); }
+  }
+  // Only an address that asks for it starts a workflow (the Explorer right-click): a DMS link to a folder
+  // used to open this dialog on the folder itself, with the file's name in the title.
+  if (land && q.get('start') === '1') startWorkflow(named ? land.replace(/[\\/]+$/, '') + '\\' + named : land);
 })();
 </script>
 </body>
