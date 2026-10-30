@@ -509,15 +509,24 @@ const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${
 const viewBtn = f => VIEW_EXT.test(f.name || f.path)
   ? `<button type="button" class="link" data-vw="${esc(f.path)}">${T.viewRo}</button>`
   : `<button type="button" class="link" data-vpdf="${esc(f.path)}">${T.viewRo}</button>`;
-// A dashboard page (dashboard_DB.html) is a tool, not a document: it opens in a tab and runs there. The DMS
-// serves it into a sandbox, so it draws itself and cannot act as the person looking at it.
-const isDash = n => /dashboard_[^\\/]*\.html?$/i.test(n || '');
+// An HTML page opens in a tab and runs there: the DMS serves it into a sandbox, so it draws itself and
+// cannot act as the person looking at it. A dashboard page (DB_Dashboard.html, dashboard_DB.html) is a tool
+// besides: it is saved where it is dropped and never released, so its row offers nothing but Open. The name
+// is read as a person types it - a space or a hyphen says what an underscore says - as the DMS reads it.
+const isHtml = n => /\.html?$/i.test((n || '').split(/[\\/]/).pop() || '');
+const isDash = n => {
+  const base = ((n || '').split(/[\\/]/).pop() || '').toLowerCase();
+  if (!/\.html?$/.test(base)) return false;
+  const stem = base.replace(/\.html?$/, '').trim().replace(/[\s-]+/g, '_').replace(/^_+|_+$/g, '');
+  return stem === 'dashboard' || stem.startsWith('dashboard_') || stem.endsWith('_dashboard') || stem.includes('_dashboard_');
+};
 const dashBtn = f => `<button type="button" class="link" data-dash="${esc(f.path)}">${T.open}</button>`;
 function bridgeActions(f) {
   // One way in. The DMS already knows whether this person may change this document, so the button says which
   // it is - "open to edit" or "view" - instead of asking the person to pick and refusing afterwards.
   const name = f.name || f.path, co = f.checkedOut, out = [];
   if (isDash(name)) return dashBtn(f);          // it runs; there is nothing to check out and nothing to approve
+  if (isHtml(name)) return dashBtn(f) + '\n' + viewBtn(f);   // a page of the repository: it runs, and it is a document
   if (TEXT_EXT.test(name)) {
     return (f.canEdit ? `<button type="button" class="link" data-tx="${esc(f.path)}">\u270E ${T.openEditFile}</button>\n` : '')
       + `<button type="button" class="link" data-txv="${esc(f.path)}">${T.viewRo}</button>`;
@@ -541,7 +550,7 @@ function bridgeActions(f) {
 }
 function fileActions(f) {
   if (isDash(f.name || f.path)) return dashBtn(f);
-  return `${f.bridge ? bridgeActions(f) : f.officeUri ? `${openBtn(f.officeUri, f.path, f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open))}${f.editable && f.viewUri ? openBtn(f.viewUri, f.path, T.viewRo) : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">${f.editable === false || f.readOnly ? T.viewRo : '✎ ' + T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cl="${esc(f.path)}">🔗 ${T.copyLink}</button>`
+  return `${f.bridge ? bridgeActions(f) : f.officeUri ? `${openBtn(f.officeUri, f.path, f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open))}${f.editable && f.viewUri ? openBtn(f.viewUri, f.path, T.viewRo) : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">${f.editable === false || f.readOnly ? T.viewRo : '✎ ' + T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (isHtml(f.name || f.path) ? dashBtn(f) : TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cl="${esc(f.path)}">🔗 ${T.copyLink}</button>`
     + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button><button type="button" class="link" data-drn="${f.document.id}" data-name="${esc(f.name)}">${T.rename}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
         + (f.document.statusKey === 'Submitted' ? `<button type="button" class="link" data-wd="${f.document.id}" style="color:var(--err)">${T.withdraw}</button>${f.document.nextRevision ? '' : `<button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button>`}` : '')
         + (f.document.statusKey === 'Approved_ReadOnly' && samePath(f.path, f.document.currentUncPath) ? `${f.document.nextRevision ? `<button type="button" class="link" data-rev="${f.document.id}" disabled title="${esc(T.nextRev.replace('{rev}', f.document.nextRevision.revision || '').replace('{status}', f.document.nextRevision.status || ''))}">⟳ ${T.newRev}</button>` : `<button type="button" class="link" data-rev="${f.document.id}">⟳ ${T.newRev}</button>`}<button type="button" class="link" data-share="${f.document.id}">✉ ${isHr(f.path) ? T.shareHrBtn : T.share}</button>` : '')

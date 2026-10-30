@@ -2115,6 +2115,16 @@ def test_a_dashboard_page_is_a_tool_and_not_a_document(tmp_path):
     assert "sandbox" in got.headers["content-security-policy"]          # it runs, it does not act as the reader
     assert c.get("/api/files/dashboard", params={"path": str(q / "nope.html")}).status_code == 404
 
+    # Any page of the repository runs the same way: it is a page, and a browser is what opens one. Only the
+    # saving rule - stays in its folder, never released - is about dashboards.
+    plain = q / "Report.html"
+    plain.write_bytes(b"<!doctype html><title>Report</title>")
+    r = c.get("/api/files/dashboard", params={"path": str(plain)})
+    assert r.status_code == 200 and "sandbox" in r.headers["content-security-policy"]
+    r = c.post("/api/files/upload", data={"folder": str(q), "noWorkflow": "true"},
+               files={"file": ("Released.html", b"<!doctype html>")})
+    assert r.json()["path"] == str(q / "Current_ReadOnly" / "Released.html")      # an ordinary page is released
+
 
 def test_a_dashboard_is_known_by_its_name_however_it_was_typed():
     """"DB_Dashboard .html" - a space before the extension - was not recognised, so it was released into

@@ -1771,13 +1771,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/files/dashboard")
     def dashboard(path: str, user: User = Depends(current_user)):
-        """A dashboard page, served so that it runs in the browser. It is served into a sandbox: the page may
-        run its own scripts and draw itself, and it may not read the DMS's cookies or call the DMS as the
-        person looking at it - a page that arrives from a shared folder is not trusted with their account."""
+        """An HTML page of the repository, served so that it runs in the browser - a dashboard, a report, a
+        page somebody saved. It is served into a sandbox: the page may run its own scripts and draw itself,
+        and it may not read the DMS's cookies or call the DMS as the person looking at it, because a page
+        that arrives from a shared folder is not trusted with their account."""
         from fastapi.responses import Response
         full = files.resolve(s.repository_root, path)
-        if not files.is_file(full) or not files.is_dashboard(full):
-            raise HTTPException(404, "Not a dashboard page")
+        if not files.is_file(full) or not full.lower().endswith((".html", ".htm")):
+            raise HTTPException(404, "Not an HTML page")
         if not may_read(user, full):
             raise HTTPException(403, "You do not have access to this file")
         with open(files.extended(full), "rb") as f:
