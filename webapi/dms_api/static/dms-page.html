@@ -1480,6 +1480,7 @@ async function actingAsDialog() {
 // same whichever way it arrived. A folder is not taken: a browser hands over files only.
 // A folder dragged from Windows arrives as an entry to be walked, not as a file: read as one it fails with
 // "failed to fetch". These two read the tree, so a whole folder can be dropped and arrives with its shape.
+const WORKFLOW_NAMES = ['Working', 'Submitted', 'Current_ReadOnly', 'Obsolete_ReadOnly'];
 const DROP_MAX = 300;                                   // a drag, not a migration: that is what the tools are for
 async function dropTree(items) {
   const entries = [...items].map(i => (i.webkitGetAsEntry ? i.webkitGetAsEntry() : null)).filter(Boolean);
@@ -1496,7 +1497,11 @@ async function dropTree(items) {
       out.push({ rel, file });
       return;
     }
-    for (const kid of await read(entry)) await walk(kid, rel ? rel + '\\' + entry.name : entry.name);
+    // A folder of the DMS's own in the source (Current_ReadOnly, Working...) is not recreated here: its files
+    // belong to the folder above it, and that is where the DMS puts them anyway.
+    const mine = WORKFLOW_NAMES.includes(entry.name);
+    const next = mine ? rel : (rel ? rel + '\\' + entry.name : entry.name);
+    for (const kid of await read(entry)) await walk(kid, next);
   };
   for (const e of entries) await walk(e, '');
   return out;
