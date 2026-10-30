@@ -43,7 +43,10 @@
   /* The top bar is laid out the same way in both languages - logo and name on the left, window buttons on
      the right, the same buttons in the same order - and only the words change. The page below it still
      mirrors itself for Hebrew; each piece of text reads in its own direction. */
-  header { padding-right:150px; direction:ltr; }
+  /* The window buttons float over the first line, so only that line has to keep clear of them; the working
+     line runs to the edge, where the menu and who is signed in belong. */
+  header { padding-right:12px; direction:ltr; }
+  header .brand, header #lang { max-width:calc(100vw - 180px); }
   header .brand { position:static; margin:0; }
   header #lang { margin-inline-end:auto; }    /* beside the logo and the name, not pushed to the edge */
   /* Who is signed in and the menu end the working line, at its right - even when the bar wraps and they
