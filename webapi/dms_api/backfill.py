@@ -79,6 +79,13 @@ def run(root: str, write: bool) -> int:
 
 
 def main() -> int:
+    # A Hebrew path printed into a pipe would otherwise stop the whole pass: the console's own codepage
+    # (cp1252) cannot write those letters, and the exception comes from the print, not from the document.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     s = Settings.from_env()
     p = argparse.ArgumentParser(description=__doc__)
