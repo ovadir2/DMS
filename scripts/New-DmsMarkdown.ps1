@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Writes the Markdown copy (.md) beside every file in Current_ReadOnly, in one pass.
 .DESCRIPTION
@@ -15,7 +15,8 @@
 param(
     [string]$App  = 'C:\DMS-Pilot\app\webapi',
     [string]$Root = '',
-    [switch]$Write
+    [switch]$Write,
+    [string]$Report = (Join-Path $PSScriptRoot 'out\markdown-run.csv')      # what happened, file by file
 )
 
 $py = Join-Path $App '.venv\Scripts\python.exe'
@@ -24,6 +25,10 @@ if (-not (Test-Path -LiteralPath $py)) { throw "The DMS python was not found: $p
 $args = @('-m', 'dms_api.backfill')
 if ($Root)  { $args += @('--root', $Root) }
 if ($Write) { $args += '--write' }
+if ($Report) {
+    New-Item -ItemType Directory -Force -Path (Split-Path $Report) | Out-Null
+    $args += @('--report', $Report)
+}
 
 Push-Location $App
 try { & $py @args } finally { Pop-Location }

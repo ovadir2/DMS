@@ -43,10 +43,11 @@ def _register(s: Settings) -> dict:
     return out
 
 
-def run(root: str, write: bool) -> int:
+def run(root: str, write: bool, report: str = "") -> int:
     from . import markdown
     docs = _register(Settings.from_env()) if write else {}     # a dry run asks SharePoint nothing
     done = skipped = failed = 0
+    rows: list[tuple] = []
     for folder, dirs, names in os.walk(root):
         if os.path.basename(folder).lower() != FOLDER:
             continue
@@ -67,14 +68,24 @@ def run(root: str, write: bool) -> int:
                 d = docs.get(os.path.normcase(os.path.normpath(path)))
                 if markdown.write_beside(path, d):
                     print(f"written      {target}")
+                    rows.append(("written", target, ""))
                     done += 1
                 else:
                     print(f"nothing to read in {path}")
                     failed += 1
             except Exception as e:  # noqa: BLE001 - one file never stops the pass
                 print(f"FAILED       {path}: {e}")
+                rows.append(("failed", path, str(e)))
                 failed += 1
     print(f"\n{done} {'to write' if not write else 'written'}, {skipped} already there or not a document, {failed} failed")
+    if report:
+        # Written as a file, in UTF-8: a Hebrew path does not survive every console, and the reason a
+        # document has no Markdown is the one thing worth keeping from the run.
+        with open(report, "w", encoding="utf-8-sig", newline="") as out:
+            out.write("result,path,reason\n")
+            for row in rows:
+                out.write(",".join('"' + str(x).replace('"', '""') + '"' for x in row) + "\n")
+        print(f"report: {report}")
     return 1 if failed else 0
 
 
@@ -91,12 +102,13 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--root", default=s.repository_root, help="the repository root (DMS_REPOSITORY_ROOT)")
     p.add_argument("--write", action="store_true", help="write the files (without it, only says what it would do)")
+    p.add_argument("--report", default="", help="write what happened to this CSV (UTF-8), one row per file")
     a = p.parse_args()
     if not a.root or not os.path.isdir(a.root):
         print(f"The repository root was not found: {a.root!r}. Give it with --root.", file=sys.stderr)
         return 2
     print(f"{'Writing' if a.write else 'Looking for'} Markdown under {a.root}\n")
-    return run(a.root, a.write)
+    return run(a.root, a.write, a.report)
 
 
 if __name__ == "__main__":
