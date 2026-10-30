@@ -732,6 +732,8 @@ async function render() {
   catch (e) { v.innerHTML = `<div class="msg err">${T.err}: ${esc(e.message)}</div>`; }
 }
 async function customers(v) {
+  // In the explorer view there is no separate home screen: Home is the top of the tree, like any other folder.
+  if (explorerOn()) { state.view = 'browse'; state.folder = ''; return browse(v); }
   const areas = await api('/api/areas');
   // the top of $Root as folders: Management and Customers (each only if AD allows it)
   v.innerHTML = (await levelBar(null))
