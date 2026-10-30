@@ -388,6 +388,34 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(404)
         return FileResponse(f, media_type="image/png")
 
+    @app.get("/api/files/link")
+    def file_link(path: str, request: Request, user: User = Depends(current_user)):
+        """A link to this file or folder that means something only inside the DMS: a short token, not the path
+        on the file server. Pasted into File Explorer it leads nowhere; opened in the DMS it goes to the file,
+        and what the person may see is decided there, by their own AD groups, as always."""
+        full = files.resolve(s.repository_root, path)
+        if not (files.is_file(full) or os.path.isdir(full)):
+            raise HTTPException(404, "Not found")
+        if not may_read(user, full):
+            raise HTTPException(403, "You do not have access to this file")
+        base = str(request.base_url).rstrip("/")
+        return {"url": f"{base}/dms/go/{files.open_token(full)}", "name": os.path.basename(full)}
+
+    @app.get("/dms/go/{token}", include_in_schema=False)
+    def open_by_link(token: str, lang: str = "", user: User = Depends(current_user)):
+        """The other end of that link: the DMS page, standing at the file the token names."""
+        from urllib.parse import quote as _q
+        full = files.open_path(token)
+        if not full:
+            raise HTTPException(404, "This link is no longer known to the DMS")
+        if not may_read(user, full):
+            raise HTTPException(403, "You do not have access to this file")
+        folder = full if os.path.isdir(full) else os.path.dirname(full)
+        where = f"/dms/dms-page?lang={_q(lang or 'EN')}&path={_q(folder)}"
+        if not os.path.isdir(full):
+            where += f"&name={_q(os.path.basename(full))}"
+        return RedirectResponse(where)
+
     @app.get("/dms/dms-page", include_in_schema=False)
     def page():
         # Never cached. The page is the whole application, and a browser that keeps yesterday's copy shows a

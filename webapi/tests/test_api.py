@@ -1879,6 +1879,23 @@ def test_the_page_is_never_cached(tmp_path):
     assert "no-store" in c.get("/dms/dms-page").headers.get("cache-control", "")
 
 
+def test_a_dms_link_is_a_token_and_opens_in_the_dms(tmp_path):
+    """Copy link gives something that means nothing outside the DMS - a token, not the path on the file
+    server - and opening it lands on the document, where AD decides what is shown as it always does."""
+    root = tmp_path / "Root"
+    (root / "01_General").mkdir(parents=True)
+    f = root / "01_General" / "QP-1.docx"
+    f.write_bytes(b"x")
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER,
+                                       sharepoint="memory")))
+    r = c.get("/api/files/link", params={"path": str(f)}).json()
+    assert "/dms/go/" in r["url"] and str(f) not in r["url"] and "QP-1" not in r["url"].rsplit("/", 1)[-1]
+    token = r["url"].rsplit("/", 1)[-1]
+    hop = c.get(f"/dms/go/{token}", follow_redirects=False)
+    assert hop.status_code in (302, 307) and "dms-page" in hop.headers["location"]
+    assert c.get("/dms/go/deadbeefdeadbeef", follow_redirects=False).status_code == 404
+
+
 def test_the_markdown_of_a_replaced_revision_is_removed(tmp_path):
     """The Markdown exists for the AI, and the AI reads the revision in force. A copy left in
     Obsolete_ReadOnly would be a second answer to the same question, from a revision nobody may follow."""
