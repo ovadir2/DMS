@@ -1585,7 +1585,7 @@ async function uploadDialog(folder) {
 async function newRevision(id) {
   const d = await api(`/api/documents/${id}`);
   const cur = d.currentRevision || '01', next = String((parseInt(cur, 10) || 1) + 1).padStart(2, '0');
-  let r = await dialog(`${T.newRevTitle} ${d.documentId} - ${d.title}`,
+  const opened = dialog(`${T.newRevTitle} ${d.documentId} - ${d.title}`,
     `<div class="small">${T.revCurrent}: <b>Rev ${esc(cur)}</b> · ${T.revNext}: <b>Rev ${next}</b></div>
      <label style="color:var(--ink)">${T.revFrom}</label>
      <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="radio" name="src" value="copy" checked>${T.revCopy}</label>
@@ -1594,13 +1594,17 @@ async function newRevision(id) {
      <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="submit">${T.revSubmit}</label>
      <div id="rev-ap" hidden>${AP_FIELD()}</div>`,
     [['cancel', T.cancel, 'light'], ['ok', T.ok]]);
-  // the file is chosen only when the revision starts from one, and the approvers only when it is sent now
-  const box = $('#dlg-b'), form = box.closest('form') || box;
+  // Wired while the dialog is open, not after it closes: the file is chosen only when the revision starts
+  // from one, and the approvers only when it is to be sent now.
+  const box = $('#dlg-b');
   const fileIn = box.querySelector('[name=file]'), apBox = box.querySelector('#rev-ap');
   const sendNow = box.querySelector('[name=submit]');
   const pickedAp = wireApprovers(box);
-  box.querySelectorAll('[name=src]').forEach(b => b.onchange = () => { fileIn.disabled = b.value !== 'file'; });
+  box.querySelectorAll('[name=src]').forEach(b => b.onchange = () => {
+    fileIn.disabled = box.querySelector('[name=src]:checked').value !== 'file';
+  });
   sendNow.onchange = () => { apBox.hidden = !sendNow.checked; };
+  let r = await opened;
   while (r.action === 'ok') {
     const fd = new FormData();
     const useFile = r.form.src.value === 'file';
