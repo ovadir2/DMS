@@ -37,8 +37,11 @@
   /* The first line is the application's own: the rh logo and the system name on the left, the window buttons
      on the right, nothing between them. Everything you work with is on the line below. */
   header { padding-right:150px; }
-  header .brand { position:static; margin:0; }
-  header .welcome { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* The logo first, then the name, and the pair at the left edge - in Hebrew too, where the line otherwise
+     starts on the right. The name itself still reads in its own direction. */
+  header .brand { position:static; margin:0; direction:ltr; }
+  [dir=rtl] header .brand { margin-inline-start:auto; }
+  header .welcome { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; unicode-bidi:plaintext; }
   body.slim header { min-height:0; padding-block:2px; }
   body.slim header .brand, body.slim header .hbreak, body.slim .hsearch { display:none; }
   .menu { position:relative; }
