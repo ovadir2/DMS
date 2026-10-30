@@ -641,7 +641,6 @@ function ctxOpen(host, x, y) {
     [1, ['data-rev'], () => '\u27F3 ' + T.newRev],
     [1, ['data-relp'], () => T.relNw],
     [1, ['data-share'], () => '\u2709 ' + T.share],
-    [1, ['data-up'], () => T.uploadEdited],
     [1, ['data-wd'], () => T.withdraw],
     [1, ['data-hist'], () => T.history],
     [2, ['data-dl'], () => T.download],
@@ -1100,7 +1099,6 @@ async function approvalsView(v) {
         ${!d.mine ? `<div class="muted">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')}</div>` : ''}</td>
       <td class="hide-s small muted">${when(d.submittedUtc)}${days(d.submittedUtc) !== null ? `<div>${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}</td>
       <td class="actions">${fileLinks(d.file, d.officeUri, d.viewUri, d.editable, d.viaDms, d)}
-        ${d.file && !TEXT_EXT.test(d.file) && !d.editable ? `<button type="button" class="link" data-up="${d.id}">⬆ ${T.uploadEdited}</button>` : ''}
         ${remarksLine(d.id, d.remarks)}
         ${d.file ? `<button type="button" class="link" data-dl="${esc(d.file)}">${T.download}</button>${d.viaDms ? '' : `<button type="button" class="link" data-cp="${esc(d.file)}">🔗 ${T.copyLink}</button>`}` : ''}
         <div style="margin-top:6px"><button type="button" class="pillbtn small" data-ok="${d.id}">✔ ${T.approve}${d.mine ? '' : ' (' + T.asSuper + ')'}</button>
