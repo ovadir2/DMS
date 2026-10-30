@@ -63,6 +63,38 @@ So the NTFS permissions on the file server (the `DL_FS_*` groups, docs/02 §3.2)
 
 `dms_api/blueprint.py` holds the Appendix A tree (the same tree `scripts/New-DmsFileServerTree.ps1` creates) with English and Hebrew names and short hints. Folder tiles show those names and hints, folders are listed in blueprint order, and the page guides users to the right folder. Folders that are not in the blueprint still show with their own names.
 
+## The page, as people see it
+
+The DMS looks and works like the file explorer people already know, so there is nothing new to learn:
+
+- **A folder tree on the side** and the folder you are standing in as a detailed list - name, status, modified,
+  kind, size - with the folders as its first rows. A branch is read once and kept; the branch you are in opens
+  by itself; what you create, rename or delete on the right appears in the tree at once.
+- **Colours say what a folder is.** Yellow: a folder someone made, which can be renamed and deleted. Grey: the
+  company skeleton (blueprint) and the DMS's own workflow folders, which nobody renames or deletes.
+- **Right-click gives the commands of what you clicked**, in three groups - Open, Workflow actions, File system
+  actions - always the same lines in the same order, with what does not apply greyed rather than missing. The
+  menu is built from the row's own buttons, so whatever the DMS decided for that row is what the menu offers.
+  A right-click also picks the row, and `⋯` at the end of each row opens the same menu.
+- **Double-click opens**, as it does in a folder window: a folder opens, a document opens or is viewed.
+- **Drag files or a folder in from Windows** onto the list: the folders are recreated here, each file is
+  released into the `Current_ReadOnly` of the folder it belongs to, with its Markdown written beside it.
+  300 files per drag; nothing can be dragged out (a browser cannot hand a file back to Windows).
+- **The search is in the top bar**, on every screen: suggestions while you type, results that follow what is
+  typed, and the suggestions come back when you return to the box.
+- **The top line is the application's own**: the rh logo and the system name on the left, the language beside
+  them, and the window buttons (hide the bar, full screen, close) on the right - the same in both languages.
+- **"Show commands"** in the ⋮ menu brings back the older layout, with a button row above the list.
+
+### Reading, editing, and what each leaves behind
+
+| | What happens | What is left afterwards |
+| --- | --- | --- |
+| **View** | SharePoint turns the document into a PDF, the DMS fetches it and deletes the copy, and serves the PDF itself. A PDF, a picture or a text file is served straight from the file server | Nothing. There is no copy anyone can annotate and save |
+| **Open to edit** | The DMS puts a copy in SharePoint and gives that one person edit on it, with their own Microsoft account | The copy, until the document is closed |
+| **Done editing** | What was changed is written back to the file server and the copy is removed | Nothing |
+| **Closing the document** | Office releases its lock; the DMS sees it go, writes the copy back and removes it - "Done editing" without pressing it | Nothing. The button appears only on a copy open for more than ten minutes |
+
 ## What users can do
 
 | On the page | API | Rules |
@@ -98,6 +130,17 @@ Protected:
 - The company structure (`$Root`, `02_Customers`, each customer folder) cannot be renamed or deleted. The depth is set with `DMS_PROTECTED_DEPTH`.
 - The workflow folders (`Submitted`, `Current_ReadOnly`, `Obsolete_ReadOnly`) are managed by the DMS only.
 - A registered file, or a folder that holds one, cannot be renamed or deleted.
+- **Nothing in `Current_ReadOnly` is deleted** - not by its owner, not by a DMS super user. A revision leaves it
+  only by being replaced, when the next one is approved.
+- **`Current_ReadOnly` and `Obsolete_ReadOnly` are read only on the file system itself**: the AD groups that
+  could see the documents keep Read and Execute, the DMS account keeps Modify, and every file carries the
+  read-only flag. A folder the DMS creates is hardened as it is made; `scripts\Protect-DmsReadOnly.ps1` does
+  the folders that already exist.
+- **A document is never sent to someone AD keeps away from it**: submitting or delegating to a person who may
+  not see the folder is refused, by name. Nobody approves a document they wrote.
+- **Beside every released document sits `<name>.md`**, the same document as Markdown, which is what the company
+  AI reads. It is written as the document is released; when a revision is replaced, its Markdown is removed so
+  nothing answers from a revision no longer in force.
 
 Every action is written to the service log, and registration and submission also to Control Audit. The full API is at `/docs`.
 

@@ -94,20 +94,53 @@ The on-prem side of the approval runs inside the DMS itself (`webapi/dms_api/fil
 | 9 | Canvas apps, pilot group share | 8 | 03 |
 | 10 | External onboarding, pilot, production | 9-10 | blueprint 13 |
 
-## Requirement traceability
+## Requirements, and whether they are met
 
-| Req | How it is met |
+The blueprint's own requirements, and the ones the pilot added once people used it. **Checked** means it was
+tried on the pilot and behaved as written; **built** means it is in the product but nobody has put it through
+its paces yet.
+
+### From the blueprint
+
+| Req | What it asks for | How it is met | Status |
+| --- | --- | --- | --- |
+| REQ-01, REQ-02 | Files stay on the file server; SharePoint holds metadata only | The register stores the UNC path and SHA-256; no content ever leaves the file server | Checked |
+| REQ-03, REQ-16 | Access by AD groups | AGDLP groups, SharePoint groups backed by Entra groups (02) | Checked |
+| REQ-04, REQ-05 | Control modes per document | `ControlMode`: Collaboration / Workflow Optional / Workflow Required / Read-Only Record | Checked |
+| REQ-06 | Approvers per document and revision | Approver Matrix + Impact Routing + approvers chosen per submission, validated on the server | Checked |
+| REQ-07 | Approvals without attachments | Approvals on the DMS page (pilot) or Teams Approvals; the file never travels | Checked |
+| REQ-08, REQ-09, REQ-10 | Large-file exchange with customers | A separate site, a folder per customer, guest invitation by the DMS account, share log | Checked |
+| REQ-11, REQ-12, REQ-13 | Malware gate, backup, retention | CrowdStrike gate (EX-06), Veeam scope, `RetentionClass` | Built |
+| REQ-14 | Audit and history | Indexed metadata, append-only Control Audit and Approval Decisions, version history | Checked |
+| REQ-15 | PLM / Priority references | Reference columns and the `ReleaseToPLMQueue` manifest (DC-10) | Built |
+| REQ-17 | No attachments anywhere | Attachments disabled on every list; moves through the file service | Checked |
+
+### What the pilot demanded
+
+| Req | What it asks for | How it is met | Status |
+| --- | --- | --- | --- |
+| REQ-P01 | Nothing is installed or configured on an approver's PC | The approval happens in the browser and in SharePoint; the DMS opens, converts and writes back with its own account | Checked |
+| REQ-P02 | Approvers need no rights at all on the file server | The DMS is the only account with rights there; a copy is put in SharePoint for the person who must read or change it | Checked |
+| REQ-P03 | Visibility follows the AD groups, always | Every listing, search and open is checked against the user's own token; a workflow does not grant sight of a document, and a person who may not see the folder cannot be its approver | Checked |
+| REQ-P04 | An approved document cannot be changed | `Current_ReadOnly` is read only on the file system itself: the AD groups that could see it keep Read and Execute, only the DMS keeps Modify, and the file carries the read-only flag | Checked |
+| REQ-P05 | Nothing in `Current_ReadOnly` is deleted | Delete is not offered there and the DMS refuses it, for its owner and for a super user alike; a revision leaves only by being replaced | Checked |
+| REQ-P06 | View means reading, not editing | SharePoint turns the document into a PDF, the DMS fetches it and deletes the copy, and serves the PDF itself: there is nothing to type into and nothing left behind | Checked |
+| REQ-P07 | Nobody approves their own document | Choosing yourself as an approver, and delegating back to the author, are both refused | Checked |
+| REQ-P08 | The company AI reads the documents in force | `<document>.md` is written beside every released document, at the moment of release; the Markdown of a replaced revision is removed so nothing quotes it | Checked |
+| REQ-P09 | The page works the way people already work | A folder tree and a detailed list, right-click for the commands of the row, double-click to open, drag files or a folder in from Windows | Checked |
+| REQ-P10 | A document comes back by itself when it is closed | Office releases its lock when the document is closed; the DMS writes the copy back to the file server and removes it, with "Done editing" kept for when that does not happen | Built |
+| REQ-P11 | A link can be shared without exposing the file server | Copy link gives a token the DMS resolves; Copy path still gives the path for whoever works that way | Built |
+| REQ-P12 | What cannot be done is visible, not hidden | Every menu offers the same lines in the same order, with what does not apply greyed and the reason in its tooltip | Checked |
+
+### Known limits
+
+| Limit | What it means |
 | --- | --- |
-| REQ-01, REQ-02 | Files only on the file server. The register stores UNC and SHA-256 |
-| REQ-03, REQ-16 | AGDLP groups, and SharePoint groups backed by Entra groups (02) |
-| REQ-04, REQ-05 | `ControlMode`: Collaboration / Workflow Optional / Workflow Required / Read-Only Record |
-| REQ-06 | Approver Matrix + Impact Routing + per-revision approver sets, validated on the server (DC-03) |
-| REQ-07 | Teams Approvals + Flow-bot chat, templates in UI Labels. No attachments |
-| REQ-08, REQ-09, REQ-10 | Separate Exchange site, per-request folders, native upload, verified-deletion gate |
-| REQ-11, REQ-12, REQ-13 | CrowdStrike blocks acceptance (EX-06). Veeam scope and compliance points (blueprint 11). `RetentionClass` |
-| REQ-14 | Indexed metadata, views, append-only audit lists, version history |
-| REQ-15 | PLM/MAE/Priority reference columns, and the `ReleaseToPLMQueue` manifest (DC-10) |
-| REQ-17 | Attachments disabled on every list. File moves via File Action Queue and the on-prem service |
+| Formats the AI can read | `.docx` `.xlsx` and text are read by the DMS; `.pdf` (with a text layer), `.pptx` and `.xls` need markitdown (and `xlrd` for `.xls`). `.doc`, `.ppt`, `.rtf` and scanned PDFs are not read at all and are invisible to the AI |
+| Path length | Beyond about 200 characters Office cannot open a path; the DMS falls back to the Windows short (8.3) name, and Hebrew names reach that limit six times faster |
+| Drag and drop | 300 files per drag, files and folders in, nothing out: a browser cannot hand a file back to Windows |
+| Upload | 500 MB per file (`DMS_MAX_UPLOAD_MB`) |
+| The upkeep pass | Automatic check-in, the read-only repair and the missing Markdown only run when `DMS_FILE_SERVICE_SECONDS` is set |
 
 ## Design decisions beyond the blueprint
 
