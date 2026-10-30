@@ -478,6 +478,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 "blueprintKind": kind or "", "canWriteHere": files.list_folder(s.repository_root, full,
                                                                               user.can).get("canWrite")}
 
+    @app.get("/api/diagnostics/dashboard")
+    def dashboard_check(name: str = "dashboard_DB.html"):
+        """Does this DMS know what a dashboard page is, and does it see this name as one? A name that comes
+        back false is released into Current_ReadOnly like any other file - and a DMS that answers 404 here is
+        running a build from before the rule. Open /api/diagnostics/dashboard?name=<the file name>."""
+        return {"name": name, "dashboard": files.is_dashboard(name),
+                "means": "saved in the folder it is dropped on, writable, never released into Current_ReadOnly"
+                         if files.is_dashboard(name) else "an ordinary file: released like any other"}
+
     @app.get("/api/diagnostics/sharepoint")
     def sp_check(user: User = Depends(current_user)):
         """Super users: the DMS lists in SharePoint (exists, items, may this account add), and the last errors."""
@@ -895,7 +904,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             except Exception as e:  # noqa: BLE001 - the file is saved; the trace error is reported
                 traced = str(e)
                 logger.warning("no-workflow trace failed for %s: %r", path, e)
-        log(user, "upload", path + (" (no workflow)" if noWorkflow else ""))
+        log(user, "upload", path + (" (no workflow)" if noWorkflow else "")
+            + (" (dashboard page: kept in the folder)" if files.is_dashboard(path) else ""))
         d = find_registered(path, register_index())
         if noWorkflow:
             markdown_beside(path, d)                               # released: the AI can read it from now

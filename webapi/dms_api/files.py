@@ -424,8 +424,11 @@ def check_editable(root: str, path: str, protected_depth: int) -> str:
 def is_dashboard(name: str) -> bool:
     """A dashboard page: an HTML file with dashboard_ in its name. It is a tool, not a document - it is opened
     and it runs, it is not released, approved or made read only, and it stays where it was put."""
-    base = os.path.basename(name or "").lower()
-    return base.endswith((".html", ".htm")) and "dashboard_" in base
+    base = os.path.basename((name or "").replace("\\", "/").rstrip("/")).lower()
+    if not base.endswith((".html", ".htm")):
+        return False
+    stem = os.path.splitext(base)[0]
+    return "dashboard_" in stem or stem.endswith("_dashboard") or stem == "dashboard"
 
 
 def in_workflow_folder(root: str, path: str) -> bool:
