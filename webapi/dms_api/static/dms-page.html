@@ -509,10 +509,15 @@ const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${
 const viewBtn = f => VIEW_EXT.test(f.name || f.path)
   ? `<button type="button" class="link" data-vw="${esc(f.path)}">${T.viewRo}</button>`
   : `<button type="button" class="link" data-vpdf="${esc(f.path)}">${T.viewRo}</button>`;
+// A dashboard page (dashboard_DB.html) is a tool, not a document: it opens in a tab and runs there. The DMS
+// serves it into a sandbox, so it draws itself and cannot act as the person looking at it.
+const isDash = n => /dashboard_[^\\/]*\.html?$/i.test(n || '');
+const dashBtn = f => `<button type="button" class="link" data-dash="${esc(f.path)}">${T.open}</button>`;
 function bridgeActions(f) {
   // One way in. The DMS already knows whether this person may change this document, so the button says which
   // it is - "open to edit" or "view" - instead of asking the person to pick and refusing afterwards.
   const name = f.name || f.path, co = f.checkedOut, out = [];
+  if (isDash(name)) return dashBtn(f);          // it runs; there is nothing to check out and nothing to approve
   if (TEXT_EXT.test(name)) {
     return (f.canEdit ? `<button type="button" class="link" data-tx="${esc(f.path)}">\u270E ${T.openEditFile}</button>\n` : '')
       + `<button type="button" class="link" data-txv="${esc(f.path)}">${T.viewRo}</button>`;
@@ -535,6 +540,7 @@ function bridgeActions(f) {
   return viewBtn(f);
 }
 function fileActions(f) {
+  if (isDash(f.name || f.path)) return dashBtn(f);
   return `${f.bridge ? bridgeActions(f) : f.officeUri ? `${openBtn(f.officeUri, f.path, f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open))}${f.editable && f.viewUri ? openBtn(f.viewUri, f.path, T.viewRo) : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">${f.editable === false || f.readOnly ? T.viewRo : '✎ ' + T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cl="${esc(f.path)}">🔗 ${T.copyLink}</button>`
     + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button><button type="button" class="link" data-drn="${f.document.id}" data-name="${esc(f.name)}">${T.rename}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
         + (f.document.statusKey === 'Submitted' ? `<button type="button" class="link" data-wd="${f.document.id}" style="color:var(--err)">${T.withdraw}</button>${f.document.nextRevision ? '' : `<button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button>`}` : '')
@@ -675,7 +681,7 @@ function ctxOpen(host, x, y) {
   // not offer - because of what it is, where it sits or who you are - is there in grey, so the menu reads the
   // same way on every file and folder and nobody hunts for a line that moved.
   const CANON = [
-    [0, ['data-f'], () => T.open],
+    [0, ['data-f', 'data-dash'], () => T.open],
     [0, ['data-ckout', 'data-ext', 'data-tx'], () => '\u270E ' + T.openEditFile],
     [0, ['data-vpdf', 'data-ckview', 'data-vw', 'data-txv'], () => T.viewRo],
     [0, ['data-ckin'], () => '\u2713 ' + T.doneEditing],
@@ -817,6 +823,8 @@ function wire(v) {
   v.querySelectorAll('[data-up]').forEach(a => a.onclick = () => uploadEdited(a.dataset.up));
   v.querySelectorAll('[data-ext]').forEach(a => a.onclick = () => openExternal(a.dataset.ext, a.dataset.f));
   // no opener on this PC: the path goes to the clipboard, so it can be pasted straight into File Explorer
+  v.querySelectorAll('[data-dash]').forEach(a => a.onclick = () =>
+    window.open('/api/files/dashboard?path=' + encodeURIComponent(a.dataset.dash), '_blank', 'noopener'));
   v.querySelectorAll('[data-noopen]').forEach(a => a.onclick = async () => {
     await copyText(userPath(a.dataset.noopen)); alert(T.openUnsupported); });
   v.querySelectorAll('[data-ai]').forEach(a => a.onclick = () => openAI(a.dataset.ai));

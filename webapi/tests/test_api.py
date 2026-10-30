@@ -2086,6 +2086,32 @@ def test_a_sheet_keeps_every_value_under_its_own_heading(tmp_path):
     assert "|   |   |   |   |   | late |" in out        # five empty cells before it, not shifted to the front
 
 
+def test_a_dashboard_page_is_a_tool_and_not_a_document(tmp_path):
+    """dashboard_DB.html is opened and run, not approved: dropped into a folder it stays there, writable, so
+    a newer one replaces it - and it is served into a sandbox, where it cannot act as the person reading it."""
+    root = tmp_path / "Root"
+    q = root / "01_General" / "Company_Profile"
+    q.mkdir(parents=True)
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER,
+                                       sharepoint="memory")))
+    page = b"<!doctype html><title>DB</title><script>fetch('/api/me')</script>"
+    r = c.post("/api/files/upload", data={"folder": str(q), "noWorkflow": "true"},
+               files={"file": ("dashboard_DB.html", page)})
+    assert r.status_code == 201, r.text
+    saved = q / "dashboard_DB.html"
+    assert r.json()["path"] == str(saved) and saved.exists()            # beside the folder, not released
+    assert not (q / "Current_ReadOnly").exists() and not r.json()["document"]
+    assert os.access(saved, os.W_OK) and not saved.with_suffix(".md").exists()
+
+    assert c.post("/api/files/release", json={"paths": [str(saved)]}).json()["results"][0].get("error")
+
+    got = c.get("/api/files/dashboard", params={"path": str(saved)})
+    assert got.status_code == 200 and got.content == page
+    assert got.headers["content-type"].startswith("text/html")
+    assert "sandbox" in got.headers["content-security-policy"]          # it runs, it does not act as the reader
+    assert c.get("/api/files/dashboard", params={"path": str(q / "nope.html")}).status_code == 404
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

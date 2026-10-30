@@ -862,6 +862,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if in_shared_folder(os.path.join(target_dir, "x")):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only)")
         from . import noworkflow
+        # A dashboard page is a tool, not a document: it is saved where it was dropped, left writable so it
+        # can be replaced by a newer one, and never released into Current_ReadOnly.
+        if files.is_dashboard(file.filename or ""):
+            noWorkflow = False
         if noWorkflow:                                             # straight to Current_ReadOnly: never over a controlled document
             there = os.path.join(target_dir, "Current_ReadOnly", os.path.basename((file.filename or "").replace("\\", "/")))
             if os.path.exists(there) and find_registered(there, register_index()) and not noworkflow.is_marked(s.repository_root, there):
@@ -1006,6 +1010,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     continue
                 if os.path.basename(folder) in WORKFLOW_FOLDERS or files.in_workflow_folder(s.repository_root, folder):
                     raise ValueError("already in a DMS workflow folder")
+                if files.is_dashboard(name):
+                    raise ValueError("a dashboard page is a tool, not a document: it stays where it is")
                 if not (user.can(full, "write") and user.can(folder, "write")):
                     raise ValueError("no permission")
                 target = os.path.join(folder, "Current_ReadOnly", name)
@@ -1752,6 +1758,24 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     from . import markdown as _markdown
     _markdown.PDF_OF[0] = pdf_of          # a .doc, a .ppt: laid out by SharePoint, read from the pages
+
+    @app.get("/api/files/dashboard")
+    def dashboard(path: str, user: User = Depends(current_user)):
+        """A dashboard page, served so that it runs in the browser. It is served into a sandbox: the page may
+        run its own scripts and draw itself, and it may not read the DMS's cookies or call the DMS as the
+        person looking at it - a page that arrives from a shared folder is not trusted with their account."""
+        from fastapi.responses import Response
+        full = files.resolve(s.repository_root, path)
+        if not files.is_file(full) or not files.is_dashboard(full):
+            raise HTTPException(404, "Not a dashboard page")
+        if not may_read(user, full):
+            raise HTTPException(403, "You do not have access to this file")
+        with open(files.extended(full), "rb") as f:
+            body = f.read(s.max_upload_mb * 1024 * 1024)
+        log(user, "dashboard", full)
+        return Response(body, media_type="text/html; charset=utf-8", headers={
+            "Content-Security-Policy": "sandbox allow-scripts allow-popups allow-downloads allow-forms",
+            "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"})
 
     @app.get("/api/files/view-pdf")
     def view_pdf(path: str, user: User = Depends(current_user)):
