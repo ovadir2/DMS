@@ -571,7 +571,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def customers(q: str = "", user: User = Depends(current_user)):
         """Customer folders the user may open (AD), optionally filtered by name."""
         try:
-            listing = files.list_folder(s.repository_root, customers_root(), user.can)
+            listing = files.list_folder(s.repository_root, customers_root(), listing_access(user))
         except (FileNotFoundError, PermissionError):
             return []
         return [{"name": f["name"], "path": f["path"]} for f in listing["folders"] if q.lower() in f["name"].lower()]
@@ -629,7 +629,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         out.sort(key=lambda f: (rank.get(f["name"].lower(), len(rank)), f["name"].lower()))
         node = blueprint.describe(parts) if parts else None
         return {"path": folder, "relative": os.path.relpath(folder, s.repository_root) if parts else "", "node": node,
-                "exists": exists, "canWrite": exists and user.can(folder, "write"), "options": out}
+                "exists": exists, "canWrite": exists and may_add(user, folder), "options": out}
 
     @app.post("/api/pathfinder/create", status_code=201)
     def pathfinder_create(path: str, user: User = Depends(current_user)):
@@ -647,11 +647,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 if parts[j].lower() not in [n.lower() for n in blueprint.order(parts[:j])]:
                     raise HTTPException(400, f"'{parts[j]}' is not a blueprint folder at this level")
             break
-        if not user.can(existing, "write"):
+        if not may_add(user, existing):
             raise HTTPException(403, "You do not have permission to create folders here")
         os.makedirs(full, exist_ok=True)
         log(user, "new-folder", full)
-        return {"path": full, "canWrite": user.can(full, "write")}
+        return {"path": full, "canWrite": may_add(user, full)}
 
     @app.get("/api/levels")
     def levels(path: str | None = None, user: User = Depends(current_user)):
@@ -690,7 +690,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.get("/api/browse")
     def browse(path: str | None = None, user: User = Depends(current_user)):
         try:
-            result = files.list_folder(s.repository_root, path, user.can)
+            result = files.list_folder(s.repository_root, path, listing_access(user))
         except FileNotFoundError:
             raise HTTPException(404, "Folder not found") from None
         except PermissionError:
@@ -756,7 +756,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """Project folders of one customer that the user may open."""
         folder = os.path.join(files.resolve(s.repository_root, customer), *blueprint.PRODUCTS)
         try:
-            listing = files.list_folder(s.repository_root, folder, user.can)
+            listing = files.list_folder(s.repository_root, folder, listing_access(user))
         except (FileNotFoundError, PermissionError):
             return []
         return [{"name": f["name"], "path": f["path"]} for f in listing["folders"]]
@@ -786,7 +786,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         base = files.resolve(s.repository_root, project if template.startswith("{p}") else customer)
         target = files.resolve(s.repository_root, os.path.join(base, *template[4:].split("/")))
         exists = os.path.isdir(target)
-        return {"path": target, "exists": exists, "canWrite": exists and user.can(target, "write")}
+        return {"path": target, "exists": exists, "canWrite": exists and may_add(user, target)}
 
     @app.get("/api/search")
     def search(q: str = Query(..., min_length=2), scope: str = Query("all", description="all | customer | project | document | file | quick (customers, folders, documents)"),
@@ -841,11 +841,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         existing = t["path"]
         while not os.path.isdir(existing):
             existing = os.path.dirname(existing)
-        if not user.can(existing, "write"):
+        if not may_add(user, existing):
             raise HTTPException(403, "You do not have permission to create this folder")
         os.makedirs(t["path"], exist_ok=True)
         log(user, "new-folder", t["path"])
-        return {"path": t["path"], "exists": True, "canWrite": user.can(t["path"], "write")}
+        return {"path": t["path"], "exists": True, "canWrite": may_add(user, t["path"])}
 
     @app.post("/api/files/upload", status_code=201)
     def upload(folder: str = Form(...), file: UploadFile = File(...), overwrite: bool = Form(False),
@@ -856,7 +856,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(404, "Folder not found")
         if files.in_workflow_folder(s.repository_root, target_dir):
             raise HTTPException(403, "Workflow folders are managed by the DMS")
-        if not user.can(target_dir, "write"):
+        if not may_add(user, target_dir):
             raise HTTPException(403, "You do not have permission to save files in this folder")
         if in_shared_folder(os.path.join(target_dir, "x")):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only)")
@@ -1036,7 +1036,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "Workflow folders are managed by the DMS")
         if in_shared_folder(os.path.join(parent, "x")):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only)")
-        if not user.can(parent, "write"):
+        if not may_add(user, parent):
             raise HTTPException(403, "You do not have permission to create folders here")
         try:
             path = files.make_folder(s.repository_root, parent, req.name)
@@ -1822,6 +1822,21 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return user.can(full, "write") or (s.submitted_editable
                                            and os.path.normcase(os.path.normpath(full)) in awaiting_approval(user))
 
+    def may_add(user: User, folder: str) -> bool:
+        """May this person put a document in this folder? By default AD has to give them a write right there,
+        like anywhere else. With DMS_ADD_WITH_DMS_RIGHTS=1 it is enough that AD lets them SEE the place: the
+        file is written by the DMS account and never by the person, which is the point of the DMS standing
+        between them and the file server (an approver has no rights there at all, and that is the policy).
+        What may not be touched is decided by the DMS either way - a workflow folder, a blueprint folder, the
+        company structure - and changing or removing something always asks for a write right."""
+        if s.add_with_dms_rights:
+            return may_read(user, folder) or may_write(user, folder)
+        return may_write(user, folder)
+
+    def listing_access(user: User):
+        """What the folder listing asks: may they see it, and may they add something to it."""
+        return lambda path, kind="read": may_add(user, path) if kind == "write" else user.can(path)
+
     def submitted_file(d: dict) -> str | None:
         """Where the file of a submitted document is now (its Submitted folder, else its working path)."""
         path = d.get("workingUncPath") or ""
@@ -2346,7 +2361,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "You do not have access to this document")
         cur_dir = os.path.dirname(current)
         place = os.path.dirname(cur_dir) if os.path.basename(cur_dir) in WORKFLOW_FOLDERS else cur_dir
-        if not user.can(place, "write"):
+        if not may_add(user, place):
             raise HTTPException(403, "You do not have permission to save files in this folder")
         base, rev, ext = files.parse_revision(os.path.basename(current))
         cur_rev = int(d["currentRevision"]) if str(d.get("currentRevision") or "").isdigit() else (rev or 1)

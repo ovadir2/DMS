@@ -86,6 +86,11 @@ class Settings:
     ex_folder: str = "Outbound"
     shared_log: str = "Shared/DMS-Shared-Log.csv"  # per customer folder: every share appended (empty: off)
     first_load_approver: str = "dms_approval@rh.co.il"  # First loading "DMS approval": recorded as the approver
+    # On: whoever may SEE a folder may put a document in it, because the DMS writes the file with its own
+    # account - the person's own rights on the file server are not what carries it. Off (the default):
+    # AD must give them a write right there, as everywhere else. Changing or removing something always
+    # asks for a write right, whatever this says.
+    add_with_dms_rights: bool = False
     submitted_editable: bool = True        # during approval the owner and the approvers may edit (remarks) the submitted file
     ex_days: int = 3                        # shared files are removed from the Exchange site N days after their last share (0: never)
     ex_shortcut: bool = True                # add a OneDrive shortcut DMS_<Customer> to the customer folder
@@ -174,6 +179,7 @@ class Settings:
             ex_folder=e("DMS_EX_FOLDER", "Outbound"),
             ex_days=int(e("DMS_EX_DAYS", "3")),
             first_load_approver=e("DMS_FIRST_LOAD_APPROVER", "dms_approval@rh.co.il").strip().lower(),
+            add_with_dms_rights=e("DMS_ADD_WITH_DMS_RIGHTS", "").strip().lower() in ("1", "true", "yes", "on"),
             submitted_editable=e("DMS_SUBMITTED_EDITABLE", "true").lower() not in ("0", "false", "no", "off"),
             shared_log=e("DMS_SHARED_LOG", "Shared/DMS-Shared-Log.csv").strip("/\\ "),
             ex_shortcut=e("DMS_EX_SHORTCUT", "true").lower() not in ("0", "false", "no", "off"),

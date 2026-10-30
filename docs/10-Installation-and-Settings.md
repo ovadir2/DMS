@@ -106,6 +106,11 @@ place is one the DMS keeps read only anyway (a workflow folder, a blueprint fold
 *write data* and *append data*; `DMS_STRICT_ACCESS_CHECK=1` goes back to asking for the whole Write right
 (extended attributes and attributes included), which an ACL set by hand often does not grant.
 
+If the rights on the file server are not going to be given at all, `DMS_ADD_WITH_DMS_RIGHTS=1` lets whoever
+may **see** a folder put a document in it: the DMS writes the file with its own account, as it already does
+for an approver who has no rights there. Changing or removing something still asks AD for a write right, and
+the workflow and blueprint folders stay out of reach either way.
+
 ## 7. Settings (`webapi\.env`)
 
 **The first occurrence of a key wins.** A leftover line above is the usual reason a setting "does not take".

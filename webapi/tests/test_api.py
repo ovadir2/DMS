@@ -1965,6 +1965,33 @@ def test_the_strict_access_check_can_be_asked_for(monkeypatch):
     assert security._needed("write") == security.FILE_GENERIC_WRITE
 
 
+def test_the_dms_can_add_the_file_for_someone_with_no_rights_of_their_own(tmp_path, monkeypatch):
+    """DMS_ADD_WITH_DMS_RIGHTS: the file is written by the DMS account, so a person who may see the folder can
+    put a document there without AD giving them anything on the file server. Changing or removing something
+    still asks for a write right, and a workflow folder is still out of reach."""
+    from dms_api import security
+    root = tmp_path / "Corporate_Data_TEST"
+    q = root / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "held.txt").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                 add_with_dms_rights=True)
+    c = TestClient(create_app(s))
+    # AD: they may see everything and write nowhere
+    monkeypatch.setattr(security.User, "can", lambda self, path, access=security.READ: access == security.READ)
+
+    r = c.post("/api/files/upload", data={"folder": str(q), "noWorkflow": "false"},
+               files={"file": ("new.txt", b"x")})
+    assert r.status_code == 201, r.text
+    assert c.post("/api/folders", json={"parent": str(q), "name": "Sub"}).status_code == 201
+    assert c.post("/api/items/delete", json={"path": str(q / "held.txt")}).status_code == 403
+    assert c.post("/api/items/rename", json={"path": str(q / "held.txt"), "newName": "other.txt"}).status_code == 403
+
+    s.add_with_dms_rights = False                      # the default: AD has to give them a write right
+    assert c.post("/api/files/upload", data={"folder": str(q)},
+                  files={"file": ("again.txt", b"x")}).status_code == 403
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""
