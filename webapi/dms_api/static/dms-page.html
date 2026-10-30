@@ -13,6 +13,10 @@
   :root { --navy:#1f4a72; --btn:#2a5279; --teal:#3db7b3; --ink:#1d2733; --muted:#6b7684; --line:#d7dde4; --bg:#ffffff; --band:#eef4fa;
           --ok:#1f7a3d; --okbg:#e3f4e8; --warn:#8a5a00; --warnbg:#fff3d6; --info:#1f5fa8; --infobg:#e4eefb; --err:#b42318; --errbg:#fde8e6; }
   * { box-sizing:border-box; }
+  /* Hebrew words in a page laid out left to right: each piece of text takes its direction from its own
+     first letter, so a Hebrew sentence reads right to left inside a left to right page. */
+  h1, h2, h3, p, td, th, li, label, option, button, a, summary, .muted, .hint, .status, .welcome,
+  .ctx button, .ctx .ctxname, .ctx .ctxhead, .xnode a, .sugg, .msg { unicode-bidi:plaintext; }
   body { margin:0; font:15px/1.45 Roboto, "Segoe UI", Arial, sans-serif; color:var(--ink); background:var(--bg); }
   body.busy, body.busy * { cursor:progress !important; }
   table.multi td.actions > * { display:none !important; }
@@ -36,11 +40,11 @@
      direction of the language. */
   /* The first line is the application's own: the rh logo and the system name on the left, the window buttons
      on the right, nothing between them. Everything you work with is on the line below. */
-  header { padding-right:150px; }
-  /* The logo first, then the name, and the pair at the left edge - in Hebrew too, where the line otherwise
-     starts on the right. The name itself still reads in its own direction. */
-  header .brand { position:static; margin:0; direction:ltr; }
-  [dir=rtl] header .brand { margin-inline-start:auto; }
+  /* The top bar is laid out the same way in both languages - logo and name on the left, window buttons on
+     the right, the same buttons in the same order - and only the words change. The page below it still
+     mirrors itself for Hebrew; each piece of text reads in its own direction. */
+  header { padding-right:150px; direction:ltr; }
+  header .brand { position:static; margin:0; }
   header .welcome { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; unicode-bidi:plaintext; }
   body.slim header { min-height:0; padding-block:2px; }
   body.slim header .brand, body.slim header .hbreak, body.slim .hsearch { display:none; }
@@ -317,6 +321,7 @@ const q = new URLSearchParams(location.search);
 const lang = (q.get('lang') || 'EN').toUpperCase() === 'HE' ? 'HE' : 'EN';
 document.documentElement.lang = lang.toLowerCase();
 document.documentElement.dir = lang === 'HE' ? 'rtl' : 'ltr';
+document.documentElement.lang = lang === 'HE' ? 'he' : 'en';
 const T = {
   EN: { welcome:'RH - Documents Management System', search:'Search', all:'All', customer:'Customer', project:'Product', document:'Document ID', file:'File', description:'Description',
         go:'Search', refresh:'Refresh', lang:'English', customers:'Customers', myDocs:'My documents', home:'Home', goBack:'Back', noAccess:'No customers are available to you.',
