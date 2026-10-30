@@ -535,7 +535,7 @@ function bridgeActions(f) {
   return viewBtn(f);
 }
 function fileActions(f) {
-  return `${f.bridge ? bridgeActions(f) : f.officeUri ? `${openBtn(f.officeUri, f.path, f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open))}${f.editable && f.viewUri ? openBtn(f.viewUri, f.path, T.viewRo) : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">${f.editable === false || f.readOnly ? T.viewRo : '✎ ' + T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cl="${esc(f.path)}">🔗 ${T.copyLink}</button>`
+  return `${f.bridge ? bridgeActions(f) : f.officeUri ? `${openBtn(f.officeUri, f.path, f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open))}${f.editable && f.viewUri ? openBtn(f.viewUri, f.path, T.viewRo) : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">${f.editable === false || f.readOnly ? T.viewRo : '✎ ' + T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cl="${esc(f.path)}">🔗 ${T.copyLink}</button><button type="button" class="link" data-cp="${esc(f.path)}">${T.copy}</button>`
     + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button><button type="button" class="link" data-drn="${f.document.id}" data-name="${esc(f.name)}">${T.rename}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
         + (f.document.statusKey === 'Submitted' ? `<button type="button" class="link" data-wd="${f.document.id}" style="color:var(--err)">${T.withdraw}</button>${f.document.nextRevision ? '' : `<button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button>`}` : '')
         + (f.document.statusKey === 'Approved_ReadOnly' && samePath(f.path, f.document.currentUncPath) ? `${f.document.nextRevision ? `<button type="button" class="link" data-rev="${f.document.id}" disabled title="${esc(T.nextRev.replace('{rev}', f.document.nextRevision.revision || '').replace('{status}', f.document.nextRevision.status || ''))}">⟳ ${T.newRev}</button>` : `<button type="button" class="link" data-rev="${f.document.id}">⟳ ${T.newRev}</button>`}<button type="button" class="link" data-share="${f.document.id}">✉ ${isHr(f.path) ? T.shareHrBtn : T.share}</button>` : '')
@@ -631,9 +631,10 @@ function ctxScreen(host, self = false) {
   const folder = !!(host && host.classList && host.classList.contains('xfolder'));
   return [...view.querySelectorAll('.toolbar:not(#selbar) .pillbtn, .toolbar:not(#selbar) button.link')]
     .filter(b => b.id !== 'pf-b')
-    .filter(b => self || b.id !== 'mk')      // a folder row says it itself (inside that folder), a file never does
-    .filter(b => self || b.id !== 'up')      // "save file" is what "release without workflow" does, by another name
-    .filter(b => self || b.id !== 'nd')      // making a document happens in a folder, never on top of a file
+    // New folder and New document belong to the folder you are in, and they read the same on every row: a
+    // folder row offers its own (inside that folder), anything else offers the folder's. "Save file" is
+    // "release without workflow" by another name and is not offered twice.
+    .filter(b => self || b.id !== 'up')
     .filter(b => self || !(b.hasAttribute('data-cp') || b.hasAttribute('data-cl')));   // the row copies its own
 }
 function ctxOpen(host, x, y) {
