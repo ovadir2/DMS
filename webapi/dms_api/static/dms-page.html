@@ -573,6 +573,18 @@ function ctxOpen(host, x, y) {
     h.textContent = name.trim();
     m.append(h, Object.assign(document.createElement('div'), { className: 'ctxsep' }));
   }
+  // The menu reads in groups, the way a folder window does: what opens the thing, what the workflow does
+  // with it, and what you do to the file itself.
+  const GROUP = [
+    ['data-ckout', 'data-ckview', 'data-tx', 'data-txv', 'data-ckin', 'data-ext', 'data-vw', 'data-noopen'],
+    ['data-sub', 'data-st', 'data-rev', 'data-relp', 'data-share', 'data-wd', 'data-dg', 'data-hist',
+     'data-ok', 'data-no', 'data-up', 'data-drn', 'data-ddel'],
+    ['data-dl', 'data-cp', 'data-rn', 'data-del'],
+  ];
+  const groupOf = el => {
+    const i = GROUP.findIndex(g => g.some(k => el.hasAttribute(k)));
+    return i < 0 ? 2 : i;                       // anything else (new folder, save file, new document) is the file system
+  };
   const entry = src => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -582,11 +594,13 @@ function ctxOpen(host, x, y) {
     b.onclick = () => { ctxClose(); src.click(); };
     m.appendChild(b);
   };
-  items.forEach(entry);
-  if (screen.length) {
-    m.appendChild(Object.assign(document.createElement('div'), { className: 'ctxsep' }));
-    screen.forEach(entry);
-  }
+  let last = -1;
+  [...items, ...screen].sort((x, y) => groupOf(x) - groupOf(y)).forEach(src => {
+    const g = groupOf(src);
+    if (last >= 0 && g !== last) m.appendChild(Object.assign(document.createElement('div'), { className: 'ctxsep' }));
+    last = g;
+    entry(src);
+  });
   document.body.appendChild(m);
   const r = m.getBoundingClientRect(), pad = 8;
   m.style.top = Math.max(pad, Math.min(y, innerHeight - r.height - pad)) + 'px';
