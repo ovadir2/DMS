@@ -1072,17 +1072,26 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             files.check_editable(s.repository_root, full, s.protected_depth)
         if holds_share_log(full) or in_shared_folder(full):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only) and cannot be deleted")
-        # The approved revision in force, and the folder that holds it: not deleted by anyone, a DMS super user
-        # included. A document leaves it only by being replaced - the next revision moves it to Obsolete_ReadOnly.
+        # The approved revision in force. Only the person whose document it is may take it out of there - not a
+        # colleague, and not a DMS super user acting for themselves. The record stays, and so does the audit.
         parts = [p.lower() for p in os.path.normpath(full).replace("/", "\\").split("\\")]
         if "current_readonly" in parts:
-            raise HTTPException(403, "Current_ReadOnly holds the approved revision in force: nothing there can be deleted")
+            held = find_registered(full, register_index())
+            owner = ((held or {}).get("ownerEmail") or "").lower()
+            if not held:
+                raise HTTPException(403, "This file sits in Current_ReadOnly and the DMS does not know it: "
+                                         "it cannot be deleted from here")
+            if owner != user.email:
+                raise HTTPException(403, f"Only {owner or 'the document owner'} can delete this approved document")
         if (blueprint.describe(rel_parts(full)) or {}).get("kind") not in (None, "project"):   # a project folder is the user's
             raise HTTPException(403, "This folder is part of the company skeleton (blueprint) and cannot be deleted. Its content can.")
         d = registered_inside(full)
         if d and not boss:
             raise HTTPException(409, f"It holds a controlled document ({d.get('documentId')}) and cannot be deleted")
         try:
+            if files.is_file(full):
+                from .file_service import _drop_markdown
+                _drop_markdown(full)          # the AI must not answer from a document that is gone
             moved = files.delete_item(s.repository_root, full, s.protected_depth, user.email, force=boss)
             from . import noworkflow
             noworkflow.moved(s.repository_root, full, None)
