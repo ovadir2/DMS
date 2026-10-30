@@ -460,6 +460,8 @@ $('#q').oninput = () => {
       const r = await api(`/api/search?q=${encodeURIComponent(text)}&scope=quick&limit=10`);
       if (seq !== ta.seq || $('#q').value.trim() !== text) return;
       ta.items = r; ta.pos = -1; taShow();
+      // Already looking at the results: they follow what is being typed, instead of waiting for Search.
+      if (state.view === 'search') { state.lastQ = text; render(); }
     } catch { taClose(); }
   }, 250);
 };
