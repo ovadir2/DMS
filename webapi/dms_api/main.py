@@ -390,7 +390,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/dms/dms-page", include_in_schema=False)
     def page():
-        return FileResponse(STATIC / "dms-page.html", media_type="text/html; charset=utf-8")
+        # Never cached. The page is the whole application, and a browser that keeps yesterday's copy shows a
+        # DMS that behaves by yesterday's rules - which looks like a change that was never installed.
+        return FileResponse(STATIC / "dms-page.html", media_type="text/html; charset=utf-8",
+                            headers={"Cache-Control": "no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"})
 
     # ------------------------------------------------------------------ signed in
     def customers_root() -> str:

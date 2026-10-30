@@ -1869,6 +1869,14 @@ def test_backfill_writes_markdown_beside_every_released_file(tmp_path, capsys, m
     assert written == [str(cur / "QP-1.docx")]                            # the one that had none
 
 
+def test_the_page_is_never_cached(tmp_path):
+    """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
+    yesterday's rules, which looks exactly like a change that was never installed."""
+    c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER,
+                                       sharepoint="memory")))
+    assert "no-store" in c.get("/dms/dms-page").headers.get("cache-control", "")
+
+
 def test_the_page_offers_the_row_commands_as_a_right_click_menu(tmp_path):
     """File Explorer's way in. The menu is built from the row's own buttons, so a command the DMS decided not
     to offer - delete in Current_ReadOnly, edit for a released document - is not in the menu either."""
