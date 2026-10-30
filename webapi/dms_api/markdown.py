@@ -150,6 +150,34 @@ def _xlsx(path: str) -> str:
     return "\n\n".join(out)
 
 
+def _xls(path: str) -> str:
+    """The old Excel format (.xls), read with xlrd. markitdown does not open one at all, and a company's
+    older procedures and forms are full of them - without this they are invisible to the AI."""
+    import xlrd                                        # installed on the server; absent, the caller falls back
+    book = xlrd.open_workbook(path)
+    out = []
+    for sheet in book.sheets():
+        rows = []
+        for r in range(sheet.nrows):
+            cells = []
+            for c in range(sheet.ncols):
+                v = sheet.cell_value(r, c)
+                if isinstance(v, float) and v == int(v):
+                    v = int(v)                         # 3.0 is 3 in a document, not in a spreadsheet
+                cells.append(str(v).strip())
+            if any(cells):
+                rows.append(cells)
+        if not rows:
+            continue
+        width = max(len(r) for r in rows)
+        rows = [r + [""] * (width - len(r)) for r in rows]
+        head, *body = rows
+        md = ["| " + " | ".join(c or " " for c in head) + " |", "|" + "---|" * width]
+        md += ["| " + " | ".join(c or " " for c in r) + " |" for r in body]
+        out.append(f"## {sheet.name}\n\n" + "\n".join(md))
+    return "\n\n".join(out)
+
+
 def _plain(path: str) -> str:
     from .doc_text import extract
     return extract(path)
@@ -168,11 +196,13 @@ def body_of(path: str) -> str:
             body = _docx(path).strip()
         elif ext in (".xlsx", ".xlsm"):
             body = _xlsx(path).strip()
+        elif ext == ".xls":
+            body = _xls(path).strip()
         else:
             body = _plain(path).strip()
         if body:
             return body
-    except (OSError, zipfile.BadZipFile, ElementTree.ParseError, ValueError) as e:
+    except (OSError, ImportError, zipfile.BadZipFile, ElementTree.ParseError, ValueError) as e:
         log.info("%s was not turned into Markdown here: %s", path, e)
     try:
         from markitdown import MarkItDown               # on the server, when IT installed it

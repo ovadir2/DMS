@@ -1847,6 +1847,27 @@ def test_view_turns_every_readable_format_into_a_pdf():
         assert not name.endswith(SharePoint.AS_PDF), name
 
 
+def test_a_legacy_xls_is_read_for_the_ai(tmp_path):
+    """markitdown does not open a .xls at all, and a company's older forms and procedures are full of them.
+    The DMS reads one itself, so those documents are not invisible to the AI."""
+    xlrd = pytest.importorskip("xlrd")                      # on the server it is installed
+    import dms_api.markdown as md
+    assert hasattr(md, "_xls")
+    book = tmp_path / "old.xls"
+    try:
+        import xlwt
+    except ImportError:
+        pytest.skip("xlwt is not here to write a .xls to read back")
+    wb = xlwt.Workbook()
+    sh = wb.add_sheet("Sheet1")
+    for r, row in enumerate((("Area", "Owner"), ("Quality", "roneno"))):
+        for c, v in enumerate(row):
+            sh.write(r, c, v)
+    wb.save(str(book))
+    out = md.body_of(str(book))
+    assert "Quality" in out and "roneno" in out and "| Area | Owner |" in out
+
+
 def test_backfill_writes_markdown_beside_every_released_file(tmp_path, capsys, monkeypatch):
     """One pass for the files that were released before the DMS wrote Markdown at all, or released by hand:
     without it they are in Current_ReadOnly and the AI cannot read them."""
