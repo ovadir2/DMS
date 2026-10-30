@@ -1869,6 +1869,17 @@ def test_backfill_writes_markdown_beside_every_released_file(tmp_path, capsys, m
     assert written == [str(cur / "QP-1.docx")]                            # the one that had none
 
 
+def test_the_page_offers_the_row_commands_as_a_right_click_menu(tmp_path):
+    """File Explorer's way in. The menu is built from the row's own buttons, so a command the DMS decided not
+    to offer - delete in Current_ReadOnly, edit for a released document - is not in the menu either."""
+    c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER,
+                                       sharepoint="memory")))
+    page = c.get("/dms/dms-page").text
+    assert "contextmenu" in page and "function ctxOpen" in page
+    assert "src.click()" in page                       # the menu clicks the row's own button, never its own copy
+    assert "dms-explorer" in page and "pointer: coarse" in page   # the view is remembered, and never on a touch screen
+
+
 def test_the_page_has_an_icon_of_its_own(tmp_path):
     """Without one the browser shows whatever it likes - often the icon of the site that tab held before - and
     the DMS looked like a different system from one tab to the next."""
