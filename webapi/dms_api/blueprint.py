@@ -79,17 +79,6 @@ CUSTOMER = N({
     "Archive": ("Archive", "ארכיון", {}),
 })
 
-# Quality procedures in operation, by division (Hebrew folder names, as on the file server)
-_QPROC = N({
-    "חטיבות": ("חטיבות", "חטיבות", {}),
-    "כלל חברה": ("כלל חברה", "כלל חברה", _same("ארכיון", "Training")),
-    "מערכות מידע": ("מערכות מידע", "מערכות מידע", _same("ארכיון")),
-    "מפעל ייצור": ("מפעל ייצור", "מפעל ייצור", _same("ארכיון")),
-    "משאבי אנוש": ("משאבי אנוש", "משאבי אנוש", _same("ארכיון")),
-    "נהלי אחזקה": ("נהלי אחזקה", "נהלי אחזקה", {}),
-    "רכש ואספקה": ("רכש ואספקה", "רכש ואספקה", _same("ארכיון")),
-    "תשתיות איכות": ("תשתיות איכות", "תשתיות איכות", _same("ארכיון")),
-})
 
 MANAGEMENT = N({k: (en, he, {}) for k, en, he in (
     ("Company_Profile", "Company profile", "פרופיל חברה"), ("Company_Strategy", "Company strategy", "אסטרטגיה"),
@@ -104,10 +93,11 @@ MANAGEMENT["HR"] = ("HR", "משאבי אנוש", N({"Shared": ("Shared", "משו
                                                      "קבצים ששותפו עם מועמדים לעבודה ויומן השיתופים")}))
 MANAGEMENT["Commercial"] = ("Commercial", "מסחרי", N({"Pricing": ("Pricing", "תמחור", {})}))
 MANAGEMENT["Supply_chain"] = ("Supply chain", "שרשרת אספקה", N({"Planners": ("Planners", "תכנון", {})}))
-MANAGEMENT["Quality and Standards"] = ("Quality and standards", "איכות ותקנים", N({
-    "נהלי איכות בתפעול": ("נהלי איכות בתפעול", "נהלי איכות בתפעול", _QPROC,
-                          "Quality procedures in operation, by division", "נהלי האיכות בתפעול, לפי חטיבה")}),
-    "Company quality procedures and standards", "נהלי האיכות והתקנים של החברה")
+# Quality and Standards is a department of the skeleton; what people arrange inside it is theirs. Those
+# folders used to be part of the blueprint, which made them grey - not to be renamed or deleted by anyone -
+# and that is not what they are.
+MANAGEMENT["Quality and Standards"] = ("Quality and standards", "איכות ותקנים", {},
+                                       "Company quality procedures and standards", "נהלי האיכות והתקנים של החברה")
 
 ROOT = N({
     "01_General": ("General", "כללי", MANAGEMENT, "Company-wide areas: procedures, standards, HR, finance",
