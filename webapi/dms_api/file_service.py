@@ -89,17 +89,19 @@ def _move(source: str, target: str, replace: bool = False) -> str:
     return target
 
 
-def _move_markdown(source: str, target: str) -> None:
-    """The Markdown written beside a document follows the document. Left in Current_ReadOnly it would say the
-    old revision is the one in force, which is exactly what the company's AI would then answer."""
-    old_md, new_md = os.path.splitext(source)[0] + ".md", os.path.splitext(target)[0] + ".md"
-    if not os.path.isfile(old_md):
+def _drop_markdown(source: str) -> None:
+    """The Markdown exists for the company's AI to read, and the AI is to read the revision in force and no
+    other. So when a document leaves Current_ReadOnly its Markdown is not carried into Obsolete_ReadOnly -
+    it is removed. The document itself is kept there, as the record of what that revision said."""
+    old_md = os.path.splitext(source)[0] + ".md"
+    if not is_file(old_md):
         return
     try:
-        _move(old_md, new_md, replace=True)
-        _set_read_only(new_md, True)
+        _set_read_only(old_md, False)
+        os.remove(old_md)
+        log.info("The Markdown of %s was removed: it is no longer the revision in force", source)
     except OSError as e:
-        log.warning("The Markdown of %s stayed behind: %s", source, e)
+        log.warning("The Markdown of %s was not removed: %s", source, e)
 
 
 def _sha256(path: str) -> str:
@@ -303,8 +305,7 @@ def run_once(sp, s: Settings, only: str = "") -> dict:
                 if _under_root(s.repository_root, old) and os.path.isfile(old):
                     obsolete = _move(old, os.path.join(folder, "Obsolete_ReadOnly", os.path.basename(old)))
                     _set_read_only(obsolete, True)
-                    _move_markdown(old, obsolete)      # its Markdown goes with it: the AI never quotes a
-                                                       # revision that is no longer the one in force
+                    _drop_markdown(old)                # the AI never quotes a revision that is not in force
                 current_name = re.sub(r"_DRAFT(?=\.[^.]+$|$)", "", name, flags=re.I)
                 target = _move(source, os.path.join(folder, "Current_ReadOnly", current_name))
                 _set_read_only(target, True)

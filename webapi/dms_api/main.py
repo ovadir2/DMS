@@ -887,8 +887,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if old and files.is_file(old):                           # a new revision: the approved one becomes obsolete
             obsolete = _move(old, os.path.join(folder, "Obsolete_ReadOnly", os.path.basename(old)))
             _set_read_only(obsolete, True)
-            from .file_service import _move_markdown
-            _move_markdown(old, obsolete)      # the AI never quotes a revision that is no longer in force
+            from .file_service import _drop_markdown
+            _drop_markdown(old)                # the AI never quotes a revision that is no longer in force
         if os.path.exists(target):
             raise ValueError("a file with this name is already in Current_ReadOnly")
         target = _move(full, target)

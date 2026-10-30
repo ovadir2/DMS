@@ -1568,8 +1568,9 @@ def test_an_approved_document_gets_its_markdown_beside_it(tmp_path):
 
 
 def test_the_markdown_follows_the_revision_in_force(tmp_path):
-    """What the company's AI reads is the revision in force. When a new one is approved, the Markdown of the
-    old one goes with it to Obsolete_ReadOnly, and the new one gets its own."""
+    """What the company's AI reads is the revision in force, and nothing else. When a new one is approved the
+    old one keeps its file in Obsolete_ReadOnly as the record of what it said, but its Markdown is removed -
+    a copy there would answer questions from a revision nobody may follow."""
     from dms_api import file_service
     from dms_api.memory import MemorySharePoint
     root = tmp_path / "Root"
@@ -1597,8 +1598,8 @@ def test_the_markdown_follows_the_revision_in_force(tmp_path):
     file_service.run_once(sp, s)
     now = list((q / "Current_ReadOnly").glob("*.md"))
     assert len(now) == 1 and "revision two" in now[0].read_text(encoding="utf-8")
-    gone = list((q / "Obsolete_ReadOnly").glob("*.md"))
-    assert gone and "revision one" in gone[0].read_text(encoding="utf-8")    # and the old one went with its file
+    assert (q / "Obsolete_ReadOnly" / "Quote.txt").exists()                 # the old revision is kept as a record
+    assert not list((q / "Obsolete_ReadOnly").glob("*.md"))                 # but the AI is not to read it
 
 
 def test_a_procedure_comes_out_as_a_procedure(tmp_path):
@@ -1875,6 +1876,20 @@ def test_the_page_is_never_cached(tmp_path):
     c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER,
                                        sharepoint="memory")))
     assert "no-store" in c.get("/dms/dms-page").headers.get("cache-control", "")
+
+
+def test_the_markdown_of_a_replaced_revision_is_removed(tmp_path):
+    """The Markdown exists for the AI, and the AI reads the revision in force. A copy left in
+    Obsolete_ReadOnly would be a second answer to the same question, from a revision nobody may follow."""
+    from dms_api.file_service import _drop_markdown
+    folder = tmp_path / "Current_ReadOnly"
+    folder.mkdir()
+    doc, md = folder / "QP-1.docx", folder / "QP-1.md"
+    doc.write_bytes(b"x")
+    md.write_text("the revision that was", encoding="utf-8")
+    os.chmod(md, 0o444)                                  # as the DMS writes it: read only
+    _drop_markdown(str(doc))
+    assert doc.exists() and not md.exists()              # the document is kept, its Markdown is not
 
 
 def test_releasing_without_a_workflow_writes_the_markdown_at_once(tmp_path, monkeypatch):
