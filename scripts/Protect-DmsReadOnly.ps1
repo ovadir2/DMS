@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   A released document can be read by whoever could read it before, and changed by nobody but the DMS.
 
@@ -24,13 +24,41 @@
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [Parameter(Mandatory = $true)][string]$Root,
-    [Parameter(Mandatory = $true)][string]$DmsAccount,              # the account the DMS runs under, e.g. RH\dms_approval
-    [string[]]$Folders = @('Current_ReadOnly', 'Obsolete_ReadOnly')
+    [string]$Root = '',
+    [string]$DmsAccount = '',                                       # the account the DMS runs under, e.g. RH\dms_approval
+    [string[]]$Folders = @('Current_ReadOnly', 'Obsolete_ReadOnly'),
+    [string]$Site = 'DMS-Pilot'
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Both are already known to the machine: the root is in the DMS's own .env, the account is the identity its
+# application pool runs under. Asking for them is how a pasted next command becomes the answer.
+if (-not $Root) {
+    $envFile = Join-Path $PSScriptRoot '..\webapi\.env'
+    if (Test-Path -LiteralPath $envFile) {
+        $line = Select-String -LiteralPath $envFile -Pattern '^\s*DMS_REPOSITORY_ROOT\s*=' | Select-Object -First 1
+        if ($line) { $Root = ($line.Line -replace '^\s*DMS_REPOSITORY_ROOT\s*=', '' -replace '\s+#.*$', '').Trim() }
+    }
+}
+if (-not $Root) { throw "The repository root was not found in webapi\.env: give it with -Root" }
 if (-not (Test-Path -LiteralPath $Root)) { throw "The repository root $Root was not found" }
+
+if (-not $DmsAccount) {
+    try {
+        Import-Module WebAdministration -ErrorAction Stop
+        $pool = (Get-Item "IIS:\Sites\$Site" -ErrorAction Stop).applicationPool
+        $DmsAccount = (Get-Item "IIS:\AppPools\$pool").processModel.userName
+    } catch { $DmsAccount = '' }
+}
+if (-not $DmsAccount) { throw "The DMS account was not found: give it with -DmsAccount RH\dms_approval" }
+try {
+    [void] (New-Object System.Security.Principal.NTAccount($DmsAccount)).Translate([System.Security.Principal.SecurityIdentifier])
+} catch {
+    throw "$DmsAccount is not an account this machine knows: give the right one with -DmsAccount"
+}
+Write-Host "Root: $Root"
+Write-Host "The DMS runs as: $DmsAccount"
 
 # These keep what they have; everybody else is left with Read and Execute
 $keep = @($DmsAccount, 'NT AUTHORITY\SYSTEM', 'BUILTIN\Administrators')
