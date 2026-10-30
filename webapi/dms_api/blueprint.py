@@ -105,6 +105,9 @@ MANAGEMENT["Quality and Standards"] = ("Quality and standards", "איכות ות
 KPIS = ("KPIs", "מדדים", {}, "The department's measures and the data behind them", "המדדים של המחלקה והנתונים שמאחוריהם")
 for _k, _n in list(MANAGEMENT.items()):
     MANAGEMENT[_k] = (_n[0], _n[1], N({**(_n[2] or {}), "KPIs": KPIS})) + tuple(_n[3:])
+# A customer is measured the same way, in the same place: one KPIs folder in the customer's own folder.
+CUSTOMER["KPIs"] = ("KPIs", "מדדים", {}, "The measures of this customer and the data behind them",
+                    "המדדים של הלקוח הזה והנתונים שמאחוריהם")
 
 ROOT = N({
     "01_General": ("General", "כללי", MANAGEMENT, "Company-wide areas: procedures, standards, HR, finance",

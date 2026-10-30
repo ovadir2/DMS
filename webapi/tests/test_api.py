@@ -2009,6 +2009,7 @@ def test_engineering_is_part_of_the_skeleton_however_it_was_spelt():
     departments = {p.split("\\")[1] for p in blueprint.folder_list() if p.startswith("01_General\\")}
     for d in departments:
         assert blueprint.describe(["01_General", d, "KPIs"])["en"] == "KPIs", d
+    assert blueprint.describe(["02_Customers", "Customer_A", "KPIs"])["en"] == "KPIs"   # and every customer
     assert blueprint.describe(["01_General", "Whatever people made"]) is None
 
 
