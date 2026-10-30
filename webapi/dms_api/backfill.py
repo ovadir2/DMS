@@ -44,7 +44,7 @@ def _register(s: Settings) -> dict:
     return out
 
 
-def run(root: str, write: bool, report: str = "") -> int:
+def run(root: str, write: bool, report: str = "", rewrite: bool = False) -> int:
     from . import markdown
     s = Settings.from_env()
     docs = _register(s) if write else {}                       # a dry run asks SharePoint nothing
@@ -82,7 +82,7 @@ def run(root: str, write: bool, report: str = "") -> int:
                 skipped += 1
                 continue
             target = os.path.splitext(path)[0] + ".md"
-            if os.path.isfile(target):
+            if os.path.isfile(target) and not rewrite:
                 skipped += 1
                 continue
             if not write:
@@ -129,12 +129,15 @@ def main() -> int:
     p.add_argument("--root", default=s.repository_root, help="the repository root (DMS_REPOSITORY_ROOT)")
     p.add_argument("--write", action="store_true", help="write the files (without it, only says what it would do)")
     p.add_argument("--report", default="", help="write what happened to this CSV (UTF-8), one row per file")
+    p.add_argument("--rewrite", action="store_true",
+                   help="write the Markdown again for documents that already have one (after a change to how "
+                        "a format is read)")
     a = p.parse_args()
     if not a.root or not os.path.isdir(a.root):
         print(f"The repository root was not found: {a.root!r}. Give it with --root.", file=sys.stderr)
         return 2
     print(f"{'Writing' if a.write else 'Looking for'} Markdown under {a.root}\n")
-    return run(a.root, a.write, a.report)
+    return run(a.root, a.write, a.report, a.rewrite)
 
 
 if __name__ == "__main__":

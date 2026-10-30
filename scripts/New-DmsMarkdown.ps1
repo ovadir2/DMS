@@ -10,12 +10,16 @@
     .\scripts\New-DmsMarkdown.ps1                     # what is missing
 .EXAMPLE
     .\scripts\New-DmsMarkdown.ps1 -Write              # write it
+.EXAMPLE
+    .\scripts\New-DmsMarkdown.ps1 -Write -Rewrite     # write it again for everything, after a change to
+                                                      # how a format is read (sheet names, a new reader)
 #>
 [CmdletBinding()]
 param(
     [string]$App  = 'C:\DMS-Pilot\app\webapi',
     [string]$Root = '',
     [switch]$Write,
+    [switch]$Rewrite,                                                      # also redo the ones that have one
     [string]$Report = (Join-Path $PSScriptRoot 'out\markdown-run.csv')      # what happened, file by file
 )
 
@@ -24,7 +28,8 @@ if (-not (Test-Path -LiteralPath $py)) { throw "The DMS python was not found: $p
 
 $args = @('-m', 'dms_api.backfill')
 if ($Root)  { $args += @('--root', $Root) }
-if ($Write) { $args += '--write' }
+if ($Write)   { $args += '--write' }
+if ($Rewrite) { $args += '--rewrite' }
 if ($Report) {
     New-Item -ItemType Directory -Force -Path (Split-Path $Report) | Out-Null
     $args += @('--report', $Report)

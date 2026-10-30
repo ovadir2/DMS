@@ -2013,6 +2013,26 @@ def test_engineering_is_part_of_the_skeleton_however_it_was_spelt():
     assert blueprint.describe(["01_General", "Whatever people made"]) is None
 
 
+def test_a_workbook_of_several_sheets_keeps_the_names_people_gave_them(tmp_path):
+    """One table per sheet, under the sheet's own name. The part inside the file is called sheet1.xml, and a
+    Markdown of "## sheet1.xml" tells the AI nothing about which sheet an answer came from."""
+    openpyxl = pytest.importorskip("openpyxl")
+    from dms_api import markdown as md
+    wb = openpyxl.Workbook()
+    wb.active.title = "Prices"
+    wb.active.append(["Item", "Cost"])
+    wb.active.append(["Bolt", 3])
+    second = wb.create_sheet("Payment terms")
+    second.append(["Clause", "Text"])
+    second.append(["1", "30 days"])
+    book = tmp_path / "Quote.xlsx"
+    wb.save(str(book))
+
+    out = md.body_of(str(book))
+    assert "## Prices" in out and "## Payment terms" in out and "sheet1" not in out
+    assert "| Item | Cost |" in out and "| Bolt | 3 |" in out
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

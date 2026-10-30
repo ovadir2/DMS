@@ -40,6 +40,25 @@ def _office(path: str, ext: str) -> str:
                 root = ElementTree.fromstring(z.read("xl/sharedStrings.xml"))
                 for si in root:
                     shared.append("".join(t.text or "" for t in si.iter() if t.tag.endswith("}t")))
+            # The sheets by the names people gave them. The part name (sheet1.xml) is not one: a workbook of
+            # several sheets came out as "sheet1.xml", "sheet2.xml", and an answer could not say which sheet
+            # it had read. workbook.xml lists them in order, and the relationships say which part each is.
+            titles: dict[str, str] = {}
+            try:
+                rels = {}
+                if "xl/_rels/workbook.xml.rels" in names:
+                    for r in ElementTree.fromstring(z.read("xl/_rels/workbook.xml.rels")):
+                        t = (r.get("Target") or "").replace("\\", "/")
+                        rels[r.get("Id")] = t.lstrip("/") if t.startswith("/") else "xl/" + t
+                rid = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+                for sh in ElementTree.fromstring(z.read("xl/workbook.xml")).iter():
+                    if sh.tag.endswith("}sheet") and sh.get("name"):
+                        part = rels.get(sh.get(rid), "")
+                        if part in names:
+                            titles[part] = sh.get("name")
+            except (KeyError, ElementTree.ParseError, OSError):
+                titles = {}                      # no names to be had: the part name says which sheet it was
+
             out = []
             for n in sorted(n for n in names if re.match(r"xl/worksheets/sheet\d+\.xml$", n)):
                 rows = []
@@ -54,7 +73,7 @@ def _office(path: str, ext: str) -> str:
                         cells.append(shared[int(v)] if c.get("t") == "s" and v.isdigit() and int(v) < len(shared) else v)
                     if cells:
                         rows.append("\t".join(cells))
-                out.append(f"[{os.path.basename(n)}]\n" + "\n".join(rows))
+                out.append(f"[{titles.get(n) or os.path.splitext(os.path.basename(n))[0]}]\n" + "\n".join(rows))
             return "\n\n".join(out)
     return ""
 
