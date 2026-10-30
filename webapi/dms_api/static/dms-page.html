@@ -544,8 +544,14 @@ function ctxActions(host) {
   const bar = host.querySelector(':scope > .toolbar, :scope > .crumbs');
   return bar ? [...host.querySelectorAll('.crumbs .pillbtn, .toolbar .pillbtn, .toolbar button.link')] : [];
 }
+function ctxScreen(host) {
+  // The commands of the screen itself (path finder, copy link, new folder, new document...): in an explorer
+  // they are on the right-click menu too, under the ones of the row you clicked.
+  const view = host && host.id !== 'view' ? host.closest('#view') : null;
+  return view ? [...view.querySelectorAll('.crumbs .pillbtn, .toolbar .pillbtn, .toolbar button.link')] : [];
+}
 function ctxOpen(host, x, y) {
-  const items = ctxActions(host);
+  const items = ctxActions(host), screen = ctxScreen(host);
   if (!items.length) return false;
   ctxClose();
   host.classList.add('ctx-on');
@@ -559,7 +565,7 @@ function ctxOpen(host, x, y) {
     h.textContent = name.trim();
     m.append(h, Object.assign(document.createElement('div'), { className: 'ctxsep' }));
   }
-  items.forEach(src => {
+  const entry = src => {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = (src.textContent || '').trim();
@@ -567,7 +573,12 @@ function ctxOpen(host, x, y) {
     if ((src.getAttribute('style') || '').includes('--err')) b.style.color = 'var(--err)';
     b.onclick = () => { ctxClose(); src.click(); };
     m.appendChild(b);
-  });
+  };
+  items.forEach(entry);
+  if (screen.length) {
+    m.appendChild(Object.assign(document.createElement('div'), { className: 'ctxsep' }));
+    screen.forEach(entry);
+  }
   document.body.appendChild(m);
   const r = m.getBoundingClientRect(), pad = 8;
   m.style.top = Math.max(pad, Math.min(y, innerHeight - r.height - pad)) + 'px';
