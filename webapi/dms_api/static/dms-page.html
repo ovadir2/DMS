@@ -679,9 +679,20 @@ function ctxOpen(host, x, y) {
   m.style.left = Math.max(pad, Math.min(document.documentElement.dir === 'rtl' ? x - r.width : x, innerWidth - r.width - pad)) + 'px';
   return true;
 }
+function ctxPick(host) {
+  // Clicking a file picks it, the way a folder window does: the row you right-clicked is the one the
+  // commands will act on. A row already in the selection leaves the rest of it alone.
+  const box = host && host.querySelector ? host.querySelector('input.sel') : null;
+  if (!box || box.checked) return;
+  const table = host.closest('table');
+  if (table) table.querySelectorAll('input.sel:checked').forEach(b => { b.checked = false; });
+  box.checked = true;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+}
 document.addEventListener('contextmenu', ev => {
   if (ev.target.closest('.ctx') || ev.target.closest('input, textarea, select')) return;
   const host = ev.target.closest(CTX_HOST);
+  ctxPick(host);
   if (host && ctxOpen(host, ev.clientX, ev.clientY)) return ev.preventDefault();
   // Anywhere else inside the DMS: the commands of this screen (the toolbar), so a right-click never falls
   // through to the browser's own menu, which has nothing to do with the documents.
@@ -727,6 +738,7 @@ function xMore(v) {
     b.onclick = e => {
       e.stopPropagation();
       const r = b.getBoundingClientRect();
+      ctxPick(box.closest(CTX_HOST));
       ctxOpen(box.closest(CTX_HOST), r.left, r.bottom);
     };
     box.appendChild(b);
