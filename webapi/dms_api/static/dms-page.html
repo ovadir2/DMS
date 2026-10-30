@@ -559,7 +559,7 @@ function ctxScreen(host, self = false) {
     .filter(b => folder || self || b.id !== 'mk');     // a new folder is made inside a folder, not beside a file
 }
 function ctxOpen(host, x, y) {
-  const items = ctxActions(host).filter(b => !b.hasAttribute('data-f')), screen = ctxScreen(host);
+  const items = ctxActions(host), screen = ctxScreen(host);
   if (!items.length) return false;
   ctxClose();
   host.classList.add('ctx-on');
@@ -576,10 +576,10 @@ function ctxOpen(host, x, y) {
   // The menu reads in groups, the way a folder window does: what opens the thing, what the workflow does
   // with it, and what you do to the file itself.
   const GROUP = [
-    ['data-ckout', 'data-ckview', 'data-tx', 'data-txv', 'data-ckin', 'data-ext', 'data-vw', 'data-noopen'],
+    ['data-f', 'data-ckout', 'data-ckview', 'data-tx', 'data-txv', 'data-ckin', 'data-ext', 'data-vw', 'data-noopen'],
     ['data-sub', 'data-st', 'data-rev', 'data-relp', 'data-share', 'data-wd', 'data-dg', 'data-hist',
      'data-ok', 'data-no', 'data-up', 'data-drn', 'data-ddel'],
-    ['data-dl', 'data-cp', 'data-rn', 'data-del'],
+    ['data-dl', 'data-cp', 'data-rn', 'data-del', 'data-mkin'],
   ];
   const groupOf = el => {
     const i = GROUP.findIndex(g => g.some(k => el.hasAttribute(k)));
@@ -865,7 +865,7 @@ async function browse(v) {
     ${explorerOn() ? '' : folders.length ? `<div class="grid" style="margin-bottom:16px">${folders.map(f => `<div class="tilewrap">${folderTile(f)}${f.workflowFolder ? `<div class="tileacts muted">🔒 ${T.managed}</div>` : (r.canWrite && (!f.label || f.label.kind === 'project') ? `<div class="tileacts">${editActions(f)}</div>` : f.label ? `<div class="tileacts muted" title="${esc(T.bpLockedTip)}">🔒 ${T.bpLocked}</div>` : '')}</div>`).join('')}</div>` : ''}
     ${r.files.length || (explorerOn() && folders.length) ? `<div class="toolbar" id="selbar" style="display:none"><b id="selcount"></b><span class="spacer"></span>${r.canWrite && !r.managed && !r.noWorkflow ? `<button type="button" class="pillbtn small light" id="sel-wf">${T.start}</button>` : ''}${r.canWrite && !r.managed ? `<button type="button" class="pillbtn small light" id="sel-rel">${T.relNw}</button>` : ''}<button type="button" class="pillbtn small light" id="sel-share">✉ ${isHr(r.path) ? T.shareHrBtn : T.share}</button><button type="button" class="pillbtn small light" id="sel-dl">${T.download}</button><button type="button" class="pillbtn small light" id="sel-cp">🔗 ${T.copyLinks}</button>${r.canWrite && !r.managed ? `<button type="button" class="pillbtn small light" id="sel-del" style="color:var(--err)">${T.del}</button>` : ''}</div>
     <table><tr><th style="width:28px"><input type="checkbox" id="sel-all" title="${esc(T.selAll)}"></th><th>${T.name}</th><th>${T.status}</th><th class="hide-s">${T.modified}</th><th class="hide-s">${T.fileType}</th><th class="hide-s">${T.size}</th><th></th></tr>
-    ${!explorerOn() ? '' : folders.map(f => `<tr class="xfolder ${f.workflowFolder ? 'xf-wf' : f.label && f.label.kind !== 'project' ? 'xf-bp' : 'xf-own'}"><td></td><td><span style="display:inline-flex;gap:8px;align-items:center">${ICON_FOLDER}<a class="link" data-f="${esc(f.path)}">${esc(lbl(f.label) || f.name)}</a></span></td><td class="muted small">${f.workflowFolder ? '\u{1F512} ' + T.managed : f.label && f.label.kind !== 'project' ? '\u{1F512} ' + T.bpLocked : ''}</td><td class="hide-s muted"></td><td class="hide-s muted small">${T.folderKind}</td><td class="hide-s muted"></td><td class="actions"><button type="button" class="link" data-f="${esc(f.path)}">${T.open}</button>${!f.workflowFolder && r.canWrite && (!f.label || f.label.kind === 'project') ? editActions(f) : ''}</td></tr>`).join('')}
+    ${!explorerOn() ? '' : folders.map(f => `<tr class="xfolder ${f.workflowFolder ? 'xf-wf' : f.label && f.label.kind !== 'project' ? 'xf-bp' : 'xf-own'}"><td></td><td><span style="display:inline-flex;gap:8px;align-items:center">${ICON_FOLDER}<a class="link" data-f="${esc(f.path)}">${esc(lbl(f.label) || f.name)}</a></span></td><td class="muted small">${f.workflowFolder ? '\u{1F512} ' + T.managed : f.label && f.label.kind !== 'project' ? '\u{1F512} ' + T.bpLocked : ''}</td><td class="hide-s muted"></td><td class="hide-s muted small">${T.folderKind}</td><td class="hide-s muted"></td><td class="actions"><button type="button" class="link" data-f="${esc(f.path)}">${T.open}</button><button type="button" class="link" data-mkin="${esc(f.path)}">${T.newFolder}</button>${!f.workflowFolder && r.canWrite && (!f.label || f.label.kind === 'project') ? editActions(f) : ''}</td></tr>`).join('')}
     ${r.files.map(f => `<tr><td><input type="checkbox" class="sel" data-path="${esc(f.path)}" data-free="${!f.document ? 1 : ''}" data-rel="${!f.document || (['Working', 'Submitted'].includes(f.document.statusKey) && !f.document.nextRevision) ? 1 : ''}" data-doc="${f.document && f.document.statusKey === 'Approved_ReadOnly' ? f.document.id : ''}"></td><td><span style="display:inline-flex;gap:8px;align-items:center">${ICON_FILE}${esc(f.name)}</span></td><td>${statusTag(f.document)}</td><td class="hide-s muted">${when(f.modified)}</td><td class="hide-s muted small">${extOf(f.name)}</td><td class="hide-s muted small ltr">${kb(f.size)}</td><td class="actions">${fileActions(f)}${inCurrentRo(f.path) ? '' : r.canWrite && !f.document && !f.readOnly ? editActions(f)
       : (me.admin ? `<button type="button" class="link" data-del="${esc(f.path)}" data-released="1" style="color:var(--err)">${T.del}</button>` : '')}</td></tr>`).join('')}
     </table>` : ''}${folders.length + r.files.length ? '' : `<p class="muted">${T.none}</p>`}`;
@@ -889,6 +889,7 @@ async function browse(v) {
   v.querySelector('#go-back').onclick = goBack;
   v.querySelector('#pf-b').onclick = () => pathFinder(r.path);
   if (r.canWrite) { const nd = v.querySelector('#nd'); if (nd) nd.onclick = () => newDocument(r.path); v.querySelector('#up').onclick = () => { const rel = v.querySelector('#sel-rel'); if (rel && v.querySelector('input.sel:checked')) rel.click(); else uploadDialog(r.path); }; v.querySelector('#mk').onclick = () => newFolderDialog(r.path); }
+  v.querySelectorAll('[data-mkin]').forEach(b => b.onclick = () => newFolderDialog(b.dataset.mkin));
   v.querySelectorAll('[data-rn]').forEach(b => b.onclick = () => renameDialog(b.dataset.rn));
   v.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteItem(b.dataset.del, b.dataset.released === '1'));
   wireSelection(v);
