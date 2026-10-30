@@ -1673,6 +1673,24 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         log(user, "checkout" if edit else "view-sharepoint", full)
         return {"path": full, "url": entry["url"], "edit": edit, "by": entry["by"]}
 
+    def pdf_of(full: str, who: str = "") -> bytes:
+        """The document as a PDF, made by SharePoint and fetched back, with the copy removed at once. This is
+        how a reader sees a document, and how a format nothing here can read still reaches the company's AI."""
+        if not review_on():
+            return b""
+        key = "pdf-" + checkout.key_of(s.repository_root, full, who or "dms")[5:]
+        try:
+            put = sp().review_put(local_path=full, document_id=key, edit=False, as_pdf=True)
+            return sp().review_get(document_id=key, name=put["name"]) or b""
+        finally:
+            try:
+                sp().review_done(document_id=key)
+            except Exception as e:  # noqa: BLE001
+                logger.info("Reading copy of %s not removed: %s", os.path.basename(full), e)
+
+    from . import markdown as _markdown
+    _markdown.PDF_OF[0] = pdf_of          # a .doc, a .ppt: laid out by SharePoint, read from the pages
+
     @app.get("/api/files/view-pdf")
     def view_pdf(path: str, user: User = Depends(current_user)):
         """The document as a PDF, served by the DMS itself. SharePoint turns it into one - nothing has to be
@@ -1686,18 +1704,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(404, "File not found")
         if not may_read(user, full):
             raise HTTPException(403, "You do not have access to this file")
-        key = "pdf-" + checkout.key_of(s.repository_root, full, user.email)[5:]
         try:
-            put = sp().review_put(local_path=full, document_id=key, edit=False, as_pdf=True)
-            data = sp().review_get(document_id=key, name=put["name"])
+            data = pdf_of(full, user.email)
         except Exception as e:  # noqa: BLE001
             sp_error(f"Reading copy of {os.path.basename(full)}", e)
             raise HTTPException(502, f"The document could not be prepared for reading: {e}") from None
-        finally:
-            try:
-                sp().review_done(document_id=key)        # the copy goes at once, whatever happened
-            except Exception as e:  # noqa: BLE001
-                logger.info("Reading copy of %s not removed: %s", os.path.basename(full), e)
         if not data:
             raise HTTPException(502, "The document came back empty")
         from urllib.parse import quote as _q

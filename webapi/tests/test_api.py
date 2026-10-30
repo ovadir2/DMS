@@ -1847,6 +1847,22 @@ def test_view_turns_every_readable_format_into_a_pdf():
         assert not name.endswith(SharePoint.AS_PDF), name
 
 
+def test_a_format_nothing_can_read_goes_through_its_pdf(tmp_path, monkeypatch):
+    """A legacy .doc is read by nothing here and by markitdown either. SharePoint can still lay it out as
+    pages, so the text is taken from the PDF it makes - otherwise those documents never reach the AI."""
+    import dms_api.markdown as md
+    asked = []
+    was, md.PDF_OF[0] = md.PDF_OF[0], lambda p: asked.append(p) or b"%PDF-1.4"
+    monkeypatch.setattr(md, "_plain", lambda p: "")          # nothing here can read it
+    old = tmp_path / "policy.doc"
+    old.write_bytes(b"\xd0\xcf\x11\xe0 old word")
+    try:
+        md.body_of(str(old))
+    finally:
+        md.PDF_OF[0] = was
+    assert asked == [str(old)]                               # it asked SharePoint for the PDF
+
+
 def test_a_legacy_xls_is_read_for_the_ai(tmp_path):
     """markitdown does not open a .xls at all, and a company's older forms and procedures are full of them.
     The DMS reads one itself, so those documents are not invisible to the AI."""

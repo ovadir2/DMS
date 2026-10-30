@@ -183,6 +183,37 @@ def _plain(path: str) -> str:
     return extract(path)
 
 
+# Set by the app at startup: a function that turns a document into PDF bytes through SharePoint. It is how
+# a format nothing here can read - a legacy .doc, a .ppt - still reaches the company's AI: SharePoint lays it
+# out as pages, and the text is taken from those. Without it, such a document has no Markdown.
+PDF_OF: list = [None]
+
+
+def _via_pdf(path: str) -> str:
+    """The document as text, by way of the PDF SharePoint makes of it."""
+    make = PDF_OF[0]
+    if not make:
+        return ""
+    data = make(path)
+    if not data:
+        return ""
+    import tempfile
+    tmp = os.path.join(tempfile.gettempdir(), f"dms-{abs(hash(path))}.pdf")
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+        from markitdown import MarkItDown
+        return (MarkItDown().convert(tmp).text_content or "").strip()
+    except Exception as e:  # noqa: BLE001 - a last resort: say why and leave the document without Markdown
+        log.info("%s was not read through its PDF: %s", path, e)
+        return ""
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
 def body_of(path: str) -> str:
     """The document as Markdown, or an empty string when this kind of file has nothing to read.
 
@@ -208,10 +239,10 @@ def body_of(path: str) -> str:
         from markitdown import MarkItDown               # on the server, when IT installed it
         return (MarkItDown().convert(path).text_content or "").strip()
     except ImportError:
-        return ""
+        return _via_pdf(path)
     except Exception as e:  # noqa: BLE001 - its answer is not worth failing a release for
         log.info("markitdown did not convert %s: %s", path, e)
-        return ""
+    return _via_pdf(path)        # nothing here could read it: let SharePoint lay it out and read that
 
 
 def write_beside(path: str, doc: dict | None = None) -> str | None:
