@@ -545,18 +545,21 @@ function ctxActions(host) {
   if (!host) return [];
   const box = host.querySelector('td.actions, .tileacts');
   if (box) return [...box.querySelectorAll('a.link, button.link')];
-  // the screen itself: its toolbar is its menu (path finder, copy link, new folder, new document...)
-  const bar = host.querySelector(':scope > .toolbar, :scope > .crumbs');
-  return bar ? [...host.querySelectorAll('.crumbs .pillbtn, .toolbar .pillbtn, .toolbar button.link')] : [];
+  return ctxScreen(host, true);               // the empty space of a folder: the folder's own commands
 }
-function ctxScreen(host) {
-  // The commands of the screen itself (path finder, copy link, new folder, new document...): in an explorer
-  // they are on the right-click menu too, under the ones of the row you clicked.
-  const view = host && host.id !== 'view' ? host.closest('#view') : null;
-  return view ? [...view.querySelectorAll('.crumbs .pillbtn, .toolbar .pillbtn, .toolbar button.link')] : [];
+function ctxScreen(host, self = false) {
+  // The commands of the folder you are in, under the ones of the row you clicked. Not everything that sits
+  // in a toolbar belongs here: Back and Up are where you are, not what you can do; the path finder is a
+  // screen of its own; and the bar that acts on ticked files says "the ones you ticked", not "this one".
+  const view = self ? host : host && host.id !== 'view' ? host.closest('#view') : null;
+  if (!view) return [];
+  const folder = !!(host && host.classList && host.classList.contains('xfolder'));
+  return [...view.querySelectorAll('.toolbar:not(#selbar) .pillbtn, .toolbar:not(#selbar) button.link')]
+    .filter(b => b.id !== 'pf-b')
+    .filter(b => folder || self || b.id !== 'mk');     // a new folder is made inside a folder, not beside a file
 }
 function ctxOpen(host, x, y) {
-  const items = ctxActions(host), screen = ctxScreen(host);
+  const items = ctxActions(host).filter(b => !b.hasAttribute('data-f')), screen = ctxScreen(host);
   if (!items.length) return false;
   ctxClose();
   host.classList.add('ctx-on');
