@@ -31,7 +31,10 @@
   .wctl .hbtn { padding:8px 14px; color:var(--muted); border-radius:0; }
   .wctl .hbtn:hover { color:var(--navy); background:var(--band); }
   #fs-close:hover { color:#fff; background:var(--err); }
-  header { padding-inline-end:140px; }        /* room for them, so nothing runs under the buttons */
+  header { padding-right:140px; }             /* room for them: they are in the right corner in both languages */
+  /* In Hebrew the bar reads right to left, which would put the logo under the window buttons. The name of
+     the system stays on the left, where it is in every other application. */
+  [dir=rtl] header .brand { margin-inline-start:auto; }
   body.slim header { min-height:0; padding-block:2px; }
   body.slim header .brand, body.slim header .hbreak, body.slim .hsearch { display:none; }
   .menu { position:relative; }
