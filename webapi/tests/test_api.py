@@ -1938,6 +1938,33 @@ def test_the_catch_up_pass_reads_a_legacy_doc_through_its_pdf(tmp_path, monkeypa
     assert "This manual applies to RH." in old.with_suffix(".md").read_text(encoding="utf-8")
 
 
+def test_a_folder_the_person_may_write_in_is_not_refused_over_extended_attributes():
+    """AD gave the person Modify on the folder and the DMS still would not let them add a file: it asked for
+    the whole of FILE_GENERIC_WRITE, which also wants extended attributes, attributes, read permissions and
+    synchronize. Adding a file needs two bits, and those are what is asked for now."""
+    from dms_api import security
+
+    class Folder:                     # Modify, with extended attributes and attributes taken out by hand
+        def granted(self, path): return 0x1 | 0x2 | 0x4 | 0x20 | 0x80 | 0x10000 | 0x20000
+
+    assert security._needed("write") == 0x6
+    assert security.AdUser.can(Folder(), "X:\\Shares\\01_General", "write") is True
+    assert security.AdUser.can(Folder(), "X:\\Shares\\01_General", "read") is True
+
+    class ReadOnly:
+        def granted(self, path): return 0x1 | 0x20 | 0x80 | 0x20000 | 0x100000
+
+    assert security.AdUser.can(ReadOnly(), "X:\\Shares\\01_General", "write") is False   # a read only place stays one
+    assert security.AdUser.can(ReadOnly(), "X:\\Shares\\01_General", "read") is True
+
+
+def test_the_strict_access_check_can_be_asked_for(monkeypatch):
+    """The old rule, for a site that wants exactly Explorer's Write right and nothing less."""
+    from dms_api import security
+    monkeypatch.setenv("DMS_STRICT_ACCESS_CHECK", "1")
+    assert security._needed("write") == security.FILE_GENERIC_WRITE
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

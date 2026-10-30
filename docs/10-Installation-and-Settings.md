@@ -93,6 +93,19 @@ it for a PDF of the document, reads the pages (pypdf) and removes the copy at on
 Then **First loading** (super users, ⋮ menu) registers what is already on the server, and
 `docs/Go-Live.md` covers the rest.
 
+## 6a. "I may see the folder but New document and Upload are not there"
+
+The DMS shows those commands where AD lets that person write. Open, signed in as them:
+
+```
+https://dms-pilot.rh.tech/api/diagnostics/access?path=02_Customers\Customer_A
+```
+
+It says what Windows answered for them on that folder, bit by bit, what the DMS asked for, and whether the
+place is one the DMS keeps read only anyway (a workflow folder, a blueprint folder). Adding a file needs
+*write data* and *append data*; `DMS_STRICT_ACCESS_CHECK=1` goes back to asking for the whole Write right
+(extended attributes and attributes included), which an ACL set by hand often does not grant.
+
 ## 7. Settings (`webapi\.env`)
 
 **The first occurrence of a key wins.** A leftover line above is the usual reason a setting "does not take".

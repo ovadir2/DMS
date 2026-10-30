@@ -44,6 +44,21 @@ class User:
 
 
 FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE, FILE_ALL_ACCESS = 0x120089, 0x120116, 0x1200A0, 0x1F01FF
+MAXIMUM_ALLOWED = 0x02000000
+# What the DMS asks for. The whole of FILE_GENERIC_WRITE was asked for before, and that also demands
+# FILE_WRITE_EA, FILE_WRITE_ATTRIBUTES, READ_CONTROL and SYNCHRONIZE: a folder whose group is given Modify in
+# Explorer has them all, but one set by hand - "Write" without extended attributes, Modify with attributes
+# taken out, rights given on the share and not on the folder - does not, and the person was then told they
+# may not save here while Explorer let them. Adding a file needs exactly these two bits.
+NEEDED = {READ: 0x0001 | 0x0080,                 # FILE_READ_DATA (list a folder) | FILE_READ_ATTRIBUTES
+          WRITE: 0x0002 | 0x0004}                # FILE_WRITE_DATA (add a file) | FILE_APPEND_DATA (add a folder)
+STRICT = {READ: FILE_GENERIC_READ, WRITE: FILE_GENERIC_WRITE}
+
+
+def _needed(access: str) -> int:
+    """DMS_STRICT_ACCESS_CHECK=1 asks for the full generic right again, as the DMS did until now."""
+    table = STRICT if os.environ.get("DMS_STRICT_ACCESS_CHECK", "").strip().lower() in ("1", "true", "yes", "on") else NEEDED
+    return table.get(access, table[READ])
 
 
 def _windows_access(token, path: str, access: str) -> bool:
@@ -72,16 +87,58 @@ def _windows_access(token, path: str, access: str) -> bool:
         if not adv.GetFileSecurityW(path, info, sd, need, ctypes.byref(need)):
             return False
         mapping = GENERIC_MAPPING(FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE, FILE_ALL_ACCESS)
-        wanted = wintypes.DWORD(FILE_GENERIC_READ if access == READ else FILE_GENERIC_WRITE)
-        adv.MapGenericMask(ctypes.byref(wanted), ctypes.byref(mapping))
         privileges, size = PRIVILEGE_SET(), wintypes.DWORD(ctypes.sizeof(PRIVILEGE_SET))
         granted, allowed = wintypes.DWORD(), wintypes.BOOL()
-        ok = adv.AccessCheck(sd, wintypes.HANDLE(int(token)), wanted, ctypes.byref(mapping),
-                             ctypes.byref(privileges), ctypes.byref(size),
+        # Everything this user is allowed here, in one answer, and the DMS then looks for the bits it needs.
+        # Asking AccessCheck for a fixed right instead says only yes or no, and never which bit was missing.
+        ok = adv.AccessCheck(sd, wintypes.HANDLE(int(token)), wintypes.DWORD(MAXIMUM_ALLOWED),
+                             ctypes.byref(mapping), ctypes.byref(privileges), ctypes.byref(size),
                              ctypes.byref(granted), ctypes.byref(allowed))
-        return bool(ok and allowed.value)
+        if not ok:
+            return False
+        need = _needed(access)
+        return (granted.value & need) == need
     except OSError:
         return False
+
+
+def granted_mask(user: "User", path: str) -> int:
+    """Everything this person is allowed on that path, as the mask Windows answers with. For the diagnostics
+    page: what the DMS saw, beside what it needed, so a refusal can be read instead of guessed at."""
+    if user.ad is not None:
+        return user.ad.granted(path)
+    if user.token is None:
+        return FILE_ALL_ACCESS
+    import ctypes
+    from ctypes import wintypes
+
+    class GENERIC_MAPPING(ctypes.Structure):
+        _fields_ = [("GenericRead", wintypes.DWORD), ("GenericWrite", wintypes.DWORD),
+                    ("GenericExecute", wintypes.DWORD), ("GenericAll", wintypes.DWORD)]
+
+    class PRIVILEGE_SET(ctypes.Structure):
+        _fields_ = [("PrivilegeCount", wintypes.DWORD), ("Control", wintypes.DWORD),
+                    ("Privilege", wintypes.BYTE * 12)]
+
+    adv = ctypes.WinDLL("advapi32", use_last_error=True)
+    try:
+        need = wintypes.DWORD()
+        adv.GetFileSecurityW(path, 0x7, None, 0, ctypes.byref(need))
+        if not need.value:
+            return 0
+        sd = ctypes.create_string_buffer(need.value)
+        if not adv.GetFileSecurityW(path, 0x7, sd, need, ctypes.byref(need)):
+            return 0
+        mapping = GENERIC_MAPPING(FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE, FILE_ALL_ACCESS)
+        privileges, size = PRIVILEGE_SET(), wintypes.DWORD(ctypes.sizeof(PRIVILEGE_SET))
+        granted, allowed = wintypes.DWORD(), wintypes.BOOL()
+        if not adv.AccessCheck(sd, wintypes.HANDLE(int(user.token)), wintypes.DWORD(MAXIMUM_ALLOWED),
+                               ctypes.byref(mapping), ctypes.byref(privileges), ctypes.byref(size),
+                               ctypes.byref(granted), ctypes.byref(allowed)):
+            return 0
+        return granted.value
+    except OSError:
+        return 0
 
 
 def user_from_windows_token(header_value: str) -> User:
@@ -143,7 +200,8 @@ class AdUser:
             cls._users[upn] = cls(upn)
         return cls._users[upn]
 
-    def can(self, path: str, access: str = READ) -> bool:
+    def granted(self, path: str) -> int:
+        """Everything this person's AD groups allow on that path, as Windows answers it."""
         ct, wt = self._ct, self._wt
 
         class REQUEST(ct.Structure):
@@ -166,8 +224,13 @@ class AdUser:
         req = REQUEST(0x02000000, None, None, 0, None)           # MAXIMUM_ALLOWED
         if not self._az.AuthzAccessCheck(0, self._ctx, ct.byref(req), None, sd, None, 0, ct.byref(reply), None):
             return False
-        wanted = 0x120089 if access == READ else 0x120116       # FILE_GENERIC_READ / FILE_GENERIC_WRITE
-        return error.value == 0 and (granted.value & wanted) == wanted
+        if error.value:
+            return 0
+        return granted.value
+
+    def can(self, path: str, access: str = READ) -> bool:
+        need = _needed(access)
+        return (self.granted(path) & need) == need
 
 
 def may_see(email: str, path: str, access: str = READ) -> bool | None:

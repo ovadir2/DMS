@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from . import access, blueprint, checkout, files, finder
+from . import access, blueprint, checkout, files, finder, security
 from .ai import AiError, OpenWebUI
 from .rag import RagError, RagTools
 from .auth import current_user
@@ -451,6 +451,31 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def pilot_owner(email: str) -> bool:
         """The live pilot on a PC (dev mode, real SharePoint): the person who runs the DMS is always a super user."""
         return s.auth_mode == "dev" and s.sp_auth == "interactive" and email == (s.dev_user or "").lower()
+
+    @app.get("/api/diagnostics/access")
+    def access_check(path: str, user: User = Depends(current_user)):
+        """Why may this person not save here? What Windows answered for them on that folder, bit by bit,
+        beside what the DMS asked for - and what the DMS itself forbids there whatever AD says (a workflow
+        folder, a blueprint folder). Open it in the browser:
+        /api/diagnostics/access?path=<folder>. It answers for whoever is signed in and reads nothing else."""
+        full = files.resolve(s.repository_root, path)
+        granted = security.granted_mask(user, full)
+        bits = {"read data / list": 0x1, "write data / add file": 0x2, "append data / add folder": 0x4,
+                "read extended attributes": 0x8, "write extended attributes": 0x10, "traverse / execute": 0x20,
+                "delete child": 0x40, "read attributes": 0x80, "write attributes": 0x100,
+                "delete": 0x10000, "read permissions": 0x20000, "change permissions": 0x40000,
+                "take ownership": 0x80000, "synchronize": 0x100000}
+        rel = rel_parts(full)
+        kind = (blueprint.describe(rel) or {}).get("kind")
+        return {"path": full, "user": user.email, "exists": files.exists(full),
+                "how": "AD groups (AuthZ)" if user.ad is not None else
+                       ("the user's Windows token" if user.token is not None else "no AD check in this DMS run"),
+                "granted": hex(granted), "has": sorted(n for n, b in bits.items() if granted & b),
+                "needs": {"read": hex(security.NEEDED["read"]), "write": hex(security.NEEDED["write"])},
+                "read": user.can(full, "read"), "write": user.can(full, "write"),
+                "dmsManaged": files.in_workflow_folder(s.repository_root, full),
+                "blueprintKind": kind or "", "canWriteHere": files.list_folder(s.repository_root, full,
+                                                                              user.can).get("canWrite")}
 
     @app.get("/api/diagnostics/sharepoint")
     def sp_check(user: User = Depends(current_user)):
