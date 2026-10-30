@@ -20,6 +20,7 @@ from .config import Settings
 
 log = logging.getLogger("dms_api.backfill")
 FOLDER = "current_readonly"
+OBSOLETE = ("obsolete_readonly", "submitted")   # a Markdown has no business there
 # A PDF is read too - it is a document, and what it says is what the AI should answer from. Only what has
 # no text to take (a picture, an archive) and the Markdown itself are passed over.
 SKIP = (".md", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".ico", ".zip", ".7z", ".rar", ".exe", ".dll")
@@ -55,6 +56,24 @@ def run(root: str, write: bool, report: str = "") -> int:
     done = skipped = failed = 0
     rows: list[tuple] = []
     for folder, dirs, names in os.walk(root):
+        if os.path.basename(folder).lower() in OBSOLETE:
+            # The Markdown is what the AI reads, and it answers from the revision in force: a copy left in
+            # Obsolete_ReadOnly by an older DMS would have it quoting a revision that was replaced.
+            for name in names:
+                if not name.lower().endswith(".md"):
+                    continue
+                stale = os.path.join(folder, name)
+                print(f"{'removing' if write else 'would remove'}   {stale}")
+                if write:
+                    try:
+                        os.chmod(stale, os.stat(stale).st_mode | 0o200)
+                        os.remove(stale)
+                        rows.append(("removed", stale, "Markdown lives in Current_ReadOnly only"))
+                    except OSError as e:
+                        print(f"FAILED       {stale}: {e}")
+                        rows.append(("failed", stale, str(e)))
+                        failed += 1
+            continue
         if os.path.basename(folder).lower() != FOLDER:
             continue
         for name in names:

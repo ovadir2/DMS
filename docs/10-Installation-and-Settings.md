@@ -86,6 +86,9 @@ Start and check it:
 .\scripts\New-DmsMarkdown.ps1 -Write                 # write it
 ```
 
+The same pass removes any `.md` left in an `Obsolete_ReadOnly` or `Submitted` folder: the Markdown is what
+the AI reads, and it answers from the revision in force, which lives in `Current_ReadOnly` only.
+
 A format nothing can read on the server - a legacy `.doc`, a `.ppt` - goes through SharePoint: the pass asks
 it for a PDF of the document, reads the pages (pypdf) and removes the copy at once. It needs `.env` filled in
 (section 7) and `DMS_REVIEW_LIBRARY` set; without them such a file is reported as "nothing to read".

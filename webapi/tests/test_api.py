@@ -1009,8 +1009,9 @@ def test_a_document_already_open_in_sharepoint_is_not_uploaded_over(tmp_path):
 
 def test_only_the_owner_deletes_an_approved_document(tmp_path):
     """Current_ReadOnly holds the revision in force. The person whose document it is may take it out - and
-    nobody else, a DMS super user included. It is not erased: it moves to Obsolete_ReadOnly beside it, with
-    its Markdown, read only, where it can still be found."""
+    nobody else, a DMS super user included. It is not erased: it moves to Obsolete_ReadOnly beside it, read
+    only, where it can still be found - without its Markdown, which lives in Current_ReadOnly only, so the AI
+    answers from the revision in force and from no other."""
     c, sp, s, q, d, fs = _approved_env(tmp_path)
     cur = q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx"
     md = cur.with_suffix(".md")
@@ -1029,7 +1030,7 @@ def test_only_the_owner_deletes_an_approved_document(tmp_path):
     gone = q / "Obsolete_ReadOnly" / cur.name
     assert not cur.exists() and r.json()["movedTo"] == str(gone)
     assert gone.exists() and fs.is_read_only(str(gone))                  # put aside, read only, never erased
-    assert not md.exists() and gone.with_suffix(".md").read_text(encoding="utf-8") == "what it said"
+    assert not md.exists() and not gone.with_suffix(".md").exists()      # the Markdown stays behind, and goes
     doc = sp.document(d["id"])                                           # the record stays, with no file in force
     assert doc["documentId"] == d["documentId"] and not doc["currentUncPath"]
 

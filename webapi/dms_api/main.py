@@ -1086,16 +1086,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     def retire(d: dict, full: str, user: User) -> dict:
         """The owner takes their approved document out of Current_ReadOnly. It is not deleted: it goes to
-        Obsolete_ReadOnly beside it - the folder is made if it is not there - read only, with its Markdown
-        beside it, so the document can still be found and read, but it is no longer the revision in force."""
-        from .file_service import _move, _set_read_only
+        Obsolete_ReadOnly beside it - the folder is made if it is not there - read only, where it can still be
+        found. Its Markdown does not go with it: the AI reads what is in force, and that lives in
+        Current_ReadOnly only, so the Markdown of a revision that leaves is removed."""
+        from .file_service import _drop_markdown, _move, _set_read_only
         c = s.choices
         folder = os.path.dirname(os.path.dirname(full))          # the document's own folder, above Current_ReadOnly
+        _drop_markdown(full)                                     # before the move: it is named after the file
         target = _move(full, os.path.join(folder, "Obsolete_ReadOnly", os.path.basename(full)))
         _set_read_only(target, True)
-        md = os.path.splitext(full)[0] + ".md"
-        if files.is_file(md):                                    # its Markdown goes with it, so it reads as it did
-            _set_read_only(_move(md, os.path.splitext(target)[0] + ".md"), True)
         try:
             sp().update(d["id"], {"CurrentUncPath": "", "LifecycleStatus": c["Archived"]})
             sp().audit(document_id=d.get("documentId") or "", event=c["StatusChanged"],
