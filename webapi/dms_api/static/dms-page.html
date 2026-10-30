@@ -181,8 +181,8 @@
   @media (max-width:900px) { .xlayout { grid-template-columns:1fr; } .xtree { display:none; } }
   /* Yellow is a folder someone made and may change. Everything else - the company skeleton and the DMS's own
      workflow folders - is grey, and grey here means it cannot be renamed or deleted by anyone. */
-  tr.xf-bp svg, tr.xf-bp svg path, .xnode.xf-bp svg, .xnode.xf-bp svg path,
-  tr.xf-wf svg, tr.xf-wf svg path, .xnode.xf-wf svg, .xnode.xf-wf svg path { fill:#9aa6b2; }
+  tr.xf-bp svg, tr.xf-bp svg path, .xnode.xf-bp svg, .xnode.xf-bp svg path, .tile.xf-bp > svg, .tile.xf-bp > svg path,
+  tr.xf-wf svg, tr.xf-wf svg path, .xnode.xf-wf svg, .xnode.xf-wf svg path, .tile.xf-wf > svg, .tile.xf-wf > svg path { fill:#9aa6b2; }
   tr.xf-bp a, .xnode.xf-bp a, tr.xf-wf a, .xnode.xf-wf a { color:var(--muted); }
   tr.xfolder td { font-weight:500; }                     /* folders first, the way a file list shows them */
   body.explorer table tr { cursor:default; }
@@ -819,7 +819,9 @@ const typeCell = (type, file) => extOf(file);          // the kind of file: DOCX
 const hint = l => l ? (lang === 'HE' ? l.hintHe : l.hintEn) : '';
 function folderTile(f) {
   const l = f.label, title = lbl(l) || f.name;
-  return `<button type="button" class="tile folder" data-f="${esc(f.path)}">${l && l.kind === 'customer' ? ICON_CUST : ICON_FOLDER}
+  // the same colours as the list: yellow is a folder someone made, grey is the skeleton and the DMS's own
+  const kind = f.workflowFolder ? 'xf-wf' : l && l.kind !== 'project' && l.kind !== 'customer' ? 'xf-bp' : 'xf-own';
+  return `<button type="button" class="tile folder ${kind}" data-f="${esc(f.path)}">${l && l.kind === 'customer' ? ICON_CUST : ICON_FOLDER}
     <span class="tl"><span>${esc(title)}</span>${hint(l) ? `<span class="hint">${esc(hint(l))}</span>` : ''}${title !== f.name ? `<span class="fname ltr">${esc(f.name)}</span>` : ''}</span></button>`;
 }
 async function browse(v) {
