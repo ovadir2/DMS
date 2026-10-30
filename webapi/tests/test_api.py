@@ -2003,6 +2003,12 @@ def test_engineering_is_part_of_the_skeleton_however_it_was_spelt():
         assert d and d["en"] == "Engineering" and d["kind"] == "area"
         assert blueprint.classify(["01_General", name]) == {"area": "Development", "type": "Procedure"}
     assert blueprint.describe(["02_Customers", "Customer_A"])["kind"] == "customer"
+    # Production is a department like the rest, and every department keeps its numbers in the same place
+    assert blueprint.describe(["01_General", "Production"])["en"] == "Production"
+    assert blueprint.classify(["01_General", "Production"]) == {"area": "Manufacturing", "type": "Procedure"}
+    departments = {p.split("\\")[1] for p in blueprint.folder_list() if p.startswith("01_General\\")}
+    for d in departments:
+        assert blueprint.describe(["01_General", d, "KPIs"])["en"] == "KPIs", d
     assert blueprint.describe(["01_General", "Whatever people made"]) is None
 
 

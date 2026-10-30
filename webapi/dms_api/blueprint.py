@@ -84,6 +84,7 @@ MANAGEMENT = N({k: (en, he, {}) for k, en, he in (
     ("Company_Profile", "Company profile", "פרופיל חברה"), ("Company_Strategy", "Company strategy", "אסטרטגיה"),
     ("Commercial", "Commercial", "מסחרי"), ("Sales_Marketing", "Sales and marketing", "מכירות ושיווק"),
     ("Engineering", "Engineering", "הנדסה"), ("Process_Engineering", "Process engineering", "הנדסת תהליך"),
+    ("Production", "Production", "ייצור"),
     ("Project_Management", "Project management", "ניהול פרויקטים"), ("Supply_chain", "Supply chain", "שרשרת אספקה"),
     ("Quality and Standards", "Quality and standards", "איכות ותקנים"), ("RA_Certifications", "RA and certifications", "רגולציה והסמכות"),
     ("HR", "HR", "משאבי אנוש"), ("Training", "Training", "הדרכה"), ("Finance", "Finance", "כספים"), ("Legal", "Legal", "משפטי"),
@@ -98,6 +99,12 @@ MANAGEMENT["Supply_chain"] = ("Supply chain", "שרשרת אספקה", N({"Plann
 # and that is not what they are.
 MANAGEMENT["Quality and Standards"] = ("Quality and standards", "איכות ותקנים", {},
                                        "Company quality procedures and standards", "נהלי האיכות והתקנים של החברה")
+
+# Every department measures itself, and the numbers belong where the work is: one KPIs folder in each, so a
+# KPI pack is looked for in the same place whichever department it is, and nobody invents a name for it.
+KPIS = ("KPIs", "מדדים", {}, "The department's measures and the data behind them", "המדדים של המחלקה והנתונים שמאחוריהם")
+for _k, _n in list(MANAGEMENT.items()):
+    MANAGEMENT[_k] = (_n[0], _n[1], N({**(_n[2] or {}), "KPIs": KPIS})) + tuple(_n[3:])
 
 ROOT = N({
     "01_General": ("General", "כללי", MANAGEMENT, "Company-wide areas: procedures, standards, HR, finance",
@@ -202,6 +209,7 @@ CLASSIFY = {
     "01_General/Process_Engineering": ("Manufacturing", "Procedure"),
     "01_General/Quality and Standards": ("Quality", "Procedure"),
     "01_General/Engineering": ("Development", "Procedure"),
+    "01_General/Production": ("Manufacturing", "Procedure"),
     "01_General/Enginnering": ("Development", "Procedure"),      # the folder an older skeleton made
     "01_General/Commercial": ("Commercial", None),
     "01_General/Supply_chain/Planners": ("Manufacturing", None),
