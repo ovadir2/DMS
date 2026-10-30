@@ -419,7 +419,17 @@ $('#menu').onclick = e => { const m = e.target.dataset.m; if (m === 'lang') retu
   if (m === 'xp') { explorerSet(!explorerOn()); $('#menu').querySelector('[data-m=xp]').textContent = '\u2630 ' + (explorerOn() ? T.explorerOff : T.explorerOn); return render(); } if (m === 'actas') return actingAsDialog(); if (m === 'ai') return openAI(null); if (m === 'pf') return pathFinder(state.view === 'browse' ? state.folder : null); if (m === 'fl') { state.flTarget = state.view === 'browse' ? state.folder : state.flTarget; state.view = 'firstLoad'; return render(); } if (m) { state.view = m; render(); } };
 $('#ap-t').textContent = T.approvals; $('#ap-b').title = T.approvals; $('#ap-b').onclick = () => { state.view = 'approvalsView'; render(); };
 $('#wf-t').textContent = T.myWf; $('#wf-b').title = T.myWf; $('#wf-b').onclick = () => { state.view = 'mine'; render(); };
-$('#go').onclick = () => { ++ta.seq; taClose(); if ($('#q').value.trim().length >= 2) { state.view = 'search'; render(); } };
+// Search does the same thing every time it is pressed: it searches. Coming back to it with the words still
+// in the box searches again; an empty box searches for what was asked last, rather than doing nothing at all.
+$('#go').onclick = () => {
+  ++ta.seq; taClose();
+  const text = $('#q').value.trim();
+  if (text.length >= 2) { state.lastQ = text; }
+  else if (state.lastQ) { $('#q').value = state.lastQ; }
+  else { return $('#q').focus(); }
+  state.view = 'search';
+  render();
+};
 // Suggestions while typing: customers, folders, documents (by ID) and file names the user may see
 const ta = { seq: 0, items: [], pos: -1, timer: null };
 const taBox = () => $('#ta') || (() => { const d = document.createElement('div'); d.id = 'ta'; d.className = 'typeahead'; d.hidden = true; $('#q').parentElement.appendChild(d); return d; })();
@@ -466,7 +476,7 @@ $('#refresh').onclick = () => render();
 // The RH logo / system name: back to the home screen, fresh (like reloading the page)
 document.querySelector('.brand').title = T.welcome;
 document.querySelector('.brand').onclick = () => {
-  $('#q').value = ''; if (typeof taClose === 'function') taClose();
+  if (typeof taClose === 'function') taClose();        // what was asked stays in the box: Search works again
   $('#ai-panel').classList.remove('open');
   Object.assign(state, { view: 'customers', folder: null, wfFilter: null }); navTrail.length = 0; navCur = null;
   history.replaceState(null, '', location.pathname + '?lang=' + lang);
