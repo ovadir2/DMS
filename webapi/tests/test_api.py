@@ -2112,6 +2112,25 @@ def test_a_dashboard_page_is_a_tool_and_not_a_document(tmp_path):
     assert c.get("/api/files/dashboard", params={"path": str(q / "nope.html")}).status_code == 404
 
 
+def test_a_dashboard_released_before_is_put_back(tmp_path):
+    """One dropped before the DMS knew what a dashboard is sits in Current_ReadOnly, read only, where nobody
+    can move it by hand - the DMS keeps that folder read only. The repair pass moves it back up."""
+    from dms_api import dashboards, file_service
+    root = tmp_path / "Root"
+    cur = root / "01_General" / "DB_Management" / "Current_ReadOnly"
+    cur.mkdir(parents=True)
+    page = cur / "dashboard_DB.html"
+    page.write_text("<!doctype html>", encoding="utf-8")
+    page.with_suffix(".md").write_text("it should not have one", encoding="utf-8")
+    file_service._set_read_only(str(page), True)
+
+    assert dashboards.run(str(root), write=False) == 0 and page.exists()        # a dry run moves nothing
+    assert dashboards.run(str(root), write=True) == 0
+    back = cur.parent / "dashboard_DB.html"
+    assert back.exists() and not page.exists() and not file_service.is_read_only(str(back))
+    assert not (cur / "dashboard_DB.md").exists()
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

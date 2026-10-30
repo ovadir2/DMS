@@ -209,7 +209,8 @@ the workflow and blueprint folders stay out of reach either way.
 | `New-DmsFileServerTree.ps1` | The repository tree, its AD groups and NTFS permissions |
 | `Set-DmsAccess.ps1`, `Get-DmsAccess.ps1` | Department access on the folders, from `dms-access.csv` |
 | `Protect-DmsReadOnly.ps1` | Released folders: read only for everyone but the DMS |
-| `New-DmsMarkdown.ps1` | The Markdown beside every released document, in one pass |
+| `New-DmsMarkdown.ps1` | The Markdown beside every released document, in one pass (`-Rewrite` writes it again for the ones that have one) |
+| `Repair-DmsDashboards.ps1` | Dashboard pages (`dashboard_*.html`) released into `Current_ReadOnly` before the DMS knew they are tools: moved back into their folder, writable |
 | `Compare-DmsTree.ps1` | What the DMS shows against what is on the disk |
 | `Restart-Dms.ps1` | Reload the service (`-ComputerName` from another machine) |
 | `New-DmsOwnerMail.ps1` | A short letter to each department's owners |
