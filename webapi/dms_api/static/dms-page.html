@@ -44,6 +44,14 @@
   .radios label { display:flex; align-items:center; gap:5px; cursor:pointer; }
   .radios input { accent-color:var(--navy); width:17px; height:17px; margin:0; }
   .searchrow { display:flex; gap:16px; align-items:center; }
+  /* The search sits in the top bar and stays there, whatever screen you are on - File Explorer's way. */
+  header { position:sticky; top:0; }
+  .hsearch { display:flex; gap:10px; align-items:center; flex:1; max-width:560px; margin-inline:18px; }
+  .hsearch .searchbox input { height:38px; }
+  .hsearch .typeahead { top:42px; min-width:360px; }   /* a shorter box: the list hangs right under it */
+  header { z-index:20; }                                /* above the page, so the list is not cut off */
+  .hsearch .pillbtn { height:38px; padding:0 18px; white-space:nowrap; }
+  @media (max-width:900px) { .hsearch { max-width:none; margin-inline:8px; } .hsearch .pillbtn { display:none; } }
   .searchbox { flex:1; position:relative; }
   .searchbox input { width:100%; height:47px; border:1px solid var(--line); border-radius:6px; padding:0 44px 0 12px; font:inherit; color:var(--ink); }
   [dir=rtl] .searchbox input { padding:0 12px 0 44px; }
@@ -76,7 +84,7 @@
   .pillbtn, .pillbtn.light { background:#d6e6fb; color:var(--navy); }
   .pillbtn:hover:not(:disabled) { background:#bcd6f7; }
   .pillbtn:disabled { background:#e6e8eb !important; color:#8a929c !important; opacity:1; cursor:not-allowed; }
-  .refresh { display:inline-flex; gap:5px; align-items:center; color:var(--info); font-size:13px; margin-top:6px; background:none; border:none; cursor:pointer; padding:0; }
+  .refresh { display:inline-flex; gap:5px; align-items:center; color:var(--info); font-size:13px; background:none; border:none; cursor:pointer; padding:0; }
   .crumbs { display:flex; flex-wrap:wrap; gap:6px; align-items:center; color:var(--muted); margin-bottom:12px; }
   .crumbs a { color:var(--info); cursor:pointer; }
   .toolbar { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
@@ -224,6 +232,7 @@
     <span class="sep"></span>
     <span class="welcome" id="t-welcome"></span>
   </div>
+  <div class="hsearch"><div class="searchbox"><input id="q" autocomplete="off"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5d6675" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg></div><button class="pillbtn" id="go"></button></div>
   <span class="spacer"></span>
   <button class="hbtn" id="ap-b" style="display:none"><svg class="icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6 9 17l-5-5"/></svg><span id="ap-t"></span><span class="badge" id="ap-n" hidden></span></button>
   <button class="hbtn" id="wf-b"><svg class="icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h10M4 12h7M4 18h10"/><path d="m15 15 2.5 2.5L22 13"/></svg><span id="wf-t"></span><span class="badge" id="wf-n" hidden></span></button>
@@ -231,20 +240,13 @@
   <button class="hbtn" id="fs-b" title=""><svg class="icon" id="fs-i" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span id="fs-t"></span></button>
   <button class="hbtn" id="lang"><svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg><span id="lang-t"></span></button>
   <span class="hbtn muted"><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span id="who"></span></span>
+  <button class="refresh" id="refresh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg><span id="t-refresh"></span></button>
   <div class="menu"><button class="hbtn" id="menu-b" aria-label="menu"><svg width="6" height="22" viewBox="0 0 6 22" fill="#1f4a72"><circle cx="3" cy="3" r="2.4"/><circle cx="3" cy="11" r="2.4"/><circle cx="3" cy="19" r="2.4"/></svg></button>
     <div class="menu-list" id="menu"></div></div>
 </header>
 
 <div class="pg-banner" id="pg" hidden></div>
 <div class="band">
-  <section class="card">
-    <h2 id="t-search"></h2>
-    <div class="searchrow">
-      <div class="searchbox"><input id="q" autocomplete="off"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5d6675" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg></div>
-      <button class="pillbtn" id="go"></button>
-    </div>
-    <button class="refresh" id="refresh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg><span id="t-refresh"></span></button>
-  </section>
   <section class="card" id="view"></section>
 </div>
 
@@ -321,7 +323,7 @@ async function apiCall(path, opts = {}) {
 }
 
 // ---------------------------------------------------------------- chrome
-$('#t-welcome').textContent = T.welcome; $('#t-search').textContent = T.search; $('#t-refresh').textContent = T.refresh;
+$('#t-welcome').textContent = T.welcome; $('#t-refresh').textContent = T.refresh;   // the search has no heading: it is the top bar itself
 $('#go').textContent = T.go; $('#q').placeholder = T.searchPh; $('#lang-t').textContent = T.lang; $('#lang').title = T.lang;
 $('#lang').onclick = () => { q.set('lang', lang === 'HE' ? 'EN' : 'HE'); location.search = q.toString(); };
 // Full screen: the page fills the screen, so a wide table of files is read without the browser's own bars.
