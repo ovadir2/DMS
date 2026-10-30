@@ -26,9 +26,19 @@ def run(root: str, write: bool) -> int:
     from .file_service import _move, _set_read_only
     moved = failed = 0
     seen: list[str] = []
-    for folder, _dirs, names in os.walk(root):
+    looked = 0
+
+    def unreachable(e: OSError) -> None:
+        # os.walk says nothing when a folder cannot be read, and the pass then reports "0 to move" for a
+        # repository it never actually looked at - a share it may not read, or a path that is not there.
+        nonlocal failed
+        failed += 1
+        print(f"NOT READ     {getattr(e, 'filename', '')}: {e}")
+
+    for folder, _dirs, names in os.walk(root, onerror=unreachable):
         if os.path.basename(folder).lower() != "current_readonly":
             continue
+        looked += 1
         for name in names:
             if not files.is_dashboard(name):
                 # Every page in there is named, matching or not: when nothing is moved, the answer is almost
@@ -56,7 +66,8 @@ def run(root: str, write: bool) -> int:
             except OSError as e:
                 print(f"FAILED       {here}: {e}")
                 failed += 1
-    print(f"\n{moved} {'to move' if not write else 'moved'}, {failed} failed")
+    print(f"\n{moved} {'to move' if not write else 'moved'}, {failed} failed"
+          f" ({looked} Current_ReadOnly folder{'' if looked == 1 else 's'} looked at under {root})")
     if not moved and seen:
         print("\nHTML pages that are not named as dashboards (dashboard_<name>.html, <name>_dashboard.html):")
         for name in sorted(set(seen)):
