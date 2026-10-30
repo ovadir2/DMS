@@ -1673,6 +1673,39 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         log(user, "checkout" if edit else "view-sharepoint", full)
         return {"path": full, "url": entry["url"], "edit": edit, "by": entry["by"]}
 
+    @app.get("/api/files/view-pdf")
+    def view_pdf(path: str, user: User = Depends(current_user)):
+        """The document as a PDF, served by the DMS itself. SharePoint turns it into one - nothing has to be
+        installed on the server for that - but the copy is fetched and removed at once, so there is no copy
+        left anywhere for a reader to annotate and save. Reading leaves nothing behind."""
+        from fastapi.responses import Response
+        if not review_on():
+            raise HTTPException(503, "Reading a document as a PDF is not set up here")
+        full = files.resolve(s.repository_root, path)
+        if not files.is_file(full):
+            raise HTTPException(404, "File not found")
+        if not may_read(user, full):
+            raise HTTPException(403, "You do not have access to this file")
+        key = "pdf-" + checkout.key_of(s.repository_root, full, user.email)[5:]
+        try:
+            put = sp().review_put(local_path=full, document_id=key, edit=False, as_pdf=True)
+            data = sp().review_get(document_id=key, name=put["name"])
+        except Exception as e:  # noqa: BLE001
+            sp_error(f"Reading copy of {os.path.basename(full)}", e)
+            raise HTTPException(502, f"The document could not be prepared for reading: {e}") from None
+        finally:
+            try:
+                sp().review_done(document_id=key)        # the copy goes at once, whatever happened
+            except Exception as e:  # noqa: BLE001
+                logger.info("Reading copy of %s not removed: %s", os.path.basename(full), e)
+        if not data:
+            raise HTTPException(502, "The document came back empty")
+        from urllib.parse import quote as _q
+        log(user, "view", full)
+        name = os.path.splitext(os.path.basename(full))[0] + ".pdf"
+        return Response(data, media_type="application/pdf",
+                        headers={"Content-Disposition": f"inline; filename*=UTF-8''{_q(name)}"})
+
     @app.post("/api/files/checkin")
     def bring_back(req: CheckoutRequest, user: User = Depends(current_user)):
         """Done editing: the DMS writes what the person changed back to the file server and removes the copy."""

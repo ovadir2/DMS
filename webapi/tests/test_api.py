@@ -1879,6 +1879,29 @@ def test_the_page_is_never_cached(tmp_path):
     assert "no-store" in c.get("/dms/dms-page").headers.get("cache-control", "")
 
 
+def test_reading_leaves_no_copy_to_write_on(tmp_path):
+    """SharePoint turns the document into a PDF and the DMS serves that PDF itself, removing the copy at
+    once. A copy left in the library is one a reader can annotate and save - which is not reading."""
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    (root / "01_General").mkdir(parents=True)
+    f = root / "01_General" / "QP-1.docx"
+    f.write_bytes(b"x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                 review_library="Approvals", approvals="page", admins=[USER])
+    sp = MemorySharePoint(s)
+    made, gone = [], []
+    sp.review_put = lambda **kw: made.append(kw) or {"name": "QP-1.pdf", "url": "https://sp/x", "serverRelative": "/x"}
+    sp.review_get = lambda **kw: b"%PDF-1.4 the document"
+    sp.review_done = lambda **kw: gone.append(kw)
+    c = TestClient(create_app(s, sp))
+    r = c.get("/api/files/view-pdf", params={"path": str(f)})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/pdf")
+    assert r.content.startswith(b"%PDF")
+    assert made and made[0]["as_pdf"] and not made[0]["edit"]      # a PDF, never the document itself
+    assert gone                                                    # and the copy is removed before the answer
+
+
 def test_a_dms_link_is_a_token_and_opens_in_the_dms(tmp_path):
     """Copy link gives something that means nothing outside the DMS - a token, not the path on the file
     server - and opening it lands on the document, where AD decides what is shown as it always does."""

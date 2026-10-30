@@ -508,7 +508,7 @@ const statusTag = d => `<span class="status ${esc(d ? d.statusKey : 'None')}">${
 // SharePoint let a reader annotate it and save it there, which is not reading.
 const viewBtn = f => VIEW_EXT.test(f.name || f.path)
   ? `<button type="button" class="link" data-vw="${esc(f.path)}">${T.viewRo}</button>`
-  : `<button type="button" class="link" data-ckview="${esc(f.path)}">${T.viewRo}</button>`;
+  : `<button type="button" class="link" data-vpdf="${esc(f.path)}">${T.viewRo}</button>`;
 function bridgeActions(f) {
   // One way in. The DMS already knows whether this person may change this document, so the button says which
   // it is - "open to edit" or "view" - instead of asking the person to pick and refusing afterwards.
@@ -676,7 +676,7 @@ function ctxOpen(host, x, y) {
   const CANON = [
     [0, ['data-f'], () => T.open],
     [0, ['data-ckout', 'data-ext', 'data-tx'], () => '\u270E ' + T.openEditFile],
-    [0, ['data-ckview', 'data-vw', 'data-txv'], () => T.viewRo],
+    [0, ['data-vpdf', 'data-ckview', 'data-vw', 'data-txv'], () => T.viewRo],
     [0, ['data-ckin'], () => '\u2713 ' + T.doneEditing],
     // Starting the approval is one thing, whether the document has a record yet or not: an unregistered file
     // is registered and sent, a registered one is sent. Two lines for it only made people ask which is which.
@@ -808,6 +808,7 @@ function wire(v) {
   v.querySelectorAll('[data-f]').forEach(a => a.onclick = () => { state.view = 'browse'; state.folder = a.dataset.f; render(); });
   v.querySelectorAll('[data-dl]').forEach(a => a.onclick = () => download(a.dataset.dl));
   v.querySelectorAll('[data-vw]').forEach(a => a.onclick = () => viewFile(a.dataset.vw));
+  v.querySelectorAll('[data-vpdf]').forEach(a => a.onclick = () => viewPdf(a.dataset.vpdf));
   v.querySelectorAll('[data-tx]').forEach(a => a.onclick = () => editText(a.dataset.tx));
   v.querySelectorAll('[data-txv]').forEach(a => a.onclick = () => editText(a.dataset.txv, true));
   v.querySelectorAll('[data-ckout]').forEach(b => b.onclick = () => takeOut(b.dataset.ckout, true));
@@ -1938,6 +1939,23 @@ async function editText(path, readOnly = false) {
   if (res.action !== 'ok') return;
   try { await api('/api/files/text', { method:'POST', body: JSON.stringify({ path, text }) }); alert(T.saved); }
   catch (e) { alert(`${T.err}: ${e.message}`); }
+}
+// Reading a Word, Excel or PowerPoint document: SharePoint turns it into a PDF, the DMS fetches it and
+// removes the copy, and what opens is the PDF itself - no copy left in SharePoint to annotate and save.
+async function viewPdf(path) {
+  const w = window.open('', '_blank');
+  if (w) try { w.document.write(`<title>${T.viewRo}</title><body style="font:15px system-ui;padding:24px">${T.oneMoment}</body>`); } catch (_) { /* gone */ }
+  try {
+    const t = await token();
+    const r = await fetch('/api/files/view-pdf?path=' + encodeURIComponent(path), { credentials: 'include',
+      headers: { ...(t ? { Authorization: 'Bearer ' + t } : {}), ...(devUser() ? { 'X-DMS-Dev-User': devUser() } : {}) } });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    const url = URL.createObjectURL(await r.blob());
+    if (w) w.location = url; else location.href = url;
+  } catch (e) {
+    if (w) w.close();
+    takeOut(path, false);            // the DMS could not prepare it: the copy in SharePoint is the way in
+  }
 }
 async function viewFile(path) {
   const w = window.open('', '_blank');                     // opened now, so the browser does not block it
