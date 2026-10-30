@@ -190,6 +190,9 @@
   body.explorer td.actions a.link, body.explorer td.actions button.link,
   body.explorer .tileacts button { display:none; }
   body.explorer table tr:hover > td { background:var(--band); }
+  /* Every command lives on the right-click menu, so the row of buttons above the list is gone. It stays
+     in the page, unseen: the menu is built from those very buttons and clicks them. */
+  body.explorer #view .toolbar { display:none; }
   .xmore { display:none; border:0; background:none; cursor:pointer; color:var(--muted); font-size:19px; line-height:1; padding:0 6px; }
   body.explorer .xmore { display:inline-block; }
   .xmore:hover { color:var(--navy); }
@@ -370,10 +373,11 @@ $('#fs-b').onclick = async () => {
 document.addEventListener('fullscreenchange', fsPaint);
 document.addEventListener('webkitfullscreenchange', fsPaint);
 fsPaint();
-$('#menu').innerHTML = `<button data-m="customers">⌂ ${T.home}</button><button data-m="mine">${T.myWf}</button><button data-m="pf">🧭 ${T.pathFinder}</button><button data-m="ai">${T.aiInsights}</button><button data-m="lang">${T.other}</button>`;
+$('#menu').innerHTML = `<button data-m="customers">⌂ ${T.home}</button><button data-m="mine">${T.myWf}</button><button data-m="pf">🧭 ${T.pathFinder}</button><button data-m="ai">${T.aiInsights}</button><button data-m="xp">☰ ${explorerOn() ? T.explorerOff : T.explorerOn}</button><button data-m="lang">${T.other}</button>`;
 $('#menu-b').onclick = e => { e.stopPropagation(); $('#menu').classList.toggle('open'); };
 document.onclick = () => $('#menu').classList.remove('open');
-$('#menu').onclick = e => { const m = e.target.dataset.m; if (m === 'lang') return $('#lang').click(); if (m === 'actas') return actingAsDialog(); if (m === 'ai') return openAI(null); if (m === 'pf') return pathFinder(state.view === 'browse' ? state.folder : null); if (m === 'fl') { state.flTarget = state.view === 'browse' ? state.folder : state.flTarget; state.view = 'firstLoad'; return render(); } if (m) { state.view = m; render(); } };
+$('#menu').onclick = e => { const m = e.target.dataset.m; if (m === 'lang') return $('#lang').click();
+  if (m === 'xp') { explorerSet(!explorerOn()); $('#menu').querySelector('[data-m=xp]').textContent = '\u2630 ' + (explorerOn() ? T.explorerOff : T.explorerOn); return render(); } if (m === 'actas') return actingAsDialog(); if (m === 'ai') return openAI(null); if (m === 'pf') return pathFinder(state.view === 'browse' ? state.folder : null); if (m === 'fl') { state.flTarget = state.view === 'browse' ? state.folder : state.flTarget; state.view = 'firstLoad'; return render(); } if (m) { state.view = m; render(); } };
 $('#ap-t').textContent = T.approvals; $('#ap-b').title = T.approvals; $('#ap-b').onclick = () => { state.view = 'approvalsView'; render(); };
 $('#wf-t').textContent = T.myWf; $('#wf-b').title = T.myWf; $('#wf-b').onclick = () => { state.view = 'mine'; render(); };
 $('#go').onclick = () => { ++ta.seq; taClose(); if ($('#q').value.trim().length >= 2) { state.view = 'search'; render(); } };
@@ -839,7 +843,7 @@ async function browse(v) {
     ${r.node && hint(r.node) ? `<p class="muted" style="margin:-4px 0 12px">${esc(hint(r.node))}</p>` : ''}
     ${r.context.customer ? guideBar(r.context) : ''}
     ${r.managed ? `<div class="msg" style="background:var(--band)">🔒 ${T.managedNote}</div>` : ''}${r.sharedNote ? `<div class="msg" style="background:var(--band)">🔒 ${isHr(r.path) ? T.sharedNoteHr : T.sharedNote}</div>` : ''}
-    <div class="toolbar"><button type="button" class="pillbtn small light" id="pf-b">🧭 ${T.pathFinder}</button><button type="button" class="pillbtn small light" data-cp="${esc(state.folder || '')}">🔗 ${T.copyLink}</button>${`<button type="button" class="pillbtn small light" id="xp-b" title="${esc(T.explorerTip)}">${explorerOn() ? '\u2630 ' + T.explorerOff : '\u2630 ' + T.explorerOn}</button>`}<span class="spacer"></span>${r.canWrite ? `<button type="button" class="pillbtn small light" id="mk">${T.newFolder}</button><button type="button" class="pillbtn small light" id="up">${T.upload}</button>${r.noWorkflow ? '' : `<button type="button" class="pillbtn small light" id="nd">＋ ${T.newDoc}</button>`}` : ''}</div>
+    <div class="toolbar"><button type="button" class="pillbtn small light" id="pf-b">🧭 ${T.pathFinder}</button><button type="button" class="pillbtn small light" data-cp="${esc(state.folder || '')}">🔗 ${T.copyLink}</button><span class="spacer"></span>${r.canWrite ? `<button type="button" class="pillbtn small light" id="mk">${T.newFolder}</button><button type="button" class="pillbtn small light" id="up">${T.upload}</button>${r.noWorkflow ? '' : `<button type="button" class="pillbtn small light" id="nd">＋ ${T.newDoc}</button>`}` : ''}</div>
     ${explorerOn() ? '' : folders.length ? `<div class="grid" style="margin-bottom:16px">${folders.map(f => `<div class="tilewrap">${folderTile(f)}${f.workflowFolder ? `<div class="tileacts muted">🔒 ${T.managed}</div>` : (r.canWrite && (!f.label || f.label.kind === 'project') ? `<div class="tileacts">${editActions(f)}</div>` : f.label ? `<div class="tileacts muted" title="${esc(T.bpLockedTip)}">🔒 ${T.bpLocked}</div>` : '')}</div>`).join('')}</div>` : ''}
     ${r.files.length || (explorerOn() && folders.length) ? `<div class="toolbar" id="selbar" style="display:none"><b id="selcount"></b><span class="spacer"></span>${r.canWrite && !r.managed && !r.noWorkflow ? `<button type="button" class="pillbtn small light" id="sel-wf">${T.start}</button>` : ''}${r.canWrite && !r.managed ? `<button type="button" class="pillbtn small light" id="sel-rel">${T.relNw}</button>` : ''}<button type="button" class="pillbtn small light" id="sel-share">✉ ${isHr(r.path) ? T.shareHrBtn : T.share}</button><button type="button" class="pillbtn small light" id="sel-dl">${T.download}</button><button type="button" class="pillbtn small light" id="sel-cp">🔗 ${T.copyLinks}</button>${r.canWrite && !r.managed ? `<button type="button" class="pillbtn small light" id="sel-del" style="color:var(--err)">${T.del}</button>` : ''}</div>
     <table><tr><th style="width:28px"><input type="checkbox" id="sel-all" title="${esc(T.selAll)}"></th><th>${T.name}</th><th>${T.status}</th><th class="hide-s">${T.modified}</th><th class="hide-s">${T.fileType}</th><th class="hide-s">${T.size}</th><th></th></tr>
@@ -865,8 +869,6 @@ async function browse(v) {
   const upb = v.querySelector('#go-up'); if (upb) upb.onclick = () => { if ((r.trail || []).length > 1) { state.folder = r.parent; } else { state.view = 'customers'; } render(); };
   v.querySelector('#go-back').onclick = goBack;
   v.querySelector('#pf-b').onclick = () => pathFinder(r.path);
-  const xp = v.querySelector('#xp-b');
-  if (xp) xp.onclick = () => { explorerSet(!explorerOn()); render(); };
   if (r.canWrite) { const nd = v.querySelector('#nd'); if (nd) nd.onclick = () => newDocument(r.path); v.querySelector('#up').onclick = () => { const rel = v.querySelector('#sel-rel'); if (rel && v.querySelector('input.sel:checked')) rel.click(); else uploadDialog(r.path); }; v.querySelector('#mk').onclick = () => newFolderDialog(r.path); }
   v.querySelectorAll('[data-rn]').forEach(b => b.onclick = () => renameDialog(b.dataset.rn));
   v.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteItem(b.dataset.del, b.dataset.released === '1'));
