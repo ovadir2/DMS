@@ -865,7 +865,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         # A dashboard page is a tool, not a document: it is saved where it was dropped, left writable so it
         # can be replaced by a newer one, and never released into Current_ReadOnly.
         if files.is_dashboard(file.filename or ""):
-            noWorkflow = False
+            noWorkflow, overwrite = False, True        # a newer one replaces the one that is there
         if noWorkflow:                                             # straight to Current_ReadOnly: never over a controlled document
             there = os.path.join(target_dir, "Current_ReadOnly", os.path.basename((file.filename or "").replace("\\", "/")))
             if os.path.exists(there) and find_registered(there, register_index()) and not noworkflow.is_marked(s.repository_root, there):
