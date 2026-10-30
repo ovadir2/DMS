@@ -1592,6 +1592,7 @@ async function newRevision(id) {
      <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="radio" name="src" value="file">${T.revUpload}</label>
      <input type="file" name="file" disabled>
      <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="submit">${T.revSubmit}</label>
+     <input type="hidden" name="documentType" value="${esc(d.documentType || '')}">
      <div id="rev-ap" hidden>${AP_FIELD()}</div>`,
     [['cancel', T.cancel, 'light'], ['ok', T.ok]]);
   // Wired while the dialog is open, not after it closes: the file is chosen only when the revision starts
@@ -1762,12 +1763,13 @@ function wireApprovers(box, initial = []) {
   box.querySelector('#ap-chips').onclick = e => { const x = e.target.dataset.x; if (x) { chosen.delete(x); chips(); draw(); } };
   const matrix = async () => {
     try {
-      const r = await api('/api/approver-rule?documentType=' + encodeURIComponent(typeSel.value));
+      const r = await api('/api/approver-rule?documentType=' + encodeURIComponent(typeSel ? typeSel.value : ''));
       const ppl = [...new Set([...r.mandatory, ...(r.final ? [r.final] : [])])].map(short).join(', ');
       box.querySelector('#ap-matrix').textContent = `${T.apMatrix}: ${ppl || '-'}${r.fallback ? ' (' + T.apFallback + ')' : ''}`;
     } catch { box.querySelector('#ap-matrix').textContent = ''; }
   };
-  typeSel.addEventListener('change', matrix); matrix();
+  if (typeSel) typeSel.addEventListener('change', matrix);
+  matrix();
   box.querySelector('#ap-on').onchange = async e => {
     box.querySelector('#ap-pick').hidden = !e.target.checked;
     if (!e.target.checked) return;
