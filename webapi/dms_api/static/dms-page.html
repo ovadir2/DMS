@@ -480,7 +480,10 @@ function bridgeActions(f) {
     out.push(`<a class="link" href="${esc(co.url)}" target="_blank" rel="noopener">\u270E ${T.openEditFile}</a>`);
     // reading it while it is out is still reading: a copy of its own, and the editing copy is untouched
     out.push(viewBtn(f));
-    out.push(`<button type="button" class="link" data-ckin="${esc(f.path)}">\u2713 ${T.doneEditing}</button>`);
+    // "Done editing" is the way out when Office never lets the copy go - it is kept for a copy that has been
+    // open a while. Closing the document is what normally ends it: the DMS sees the lock go and brings it back.
+    const since = co.utc ? (Date.now() - new Date(co.utc)) / 60000 : 99;
+    if (since > 10) out.push(`<button type="button" class="link" data-ckin="${esc(f.path)}">\u2713 ${T.doneEditing}</button>`);
     return out.join('\n');
   }
   // A copy only being read is never linked to directly: the DMS decides each time where that copy belongs and
