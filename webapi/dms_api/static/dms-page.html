@@ -575,10 +575,16 @@ function ctxScreen(host, self = false) {
   const folder = !!(host && host.classList && host.classList.contains('xfolder'));
   return [...view.querySelectorAll('.toolbar:not(#selbar) .pillbtn, .toolbar:not(#selbar) button.link')]
     .filter(b => b.id !== 'pf-b')
-    .filter(b => self || b.id !== 'mk');     // a folder row says it itself (inside that folder), a file never does
+    .filter(b => self || b.id !== 'mk')      // a folder row says it itself (inside that folder), a file never does
+    .filter(b => self || b.id !== 'up')      // "save file" is what "release without workflow" does, by another name
+    .filter(b => self || !b.hasAttribute('data-cp'));   // the row already copies a link - to itself
 }
 function ctxOpen(host, x, y) {
-  const items = ctxActions(host), screen = ctxScreen(host);
+  let items = ctxActions(host);
+  // A registered file has two deletions behind it: the document (its record goes too) and the file alone.
+  // Only the document's is offered, so the menu does not say Delete twice and mean two different things.
+  if (items.some(b => b.hasAttribute('data-ddel'))) items = items.filter(b => !b.hasAttribute('data-del'));
+  const screen = ctxScreen(host);
   if (!items.length) return false;
   ctxClose();
   host.classList.add('ctx-on');
