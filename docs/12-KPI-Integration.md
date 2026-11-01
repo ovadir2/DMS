@@ -1,6 +1,6 @@
 # KPI integration - what the DMS already does, and what is still to build
 
-The KPI Builder lives in its own repository. This document is the DMS side of the contract the SRS
+The KPI Builder lives in its own repository (`kpi-builder`), with its own VS Code workspace, built, tested and deployed on its own. Nothing of it is in this repository: what the two applications agree on is this document, and the one script that puts the Builder on the server (`scripts\New-KpiBuilderSite.ps1 -Source <the Builder's folder>`). This document is the DMS side of the contract the SRS
 (`DMS_KPI_INTEGRATION_SRS`, v1.2) asks each team to write: the integration points **as they exist in this
 code**, the semantics the Builder may rely on, and the requirements that are not built yet. Where the SRS
 says the DMS "SHALL" do something that is already true, the endpoint or rule is named; where it is not, it

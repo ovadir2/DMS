@@ -7,21 +7,22 @@
     department's KPIs folder. It needs no application pool of its own doing work, no database and no network
     beyond this server.
 
-    The script copies kpi-builder\ from this repository to -Path, creates the IIS site (or updates it), turns
+    The Builder is its own repository (its own VS Code workspace, built and deployed on its own, as the
+    integration SRS says). This script only puts it on the server: it copies -Source to -Path, creates the IIS site (or updates it), turns
     Windows Authentication on and anonymous off so it knows who is using it, and - with -WireDms - writes
     DMS_KPI_BUILDER_URL into the DMS's own .env and lets the DMS answer the Builder's calls
     (DMS_ALLOWED_ORIGINS), so New KPI in the DMS menu opens it.
 
     Run it on the file server, as an administrator.
 .EXAMPLE
-    .\scripts\New-KpiBuilderSite.ps1 -WhatIf
+    .\scripts\New-KpiBuilderSite.ps1 -Source C:\Dev\kpi-builder -WhatIf
 .EXAMPLE
-    .\scripts\New-KpiBuilderSite.ps1 -WireDms
+    .\scripts\New-KpiBuilderSite.ps1 -Source C:\Dev\kpi-builder -WireDms
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [string]$Path = 'E:\KPI_Builder',
-    [string]$Source = '',                           # the Builder's own repository; empty: the copy in this one
+    [Parameter(Mandatory)] [string]$Source,         # the Builder's own repository (it is not in this one)
     [string]$SiteName = 'KPI-Builder',
     [int]$Port = 8081,
     [string]$HostHeader = '',                       # e.g. kpi-pilot.rh.tech; empty: the port alone
@@ -31,8 +32,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$source = if ($Source) { $Source } else { Join-Path $PSScriptRoot '..\kpi-builder' }
-if (-not (Test-Path -LiteralPath $source)) { throw "The Builder was not found: $source (give -Source)" }
+$source = $Source
+if (-not (Test-Path -LiteralPath $source)) { throw "The Builder was not found: $source" }
+if (-not (Test-Path -LiteralPath (Join-Path $source 'index.html'))) {
+    throw "$source does not look like the Builder (no index.html). Give the folder of its repository."
+}
 
 Write-Host "=== The files" -ForegroundColor Cyan
 if ($PSCmdlet.ShouldProcess($Path, 'copy the Builder')) {
