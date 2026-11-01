@@ -2260,6 +2260,36 @@ def test_add_new_kpi_is_offered_on_a_kpis_folder_and_checked_here(tmp_path):
     assert c.post("/api/kpi/open", json={"folder": str(kpis)}).status_code == 503
 
 
+def test_the_register_is_put_straight_after_a_deletion_on_the_file_server(tmp_path):
+    """Somebody removed files on the file server itself. The DMS cannot see that happen: a record whose file
+    merely moved is pointed at where it really is, a record whose file is gone keeps its history but stops
+    claiming it, and the Markdown left beside nothing goes - the AI must not answer from a document that is
+    not there."""
+    from dms_api import reconcile
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    cur = q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx"
+    md = cur.with_suffix(".md")
+    md.write_text("what it said", encoding="utf-8")
+    assert sp.document(d["id"])["currentUncPath"] == str(cur)
+
+    # a second document, whose file somebody moved rather than deleted
+    (q / "Obsolete_ReadOnly").mkdir(exist_ok=True)
+    moved_to = q / "Obsolete_ReadOnly" / cur.name
+
+    fs._set_read_only(str(cur), False)
+    cur.replace(moved_to)
+    assert reconcile.run(s, write=True, sp=sp) == 0
+    assert sp.document(d["id"])["currentUncPath"] == str(moved_to)        # found where the workflow puts it
+
+    fs._set_read_only(str(moved_to), False)
+    moved_to.unlink()
+    assert reconcile.run(s, write=True, sp=sp) == 0
+    after = sp.document(d["id"])
+    assert not after["currentUncPath"] and after["lifecycleStatus"] == s.choices["Archived"]
+    assert after["documentId"] == d["documentId"]                         # the record and its history stay
+    assert not md.exists()                                                # nothing left for the AI to read
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""
