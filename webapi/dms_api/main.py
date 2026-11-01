@@ -1780,8 +1780,78 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     from . import markdown as _markdown
     _markdown.PDF_OF[0] = pdf_of          # a .doc, a .ppt: laid out by SharePoint, read from the pages
 
+    # A page served into a sandbox has no account of its own: it cannot send the person's sign-in, and the
+    # DMS would refuse it if it could, because a page that arrives from a shared folder is not trusted to act
+    # as whoever opens it. So the DMS hands the page a key when it opens it: good for a few hours, for that
+    # one folder, for reading only, and in the name of the person who opened the page - their AD rights are
+    # checked again on every call. The page reads it from its own address (?t=...).
+    KPI_KEYS: dict[str, tuple[str, str, float]] = {}
+
+    def kpi_key(folder: str, email: str) -> str:
+        import secrets
+        now = time.time()
+        for k, (_f, _e, until) in list(KPI_KEYS.items()):
+            if until < now:
+                KPI_KEYS.pop(k, None)
+        key = secrets.token_urlsafe(24)
+        KPI_KEYS[key] = (os.path.normcase(os.path.normpath(folder)), email, now + s.page_key_hours * 3600)
+        return key
+
+    def kpi_scope(token: str, path: str) -> str:
+        """The file that key opens, or a refusal. The key names a folder; nothing outside it is reachable,
+        and the person it was given to must still be allowed to see the file."""
+        folder, email, until = KPI_KEYS.get(token or "", ("", "", 0.0))
+        if not folder or until < time.time():
+            raise HTTPException(403, "This page's key has expired: open the page again from the DMS")
+        full = files.resolve(s.repository_root, path or folder)
+        here = os.path.normcase(os.path.normpath(full))
+        if here != folder and not here.startswith(folder + os.sep):
+            raise HTTPException(403, "This page may only read the folder it was opened from")
+        if security.may_see(email, full) is False:
+            raise HTTPException(403, "You do not have access to this file")
+        return full
+
+    OPEN_TO_THE_PAGE = {"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}
+
+    @app.get("/api/kpi/files")
+    def kpi_files(t: str, path: str = ""):
+        """What is in the folder this page was opened from (and in the folders under it): name, size, when it
+        was last written. The page asks for this instead of the DMS's own folder API, which answers only to a
+        signed-in browser."""
+        from fastapi.responses import JSONResponse
+        full = kpi_scope(t, path)
+        if not os.path.isdir(full):
+            raise HTTPException(404, "Folder not found")
+        out = []
+        with os.scandir(full) as it:
+            for e in it:
+                try:
+                    st = e.stat()
+                except OSError:
+                    continue
+                out.append({"name": e.name, "path": e.path, "folder": e.is_dir(),
+                            "size": 0 if e.is_dir() else st.st_size,
+                            "modified": datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat()})
+        out.sort(key=lambda x: (not x["folder"], x["name"].lower()))
+        return JSONResponse({"path": full, "files": out}, headers=OPEN_TO_THE_PAGE)
+
+    @app.get("/api/kpi/file")
+    def kpi_file(t: str, path: str):
+        """One file of that folder, as it is on disk. Reading only: there is no way back through this key."""
+        from fastapi.responses import Response
+        full = kpi_scope(t, path)
+        if not files.is_file(full):
+            raise HTTPException(404, "File not found")
+        with open(files.extended(full), "rb") as f:
+            body = f.read(s.max_upload_mb * 1024 * 1024)
+        kind = mimetypes.guess_type(full)[0] or "application/octet-stream"
+        if full.lower().endswith((".md", ".txt", ".csv", ".json")):
+            kind = {"md": "text/markdown", "txt": "text/plain", "csv": "text/csv",
+                    "json": "application/json"}[full.rsplit(".", 1)[1].lower()] + "; charset=utf-8"
+        return Response(body, media_type=kind, headers=OPEN_TO_THE_PAGE)
+
     @app.get("/api/files/dashboard")
-    def dashboard(path: str, user: User = Depends(current_user)):
+    def dashboard(path: str, t: str = "", user: User = Depends(current_user)):
         """An HTML page of the repository, served so that it runs in the browser - a dashboard, a report, a
         page somebody saved. It is served into a sandbox: the page may run its own scripts and draw itself,
         and it may not read the DMS's cookies or call the DMS as the person looking at it, because a page
@@ -1792,6 +1862,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(404, "Not an HTML page")
         if not may_read(user, full):
             raise HTTPException(403, "You do not have access to this file")
+        # The page is sent to itself once, with its key in the address. A sandboxed page cannot send the
+        # person's sign-in, so this is the only way it can read anything of the DMS - and all it can read is
+        # the folder it lives in, for a few hours, in the name of whoever opened it.
+        if not t:
+            from urllib.parse import quote as _q
+            return RedirectResponse(f"/api/files/dashboard?path={_q(path)}&t={kpi_key(os.path.dirname(full), user.email)}")
         with open(files.extended(full), "rb") as f:
             body = f.read(s.max_upload_mb * 1024 * 1024)
         log(user, "dashboard", full)

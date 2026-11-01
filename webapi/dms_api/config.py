@@ -91,6 +91,9 @@ class Settings:
     # AD must give them a write right there, as everywhere else. Changing or removing something always
     # asks for a write right, whatever this says.
     add_with_dms_rights: bool = False
+    # How long the key a sandboxed page is given stays good (it reads one folder, in the name of the
+    # person who opened the page, and their AD rights are checked again on every call).
+    page_key_hours: int = 8
     submitted_editable: bool = True        # during approval the owner and the approvers may edit (remarks) the submitted file
     ex_days: int = 3                        # shared files are removed from the Exchange site N days after their last share (0: never)
     ex_shortcut: bool = True                # add a OneDrive shortcut DMS_<Customer> to the customer folder
@@ -180,6 +183,7 @@ class Settings:
             ex_days=int(e("DMS_EX_DAYS", "3")),
             first_load_approver=e("DMS_FIRST_LOAD_APPROVER", "dms_approval@rh.co.il").strip().lower(),
             add_with_dms_rights=e("DMS_ADD_WITH_DMS_RIGHTS", "").strip().lower() in ("1", "true", "yes", "on"),
+            page_key_hours=int(e("DMS_PAGE_KEY_HOURS", "8") or 8),
             submitted_editable=e("DMS_SUBMITTED_EDITABLE", "true").lower() not in ("0", "false", "no", "off"),
             shared_log=e("DMS_SHARED_LOG", "Shared/DMS-Shared-Log.csv").strip("/\\ "),
             ex_shortcut=e("DMS_EX_SHORTCUT", "true").lower() not in ("0", "false", "no", "off"),

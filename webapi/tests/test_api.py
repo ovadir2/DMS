@@ -2189,6 +2189,39 @@ def test_a_kpi_package_dropped_into_a_kpis_folder_lands_as_one_kpi(tmp_path):
                   files={"file": ("Plan.docx", b"x")}).json()["path"] == str(other / "Current_ReadOnly" / "Plan.docx")
 
 
+def test_a_sandboxed_page_gets_a_key_for_its_own_folder(tmp_path):
+    """A page served into a sandbox cannot send the person's sign-in, so it could read nothing of the DMS and
+    every call it made came back as "failed to fetch". It is given a key instead: its own folder, reading
+    only, for a few hours, in the name of whoever opened it - and nothing outside that folder."""
+    root = tmp_path / "Root"
+    kpis = root / "01_General" / "DB_Management" / "KPIs"
+    (kpis / "Current_ReadOnly").mkdir(parents=True)
+    (kpis / "DB_Dashboard.html").write_text("<!doctype html>", encoding="utf-8")
+    (kpis / "Current_ReadOnly" / "DB 14.09.2026.md").write_text("# DB\n\n| a | b |", encoding="utf-8")
+    (root / "01_General" / "Secret.txt").write_text("not this", encoding="utf-8")
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER,
+                                       sharepoint="memory")))
+
+    first = c.get("/api/files/dashboard", params={"path": str(kpis / "DB_Dashboard.html")},
+                  follow_redirects=False)
+    assert first.status_code == 307 and "&t=" in first.headers["location"]
+    key = first.headers["location"].split("&t=")[1]
+
+    listed = c.get("/api/kpi/files", params={"t": key})
+    assert listed.status_code == 200 and listed.headers["access-control-allow-origin"] == "*"
+    assert {f["name"] for f in listed.json()["files"]} == {"Current_ReadOnly", "DB_Dashboard.html"}
+    inside = c.get("/api/kpi/files", params={"t": key, "path": str(kpis / "Current_ReadOnly")}).json()
+    assert [f["name"] for f in inside["files"]] == ["DB 14.09.2026.md"]
+
+    got = c.get("/api/kpi/file", params={"t": key, "path": str(kpis / "Current_ReadOnly" / "DB 14.09.2026.md")})
+    assert got.status_code == 200 and got.text.startswith("# DB")
+    assert got.headers["content-type"].startswith("text/markdown")
+
+    # nothing outside the folder it was opened from, and nothing at all without a key
+    assert c.get("/api/kpi/file", params={"t": key, "path": str(root / "01_General" / "Secret.txt")}).status_code == 403
+    assert c.get("/api/kpi/files", params={"t": "made up"}).status_code == 403
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

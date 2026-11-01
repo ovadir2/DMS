@@ -50,6 +50,35 @@ at it (**SEC-006**). The DMS page opens it in a tab on double-click or Open (**D
 The endpoint authorizes the file itself on every request (`may_read`), so a path typed by hand grants nothing
 (**SEC-004**).
 
+## 3a. What a page may read (the page key)
+
+A sandboxed page has no account: it cannot send the person's Windows sign-in, and the DMS would refuse it if
+it could. A page that tried to call `/api/browse` therefore got "failed to fetch" on every call.
+
+So the DMS hands the page a key when it opens it. `GET /api/files/dashboard?path=<file>` without a key
+answers with a redirect to the same address plus `&t=<key>`; the page reads it from its own address:
+
+```js
+const key = new URLSearchParams(location.search).get('t');
+const folder = await (await fetch('/api/kpi/files?t=' + key)).json();          // its own folder
+const sub = await (await fetch('/api/kpi/files?t=' + key + '&path=' + encodeURIComponent(p))).json();
+const text = await (await fetch('/api/kpi/file?t=' + key + '&path=' + encodeURIComponent(f))).text();
+```
+
+| | |
+| --- | --- |
+| `GET /api/kpi/files?t=&path=` | What is in that folder: `name`, `path`, `folder`, `size`, `modified`. `path` defaults to the folder the page lives in; folders under it are allowed |
+| `GET /api/kpi/file?t=&path=` | One file as it is on disk (`.md` as `text/markdown`, `.json` as `application/json`, and so on) |
+
+The key reads **one folder and what is under it**, for `DMS_PAGE_KEY_HOURS` hours (8 by default), in the name
+of the person who opened the page - their AD rights are checked again on every call, so a page cannot show
+anyone more than they may see. There is no way back through it: nothing it reaches can be written, renamed or
+deleted. Both answers carry `Access-Control-Allow-Origin: *`, because the sandbox gives the page an origin of
+its own; the key, not the origin, is what authorizes the call (**SEC-004**, **SEC-006**).
+
+A page that is opened by hand - its address typed, or a link kept from yesterday - gets a fresh key the same
+way, as long as the person opening it is signed in to the DMS and may see the file.
+
 ## 4. Identity, rights and audit
 
 | What the Builder needs | Where it is |
