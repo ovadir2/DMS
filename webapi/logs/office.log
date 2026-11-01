@@ -1,0 +1,16 @@
+2026-11-01 12:20:41 GET /api/options -> 200 | testclient
+2026-11-01 12:20:55 OPTIONS /api/kpi/files -> 204 | testclient
+2026-11-01 12:21:00 GET /api/o/416d0f58d4dc0947/QP-2.1 V06 נוהל בקרת מסמכים ורשומות ארגוניות_Rev02.docx -> 200 | testclient
+2026-11-01 12:21:00 OPTIONS /api/o/416d0f58d4dc0947/QP-2.1 V06 נוהל בקרת מסמכים ורשומות ארגוניות_Rev02.docx -> 200 | testclient
+2026-11-01 12:21:00 OPTIONS / -> 200 | testclient
+2026-11-01 12:21:00 PROPFIND /api/o/416d0f58d4dc0947 -> 207 | testclient
+2026-11-01 12:21:00 PROPFIND /api/o/416d0f58d4dc0947/QP-2.1 V06 נוהל בקרת מסמכים ורשומות ארגוניות_Rev02.docx -> 207 | testclient
+2026-11-01 12:21:00 LOCK /api/o/416d0f58d4dc0947/QP-2.1 V06 נוהל בקרת מסמכים ורשומות ארגוניות_Rev02.docx -> 200 | testclient
+2026-11-01 12:21:00 PROPFIND /api/o/416d0f58d4dc0947/QP-2.1 V06 נוהל בקרת מסמכים ורשומות ארגוניות_Rev02.docx -> 207 | testclient
+2026-11-01 12:21:00 LOCK /api/o/416d0f58d4dc0947/QP-2.1 V06 נוהל בקרת מסמכים ורשומות ארגוניות_Rev02.docx -> 200 | testclient
+2026-11-01 12:21:00 LOCK /api/o/416d0f58d4dc0947/QP-2.1 V06 נוהל בקרת מסמכים ורשומות ארגוניות_Rev02.docx -> 423 | testclient
+2026-11-01 12:21:00 PUT /api/o/416d0f58d4dc0947/QP-2.1 V06 נוהל בקרת מסמכים ורשומות ארגוניות_Rev02.docx -> 204 | testclient
+2026-11-01 12:21:00 UNLOCK /api/o/416d0f58d4dc0947/QP-2.1 V06 נוהל בקרת מסמכים ורשומות ארגוניות_Rev02.docx -> 204 | testclient
+2026-11-01 12:21:00 PROPFIND /api/o/416d0f58d4dc0947/QP-2.1 V06 נוהל בקרת מסמכים ורשומות ארגוניות_Rev02.docx -> 207 | testclient
+2026-11-01 12:21:00 PUT /api/o/416d0f58d4dc0947/~$tmp.docx -> 403 | testclient
+2026-11-01 12:21:00 PUT /api/o/427522ab91e66506/QP-2.1 V06 נוהל בקרת מסמכים ורשומות ארגוניות_Rev02.docx -> 403 | testclient

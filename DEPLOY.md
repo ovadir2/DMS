@@ -8,8 +8,7 @@ $src = 'C:\Dev\kpi-builder'                     # this repository
 robocopy $src 'E:\KPI_Builder' /MIR /XD .git .vscode
 ```
 
-The site itself (once): the DMS repository's `scripts\New-KpiBuilderSite.ps1 -Source C:\Dev\kpi-builder`
-creates it - IIS site on port 8081, Windows Authentication on, anonymous off - and with `-WireDms` writes
+The site itself (once): `.\New-KpiBuilderSite.ps1`, here in this repository, creates it - IIS site on port 8081, Windows Authentication on, anonymous off - and with `-WireDms` writes
 `DMS_KPI_BUILDER_URL` into the DMS's `.env` and adds this address to `DMS_ALLOWED_ORIGINS`, so **＋ New KPI**
 in the DMS opens it.
 
