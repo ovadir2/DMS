@@ -875,6 +875,17 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         # can be replaced by a newer one, and never released into Current_ReadOnly.
         if files.is_dashboard(file.filename or ""):
             noWorkflow, overwrite = False, True        # a newer one replaces the one that is there
+        # A KPI package dropped into a departmental (or customer) KPIs folder: one KPI, one subfolder named
+        # after it. The page that runs the KPI stays at the root of that subfolder, writable, so a newer
+        # build replaces it; its definition and data are released into Current_ReadOnly beside it, read only
+        # and approved, under the DMS's ordinary rules for a released document.
+        kpi = files.kpi_place(s.repository_root, target_dir, file.filename or "")
+        if kpi:
+            target_dir, noWorkflow = kpi[0], kpi[1]
+            overwrite = overwrite or not noWorkflow
+            if not os.path.isdir(target_dir):
+                os.makedirs(target_dir, exist_ok=True)
+                log(user, "kpi", f"folder made for a KPI: {target_dir}")
         if noWorkflow:                                             # straight to Current_ReadOnly: never over a controlled document
             there = os.path.join(target_dir, "Current_ReadOnly", os.path.basename((file.filename or "").replace("\\", "/")))
             if os.path.exists(there) and find_registered(there, register_index()) and not noworkflow.is_marked(s.repository_root, there):

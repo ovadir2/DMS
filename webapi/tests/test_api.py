@@ -2157,6 +2157,38 @@ def test_a_dashboard_released_before_is_put_back(tmp_path):
     assert not (cur / "dashboard_DB.md").exists()
 
 
+def test_a_kpi_package_dropped_into_a_kpis_folder_lands_as_one_kpi(tmp_path):
+    """One KPI, one subfolder named after it, under the department's own KPIs folder: the page that runs it
+    stays at the root of that subfolder and is replaced by a newer build; its definition is released into
+    Current_ReadOnly beside it, read only and approved, by the DMS's ordinary rules."""
+    from dms_api import file_service
+    root = tmp_path / "Root"
+    kpis = root / "01_General" / "Production" / "KPIs"
+    kpis.mkdir(parents=True)
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER,
+                                       sharepoint="memory")))
+
+    def drop(name, body):
+        return c.post("/api/files/upload", data={"folder": str(kpis), "noWorkflow": "true"},
+                      files={"file": (name, body)})
+
+    assert drop("OEE_LINE1.html", b"<!doctype html><title>OEE</title>").status_code == 201
+    assert drop("OEE_LINE1.json", b'{"kpi": "OEE"}').status_code == 201
+    page, definition = kpis / "OEE_LINE1" / "OEE_LINE1.html", kpis / "OEE_LINE1" / "Current_ReadOnly" / "OEE_LINE1.json"
+    assert page.exists() and not file_service.is_read_only(str(page))     # it runs, and a new build replaces it
+    assert definition.exists() and file_service.is_read_only(str(definition))
+
+    assert drop("OEE_LINE1.html", b"<!doctype html><title>OEE 2</title>").status_code == 201
+    assert page.read_bytes().endswith(b"<title>OEE 2</title>")
+
+    # A second KPI is a folder of its own, and a file dropped anywhere else is released exactly as before.
+    assert drop("SCRAP.html", b"<html>").status_code == 201
+    assert (kpis / "SCRAP" / "SCRAP.html").exists()
+    other = root / "01_General" / "Production"
+    assert c.post("/api/files/upload", data={"folder": str(other), "noWorkflow": "true"},
+                  files={"file": ("Plan.docx", b"x")}).json()["path"] == str(other / "Current_ReadOnly" / "Plan.docx")
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

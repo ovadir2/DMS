@@ -434,6 +434,46 @@ def is_dashboard(name: str) -> bool:
     return stem == "dashboard" or stem.startswith("dashboard_") or stem.endswith("_dashboard") or "_dashboard_" in stem
 
 
+def kpis_folder(root: str, path: str) -> str | None:
+    """The departmental (or customer) KPIs folder this path is in, or None. The KPIs folders are part of the
+    blueprint - one in every department and one in every customer - so they are known by where they sit in the
+    skeleton and not by a folder somebody happened to name KPIs inside their own work."""
+    from . import blueprint
+    try:
+        parts = [p for p in os.path.relpath(resolve(root, path), root).replace("\\", "/").split("/") if p and p != "."]
+    except (PathNotAllowed, ValueError):
+        return None
+    for n in range(len(parts), 0, -1):
+        if parts[n - 1].lower() != "kpis":
+            continue
+        d = blueprint.describe(parts[:n])
+        if d and d.get("en") == "KPIs":
+            return os.path.join(root, *parts[:n])
+    return None
+
+
+def kpi_place(root: str, folder: str, filename: str) -> tuple[str, bool] | None:
+    """Where a file of a KPI package goes, when it is dropped into a KPIs folder: (the KPI's own subfolder,
+    whether the file is released into its Current_ReadOnly).
+
+    One KPI, one subfolder named after it. The page that runs the KPI stays at the root of that subfolder,
+    writable, so a newer build replaces it; everything else it needs - the definition, the data - is released
+    into Current_ReadOnly beside it, read only and approved, like any other document of the DMS.
+    """
+    kpis = kpis_folder(root, folder)
+    if not kpis:
+        return None
+    name = os.path.basename((filename or "").replace("\\", "/").rstrip("/"))
+    if not name:
+        return None
+    here = os.path.normcase(os.path.normpath(resolve(root, folder)))
+    at_kpis = here == os.path.normcase(os.path.normpath(kpis))
+    # Dropped on the KPIs folder itself, the file says which KPI it belongs to: <KPI_ID>.html, <KPI_ID>.json.
+    # Dropped on (or dragged as) a folder of its own, that folder is the KPI.
+    where = os.path.join(kpis, valid_name(os.path.splitext(name)[0])) if at_kpis else resolve(root, folder)
+    return where, not name.lower().endswith((".html", ".htm"))
+
+
 def in_workflow_folder(root: str, path: str) -> bool:
     """True for Submitted / Current_ReadOnly / Obsolete_ReadOnly and anything inside them."""
     rel = os.path.relpath(path, root).replace("\\", "/").split("/")
