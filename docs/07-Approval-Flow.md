@@ -2,7 +2,9 @@
 
 How a document moves from submission to an approved, read-only record in the pilot flow **DC-P1 Pilot Approval** (`scripts/New-DmsPilotFlowPackage.ps1`).
 
-> **Optional - the DMS does not need Power Automate.** This is the Power Automate pilot flow. What the pilot actually runs is the approval inside
+> **Optional.** The pilot approves on the DMS page; this is the Power Automate pilot flow, for a site
+> that wants the decision taken there instead. (The notifications flow is a different thing, and is
+> what RH runs - see [04](04-Power-Automate.md).) This is the Power Automate pilot flow. What the pilot actually runs is the approval inside
 > the DMS page (`DMS_APPROVALS=page`): the same stages and the same records, decided on the page. See
 > [11 - Project Context](11-Project-Context.md) and [`webapi/README.md`](../webapi/README.md).
 

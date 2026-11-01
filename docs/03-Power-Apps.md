@@ -1,8 +1,9 @@
 # 03 - Power Apps
 
 
-> **As built.** The pilot does not use these Canvas apps: the DMS page (`webapi/`) replaced them, and it is
-> what people use. This document is kept as the design, for a tenant that wants the Power Apps route.
+> **Not used at RH.** There is no Power Apps here: the DMS page (`webapi/`) is the application, and it is
+> what people use. Nothing in the DMS, the pilot or the notifications depends on anything in this
+> chapter - it is kept as the design, for a tenant that wants the Power Apps route.
 
 Two responsive **Canvas** apps, both in the unmanaged solution `RH Document Control` (blueprint Appendix B).
 

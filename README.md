@@ -3,8 +3,16 @@
 Implementation of **IT-DOC-BP-001 "Enterprise Document Control and Large-File Exchange Blueprint"** (On-Premises Windows repository + Microsoft 365 control plane, about 260 Business Premium users).
 
 > **What the DMS needs:** a Windows file server, IIS on a Windows server, and a SharePoint site for the
-> register and the audit. **Power Automate and Teams are optional** - without them approvals happen on the
-> DMS page (`DMS_APPROVALS=page`) and nobody is emailed; everything else works the same.
+> register and the audit.
+>
+> **Power Apps is not used.** The DMS page is the application; the Power Apps design is kept as
+> [`docs/03-Power-Apps.md`](docs/03-Power-Apps.md) for a tenant that wants that route, and nothing in the
+> pilot depends on it.
+>
+> **Power Automate carries the notifications.** The DMS writes a row to DMS Notifications at every step
+> and the flow sends it as mail or to Teams. The approvals themselves are on the DMS page
+> (`DMS_APPROVALS=page`); running them in a flow instead is the optional route in
+> [`docs/04-Power-Automate.md`](docs/04-Power-Automate.md).
 >
 > Files stay on `\\FILE-SERVER\Corporate_Data`. SharePoint holds metadata only. Power Apps and Power Automate never touch binary content. PLM/MAE and Priority remain the systems of record.
 

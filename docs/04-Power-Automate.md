@@ -1,8 +1,11 @@
 # 04 - Power Automate
 
-> **Optional.** The DMS does not need Power Automate. With `DMS_APPROVALS=page` the approvals
-> happen on the DMS page itself and the notification rows are simply not picked up by anything. This
-> chapter is for a site that has Power Automate and wants the approvals and the emails to run there.
+> **What RH runs here is the notifications flow** (DC-P2): the DMS writes a row to DMS Notifications at
+> every step and the flow sends it as mail or to Teams. `scripts/New-DmsNotifyFlowPackage.ps1` builds it.
+>
+> **The approval flows are the optional part.** The pilot approves on the DMS page
+> (`DMS_APPROVALS=page`); the flows below are for a site that wants the decision to happen in Power
+> Automate and Teams instead. Nothing in the DMS requires them.
 
 
 > **As built.** The pilot runs approvals inside the DMS (`DMS_APPROVALS=page`) and moves files with its own

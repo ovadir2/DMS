@@ -2,8 +2,9 @@
 #Requires -Modules PnP.PowerShell
 <#
 .SYNOPSIS
-    OPTIONAL: only for a site that has Power Automate. The DMS runs without it - approvals on the
-    DMS page (DMS_APPROVALS=page), and the notification rows simply go unread.
+    This is what sends the DMS's notifications: the DMS writes a row to DMS Notifications at every
+    step and this flow mails it (and posts it to Teams). Without the flow the rows are a log nobody
+    reads - the DMS itself goes on working, and the approvals are on its own page.
     Pilot notifications: creates the "DMS Notifications" list and builds an importable Power Automate
     package for the flow "DC-P2 Pilot Notifications" (email + Teams).
 
