@@ -1855,6 +1855,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         log(user, "kpi", f"{'edit' if kpi else 'new'} KPI in {kpis}" + (f" ({kpi})" if kpi else ""))
         return {"url": url, "folder": kpis, "kpi": kpi, "mode": args["mode"]}
 
+    @app.get("/api/kpi/ping")
+    def kpi_ping():
+        """Can a page reach the DMS at all? This one answers without a key and without a sign-in, so it says
+        which of the two is in the way: open it in the browser (/api/kpi/ping). A sign-in prompt or 401 means
+        IIS is still asking for one on /api/kpi (scripts\Set-DmsKpiKeyAccess.ps1); an answer means the way is
+        open and anything still failing is the key or the address."""
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"ok": True, "version": version, "sandbox": s.page_sandbox,
+                             "keys": len(KPI_KEYS)}, headers=OPEN_TO_THE_PAGE)
+
     @app.get("/api/kpi/files")
     def kpi_files(t: str, path: str = ""):
         """What is in the folder this page was opened from (and in the folders under it): name, size, when it
