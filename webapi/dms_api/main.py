@@ -3133,7 +3133,9 @@ BRIDGE = b"""<script>
 (function () {
   var key = '__KEY__';
   var here = new URLSearchParams(location.search);
-  window.DMS = { key: key, api: '/api/kpi', folder: here.get('path') || '',
+  var me = here.get('path') || '';
+  window.DMS = { key: key, api: '/api/kpi', file: me,
+                 folder: me.replace(/[\\/][^\\/]*$/, ''),        // the folder this page lives in
                  logo: '/dms/logo.png', icon: '/dms/icon.png' };
   var FOLDER = /^(?:https?:\\/\\/[^\\/]+)?\\/api\\/(?:browse|list|files|folder|folders|levels)\\/?(?:\\?(.*))?$/i;
   var FILE = /^(?:https?:\\/\\/[^\\/]+)?\\/api\\/(?:files\\/(?:download|text|raw)|file)\\/?(?:\\?(.*))?$/i;
