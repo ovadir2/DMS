@@ -2,6 +2,8 @@
 #Requires -Modules @{ ModuleName = 'PnP.PowerShell'; ModuleVersion = '2.12.0' }
 <#
 .SYNOPSIS
+    OPTIONAL: only for a site that has Power Automate. The DMS runs without it - approvals on the
+    DMS page (DMS_APPROVALS=page), and the notification rows simply go unread.
     Builds an importable Power Automate package (.zip) for the pilot approval flow
     "DC-P1 Pilot Approval", so nothing has to be built by hand in the designer.
 

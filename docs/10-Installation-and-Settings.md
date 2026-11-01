@@ -158,7 +158,7 @@ the workflow and blueprint folders stay out of reach either way.
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `DMS_APPROVALS` | `flow` | `page`: approvals happen in the DMS. `flow`: Power Automate / Teams |
+| `DMS_APPROVALS` | `flow` | `page`: approvals happen in the DMS, and nothing outside it is needed. `flow`: Power Automate / Teams, for a site that has them |
 | `DMS_REVIEW_SITE_URL`, `DMS_REVIEW_LIBRARY` | `Approvals` | Where the editing copy lives |
 | `DMS_VIEW_LIBRARY` | `Views` | Where a reading copy is made before the DMS fetches it and deletes it |
 | `DMS_CHECKOUT_HOURS` | `8` | A document left open for editing comes back by itself after this |
@@ -214,7 +214,7 @@ the workflow and blueprint folders stay out of reach either way.
 | `New-DmsMarkdown.ps1` | The Markdown beside every released document, in one pass (`-Rewrite` writes it again for the ones that have one) |
 | `Repair-DmsDashboards.ps1` | Dashboard pages (`dashboard_*.html`) released into `Current_ReadOnly` before the DMS knew they are tools: moved back into their folder, writable |
 | `Repair-DmsRegister.ps1` | After files or folders were removed on the file server itself: a record whose file moved is pointed at it, a record whose file is gone is archived and says so in Control Audit, Markdown beside nothing and stale check-outs go, missing blueprint folders are listed |
-| `New-KpiBuilderSite.ps1` | Puts the KPI Builder (its own repository) on this server and gives it an IIS site; `-WireDms` tells the DMS where it is |
+| `Set-DmsKpiKeyAccess.ps1` | Lets `/api/kpi` answer a page the DMS serves into a sandbox (it has no sign-in to send; the key in its address is what authorizes it) |
 | `Compare-DmsTree.ps1` | What the DMS shows against what is on the disk |
 | `Restart-Dms.ps1` | Reload the service (`-ComputerName` from another machine) |
 | `New-DmsOwnerMail.ps1` | A short letter to each department's owners |

@@ -18,7 +18,7 @@ Related: [07 - Approval Flow](07-Approval-Flow.md) (the flow inside Power Automa
 | Drive letters and Open | Each PC (`scripts/Set-DmsDrives.ps1`) | G: / R: for short paths, and the `rh-dms:` handler so Open and Edit work from the page |
 | Document Register | SharePoint `DocumentControl` site | One record per controlled document: ID, type, status, owner, paths, SHA-256 |
 | Approver Matrix | SharePoint | Who approves each document type (mandatory approvers, final approver) |
-| Approvals | DMS page (pilot) or DC-P1 in Power Automate (production) | Stage 1 mandatory approvers, stage 2 final approver from the Approver Matrix; sets the result and writes each decision to Control Audit |
+| Approvals | DMS page (what the pilot runs; no Power Automate needed) or DC-P1 in Power Automate, where a site has it | Stage 1 mandatory approvers, stage 2 final approver from the Approver Matrix; sets the result and writes each decision to Control Audit |
 | Workflow Service | DMS server (inside the page service in the pilot) | Moves the file to match its status, sets read-only, writes the path and SHA-256 back |
 | Control Audit | SharePoint | Every event: registered, submitted, approved/rejected, file moved |
 | AI Insights | RH on-prem LLM (`chat.ai.rh-global.com`) | Answers about a document, finds files the user is allowed to see |

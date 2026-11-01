@@ -1,5 +1,9 @@
 # 04 - Power Automate
 
+> **Optional.** The DMS does not need Power Automate. With `DMS_APPROVALS=page` the approvals
+> happen on the DMS page itself and the notification rows are simply not picked up by anything. This
+> chapter is for a site that has Power Automate and wants the approvals and the emails to run there.
+
 
 > **As built.** The pilot runs approvals inside the DMS (`DMS_APPROVALS=page`) and moves files with its own
 > upkeep pass, so most of these flows are not deployed. DC-P1 (approval) and DC-P2 (notifications) exist as
