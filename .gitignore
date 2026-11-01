@@ -5,3 +5,7 @@ scripts/dms-access-report.csv
 webapi/cert/
 *.pem
 *.pfx
+
+# The IIS configuration of this installation: its own paths, its own site. Kept out of the repository so
+# a pull never fights with it; start from webapi/web.config.example.
+webapi/web.config

@@ -66,6 +66,8 @@ python -m venv .venv
 copy .env.example .env                                   # then fill it in (section 7)
 ```
 
+`webapi\web.config` is this installation's own - its paths, its site - so it is **not** in the repository: copy `webapi\web.config.example` to `webapi\web.config` and fill in the paths. A pull then never fights with it.
+
 IIS: a site whose physical path is `C:\DMS\app\webapi`, with **Windows Authentication** on and anonymous off,
 its application pool running as the DMS account, and `web.config` pointing HttpPlatformHandler at
 `.venv\Scripts\python.exe -m uvicorn dms_api.main:app`.
