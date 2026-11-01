@@ -94,6 +94,8 @@ class Settings:
     # How long the key a sandboxed page is given stays good (it reads one folder, in the name of the
     # person who opened the page, and their AD rights are checked again on every call).
     page_key_hours: int = 8
+    # Where the KPI Builder lives. Empty: Add New KPI is offered greyed, with the reason.
+    kpi_builder_url: str = ""
     submitted_editable: bool = True        # during approval the owner and the approvers may edit (remarks) the submitted file
     ex_days: int = 3                        # shared files are removed from the Exchange site N days after their last share (0: never)
     ex_shortcut: bool = True                # add a OneDrive shortcut DMS_<Customer> to the customer folder
@@ -184,6 +186,7 @@ class Settings:
             first_load_approver=e("DMS_FIRST_LOAD_APPROVER", "dms_approval@rh.co.il").strip().lower(),
             add_with_dms_rights=e("DMS_ADD_WITH_DMS_RIGHTS", "").strip().lower() in ("1", "true", "yes", "on"),
             page_key_hours=int(e("DMS_PAGE_KEY_HOURS", "8") or 8),
+            kpi_builder_url=e("DMS_KPI_BUILDER_URL", "").strip(),
             submitted_editable=e("DMS_SUBMITTED_EDITABLE", "true").lower() not in ("0", "false", "no", "off"),
             shared_log=e("DMS_SHARED_LOG", "Shared/DMS-Shared-Log.csv").strip("/\\ "),
             ex_shortcut=e("DMS_EX_SHORTCUT", "true").lower() not in ("0", "false", "no", "off"),

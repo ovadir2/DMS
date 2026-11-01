@@ -79,6 +79,38 @@ its own; the key, not the origin, is what authorizes the call (**SEC-004**, **SE
 A page that is opened by hand - its address typed, or a link kept from yesterday - gets a fresh key the same
 way, as long as the person opening it is signed in to the DMS and may see the file.
 
+## 3b. New KPI / Edit KPI (the launch)
+
+Right-clicking a departmental or customer `KPIs` folder offers **＋ New KPI**; right-clicking one KPI's folder
+inside it offers **Edit KPI**. Both appear only where the person may add to that folder, and only where the
+Builder is configured (`DMS_KPI_BUILDER_URL`); otherwise the line is there in grey like any command that does
+not apply (**DMS-003**, **DMS-004**, **DMS-006**, **DMS-008**).
+
+The page does not build the address. It asks the DMS, which checks the folder against the blueprint and the
+person against AD before answering (**DMS-005**):
+
+```http
+POST /api/kpi/open      {"folder": "<a KPIs folder, or one KPI's folder>", "kpi": "<optional>"}
+  -> {"url": "...", "folder": "<the KPIs folder>", "kpi": "OEE_LINE1", "mode": "create" | "edit"}
+  400 this is not a KPIs folder | 403 not allowed to add here | 503 the Builder is not set up here
+```
+
+The address handed back is `DMS_KPI_BUILDER_URL` plus, as the **interim** launch contract (to be replaced by
+the versioned one when the Builder team states theirs):
+
+| Parameter | Meaning |
+| --- | --- |
+| `mode` | `create` or `edit` |
+| `folder`, `folderId` | the departmental (or customer) `KPIs` folder, by path |
+| `owner` | the department or customer that folder belongs to |
+| `kpi` | the KPI's folder name, on `edit` |
+| `user` | the signed-in DMS user |
+| `dms` | `DMS_PAGE_URL`, where to come back to |
+| `api` | `/api/kpi` - where the page-key endpoints of §3a live |
+
+The Builder has no publication API in the DMS yet (**PKG-003** is still open): what it produces is brought in
+by dropping it into the `KPIs` folder, as §2 describes.
+
 ## 4. Identity, rights and audit
 
 | What the Builder needs | Where it is |

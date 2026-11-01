@@ -62,6 +62,11 @@ class DocRenameRequest(BaseModel):
     newName: str = Field(min_length=1, max_length=200)
 
 
+
+class KpiOpen(BaseModel):
+    folder: str                                       # the KPIs folder, or one KPI's folder under it
+    kpi: str = ""                                     # the KPI to edit; empty: a new one
+
 class DeleteRequest(BaseModel):
     path: str
 
@@ -749,6 +754,17 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     f.update(officeUri=st["url"], editable=bool(st.get("edit")))
         if in_shared_folder(os.path.join(result["path"], "x")):
             result.update(noWorkflow=True, canWrite=False, sharedNote=True)
+        # Which of these is a KPIs folder of the skeleton, and which is one KPI inside one: the page offers
+        # Add New KPI on the first and Edit KPI on the second, and nothing of the sort anywhere else.
+        kpis = files.kpis_folder(s.repository_root, result["path"])
+        same = lambda a, b: os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+        result["kpis"] = bool(kpis) and same(kpis, result["path"])
+        result["kpi"] = bool(kpis) and not result["kpis"]
+        result["kpiBuilder"] = bool(s.kpi_builder_url)
+        for f in result["folders"]:
+            under = files.kpis_folder(s.repository_root, f["path"])
+            f["kpis"] = bool(under) and same(under, f["path"])
+            f["kpi"] = bool(under) and not f["kpis"]
         return result
 
     @app.get("/api/areas")
@@ -1812,6 +1828,32 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return full
 
     OPEN_TO_THE_PAGE = {"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}
+
+    @app.post("/api/kpi/open")
+    def kpi_open(req: KpiOpen, user: User = Depends(current_user)):
+        """Where to send this person to make a KPI, or to change one. The page asks for this rather than
+        building the address itself: the folder is checked here - that it is a KPIs folder of the skeleton,
+        and that this person may add to it - so a folder named in a browser grants nothing (DMS-005)."""
+        full = files.resolve(s.repository_root, req.folder)
+        kpis = files.kpis_folder(s.repository_root, full)
+        if not kpis:
+            raise HTTPException(400, "This is not a KPIs folder")
+        if not may_add(user, kpis):
+            raise HTTPException(403, "You do not have permission to add a KPI here")
+        if not s.kpi_builder_url:
+            raise HTTPException(503, "The KPI Builder is not set up here (DMS_KPI_BUILDER_URL)")
+        from urllib.parse import quote as _q, urlencode
+        here = os.path.normcase(os.path.normpath(full))
+        kpi = req.kpi or ("" if here == os.path.normcase(os.path.normpath(kpis)) else os.path.basename(full))
+        parts = rel_parts(kpis)
+        args = {"mode": "edit" if kpi else "create", "folder": kpis, "folderId": kpis,
+                "owner": parts[1] if len(parts) > 1 else "", "user": user.email,
+                "dms": s.page_url or "", "api": "/api/kpi"}
+        if kpi:
+            args["kpi"] = kpi
+        url = s.kpi_builder_url + ("&" if "?" in s.kpi_builder_url else "?") + urlencode(args)
+        log(user, "kpi", f"{'edit' if kpi else 'new'} KPI in {kpis}" + (f" ({kpi})" if kpi else ""))
+        return {"url": url, "folder": kpis, "kpi": kpi, "mode": args["mode"]}
 
     @app.get("/api/kpi/files")
     def kpi_files(t: str, path: str = ""):

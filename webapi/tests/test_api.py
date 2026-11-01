@@ -2222,6 +2222,37 @@ def test_a_sandboxed_page_gets_a_key_for_its_own_folder(tmp_path):
     assert c.get("/api/kpi/files", params={"t": "made up"}).status_code == 403
 
 
+def test_add_new_kpi_is_offered_on_a_kpis_folder_and_checked_here(tmp_path):
+    """Right-clicking a department's KPIs folder offers New KPI. Where the Builder is, and whether this
+    person may add one, is decided by the DMS and not by the browser: a folder named in a request is checked
+    against the skeleton and against AD before any address is handed back."""
+    root = tmp_path / "Root"
+    kpis = root / "01_General" / "Production" / "KPIs"
+    (kpis / "OEE").mkdir(parents=True)
+    (root / "01_General" / "Production" / "KPIs_of_my_own").mkdir()
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                 kpi_builder_url="https://kpi.rh.tech/builder")
+    c = TestClient(create_app(s))
+
+    listed = c.get("/api/browse", params={"path": str(kpis.parent)}).json()
+    assert listed["kpiBuilder"] is True
+    by_name = {f["name"]: f for f in listed["folders"]}
+    assert by_name["KPIs"]["kpis"] and not by_name["KPIs"]["kpi"]
+    assert not by_name["KPIs_of_my_own"]["kpis"]                      # a folder somebody named KPIs is not one
+    inside = c.get("/api/browse", params={"path": str(kpis)}).json()
+    assert inside["kpis"] and by_name and [f["kpi"] for f in inside["folders"]] == [True]
+
+    r = c.post("/api/kpi/open", json={"folder": str(kpis)}).json()
+    assert r["mode"] == "create" and r["url"].startswith("https://kpi.rh.tech/builder?")
+    assert "mode=create" in r["url"] and "owner=Production" in r["url"] and USER.replace("@", "%40") in r["url"]
+    r = c.post("/api/kpi/open", json={"folder": str(kpis / "OEE")}).json()
+    assert r["mode"] == "edit" and "kpi=OEE" in r["url"] and r["folder"] == str(kpis)
+
+    assert c.post("/api/kpi/open", json={"folder": str(root / "01_General")}).status_code == 400
+    s.kpi_builder_url = ""
+    assert c.post("/api/kpi/open", json={"folder": str(kpis)}).status_code == 503
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""
