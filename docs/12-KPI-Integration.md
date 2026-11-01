@@ -89,6 +89,18 @@ its own; the key, not the origin, is what authorizes the call (**SEC-004**, **SE
 A page that is opened by hand - its address typed, or a link kept from yesterday - gets a fresh key the same
 way, as long as the person opening it is signed in to the DMS and may see the file.
 
+**A page written against the DMS's own addresses needs no rewriting.** The DMS puts a few lines in front of
+the page it serves, which send the DMS's folder and file calls to the key endpoints instead:
+
+| What the page asks for | Where it goes |
+| --- | --- |
+| `/api/browse`, `/api/list`, `/api/files`, `/api/folder(s)`, `/api/levels` (with `path=`, `folder=` or `file=`) | `/api/kpi/files?t=…&path=…` |
+| `/api/files/download`, `/api/files/text`, `/api/files/raw`, `/api/file` | `/api/kpi/file?t=…&path=…` |
+
+`/api/kpi/files` answers in the shape `/api/browse` answers in (`path`, `parent`, `folders[]`, `files[]`),
+so such a page reads it unchanged. The key is also there as `window.DMS = {key, api, folder}` for a page that
+would rather call the endpoints itself. Everything else the page does is untouched.
+
 ## 3b. New KPI / Edit KPI (the launch)
 
 Right-clicking a departmental or customer `KPIs` folder offers **＋ New KPI**; right-clicking one KPI's folder

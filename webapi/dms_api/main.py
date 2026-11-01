@@ -1864,18 +1864,23 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         full = kpi_scope(t, path)
         if not os.path.isdir(full):
             raise HTTPException(404, "Folder not found")
-        out = []
+        folders, inside = [], []
         with os.scandir(full) as it:
             for e in it:
                 try:
                     st = e.stat()
                 except OSError:
                     continue
-                out.append({"name": e.name, "path": e.path, "folder": e.is_dir(),
-                            "size": 0 if e.is_dir() else st.st_size,
-                            "modified": datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat()})
-        out.sort(key=lambda x: (not x["folder"], x["name"].lower()))
-        return JSONResponse({"path": full, "files": out}, headers=OPEN_TO_THE_PAGE)
+                item = {"name": e.name, "path": e.path, "folder": e.is_dir(),
+                        "size": 0 if e.is_dir() else st.st_size,
+                        "modified": datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat()}
+                (folders if e.is_dir() else inside).append(item)
+        for lst in (folders, inside):
+            lst.sort(key=lambda x: x["name"].lower())
+        # Folders and files apart, as the DMS's own folder call answers: a page written against that reads
+        # this without being rewritten.
+        return JSONResponse({"path": full, "parent": os.path.dirname(full), "folders": folders,
+                             "files": inside}, headers=OPEN_TO_THE_PAGE)
 
     @app.get("/api/kpi/file")
     def kpi_file(t: str, path: str):
@@ -1912,6 +1917,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return RedirectResponse(f"/api/files/dashboard?path={_q(path)}&t={kpi_key(os.path.dirname(full), user.email)}")
         with open(files.extended(full), "rb") as f:
             body = f.read(s.max_upload_mb * 1024 * 1024)
+        # A page written against the DMS's own addresses (/api/browse, /api/files/download) cannot reach them
+        # from inside the sandbox: it has no sign-in to send. The DMS puts a few lines in front of the page
+        # that send those calls to the key endpoints instead, so a page that was written for the DMS works
+        # here without being rewritten. A page that already uses /api/kpi is left alone by it.
+        body = BRIDGE.replace(b"__KEY__", t.encode()) + body
         log(user, "dashboard", full)
         return Response(body, media_type="text/html; charset=utf-8", headers={
             "Content-Security-Policy": "sandbox allow-scripts allow-popups allow-downloads allow-forms",
@@ -3114,3 +3124,36 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
 
 app = create_app()
+
+
+# Put in front of a page the DMS serves into a sandbox (see the dashboard endpoint). It sends the DMS's own
+# folder and file addresses to the key endpoints of /api/kpi, which answer without a sign-in and only for the
+# folder that page lives in. Everything else the page does is untouched.
+BRIDGE = b"""<script>
+(function () {
+  var key = '__KEY__';
+  var here = new URLSearchParams(location.search);
+  window.DMS = { key: key, api: '/api/kpi', folder: here.get('path') || '' };
+  var FOLDER = /^(?:https?:\\/\\/[^\\/]+)?\\/api\\/(?:browse|list|files|folder|folders|levels)\\/?(?:\\?(.*))?$/i;
+  var FILE = /^(?:https?:\\/\\/[^\\/]+)?\\/api\\/(?:files\\/(?:download|text|raw)|file)\\/?(?:\\?(.*))?$/i;
+  var sent = window.fetch.bind(window);
+  function where(q) {
+    var p = new URLSearchParams(q || '');
+    return p.get('path') || p.get('folder') || p.get('file') || '';
+  }
+  window.fetch = function (url, options) {
+    try {
+      var text = typeof url === 'string' ? url : (url && url.url) || '';
+      var folder = text.match(FOLDER), file = !folder && text.match(FILE);
+      if (folder || file) {
+        var path = where((folder || file)[1]);
+        var to = '/api/kpi/' + (folder ? 'files' : 'file') + '?t=' + encodeURIComponent(key)
+               + (path ? '&path=' + encodeURIComponent(path) : '');
+        return sent(to, options);
+      }
+    } catch (e) { /* a page that fetches something unusual is left to do it */ }
+    return sent(url, options);
+  };
+})();
+</script>
+"""

@@ -2109,8 +2109,8 @@ def test_a_dashboard_page_is_a_tool_and_not_a_document(tmp_path):
 
     assert c.post("/api/files/release", json={"paths": [str(saved)]}).json()["results"][0].get("error")
 
-    got = c.get("/api/files/dashboard", params={"path": str(saved)})
-    assert got.status_code == 200 and got.content == saved.read_bytes()
+    got = c.get("/api/files/dashboard", params={"path": str(saved)}, follow_redirects=True)
+    assert got.status_code == 200 and got.content.endswith(saved.read_bytes())   # the page, behind its bridge
     assert got.headers["content-type"].startswith("text/html")
     assert "sandbox" in got.headers["content-security-policy"]          # it runs, it does not act as the reader
     assert c.get("/api/files/dashboard", params={"path": str(q / "nope.html")}).status_code == 404
@@ -2119,7 +2119,7 @@ def test_a_dashboard_page_is_a_tool_and_not_a_document(tmp_path):
     # saving rule - stays in its folder, never released - is about dashboards.
     plain = q / "Report.html"
     plain.write_bytes(b"<!doctype html><title>Report</title>")
-    r = c.get("/api/files/dashboard", params={"path": str(plain)})
+    r = c.get("/api/files/dashboard", params={"path": str(plain)}, follow_redirects=True)
     assert r.status_code == 200 and "sandbox" in r.headers["content-security-policy"]
     r = c.post("/api/files/upload", data={"folder": str(q), "noWorkflow": "true"},
                files={"file": ("Released.html", b"<!doctype html>")})
@@ -2216,9 +2216,14 @@ def test_a_sandboxed_page_gets_a_key_for_its_own_folder(tmp_path):
 
     listed = c.get("/api/kpi/files", params={"t": key})
     assert listed.status_code == 200 and listed.headers["access-control-allow-origin"] == "*"
-    assert {f["name"] for f in listed.json()["files"]} == {"Current_ReadOnly", "DB_Dashboard.html"}
+    answer = listed.json()
+    assert [f["name"] for f in answer["folders"]] == ["Current_ReadOnly"]      # as /api/browse answers
+    assert [f["name"] for f in answer["files"]] == ["DB_Dashboard.html"]
     inside = c.get("/api/kpi/files", params={"t": key, "path": str(kpis / "Current_ReadOnly")}).json()
     assert [f["name"] for f in inside["files"]] == ["DB 14.09.2026.md"]
+
+    page = c.get("/api/files/dashboard", params={"path": str(kpis / "DB_Dashboard.html"), "t": key})
+    assert "window.DMS" in page.text and key in page.text and page.text.rstrip().endswith("<!doctype html>")
 
     got = c.get("/api/kpi/file", params={"t": key, "path": str(kpis / "Current_ReadOnly" / "DB 14.09.2026.md")})
     assert got.status_code == 200 and got.text.startswith("# DB")
