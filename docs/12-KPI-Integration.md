@@ -32,6 +32,16 @@ folder above it (**SRS-002**, **DMS-001**).
       <other artifacts>
 ```
 
+A dashboard reads several KPIs, so it belongs to the department rather than to one of them:
+
+```text
+01_General/<Department>/KPIs/
+  Dashboard_DB.html                     <- the dashboard page: writable, replaced by a newer build
+  Current_ReadOnly/
+    Dashboard_DB.json                   <- what it reads: released, read only, approved
+  <KPI_ID>/...                          <- one folder per KPI, as above
+```
+
 `files.kpi_place()` decides this, and `POST /api/files/upload` applies it: a file dropped **on the KPIs
 folder** is placed in a subfolder named after the file (`OEE_LINE1.json` -> `OEE_LINE1/`), a file dropped on
 a KPI's own subfolder stays in that one. HTML stays at the subfolder root and is overwritten by the next

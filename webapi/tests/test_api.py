@@ -2181,6 +2181,13 @@ def test_a_kpi_package_dropped_into_a_kpis_folder_lands_as_one_kpi(tmp_path):
     assert drop("OEE_LINE1.html", b"<!doctype html><title>OEE 2</title>").status_code == 201
     assert page.read_bytes().endswith(b"<title>OEE 2</title>")
 
+    # A dashboard reads several KPIs, so it belongs to the department and not to one of them: its page stays
+    # at the root of the KPIs folder, and what it reads is released into that folder's own Current_ReadOnly.
+    assert drop("Dashboard_DB.html", b"<html>").status_code == 201
+    assert (kpis / "Dashboard_DB.html").exists() and not (kpis / "Dashboard_DB").exists()
+    assert drop("Dashboard_DB.json", b"{}").status_code == 201
+    assert (kpis / "Current_ReadOnly" / "Dashboard_DB.json").exists()
+
     # A second KPI is a folder of its own, and a file dropped anywhere else is released exactly as before.
     assert drop("SCRAP.html", b"<html>").status_code == 201
     assert (kpis / "SCRAP" / "SCRAP.html").exists()

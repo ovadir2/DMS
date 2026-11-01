@@ -468,6 +468,13 @@ def kpi_place(root: str, folder: str, filename: str) -> tuple[str, bool] | None:
         return None
     here = os.path.normcase(os.path.normpath(resolve(root, folder)))
     at_kpis = here == os.path.normcase(os.path.normpath(kpis))
+    # A dashboard belongs to the department, not to one KPI: it reads several of them. Its page stays at the
+    # root of the KPIs folder and what it reads is released into that folder's own Current_ReadOnly, so a
+    # dashboard dropped on KPIs does not grow a KPI folder of its own.
+    stem = re.sub(r"[\s\-]+", "_", os.path.splitext(name)[0].strip()).strip("_").lower()
+    if at_kpis and (is_dashboard(name) or stem == "dashboard" or stem.startswith("dashboard_")
+                    or stem.endswith("_dashboard")):
+        return kpis, not name.lower().endswith((".html", ".htm"))
     # Dropped on the KPIs folder itself, the file says which KPI it belongs to: <KPI_ID>.html, <KPI_ID>.json.
     # Dropped on (or dragged as) a folder of its own, that folder is the KPI.
     where = os.path.join(kpis, valid_name(os.path.splitext(name)[0])) if at_kpis else resolve(root, folder)
