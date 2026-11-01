@@ -2320,6 +2320,34 @@ def test_the_register_is_put_straight_after_a_deletion_on_the_file_server(tmp_pa
     assert not md.exists()                                                # nothing left for the AI to read
 
 
+def test_one_pass_puts_the_dms_and_the_file_server_back_in_step(tmp_path, capsys):
+    """Files are added and deleted on the file server itself, where the DMS cannot see it happen: a document
+    whose file is gone, a file left in Current_ReadOnly that nobody registered, a released file somebody
+    made writable. One pass finds all three and says what it would do before it does anything."""
+    from dms_api import align, file_service
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    cur = q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx"
+    assert cur.exists()
+
+    stray = q / "Current_ReadOnly" / "Pasted by hand.xlsx"      # copied in by hand, read only never set
+    stray.write_text("x", encoding="utf-8")
+    file_service._set_read_only(str(cur), False)                # and somebody cleared the flag on this one
+
+    align.run(s, write=False, sp=sp)
+    said = capsys.readouterr().out
+    assert "not known" in said and "Pasted by hand.xlsx" in said
+    assert "not read only" in said
+    assert not file_service.is_read_only(str(cur))              # a dry run changes nothing
+
+    align.run(s, write=True, sp=sp)
+    assert file_service.is_read_only(str(cur)) and file_service.is_read_only(str(stray))
+    assert sp.document(d["id"])["currentUncPath"] == str(cur)   # the record it does know is left alone
+
+    align.run(s, write=True, register=True, sp=sp)
+    found = [x for x in sp.documents() if (x.get("currentUncPath") or "").endswith("Pasted by hand.xlsx")]
+    assert found, "the file nobody registered is adopted, with its own record"
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

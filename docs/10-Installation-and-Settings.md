@@ -98,6 +98,13 @@ it for a PDF of the document, reads the pages (pypdf) and removes the copy at on
 Then **First loading** (super users, ⋮ menu) registers what is already on the server, and
 `docs/Go-Live.md` covers the rest.
 
+Later, whenever somebody has been working on the file server directly:
+
+```powershell
+.\scripts\Sync-DmsFileServer.ps1            # what it would do
+.\scripts\Sync-DmsFileServer.ps1 -Write     # put the two back in step
+```
+
 ## 6a. "I may see the folder but New document and Upload are not there"
 
 The DMS shows those commands where AD lets that person write. Open, signed in as them:
@@ -214,6 +221,7 @@ the workflow and blueprint folders stay out of reach either way.
 | `New-DmsMarkdown.ps1` | The Markdown beside every released document, in one pass (`-Rewrite` writes it again for the ones that have one) |
 | `Repair-DmsDashboards.ps1` | Dashboard pages (`dashboard_*.html`) released into `Current_ReadOnly` before the DMS knew they are tools: moved back into their folder, writable |
 | `Repair-DmsRegister.ps1` | After files or folders were removed on the file server itself: a record whose file moved is pointed at it, a record whose file is gone is archived and says so in Control Audit, Markdown beside nothing and stale check-outs go, missing blueprint folders are listed |
+| `Sync-DmsFileServer.ps1` | **After files were added or deleted by hand on the file server**: one pass over everything - records against files, files nobody registered, read-only flags, dashboards, Markdown, missing blueprint folders |
 | `Set-DmsKpiKeyAccess.ps1` | Lets `/api/kpi` answer a page the DMS serves into a sandbox (it has no sign-in to send; the key in its address is what authorizes it) |
 | `Compare-DmsTree.ps1` | What the DMS shows against what is on the disk |
 | `Restart-Dms.ps1` | Reload the service (`-ComputerName` from another machine) |
