@@ -1855,6 +1855,17 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         log(user, "kpi", f"{'edit' if kpi else 'new'} KPI in {kpis}" + (f" ({kpi})" if kpi else ""))
         return {"url": url, "folder": kpis, "kpi": kpi, "mode": args["mode"]}
 
+    @app.options("/api/kpi/{rest:path}")
+    def kpi_preflight(rest: str):
+        """A page that sends a header of its own (Accept, a language) makes the browser ask permission first.
+        Unanswered, that question is the end of the call - whatever the DMS would have said to the call
+        itself."""
+        from fastapi.responses import Response
+        return Response(status_code=204, headers={**OPEN_TO_THE_PAGE,
+                                                  "Access-Control-Allow-Methods": "GET, OPTIONS",
+                                                  "Access-Control-Allow-Headers": "*",
+                                                  "Access-Control-Max-Age": "600"})
+
     @app.get("/api/kpi/ping")
     def kpi_ping():
         """Can a page reach the DMS at all? This one answers without a key and without a sign-in, so it says
