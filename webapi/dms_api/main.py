@@ -1938,7 +1938,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return JSONResponse({"name": name, "kind": "text", "text": text}, headers=OPEN_TO_THE_PAGE)
 
     @app.get("/api/files/dashboard")
-    def dashboard(path: str, t: str = "", user: User = Depends(current_user)):
+    def dashboard(request: Request, path: str, t: str = "", user: User = Depends(current_user)):
         """An HTML page of the repository, served so that it runs in the browser - a dashboard, a report, a
         page somebody saved. It is served into a sandbox: the page may run its own scripts and draw itself,
         and it may not read the DMS's cookies or call the DMS as the person looking at it, because a page
@@ -1964,10 +1964,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         body = BRIDGE.replace(b"__KEY__", t.encode()) + body
         log(user, "dashboard", full)
         rules = ("sandbox allow-scripts allow-popups allow-downloads allow-forms; " if s.page_sandbox else "")
+        # The page may reach this server and nothing else: what it reads has no business leaving the company.
+        # The DMS has to be named here, not written as 'self': in the sandbox the page's own origin is a
+        # nameless one, so 'self' matches nothing at all - and every call it made was blocked before it left.
+        home = str(request.base_url).rstrip("/")
         return Response(body, media_type="text/html; charset=utf-8", headers={
-            # Whether or not it is sandboxed, the page may reach nothing but this server: a page of the
-            # repository has no business sending what it reads anywhere else.
-            "Content-Security-Policy": rules + "default-src 'self' data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'self'",
+            "Content-Security-Policy": rules + f"default-src 'self' {home} data: blob: 'unsafe-inline' "
+                                               f"'unsafe-eval'; connect-src 'self' {home}",
             "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"})
 
     @app.get("/api/files/view-pdf")

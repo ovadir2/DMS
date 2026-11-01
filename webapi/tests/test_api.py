@@ -2112,7 +2112,11 @@ def test_a_dashboard_page_is_a_tool_and_not_a_document(tmp_path):
     got = c.get("/api/files/dashboard", params={"path": str(saved)}, follow_redirects=True)
     assert got.status_code == 200 and got.content.endswith(saved.read_bytes())   # the page, behind its bridge
     assert got.headers["content-type"].startswith("text/html")
-    assert "sandbox" in got.headers["content-security-policy"]          # it runs, it does not act as the reader
+    rules = got.headers["content-security-policy"]
+    assert "sandbox" in rules                                           # it runs, it does not act as the reader
+    # ...and it may still reach the DMS: in the sandbox its own origin is nameless, so 'self' alone would
+    # block every call it makes, including the ones to the key endpoints.
+    assert "connect-src 'self' http://testserver" in rules
     assert c.get("/api/files/dashboard", params={"path": str(q / "nope.html")}).status_code == 404
 
     # Any page of the repository runs the same way: it is a page, and a browser is what opens one. Only the
