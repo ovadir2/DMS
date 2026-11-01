@@ -2222,6 +2222,20 @@ def test_a_sandboxed_page_gets_a_key_for_its_own_folder(tmp_path):
     inside = c.get("/api/kpi/files", params={"t": key, "path": str(kpis / "Current_ReadOnly")}).json()
     assert [f["name"] for f in inside["files"]] == ["DB 14.09.2026.md"]
 
+    # The workbook and the definition beside it, as data a page can draw without a library of its own
+    openpyxl = pytest.importorskip("openpyxl")
+    book = openpyxl.Workbook()
+    book.active.title = "DB"
+    book.active.append(["Customer", "Total"])
+    book.active.append(["A", 120])
+    book.save(str(kpis / "Current_ReadOnly" / "DB 04.10.2026.xlsx"))
+    (kpis / "Current_ReadOnly" / "dashboard_db.json").write_text('{"goal": 100}', encoding="utf-8")
+    data = c.get("/api/kpi/data", params={"t": key, "path": str(kpis / "Current_ReadOnly" / "DB 04.10.2026.xlsx")}).json()
+    assert data["kind"] == "sheets" and data["sheets"]["DB"][1] == ["A", "120"]
+    told = c.get("/api/kpi/data", params={"t": key, "path": str(kpis / "Current_ReadOnly" / "dashboard_db.json")}).json()
+    assert told["kind"] == "json" and told["json"] == {"goal": 100}
+    assert c.get("/api/kpi/data", params={"t": key, "path": str(root / "01_General" / "Secret.txt")}).status_code == 403
+
     page = c.get("/api/files/dashboard", params={"path": str(kpis / "DB_Dashboard.html"), "t": key})
     assert "window.DMS" in page.text and key in page.text and page.text.rstrip().endswith("<!doctype html>")
 

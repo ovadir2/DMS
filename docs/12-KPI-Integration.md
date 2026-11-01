@@ -79,6 +79,7 @@ const text = await (await fetch('/api/kpi/file?t=' + key + '&path=' + encodeURIC
 | --- | --- |
 | `GET /api/kpi/files?t=&path=` | What is in that folder: `name`, `path`, `folder`, `size`, `modified`. `path` defaults to the folder the page lives in; folders under it are allowed |
 | `GET /api/kpi/file?t=&path=` | One file as it is on disk (`.md` as `text/markdown`, `.json` as `application/json`, and so on) |
+| `GET /api/kpi/data?t=&path=` | The same file **as data a page can draw**: a workbook as `{kind:"sheets", sheets:{<sheet>: [[cell, …], …]}}`, a JSON as `{kind:"json", json:…}`, anything else as `{kind:"text", text:…}`. A browser cannot open an `.xlsx` by itself, and the server may have no way out to fetch a library for it |
 
 The key reads **one folder and what is under it**, for `DMS_PAGE_KEY_HOURS` hours (8 by default), in the name
 of the person who opened the page - their AD rights are checked again on every call, so a page cannot show
@@ -140,6 +141,22 @@ the versioned one when the Builder team states theirs):
 
 The Builder has no publication API in the DMS yet (**PKG-003** is still open): what it produces is brought in
 by dropping it into the `KPIs` folder, as §2 describes.
+
+### The dashboard's own files
+
+`KPIs\Current_ReadOnly` holds what a departmental dashboard reads - the weekly workbook and the dashboard's
+definition - both released, approved and read only:
+
+```js
+const key = new URLSearchParams(location.search).get('t');
+const at  = window.DMS.folder + '\\Current_ReadOnly';
+const inside = await (await fetch(`/api/kpi/files?t=${key}&path=${encodeURIComponent(at)}`)).json();
+for (const f of inside.files) {
+  const d = await (await fetch(`/api/kpi/data?t=${key}&path=${encodeURIComponent(f.path)}`)).json();
+  if (d.kind === 'sheets') { /* d.sheets['DB'] -> rows of cells */ }
+  if (d.kind === 'json')   { /* d.json         -> the definition */ }
+}
+```
 
 ## 4. Identity, rights and audit
 

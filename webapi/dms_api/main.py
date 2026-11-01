@@ -1897,6 +1897,36 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     "json": "application/json"}[full.rsplit(".", 1)[1].lower()] + "; charset=utf-8"
         return Response(body, media_type=kind, headers=OPEN_TO_THE_PAGE)
 
+    @app.get("/api/kpi/data")
+    def kpi_data(t: str, path: str):
+        """A file of that folder as data a page can draw: a workbook as its sheets and rows, a JSON as what
+        it says, anything else as its text. A browser cannot open an .xlsx by itself and the server may have
+        no way out to fetch a library for it - the DMS reads workbooks anyway, for the AI."""
+        from fastapi.responses import JSONResponse
+        full = kpi_scope(t, path)
+        if not files.is_file(full):
+            raise HTTPException(404, "File not found")
+        name = os.path.basename(full)
+        if full.lower().endswith((".xlsx", ".xlsm", ".xls", ".csv")):
+            from . import sheets
+            try:
+                return JSONResponse({"name": name, "kind": "sheets", "sheets": sheets.rows_of(full)},
+                                    headers=OPEN_TO_THE_PAGE)
+            except Exception as e:  # noqa: BLE001 - a workbook the DMS cannot open is said so, not a 500
+                logger.info("%s was not read as a workbook: %s", full, e)
+                raise HTTPException(415, f"This workbook could not be read here: {e}") from None
+        with open(files.extended(full), "rb") as f:
+            body = f.read(s.max_upload_mb * 1024 * 1024)
+        text = body.decode("utf-8-sig", "replace")
+        if full.lower().endswith(".json"):
+            import json as _json
+            try:
+                return JSONResponse({"name": name, "kind": "json", "json": _json.loads(text)},
+                                    headers=OPEN_TO_THE_PAGE)
+            except ValueError as e:
+                raise HTTPException(415, f"This file is not JSON: {e}") from None
+        return JSONResponse({"name": name, "kind": "text", "text": text}, headers=OPEN_TO_THE_PAGE)
+
     @app.get("/api/files/dashboard")
     def dashboard(path: str, t: str = "", user: User = Depends(current_user)):
         """An HTML page of the repository, served so that it runs in the browser - a dashboard, a report, a
