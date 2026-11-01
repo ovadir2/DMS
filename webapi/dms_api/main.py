@@ -3133,7 +3133,8 @@ BRIDGE = b"""<script>
 (function () {
   var key = '__KEY__';
   var here = new URLSearchParams(location.search);
-  window.DMS = { key: key, api: '/api/kpi', folder: here.get('path') || '' };
+  window.DMS = { key: key, api: '/api/kpi', folder: here.get('path') || '',
+                 logo: '/dms/logo.png', icon: '/dms/icon.png' };
   var FOLDER = /^(?:https?:\\/\\/[^\\/]+)?\\/api\\/(?:browse|list|files|folder|folders|levels)\\/?(?:\\?(.*))?$/i;
   var FILE = /^(?:https?:\\/\\/[^\\/]+)?\\/api\\/(?:files\\/(?:download|text|raw)|file)\\/?(?:\\?(.*))?$/i;
   var sent = window.fetch.bind(window);
@@ -3149,10 +3150,31 @@ BRIDGE = b"""<script>
         var path = where((folder || file)[1]);
         var to = '/api/kpi/' + (folder ? 'files' : 'file') + '?t=' + encodeURIComponent(key)
                + (path ? '&path=' + encodeURIComponent(path) : '');
-        return sent(to, options);
+        // The page has an origin of its own in here, so the call is a cross-origin one. A browser throws
+        // away an answer that says "anyone may read this" when the call also sent a sign-in, and the page
+        // sees nothing but "failed to fetch" - so the sign-in is left off: the key is what opens the door.
+        var how = {};
+        for (var k in (options || {})) how[k] = options[k];
+        how.credentials = 'omit';
+        how.mode = 'cors';
+        return sent(to, how);
       }
     } catch (e) { /* a page that fetches something unusual is left to do it */ }
     return sent(url, options);
+  };
+  // Some pages ask the older way. The same addresses, the same key.
+  var open = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (method, url) {
+    try {
+      var folder = (url || '').match(FOLDER), file = !folder && (url || '').match(FILE);
+      if (folder || file) {
+        var path = where((folder || file)[1]);
+        url = '/api/kpi/' + (folder ? 'files' : 'file') + '?t=' + encodeURIComponent(key)
+            + (path ? '&path=' + encodeURIComponent(path) : '');
+        arguments[1] = url;
+      }
+    } catch (e) { /* left as it was */ }
+    return open.apply(this, arguments);
   };
 })();
 </script>

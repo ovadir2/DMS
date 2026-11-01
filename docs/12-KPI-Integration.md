@@ -97,6 +97,14 @@ the page it serves, which send the DMS's folder and file calls to the key endpoi
 | `/api/browse`, `/api/list`, `/api/files`, `/api/folder(s)`, `/api/levels` (with `path=`, `folder=` or `file=`) | `/api/kpi/files?t=…&path=…` |
 | `/api/files/download`, `/api/files/text`, `/api/files/raw`, `/api/file` | `/api/kpi/file?t=…&path=…` |
 
+The bridge sends those calls without a sign-in (`credentials: 'omit'`): in the sandbox the page has an
+origin of its own, and a browser throws away an answer that says "anyone may read this" when the call also
+carried credentials - which is what "failed to fetch" meant. The key is what opens the door, not the sign-in.
+`XMLHttpRequest` is bridged the same way.
+
+The DMS's own marks are there for a page that draws a header: `/dms/logo.png` and `/dms/icon.png` (also
+`window.DMS.logo` and `window.DMS.icon`). A page should use those rather than draw its own "rh".
+
 `/api/kpi/files` answers in the shape `/api/browse` answers in (`path`, `parent`, `folders[]`, `files[]`),
 so such a page reads it unchanged. The key is also there as `window.DMS = {key, api, folder}` for a page that
 would rather call the endpoints itself. Everything else the page does is untouched.
