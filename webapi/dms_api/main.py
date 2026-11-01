@@ -3184,7 +3184,7 @@ BRIDGE = b"""<script>
                  folder: me.replace(/[\\/][^\\/]*$/, ''),        // the folder this page lives in
                  logo: '/dms/logo.png', icon: '/dms/icon.png' };
   var FOLDER = /^(?:https?:\\/\\/[^\\/]+)?\\/api\\/(?:browse|list|files|folder|folders|levels)\\/?(?:\\?(.*))?$/i;
-  var FILE = /^(?:https?:\\/\\/[^\\/]+)?\\/api\\/(?:files\\/(?:download|text|raw)|file)\\/?(?:\\?(.*))?$/i;
+  var FILE = /^(?:https?:\\/\\/[^\\/]+)?\\/api\\/(?:files\\/(?:download|text|raw)|file|download|open|content|read|preview)\\/?(?:\\?(.*))?$/i;
   var sent = window.fetch.bind(window);
   function where(q) {
     var p = new URLSearchParams(q || '');
@@ -3201,11 +3201,10 @@ BRIDGE = b"""<script>
         // The page has an origin of its own in here, so the call is a cross-origin one. A browser throws
         // away an answer that says "anyone may read this" when the call also sent a sign-in, and the page
         // sees nothing but "failed to fetch" - so the sign-in is left off: the key is what opens the door.
-        var how = {};
-        for (var k in (options || {})) how[k] = options[k];
-        how.credentials = 'omit';
-        how.mode = 'cors';
-        return sent(to, how);
+        // No headers of the page's own either: one header the browser does not know by heart turns the
+        // call into a question asked first, and a question is one more thing to go wrong. The key says
+        // everything these two endpoints need.
+        return sent(to, { method: 'GET', credentials: 'omit', mode: 'cors', redirect: 'follow' });
       }
     } catch (e) { /* a page that fetches something unusual is left to do it */ }
     return sent(url, options);

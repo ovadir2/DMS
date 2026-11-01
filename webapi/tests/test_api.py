@@ -2218,6 +2218,13 @@ def test_a_sandboxed_page_gets_a_key_for_its_own_folder(tmp_path):
     assert first.status_code == 307 and "&t=" in first.headers["location"]
     key = first.headers["location"].split("&t=")[1]
 
+    # A page that sends a header of its own makes the browser ask permission first; unanswered, that
+    # question is the end of the call.
+    asked = c.options("/api/kpi/files", headers={"Origin": "null", "Access-Control-Request-Method": "GET",
+                                                 "Access-Control-Request-Headers": "x-dms-lang"})
+    assert asked.status_code == 204 and asked.headers["access-control-allow-origin"] == "*"
+    assert "GET" in asked.headers["access-control-allow-methods"]
+
     listed = c.get("/api/kpi/files", params={"t": key})
     assert listed.status_code == 200 and listed.headers["access-control-allow-origin"] == "*"
     answer = listed.json()
