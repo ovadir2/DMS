@@ -1923,8 +1923,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         # here without being rewritten. A page that already uses /api/kpi is left alone by it.
         body = BRIDGE.replace(b"__KEY__", t.encode()) + body
         log(user, "dashboard", full)
+        rules = ("sandbox allow-scripts allow-popups allow-downloads allow-forms; " if s.page_sandbox else "")
         return Response(body, media_type="text/html; charset=utf-8", headers={
-            "Content-Security-Policy": "sandbox allow-scripts allow-popups allow-downloads allow-forms",
+            # Whether or not it is sandboxed, the page may reach nothing but this server: a page of the
+            # repository has no business sending what it reads anywhere else.
+            "Content-Security-Policy": rules + "default-src 'self' data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'self'",
             "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"})
 
     @app.get("/api/files/view-pdf")

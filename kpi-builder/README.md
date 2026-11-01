@@ -1,5 +1,11 @@
 # RH KPI Builder
 
+> **This is a separate application.** It lives here only so the pilot had something to run.
+> `scripts\Split-KpiBuilder.ps1 -Path <folder>` makes it a repository and a VS Code workspace of its own,
+> after which this copy is deleted and the site is deployed with `New-KpiBuilderSite.ps1 -Source <folder>`.
+> The DMS and the Builder are built, tested and deployed independently; what they agree on is written in the
+> DMS repository's `docs/12-KPI-Integration.md`.
+
 A page that makes a KPI. It is deliberately small: the DMS already knows what a KPI's files are and where
 they go, so the Builder's whole job is to write those two files.
 

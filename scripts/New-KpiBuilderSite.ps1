@@ -21,6 +21,7 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [string]$Path = 'E:\KPI_Builder',
+    [string]$Source = '',                           # the Builder's own repository; empty: the copy in this one
     [string]$SiteName = 'KPI-Builder',
     [int]$Port = 8081,
     [string]$HostHeader = '',                       # e.g. kpi-pilot.rh.tech; empty: the port alone
@@ -30,8 +31,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$source = Join-Path $PSScriptRoot '..\kpi-builder'
-if (-not (Test-Path -LiteralPath $source)) { throw "kpi-builder was not found beside the scripts folder: $source" }
+$source = if ($Source) { $Source } else { Join-Path $PSScriptRoot '..\kpi-builder' }
+if (-not (Test-Path -LiteralPath $source)) { throw "The Builder was not found: $source (give -Source)" }
 
 Write-Host "=== The files" -ForegroundColor Cyan
 if ($PSCmdlet.ShouldProcess($Path, 'copy the Builder')) {

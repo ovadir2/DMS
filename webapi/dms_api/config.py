@@ -96,6 +96,11 @@ class Settings:
     page_key_hours: int = 8
     # Where the KPI Builder lives. Empty: Add New KPI is offered greyed, with the reason.
     kpi_builder_url: str = ""
+    # A page the DMS serves runs in a sandbox: an origin of its own, so it cannot act as the person
+    # reading it. 0 serves it as part of the DMS instead - its own calls then work with that person's
+    # sign-in, and a page that arrives from a shared folder can do whatever they could. Only for a site
+    # that will not let the key endpoints answer without a sign-in (scripts\Set-DmsKpiKeyAccess.ps1).
+    page_sandbox: bool = True
     submitted_editable: bool = True        # during approval the owner and the approvers may edit (remarks) the submitted file
     ex_days: int = 3                        # shared files are removed from the Exchange site N days after their last share (0: never)
     ex_shortcut: bool = True                # add a OneDrive shortcut DMS_<Customer> to the customer folder
@@ -187,6 +192,7 @@ class Settings:
             add_with_dms_rights=e("DMS_ADD_WITH_DMS_RIGHTS", "").strip().lower() in ("1", "true", "yes", "on"),
             page_key_hours=int(e("DMS_PAGE_KEY_HOURS", "8") or 8),
             kpi_builder_url=e("DMS_KPI_BUILDER_URL", "").strip(),
+            page_sandbox=e("DMS_PAGE_SANDBOX", "1").strip().lower() not in ("0", "false", "no", "off"),
             submitted_editable=e("DMS_SUBMITTED_EDITABLE", "true").lower() not in ("0", "false", "no", "off"),
             shared_log=e("DMS_SHARED_LOG", "Shared/DMS-Shared-Log.csv").strip("/\\ "),
             ex_shortcut=e("DMS_EX_SHORTCUT", "true").lower() not in ("0", "false", "no", "off"),
