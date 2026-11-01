@@ -18,6 +18,9 @@
     .\scripts\New-KpiBuilderSite.ps1 -Source C:\Dev\kpi-builder -WhatIf
 .EXAMPLE
     .\scripts\New-KpiBuilderSite.ps1 -Source C:\Dev\kpi-builder -WireDms
+.EXAMPLE
+    # the checkout itself is what IIS serves (clone the branch straight into E:\KPI_Builder)
+    .\scripts\New-KpiBuilderSite.ps1 -Source E:\KPI_Builder -Path E:\KPI_Builder -WireDms
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
@@ -39,10 +42,47 @@ if (-not (Test-Path -LiteralPath (Join-Path $source 'index.html'))) {
 }
 
 Write-Host "=== The files" -ForegroundColor Cyan
-if ($PSCmdlet.ShouldProcess($Path, 'copy the Builder')) {
+$same = (Test-Path -LiteralPath $Path) -and
+        ((Resolve-Path -LiteralPath $source).Path.TrimEnd('\') -ieq (Resolve-Path -LiteralPath $Path).Path.TrimEnd('\'))
+if ($same) {
+    Write-Host "  [skip] the site is the checkout itself: $Path" -ForegroundColor DarkGray
+} elseif ($PSCmdlet.ShouldProcess($Path, 'copy the Builder')) {
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
-    Copy-Item -Path (Join-Path $source '*') -Destination $Path -Recurse -Force
+    Copy-Item -Path (Join-Path $source '*') -Destination $Path -Recurse -Force -Exclude '.git'
     Write-Host "  [ok]   $Path" -ForegroundColor Green
+}
+
+# Whatever is in that folder, IIS serves it - and a checkout has a .git in it. Nobody gets to read that,
+# and index.html is what an address with no file asks for.
+$siteConfig = @'
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <system.webServer>
+    <defaultDocument>
+      <files>
+        <clear />
+        <add value="index.html" />
+      </files>
+    </defaultDocument>
+    <security>
+      <requestFiltering>
+        <hiddenSegments>
+          <add segment=".git" />
+          <add segment=".vscode" />
+        </hiddenSegments>
+      </requestFiltering>
+    </security>
+    <staticContent>
+      <remove fileExtension=".json" />
+      <mimeMap fileExtension=".json" mimeType="application/json" />
+    </staticContent>
+  </system.webServer>
+</configuration>
+'@
+if ($PSCmdlet.ShouldProcess((Join-Path $Path 'web.config'), 'write the site configuration')) {
+    New-Item -ItemType Directory -Force -Path $Path | Out-Null
+    Set-Content -LiteralPath (Join-Path $Path 'web.config') -Value $siteConfig -Encoding UTF8
+    Write-Host "  [ok]   web.config (index.html by default, .git not served)" -ForegroundColor Green
 }
 
 Write-Host "=== The site" -ForegroundColor Cyan
