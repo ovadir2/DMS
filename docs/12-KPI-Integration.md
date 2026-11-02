@@ -178,8 +178,8 @@ no-workflow releases are written to Control Audit with the person's email (**SEC
 
 | Requirement | What is missing |
 | --- | --- |
-| **DMS-003**, **DMS-004**, **DMS-005**, **DMS-009** | The right-click menu has no *Add New KPI*, *Edit KPI*, *View KPIs* or *Refresh*. The menu is built in `dms-page.html` (the `CANON` list); adding a line is small, but it needs the Builder's launch URL and the contract for passing the folder - neither exists yet. Nothing in the DMS launches the Builder. |
-| **DMS-006** | No *Edit KPI*: the DMS does not know which file is a KPI definition, only that it is a released document. |
+| **DMS-009** | The `KPIs` folder menu has no *View KPIs* or *Refresh* (New KPI and Edit KPI are built - see §3b). |
+| **DMS-006** (part) | *Edit KPI* opens the Builder on a KPI's folder, but the DMS does not know which file inside it is the definition - only that it is a released document. |
 | **ART-005** | A package is dropped file by file. There is no "one logical release" of the HTML and the JSON together, so a half-finished drop leaves the page without its definition. |
 | **ART-006** | KPI IDs are folder names; there is no collision detection beyond a file of the same name, and no rollback of a KPI as a unit. Revisions of the released artifacts work as for any document. |
 | **ART-008** | There is no derived index of KPIs. The Builder would have to walk `KPIs` folders through `/api/browse`. |
