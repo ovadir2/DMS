@@ -82,7 +82,9 @@ const text = await (await fetch('/api/kpi/file?t=' + key + '&path=' + encodeURIC
 | `GET /api/kpi/data?t=&path=` | The same file **as data a page can draw**: a workbook as `{kind:"sheets", sheets:{<sheet>: [[cell, …], …]}}`, a JSON as `{kind:"json", json:…}`, anything else as `{kind:"text", text:…}`. A browser cannot open an `.xlsx` by itself, and the server may have no way out to fetch a library for it |
 
 The key reads **one folder and what is under it**, for `DMS_PAGE_KEY_HOURS` hours (8 by default), in the name
-of the person who opened the page - their AD rights are checked again on every call, so a page cannot show
+of the person who opened the page. For a page inside a `KPIs` folder that folder is the whole of it, so a
+KPI's page reads its own `Current_ReadOnly` (under it) and a dashboard reads the department's (**beside**
+it); anywhere else the page is given its own folder and no more - their AD rights are checked again on every call, so a page cannot show
 anyone more than they may see. There is no way back through it: nothing it reaches can be written, renamed or
 deleted. Both answers carry `Access-Control-Allow-Origin: *`, because the sandbox gives the page an origin of
 its own; the key, not the origin, is what authorizes the call (**SEC-004**, **SEC-006**).

@@ -2218,6 +2218,16 @@ def test_a_sandboxed_page_gets_a_key_for_its_own_folder(tmp_path):
     assert first.status_code == 307 and "&t=" in first.headers["location"]
     key = first.headers["location"].split("&t=")[1]
 
+    # A page of a KPI reads the department's KPIs folder, not only the folder it sits in: its own
+    # Current_ReadOnly is under it, and a dashboard's sits beside it.
+    (kpis / "OEE").mkdir()
+    (kpis / "OEE" / "OEE.html").write_text("<!doctype html>", encoding="utf-8")
+    inner = c.get("/api/files/dashboard", params={"path": str(kpis / "OEE" / "OEE.html")}, follow_redirects=False)
+    deep = inner.headers["location"].split("&t=")[1]
+    beside = c.get("/api/kpi/files", params={"t": deep, "path": str(kpis / "Current_ReadOnly")})
+    assert beside.status_code == 200 and [f["name"] for f in beside.json()["files"]] == ["DB 14.09.2026.md"]
+    assert c.get("/api/kpi/files", params={"t": deep, "path": str(root / "01_General")}).status_code == 403
+
     # A page that sends a header of its own makes the browser ask permission first; unanswered, that
     # question is the end of the call.
     asked = c.options("/api/kpi/files", headers={"Origin": "null", "Access-Control-Request-Method": "GET",
@@ -2228,7 +2238,7 @@ def test_a_sandboxed_page_gets_a_key_for_its_own_folder(tmp_path):
     listed = c.get("/api/kpi/files", params={"t": key})
     assert listed.status_code == 200 and listed.headers["access-control-allow-origin"] == "*"
     answer = listed.json()
-    assert [f["name"] for f in answer["folders"]] == ["Current_ReadOnly"]      # as /api/browse answers
+    assert "Current_ReadOnly" in [f["name"] for f in answer["folders"]]        # as /api/browse answers
     assert [f["name"] for f in answer["files"]] == ["DB_Dashboard.html"]
     inside = c.get("/api/kpi/files", params={"t": key, "path": str(kpis / "Current_ReadOnly")}).json()
     assert [f["name"] for f in inside["files"]] == ["DB 14.09.2026.md"]

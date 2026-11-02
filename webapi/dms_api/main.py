@@ -1965,7 +1965,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         # the folder it lives in, for a few hours, in the name of whoever opened it.
         if not t:
             from urllib.parse import quote as _q
-            return RedirectResponse(f"/api/files/dashboard?path={_q(path)}&t={kpi_key(os.path.dirname(full), user.email)}")
+            # A page in a KPIs folder is given the whole of that folder: a KPI's page reads its own
+            # Current_ReadOnly, and a dashboard reads the department's - which sits beside it, not under it.
+            # Everything in there is released, approved material, and the person's AD rights are checked
+            # again on every call; anywhere else the page is given its own folder and no more.
+            scope = files.kpis_folder(s.repository_root, full) or os.path.dirname(full)
+            return RedirectResponse(f"/api/files/dashboard?path={_q(path)}&t={kpi_key(scope, user.email)}")
         with open(files.extended(full), "rb") as f:
             body = f.read(s.max_upload_mb * 1024 * 1024)
         # A page written against the DMS's own addresses (/api/browse, /api/files/download) cannot reach them
