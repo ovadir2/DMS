@@ -2402,6 +2402,72 @@ def test_a_new_customer_is_cut_from_the_skeleton(tmp_path):
                   files={"file": ("Quote.docx", b"x")}).status_code == 201
 
 
+def test_an_application_calls_the_dms_with_a_key_of_its_own(tmp_path):
+    """An application has no Windows sign-in and no AD rights. It is given a key, and the key is an
+    identity: a name, what it may read, and a line in the log for every call. A call with no key, a wrong
+    key or a key for something else is refused, and the key itself never comes back in an answer."""
+    root = tmp_path / "Root"
+    customers = root / "02_Customers"
+    for name in ("Customer_Skeleton", "Elbit", "Rafael"):
+        (customers / name).mkdir(parents=True)
+    (customers / "Elbit" / "Develop" / "Products" / "CRU 4").mkdir(parents=True)
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory")
+    s.api_keys = {"the-key": {"name": "priority", "scopes": ["customers"], "as": "svc_priority@rh.co.il"},
+                  "other": {"name": "reports", "scopes": ["documents"], "as": "svc_reports@rh.co.il"},
+                  "nameless": {"name": "nobody", "scopes": ["customers"], "as": ""}}
+    c = TestClient(create_app(s))
+
+    assert c.get("/api/v1/customers").status_code == 401                       # no key
+    assert c.get("/api/v1/customers", headers={"X-DMS-Api-Key": "guess"}).status_code == 401
+    refused = c.get("/api/v1/customers", headers={"X-DMS-Api-Key": "other"})   # a key for something else
+    assert refused.status_code == 403 and "reports" in refused.text
+
+    # a key that names no AD account is told nothing: an application is not a super user
+    blind = c.get("/api/v1/customers", headers={"X-DMS-Api-Key": "nameless"})
+    assert blind.status_code == 403 and "AD account" in blind.text
+
+    r = c.get("/api/v1/customers", headers={"X-DMS-Api-Key": "the-key"})
+    assert r.status_code == 200
+    assert [x["name"] for x in r.json()["customers"]] == ["Elbit", "Rafael"]   # the shape is not a customer
+    assert "the-key" not in r.text and r.json()["count"] == 2
+
+    same = c.get("/api/v1/customers", headers={"Authorization": "Bearer the-key"},
+                 params={"q": "elb", "with_projects": True})
+    assert [x["name"] for x in same.json()["customers"]] == ["Elbit"]
+    assert same.json()["customers"][0]["products"] == ["CRU 4"]
+
+
+def test_an_application_asks_which_documents_are_approved(tmp_path):
+    """What the company's AI reads from: the DMS says which documents are in force and where their files
+    are, instead of being pointed at a folder and left to guess. A revision that was replaced is not in the
+    answer, and neither is anything still in work."""
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    cur = q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx"
+    cur.with_suffix(".md").write_text("# what it says", encoding="utf-8")
+    s.api_keys = {"k": {"name": "ai", "scopes": ["documents"], "as": "svc_ai@rh.co.il"}}
+    key = {"X-DMS-Api-Key": "k"}
+
+    r = c.get("/api/v1/documents", headers=key)
+    assert r.status_code == 200
+    one = r.json()["documents"][0]
+    assert one["documentId"] == d["documentId"] and one["path"] == str(cur)
+    assert one["markdown"] == str(cur.with_suffix(".md")) and one["customer"] == "Customer_A"
+    assert one["status"] == s.choices["Approved_ReadOnly"] and one["revision"] == "01"
+
+    assert c.get("/api/v1/documents", headers=key, params={"customer": "Elbit"}).json()["count"] == 0
+    assert c.get("/api/v1/documents", headers=key, params={"q": "FCT"}).json()["count"] == 1
+
+    # a document whose next revision is being written is still the approved one, and says which is coming
+    c.post(f"/api/documents/{d['id']}/revise")
+    again = c.get("/api/v1/documents", headers=key).json()
+    assert again["count"] == 1 and again["documents"][0]["path"] == str(cur)
+    assert again["documents"][0]["nextRevision"] == "02"
+
+    # the key is for documents only, and the answer never carries it
+    s.api_keys = {"k": {"name": "ai", "scopes": ["customers"], "as": "svc_ai@rh.co.il"}}
+    assert c.get("/api/v1/documents", headers=key).status_code == 403
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

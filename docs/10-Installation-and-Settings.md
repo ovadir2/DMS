@@ -198,6 +198,8 @@ the workflow and blueprint folders stay out of reach either way.
 | Key | Default | What it does |
 | --- | --- | --- |
 | `DMS_FL_CHECK_URL`, `DMS_FL_UPDATE_URL`, `DMS_FL_UPDATE_METHOD`, `DMS_FL_UPDATE_BODY`, `DMS_FL_REGISTERED_FIELD`, `DMS_FL_AUTH`, `DMS_FL_TOKEN` | - | Moving an old link to the document's new home |
+| `DMS_CUSTOMER_SKELETON` | `Customer_Skeleton` | The customer folder a new customer is cut from - its folders and the AD rights on them. `Customer_Skelton` answers to it too |
+| `DMS_API_KEYS` | - | Applications that may call `/api/v1/...`: `name:key:scopes` (`customers`, `documents`, `files`), several separated by `\|`. Empty: none can |
 
 ### Testing only
 
@@ -223,6 +225,7 @@ the workflow and blueprint folders stay out of reach either way.
 | `Repair-DmsRegister.ps1` | After files or folders were removed on the file server itself: a record whose file moved is pointed at it, a record whose file is gone is archived and says so in Control Audit, Markdown beside nothing and stale check-outs go, missing blueprint folders are listed |
 | `Sync-DmsFileServer.ps1` | **After files were added or deleted by hand on the file server**: one pass over everything - records against files, files nobody registered, read-only flags, dashboards, Markdown, missing blueprint folders |
 | `New-DmsCustomer.ps1` | A new customer cut from `Customer_Skeleton`: its folders and the NTFS permissions on them. `-MakeSkeletonFrom Customer_A` does the one-time rename |
+| `New-DmsApiKey.ps1` | A key for an application that calls the DMS (`/api/v1/...`), with a name and what it may read (`docs/13-Machine-API.md`) |
 | `Set-DmsKpiKeyAccess.ps1` | Lets `/api/kpi` answer a page the DMS serves into a sandbox (it has no sign-in to send; the key in its address is what authorizes it) |
 | `Compare-DmsTree.ps1` | What the DMS shows against what is on the disk |
 | `Restart-Dms.ps1` | Reload the service (`-ComputerName` from another machine) |

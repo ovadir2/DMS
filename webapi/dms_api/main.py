@@ -1883,6 +1883,125 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                                   "Access-Control-Allow-Headers": "*",
                                                   "Access-Control-Max-Age": "600"})
 
+    # ---- the machine API: a caller that is an application, not a person --------------------------------
+    # A browser signs in with Windows and sees what AD lets that person see. An application has no sign-in
+    # and no AD rights: it is given a key, and the key is an identity - a name, what it may read, and a line
+    # in the log for every call it makes. The key never appears in the log or in an answer.
+
+    def api_caller(request: Request, scope: str) -> dict:
+        from . import apikeys
+        sent = (request.headers.get("X-DMS-Api-Key") or "").strip()
+        if not sent:
+            auth = (request.headers.get("Authorization") or "").strip()
+            if auth.lower().startswith("bearer "):
+                sent = auth[7:].strip()
+        who = apikeys.caller(s.api_keys, sent)
+        if not who:
+            logger.info("machine API refused: %s %s (no key, or one the DMS does not know)",
+                        request.method, request.url.path)
+            raise HTTPException(401, "This call needs the key of an application known to the DMS "
+                                     "(X-DMS-Api-Key). Ask IT for one.")
+        if scope not in who["scopes"]:
+            raise HTTPException(403, f"{who['name']} may not read {scope}")
+        if not who.get("as"):
+            raise HTTPException(403, f"{who['name']} names no AD account to act as. An application is not a "
+                                     f"super user: the DMS answers it only what that account may see, so a "
+                                     f"key without one is told nothing. Add it to the key's line in .env.")
+        return who
+
+    def api_may_see(who: dict, path: str) -> bool:
+        """What this caller's AD account may see - the same question the DMS asks of a person, asked of the
+        account the application acts as. None means the question cannot be answered here (not a domain
+        machine), and then it is let through, as everywhere else in the DMS."""
+        return security.may_see(who.get("as") or "", path) is not False
+
+    @app.get("/api/v1/customers")
+    def api_customers(request: Request, q: str = "", with_projects: bool = False):
+        """The customers the DMS knows: what is under the customers folder of the repository, by name.
+
+        For an application, not for a person - see /api/customers for the signed-in page. The skeleton that
+        new customers are cut from is not one of them."""
+        from fastapi.responses import JSONResponse
+        who = api_caller(request, "customers")
+        base = customers_root()
+        out = []
+        try:
+            with os.scandir(base) as it:
+                for e in it:
+                    if not e.is_dir() or is_skeleton(e.name) or e.name.startswith("."):
+                        continue
+                    if not api_may_see(who, e.path):      # AD decides, for an application as for a person
+                        continue
+                    if q and q.lower() not in e.name.lower():
+                        continue
+                    item = {"name": e.name, "path": e.path}
+                    if with_projects:
+                        item["products"] = sorted(
+                            p.name for p in os.scandir(os.path.join(e.path, *blueprint.PRODUCTS))
+                            if p.is_dir()) if os.path.isdir(os.path.join(e.path, *blueprint.PRODUCTS)) else []
+                    out.append(item)
+        except OSError as e:
+            raise HTTPException(503, f"The repository could not be read: {e}") from None
+        out.sort(key=lambda x: x["name"].lower())
+        log_line = f"api {who['name']} GET /api/v1/customers -> {len(out)}"
+        logger.info(log_line)
+        return JSONResponse({"customers": out, "count": len(out)},
+                            headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/v1/documents")
+    def api_documents(request: Request, customer: str = "", q: str = "", since: str = "",
+                      with_markdown: bool = True):
+        """Every approved document the DMS holds, with the file that is in force and the Markdown beside it.
+
+        This is what the company's AI reads from: it asks the DMS which documents are approved and where
+        their files are, instead of being pointed at a folder and left to guess what in it is current. A
+        revision that has been replaced is not here; nor is anything still in work."""
+        from fastapi.responses import JSONResponse
+        from . import file_service
+        who = api_caller(request, "documents")
+        approved = s.choices["Approved_ReadOnly"]
+        out, missing = [], 0
+        for d in sp().documents():
+            state = d.get("lifecycleStatus") or ""
+            # The revision in force is the file in Current_ReadOnly, not the state of the record: a document
+            # whose next revision is being written is still approved, and the DMS says so everywhere else.
+            # A document only in work has no revision in force, and is not one of these.
+            if not (d.get("currentUncPath") or ""):
+                continue
+            path = file_service.find_file(s.repository_root, d.get("currentUncPath"))
+            if not path:
+                missing += 1
+                continue
+            if not api_may_see(who, path):                # the account it acts as, folder by folder
+                continue
+            parts = rel_parts(path)
+            of_customer = parts[1] if len(parts) > 2 and parts[0].lower() == s.customers_folder.lower() else ""
+            if customer and of_customer.lower() != customer.lower():
+                continue
+            title = d.get("title") or os.path.splitext(os.path.basename(path))[0]
+            if q and q.lower() not in f"{title} {d.get('documentId') or ''} {os.path.basename(path)}".lower():
+                continue
+            approved_utc = (d.get("lastApprovedUtc") or "")
+            if since and approved_utc and approved_utc < since:
+                continue
+            item = {"documentId": d.get("documentId") or "", "title": title,
+                    "revision": d.get("currentRevision") or "", "type": d.get("documentType") or "",
+                    "area": d.get("documentArea") or "", "owner": d.get("ownerEmail") or "",
+                    "customer": of_customer,
+                    "status": approved,
+                    "nextRevision": d.get("draftRevision") if state != approved else "",
+                    "approvedUtc": approved_utc,
+                    "path": path, "sha256": d.get("currentSHA256") or "",
+                    "folder": os.path.dirname(path)}
+            if with_markdown:
+                md = os.path.splitext(path)[0] + ".md"
+                item["markdown"] = md if files.is_file(md) else ""
+            out.append(item)
+        out.sort(key=lambda x: (x["customer"].lower(), x["title"].lower()))
+        logger.info("api %s GET /api/v1/documents -> %d, %d with no file", who["name"], len(out), missing)
+        return JSONResponse({"documents": out, "count": len(out), "withoutFile": missing},
+                            headers={"Cache-Control": "no-store"})
+
     @app.get("/api/kpi/ping")
     def kpi_ping():
         """Can a page reach the DMS at all? This one answers without a key and without a sign-in, so it says

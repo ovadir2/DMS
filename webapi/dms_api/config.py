@@ -19,6 +19,11 @@ def _load_dotenv() -> None:
             os.environ.setdefault(key.strip(), value.strip("'\""))
 
 
+def _api_keys(value: str) -> dict:
+    from .apikeys import parse
+    return parse(value)
+
+
 def _short_paths(value: str) -> dict:
     """DMS_SHORT_PATHS=02_Customers=\\\\fs\\Customers;01_General=\\\\fs\\General -> {folder: short path}."""
     out = {}
@@ -99,6 +104,9 @@ class Settings:
     # The customer folder a new customer is cut from: its folders and, on the file server, the AD
     # permissions on them. Empty or missing: the blueprint folders are made and nothing is copied.
     customer_skeleton: str = "Customer_Skeleton"
+    # Applications that call the DMS without a person behind them: name:key:scopes, separated by |.
+    # Empty: no application can call it, and the machine API answers nothing.
+    api_keys: dict = field(default_factory=dict)
     # A page the DMS serves runs in a sandbox: an origin of its own, so it cannot act as the person
     # reading it. 0 serves it as part of the DMS instead - its own calls then work with that person's
     # sign-in, and a page that arrives from a shared folder can do whatever they could. Only for a site
@@ -196,6 +204,7 @@ class Settings:
             page_key_hours=int(e("DMS_PAGE_KEY_HOURS", "8") or 8),
             kpi_builder_url=e("DMS_KPI_BUILDER_URL", "").strip(),
             customer_skeleton=e("DMS_CUSTOMER_SKELETON", "Customer_Skeleton").strip(),
+            api_keys=_api_keys(e("DMS_API_KEYS", "")),
             page_sandbox=e("DMS_PAGE_SANDBOX", "1").strip().lower() not in ("0", "false", "no", "off"),
             submitted_editable=e("DMS_SUBMITTED_EDITABLE", "true").lower() not in ("0", "false", "no", "off"),
             shared_log=e("DMS_SHARED_LOG", "Shared/DMS-Shared-Log.csv").strip("/\\ "),

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Lets the key endpoints (/api/kpi) answer a page the DMS serves into a sandbox.
 .DESCRIPTION
@@ -33,9 +33,12 @@ foreach ($section in 'anonymousAuthentication', 'windowsAuthentication') {
         & $appcmd unlock config /section:$section | Out-Null
     }
 }
-if ($PSCmdlet.ShouldProcess("$Site/api/kpi", "anonymous $(if ($on) { 'on' } else { 'off' })")) {
-    & $appcmd set config "$Site/api/kpi" /section:anonymousAuthentication /enabled:$($on.ToString().ToLower()) /commit:apphost | Out-Null
-    & $appcmd set config "$Site/api/kpi" /section:windowsAuthentication  /enabled:$((-not $on).ToString().ToLower()) /commit:apphost | Out-Null
-    Write-Host "  [ok]   $Site/api/kpi: anonymous $(if ($on) { 'on (the key authorizes)' } else { 'off' })" -ForegroundColor Green
+foreach ($path in 'api/kpi', 'api/v1') {
+    # api/kpi: a page the DMS serves into a sandbox. api/v1: an application with a key of its own.
+    if ($PSCmdlet.ShouldProcess("$Site/$path", "anonymous $(if ($on) { 'on' } else { 'off' })")) {
+        & $appcmd set config "$Site/$path" /section:anonymousAuthentication /enabled:$($on.ToString().ToLower()) /commit:apphost | Out-Null
+        & $appcmd set config "$Site/$path" /section:windowsAuthentication  /enabled:$((-not $on).ToString().ToLower()) /commit:apphost | Out-Null
+        Write-Host "  [ok]   $Site/$path : anonymous $(if ($on) { 'on (the key authorizes)' } else { 'off' })" -ForegroundColor Green
+    }
 }
 Write-Host "  next   .\scripts\Restart-Dms.ps1, then open the page again" -ForegroundColor DarkGray

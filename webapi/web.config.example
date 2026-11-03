@@ -36,6 +36,18 @@
        two answer by the key in the address instead: one folder, reading only, for a few hours, in the name
        of the person who opened the page, whose AD rights are checked again on every call.
        The section must be unlocked once on the server: scripts\Set-DmsKpiKeyAccess.ps1 does it. -->
+  <!-- The machine API: an application calls it with its own key (DMS_API_KEYS), not with a Windows
+       sign-in, so IIS must let the call reach the DMS. The key is what authorizes it. -->
+  <location path="api/v1">
+    <system.webServer>
+      <security>
+        <authentication>
+          <anonymousAuthentication enabled="true" />
+          <windowsAuthentication enabled="false" />
+        </authentication>
+      </security>
+    </system.webServer>
+  </location>
   <location path="api/kpi">
     <system.webServer>
       <security>
