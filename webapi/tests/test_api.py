@@ -2508,6 +2508,27 @@ def test_the_rag_asks_which_markdown_to_read(tmp_path):
         security.may_see = old
 
 
+def test_a_record_follows_its_document_through_a_renamed_folder(tmp_path):
+    """Renaming a customer folder - Customer_A becoming the skeleton - leaves every record under it pointing
+    at a path that is not there any more, while the files sit untouched a folder away. They are found by
+    name, so the alignment pass repoints them instead of declaring them gone."""
+    from dms_api import file_service, reconcile
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    cur = q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx"
+    assert sp.document(d["id"])["currentUncPath"] == str(cur)
+
+    customer = tmp_path / "Root" / "02_Customers" / "Customer_A"
+    renamed = customer.with_name("Customer_Skeleton")
+    customer.rename(renamed)
+
+    moved = renamed / "Commercial" / "Quotations" / "Current_ReadOnly" / cur.name
+    assert file_service.find_file(s.repository_root, str(cur)) == str(moved)
+
+    assert reconcile.run(s, write=True, sp=sp) == 0
+    after = sp.document(d["id"])
+    assert after["currentUncPath"] == str(moved) and after["lifecycleStatus"] != s.choices["Archived"]
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

@@ -158,7 +158,29 @@ def relocate(root: str, path: str | None, sha: str | None = None) -> str | None:
             candidate = os.path.join(base, *parts[i:])
             if os.path.isfile(candidate) and (not sha or _sha256(candidate).lower() == sha.lower()):
                 return candidate
-    return None
+    return _by_name(root, parts[-1], sha)
+
+
+def _by_name(root: str, name: str, sha: str | None = None) -> str | None:
+    """The last resort: the file by its own name, anywhere under the repository. A folder somebody renamed -
+    a customer that became the skeleton, a department spelt differently - leaves every record under it
+    pointing at a path that no longer exists, and the file itself untouched a few folders away. One match is
+    an answer; two of the same name are not, unless the record kept a SHA-256 to tell them apart."""
+    if not name:
+        return None
+    found: list[str] = []
+    for folder, dirs, names in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in ("04_Workflow_System", "05_Exchange_Quarantine") and not d.startswith(".")]
+        if name in names:
+            here = os.path.join(folder, name)
+            if sha:
+                if _sha256(here).lower() == sha.lower():
+                    return here
+            else:
+                found.append(here)
+                if len(found) > 1:
+                    return None                                  # the same name twice: say nothing
+    return found[0] if len(found) == 1 else None
 
 
 def find_file(root: str, path: str | None, sha: str | None = None) -> str | None:
