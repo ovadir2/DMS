@@ -2840,6 +2840,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(404, "The target folder was not found")
         if files.in_workflow_folder(s.repository_root, target):
             raise HTTPException(403, "The target cannot be a workflow folder")
+        no_files_in_skeleton(target)                 # a first loading into the shape would fill every customer
         if not req.dryRun and not user.can(target, "write"):
             raise HTTPException(403, "You do not have permission to write in the target folder")
         source = os.path.normpath(req.source.strip())

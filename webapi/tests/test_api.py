@@ -2392,6 +2392,15 @@ def test_a_new_customer_is_cut_from_the_skeleton(tmp_path):
                                           "submit": False}).status_code == 403
     assert c.get("/api/browse", params={"path": str(shape)}).json()["skeletonNote"] is True
 
+    # every other way a file could arrive: released without workflow, and a first loading into the shape
+    assert c.post("/api/files/release",
+                  json={"paths": [str(shape / "Commercial" / "Left here.docx")]}).json()["results"][0].get("error")
+    assert c.post("/api/first-load", json={"source": str(tmp_path), "target": str(shape),
+                                           "dryRun": True}).status_code in (403, 422)
+    # and a customer cut from it is an ordinary customer: documents are filed there as anywhere
+    assert c.post("/api/files/upload", data={"folder": str(new / "Commercial")},
+                  files={"file": ("Quote.docx", b"x")}).status_code == 201
+
 
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
