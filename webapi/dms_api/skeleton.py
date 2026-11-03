@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import subprocess
+import threading
 
 log = logging.getLogger("dms_api.skeleton")
 LOOKS_LIKE = re.compile(r"^customer[ _-]?skel(e)?ton$", re.I)
@@ -50,28 +51,40 @@ def folders_of(path: str) -> list[tuple[str, ...]]:
     return sorted(out, key=len)
 
 
-def copy(skeleton: str, target: str) -> tuple[int, str]:
+def copy(skeleton: str, target: str, wait: bool = False) -> tuple[int, str]:
     """The skeleton's folders - and on Windows the permissions on them - as a new customer. No documents.
 
-    Returns (how many folders, what happened to the permissions)."""
+    The folders are made here and now: that is what the person is waiting for. The permissions are copied
+    after the answer, unless wait, because robocopy on a large tree takes as long as it takes and nobody
+    should watch a dialog for it. Returns (how many folders, what is happening to the permissions)."""
     made = folders_of(skeleton)
     os.makedirs(target, exist_ok=True)
     for rel in made:
         os.makedirs(os.path.join(target, *rel), exist_ok=True)
     if os.name != "nt":
         return len(made), "folders only (not Windows)"
-    # robocopy is the one thing that copies a folder's own security with it. /E every folder, /XF *
-    # nothing of what is in them, /COPYALL the permissions, the owner and the auditing beside the dates.
+    if wait:
+        return len(made), permissions(skeleton, target)
+    threading.Thread(target=permissions, args=(skeleton, target), daemon=True, name="dms-skeleton").start()
+    return len(made), "folders made; their permissions are being copied"
+
+
+def permissions(skeleton: str, target: str) -> str:
+    """The permissions each folder carries, copied onto the same folder of the new customer.
+
+    robocopy is the one thing that copies a folder's own security with it: /E every folder, /XF * nothing of
+    what is in them, /COPYALL the permissions, the owner and the auditing beside the dates."""
     try:
         r = subprocess.run(["robocopy", skeleton, target, "/E", "/XF", "*", "/COPYALL", "/DCOPY:DAT",
                             "/R:1", "/W:1", "/NFL", "/NDL", "/NJH", "/NJS", "/NP"],
-                           capture_output=True, text=True, timeout=900)
+                           capture_output=True, text=True, timeout=600)
         # robocopy says 0-7 for "did something, or nothing to do"; 8 and up is a failure.
         if r.returncode >= 8:
             log.warning("the permissions were not copied to %s: robocopy %s %s", target, r.returncode,
                         (r.stdout or r.stderr or "").strip()[:300])
-            return len(made), f"folders made; the permissions were not copied (robocopy {r.returncode})"
-        return len(made), "folders and their permissions"
+            return f"the permissions were not copied (robocopy {r.returncode})"
+        log.info("%s: folders and permissions copied from %s", target, os.path.basename(skeleton))
+        return "folders and their permissions"
     except (OSError, subprocess.SubprocessError) as e:
         log.warning("robocopy could not be run for %s: %s", target, e)
-        return len(made), f"folders made; the permissions were not copied ({e})"
+        return f"the permissions were not copied ({e})"

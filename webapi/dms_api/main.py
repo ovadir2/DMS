@@ -760,12 +760,17 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             result.update(noWorkflow=True, skeletonNote=True)
         # Which of these is a KPIs folder of the skeleton, and which is one KPI inside one: the page offers
         # Add New KPI on the first and Edit KPI on the second, and nothing of the sort anywhere else.
+        # Standing in the customers folder, a new folder is a new customer: the page says so.
+        result["customersRoot"] = os.path.normcase(os.path.normpath(result["path"])) == \
+            os.path.normcase(os.path.normpath(customers_root()))
         kpis = files.kpis_folder(s.repository_root, result["path"])
         same = lambda a, b: os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
         result["kpis"] = bool(kpis) and same(kpis, result["path"])
         result["kpi"] = bool(kpis) and not result["kpis"]
         result["kpiBuilder"] = bool(s.kpi_builder_url)
         for f in result["folders"]:
+            f["customersRoot"] = os.path.normcase(os.path.normpath(f["path"])) == \
+                os.path.normcase(os.path.normpath(customers_root()))
             f["skeleton"] = len(rel_parts(f["path"])) == 2 and \
                 rel_parts(f["path"])[0].lower() == s.customers_folder.lower() and is_skeleton(f["name"])
             under = files.kpis_folder(s.repository_root, f["path"])
