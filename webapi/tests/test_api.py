@@ -2358,6 +2358,41 @@ def test_one_pass_puts_the_dms_and_the_file_server_back_in_step(tmp_path, capsys
     assert found, "the file nobody registered is adopted, with its own record"
 
 
+def test_a_new_customer_is_cut_from_the_skeleton(tmp_path):
+    """One customer folder is kept as the shape: its folders - and on the file server the AD rights on them,
+    which the blueprint cannot carry - are what a new customer starts as. It is not a customer itself: it is
+    out of the customer lists, and no document may be filed in it."""
+    root = tmp_path / "Root"
+    customers = root / "02_Customers"
+    shape = customers / "Customer_Skeleton"
+    (shape / "Commercial" / "Quotations").mkdir(parents=True)
+    (shape / "Develop" / "Products").mkdir(parents=True)
+    (shape / "A folder somebody added").mkdir()
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER,
+                                       sharepoint="memory")))
+
+    made = c.post("/api/folders", json={"parent": str(customers), "name": "Elbit"})
+    assert made.status_code == 201, made.text
+    new = customers / "Elbit"
+    assert (new / "Commercial" / "Quotations").is_dir()
+    assert (new / "A folder somebody added").is_dir()          # the shape, not only the blueprint
+    assert made.json()["fromSkeleton"].startswith("folders")
+
+    assert [x["name"] for x in c.get("/api/customers").json()] == ["Elbit"]   # the shape is not a customer
+    listed = c.get("/api/browse", params={"path": str(customers)}).json()
+    assert {f["name"]: f["skeleton"] for f in listed["folders"]} == {"Customer_Skeleton": True, "Elbit": False}
+
+    # no documents in it, by either way in
+    refused = c.post("/api/files/upload", data={"folder": str(shape / "Commercial")},
+                     files={"file": ("Quote.docx", b"x")})
+    assert refused.status_code == 403 and "Customer_Skeleton" in refused.text
+    (shape / "Commercial" / "Left here.docx").write_text("x", encoding="utf-8")
+    assert c.post("/api/documents", json={"path": str(shape / "Commercial" / "Left here.docx"),
+                                          "documentType": "הצעת מחיר", "documentArea": "מסחרי",
+                                          "submit": False}).status_code == 403
+    assert c.get("/api/browse", params={"path": str(shape)}).json()["skeletonNote"] is True
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

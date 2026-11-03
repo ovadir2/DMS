@@ -589,7 +589,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             listing = files.list_folder(s.repository_root, customers_root(), listing_access(user))
         except (FileNotFoundError, PermissionError):
             return []
-        return [{"name": f["name"], "path": f["path"]} for f in listing["folders"] if q.lower() in f["name"].lower()]
+        return [{"name": f["name"], "path": f["path"]} for f in listing["folders"]
+                if q.lower() in f["name"].lower() and not is_skeleton(f["name"])]
 
     def rel_parts(path: str) -> list[str]:
         rel = os.path.relpath(path, s.repository_root)
@@ -754,6 +755,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     f.update(officeUri=st["url"], editable=bool(st.get("edit")))
         if in_shared_folder(os.path.join(result["path"], "x")):
             result.update(noWorkflow=True, canWrite=False, sharedNote=True)
+        if in_skeleton(result["path"]):
+            # Folders may be added here - that is how the shape is changed - but no documents.
+            result.update(noWorkflow=True, skeletonNote=True)
         # Which of these is a KPIs folder of the skeleton, and which is one KPI inside one: the page offers
         # Add New KPI on the first and Edit KPI on the second, and nothing of the sort anywhere else.
         kpis = files.kpis_folder(s.repository_root, result["path"])
@@ -762,6 +766,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         result["kpi"] = bool(kpis) and not result["kpis"]
         result["kpiBuilder"] = bool(s.kpi_builder_url)
         for f in result["folders"]:
+            f["skeleton"] = len(rel_parts(f["path"])) == 2 and \
+                rel_parts(f["path"])[0].lower() == s.customers_folder.lower() and is_skeleton(f["name"])
             under = files.kpis_folder(s.repository_root, f["path"])
             f["kpis"] = bool(under) and same(under, f["path"])
             f["kpi"] = bool(under) and not f["kpis"]
@@ -886,6 +892,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "You do not have permission to save files in this folder")
         if in_shared_folder(os.path.join(target_dir, "x")):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only)")
+        no_files_in_skeleton(target_dir)
         from . import noworkflow
         # A dashboard page is a tool, not a document: it is saved where it was dropped, left writable so it
         # can be replaced by a newer one, and never released into Current_ReadOnly.
@@ -1049,6 +1056,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     raise ValueError("already in a DMS workflow folder")
                 if files.is_dashboard(name):
                     raise ValueError("a dashboard page is a tool, not a document: it stays where it is")
+                if in_skeleton(full):
+                    raise ValueError("the customer skeleton keeps no documents")
                 if not (user.can(full, "write") and user.can(folder, "write")):
                     raise ValueError("no permission")
                 target = os.path.join(folder, "Current_ReadOnly", name)
@@ -1089,9 +1098,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         except FileNotFoundError:
             raise HTTPException(404, "Folder not found") from None
         # a new customer or a new project gets its blueprint folders at once (Appendix A)
-        parts, sub = rel_parts(path), []
+        parts, sub, how = rel_parts(path), [], ""
         if len(parts) == 2 and parts[0].lower() == s.customers_folder.lower():
             sub = blueprint.leaves(blueprint.CUSTOMER)
+            # A customer is cut from the skeleton when there is one: the same folders, and the same AD
+            # permissions on them, which the blueprint cannot carry because they live on the folders.
+            from . import skeleton as _skeleton
+            shape = _skeleton.find(s.repository_root, s.customers_folder, s.customer_skeleton)
+            if shape and os.path.normcase(shape) != os.path.normcase(path):
+                count, how = _skeleton.copy(shape, path)
+                log(user, "new-customer", f"{path} from {os.path.basename(shape)}: {count} folders, {how}")
         elif blueprint.product_index(parts) == len(parts) - 1:
             sub = blueprint.leaves(blueprint.PROJECT)
         for rel in sub:
@@ -1099,7 +1115,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if s.access_script and len(parts) == 2 and sub:          # the new customer's department folders: AD groups
             access.new_customer(s.repository_root, parts[1])
         log(user, "new-folder", f"{path}" + (f" (+{len(sub)} blueprint folders)" if sub else ""))
-        return {"name": os.path.basename(path), "path": path, "blueprintFolders": len(sub)}
+        return {"name": os.path.basename(path), "path": path, "blueprintFolders": len(sub),
+                **({"fromSkeleton": how} if how else {})}
 
     @app.post("/api/items/rename")
     def rename(req: RenameRequest, user: User = Depends(current_user)):
@@ -1870,7 +1887,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def kpi_ping():
         """Can a page reach the DMS at all? This one answers without a key and without a sign-in, so it says
         which of the two is in the way: open it in the browser (/api/kpi/ping). A sign-in prompt or 401 means
-        IIS is still asking for one on /api/kpi (scripts\Set-DmsKpiKeyAccess.ps1); an answer means the way is
+        IIS is still asking for one on /api/kpi (scripts/Set-DmsKpiKeyAccess.ps1); an answer means the way is
         open and anything still failing is the key or the address."""
         from fastapi.responses import JSONResponse
         return JSONResponse({"ok": True, "version": version, "sandbox": s.page_sandbox,
@@ -2497,6 +2514,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(409, "The file is already in a workflow folder")
         if holds_share_log(path):
             raise HTTPException(403, "The customer's share log is kept by the DMS and is not a controlled document")
+        no_files_in_skeleton(path)
         from . import noworkflow
         if noworkflow.is_marked(s.repository_root, path):
             raise HTTPException(409, "This file was saved without workflow (Save file (no workflow))")
@@ -2680,9 +2698,31 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         rev = str(d.get("currentRevision") or files.parse_revision(os.path.basename(current))[1] or 1).zfill(2)
         return d, current, rev
 
+    def is_skeleton(name: str) -> bool:
+        """The customer folder new customers are cut from. It is a shape, not a customer: it is not offered
+        for a document, for a share or in the customer list, and nothing is filed in it."""
+        from . import skeleton as _skeleton
+        return bool(name) and (name.lower() == (s.customer_skeleton or "").lower()
+                               or bool(_skeleton.LOOKS_LIKE.match(name)))
+
+    def in_skeleton(path: str) -> str:
+        """The name of the skeleton, when this path is inside it. Its folders are the shape of a customer;
+        a document kept there would be copied into every customer made after it."""
+        parts = rel_parts(path)
+        if len(parts) >= 2 and parts[0].lower() == s.customers_folder.lower() and is_skeleton(parts[1]):
+            return parts[1]
+        return ""
+
+    def no_files_in_skeleton(path: str) -> None:
+        name = in_skeleton(path)
+        if name:
+            raise HTTPException(403, f"{name} is the shape every new customer is cut from, not a customer: "
+                                     f"its folders are kept, its documents are not. File this in a customer.")
+
     def customer_names(user: User) -> list[str]:
         try:
-            return [f["name"] for f in files.list_folder(s.repository_root, customers_root(), user.can)["folders"]]
+            return [f["name"] for f in files.list_folder(s.repository_root, customers_root(), user.can)["folders"]
+                    if not is_skeleton(f["name"])]
         except (FileNotFoundError, PermissionError):
             return []
 
