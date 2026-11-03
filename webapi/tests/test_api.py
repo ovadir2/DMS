@@ -2539,6 +2539,26 @@ def test_a_record_follows_its_document_through_a_renamed_folder(tmp_path):
     assert file_service._by_name(s.repository_root, moved.name, like="Obsolete_ReadOnly") is None
 
 
+def test_the_dms_can_test_its_own_page_plumbing(tmp_path):
+    """A page of the DMS's own, served the way every HTML of the repository is served. When somebody says
+    "the page does not run", this one says which of the three steps failed - the key, the key endpoint, or
+    the bridge - instead of leaving everyone to guess."""
+    root = tmp_path / "Root"
+    (root / "01_General").mkdir(parents=True)
+    c = TestClient(create_app(Settings(repository_root=str(root), auth_mode="dev", dev_user=USER,
+                                       sharepoint="memory")))
+
+    first = c.get("/dms/page-test", follow_redirects=False)
+    assert first.status_code == 307 and "t=" in first.headers["location"]
+    key = first.headers["location"].split("t=")[1]
+
+    page = c.get("/dms/page-test", params={"t": key})
+    assert page.status_code == 200 and "window.DMS" in page.text and "DMS page test" in page.text
+    assert "sandbox" in page.headers["content-security-policy"]
+    # and the key it was given really opens the repository for it
+    assert [f["name"] for f in c.get("/api/kpi/files", params={"t": key}).json()["folders"]] == ["01_General"]
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

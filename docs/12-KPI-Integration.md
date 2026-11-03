@@ -160,6 +160,20 @@ for (const f of inside.files) {
 }
 ```
 
+### When a page will not run
+
+`https://<the DMS>/dms/page-test` is a page of the DMS's own, served exactly as any HTML of the repository
+is - into the sandbox, with a key in its address and the bridge in front of it. It asks the DMS the three
+things such a page asks and says which one failed:
+
+1. **the page was given a key** - no key means the DMS serving it is older than the bridge, or the address
+   lost its `?t=`;
+2. **the key endpoint answers** - a 401 here is IIS asking for a sign-in the page cannot give
+   (`scripts\Set-DmsKpiKeyAccess.ps1`), and "failed to fetch" means the call never reached the DMS at all;
+3. **a call written for the DMS** (`/api/browse`) - if 2 works and 3 does not, the bridge is missing.
+
+If that page works and yours does not, the fault is in the page.
+
 ## 4. Identity, rights and audit
 
 | What the Builder needs | Where it is |

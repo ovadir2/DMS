@@ -2188,6 +2188,24 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                                f"'unsafe-eval'; connect-src 'self' {home}",
             "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"})
 
+    @app.get("/dms/page-test", include_in_schema=False)
+    def page_test(request: Request, t: str = "", user: User = Depends(current_user)):
+        """A page of the DMS's own, served exactly as any HTML in the repository is: into the sandbox, with a
+        key in its address and the bridge in front of it. It then asks the DMS three things and says what came
+        back. If this page works and yours does not, the fault is in the page; if this one fails, it says
+        which of the three steps failed and that is the DMS's side to fix."""
+        from fastapi.responses import Response
+        if not t:
+            from urllib.parse import quote as _q
+            return RedirectResponse(f"/dms/page-test?t={_q(kpi_key(s.repository_root, user.email))}")
+        body = BRIDGE.replace(b"__KEY__", t.encode()) + PAGE_TEST
+        rules = ("sandbox allow-scripts allow-popups allow-downloads allow-forms; " if s.page_sandbox else "")
+        home = str(request.base_url).rstrip("/")
+        return Response(body, media_type="text/html; charset=utf-8", headers={
+            "Content-Security-Policy": rules + f"default-src 'self' {home} data: blob: 'unsafe-inline' "
+                                               f"'unsafe-eval'; connect-src 'self' {home}",
+            "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"})
+
     @app.get("/api/files/view-pdf")
     def view_pdf(path: str, user: User = Depends(current_user)):
         """The document as a PDF, served by the DMS itself. SharePoint turns it into one - nothing has to be
@@ -3464,4 +3482,62 @@ BRIDGE = b"""<script>
   };
 })();
 </script>
+"""
+
+
+# The page behind /dms/page-test. It is served the way every HTML of the repository is served - sandbox, key,
+# bridge - and then asks the DMS the three things such a page asks, so a failure says which step failed
+# instead of "failed to fetch".
+PAGE_TEST = b"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DMS page test</title><link rel="icon" href="/dms/icon.png">
+<style>body{margin:0;font:15px/1.6 "Segoe UI",system-ui,sans-serif;color:#1f2a37;background:#eef2f7}
+header{display:flex;align-items:center;gap:12px;padding:12px 20px;background:#fff;border-bottom:1px solid #e5e7eb}
+header img{height:26px}main{max-width:860px;margin:18px auto;padding:0 16px}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px;margin-bottom:14px}
+h2{margin:0 0 6px;font-size:15px}.ok{color:#047857}.bad{color:#b91c1c}
+pre{white-space:pre-wrap;word-break:break-word;background:#f3f6fa;padding:10px;border-radius:8px;font-size:13px;margin:8px 0 0}</style>
+</head><body>
+<header><img src="/dms/logo.png" alt="rh" onerror="this.remove()"><b>DMS page test</b></header>
+<main id="out"><p class="muted">Asking the DMS...</p></main>
+<script>
+const out = document.getElementById('out');
+const card = (title, ok, text) => {
+  const d = document.createElement('div');
+  d.className = 'card';
+  d.innerHTML = '<h2>' + title + ' <span class="' + (ok ? 'ok">works' : 'bad">failed') + '</span></h2><pre></pre>';
+  d.querySelector('pre').textContent = text;
+  out.appendChild(d);
+};
+(async () => {
+  out.innerHTML = '';
+  const key = (window.DMS && window.DMS.key) || new URLSearchParams(location.search).get('t') || '';
+  card('1. The page was given a key', !!key, key ? 'window.DMS.key is there (' + key.slice(0, 6) + '...)'
+       : 'No key. The DMS did not put the bridge in front of this page, or the address lost its ?t=.');
+  if (!key) return;
+  try {
+    const r = await fetch('/api/kpi/files?t=' + encodeURIComponent(key), { credentials: 'omit', mode: 'cors' });
+    const text = await r.text();
+    card('2. The key endpoint answers', r.ok, r.ok
+      ? (JSON.parse(text).folders || []).map(f => f.name).slice(0, 12).join(', ') || '(no folders)'
+      : 'HTTP ' + r.status + '\\n' + text.slice(0, 300)
+        + (r.status === 401 ? '\\n\\n401 is IIS asking for a sign-in: run scripts/Set-DmsKpiKeyAccess.ps1' : ''));
+  } catch (e) {
+    card('2. The key endpoint answers', false, (e.message || e) +
+      '\\n\\n"Failed to fetch" here means the call never reached the DMS: IIS asked for a sign-in this page ' +
+      'cannot give (scripts/Set-DmsKpiKeyAccess.ps1), or the policy of this page forbade the call.');
+  }
+  try {
+    const r = await fetch('/api/browse?path=' + encodeURIComponent((window.DMS && window.DMS.folder) || ''));
+    const text = await r.text();
+    card('3. A page written for the DMS (bridge)', r.ok, r.ok
+      ? 'A call to /api/browse was answered - the bridge sent it to /api/kpi/files.'
+      : 'HTTP ' + r.status + '\\n' + text.slice(0, 300));
+  } catch (e) {
+    card('3. A page written for the DMS (bridge)', false, (e.message || e) +
+      '\\n\\nThe bridge is what makes /api/browse work from inside a served page. If step 2 worked and this ' +
+      'did not, the bridge is missing - the DMS serving this page is older than the bridge.');
+  }
+})();
+</script></body></html>
 """
