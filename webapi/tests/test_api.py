@@ -2468,6 +2468,46 @@ def test_an_application_asks_which_documents_are_approved(tmp_path):
     assert c.get("/api/v1/documents", headers=key).status_code == 403
 
 
+def test_the_rag_asks_which_markdown_to_read(tmp_path):
+    """The list the company's AI indexes: the Markdown under every Current_ReadOnly, with the document it
+    belongs to. Taken from the folders and not only from the register, because a document released by hand
+    has its Markdown there too - and filtered by the AD account the caller acts as, like everything else."""
+    from dms_api import security
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    cur = q / "Current_ReadOnly" / "CRU 4 FCT Quote_Rev1.xlsx"
+    md = cur.with_suffix(".md")
+    md.write_text("# CRU 4 FCT Quote\n\n- Document ID: DMS-00001\n- Revision: 01\n\n---\n\nwhat it says",
+                  encoding="utf-8")
+    # one nobody registered, with only its own head to go by
+    other = tmp_path / "Root" / "01_General" / "HR" / "Current_ReadOnly"
+    other.mkdir(parents=True)
+    (other / "Policy.md").write_text("# Travel policy\n\n- Document ID: QP-7\n- Revision: 03\n\n---\n\nx",
+                                     encoding="utf-8")
+    s.api_keys = {"k": {"name": "rag", "scopes": ["documents"], "as": "svc_ai@rh.co.il"}}
+    key = {"X-DMS-Api-Key": "k"}
+
+    r = c.get("/api/v1/approved-documents", headers=key)
+    assert r.status_code == 200
+    by_id = {x["DocID"]: x for x in r.json()["documents"]}
+    assert set(by_id) == {d["documentId"], "QP-7"}
+    assert by_id["QP-7"] == {"DocID": "QP-7", "DocName": "Travel policy", "DocRev": "03",
+                             "DocDMSpath": str(other / "Policy.md")}
+    mine = by_id[d["documentId"]]
+    assert mine["DocDMSpath"] == str(md) and mine["DocRev"] == "01"
+
+    assert c.get("/api/v1/approved-documents", headers=key,
+                 params={"customer": "Customer_A"}).json()["count"] == 1
+
+    # what the account may not see is not in the list
+    monkey = lambda email, path, access="read": False if "HR" in path else True
+    old, security.may_see = security.may_see, monkey
+    try:
+        left = c.get("/api/v1/approved-documents", headers=key).json()
+        assert [x["DocID"] for x in left["documents"]] == [d["documentId"]]
+    finally:
+        security.may_see = old
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

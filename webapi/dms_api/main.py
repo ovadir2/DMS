@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from . import access, blueprint, checkout, files, finder, security
+from . import access, blueprint, checkout, files, finder, markdown, security
 from .ai import AiError, OpenWebUI
 from .rag import RagError, RagTools
 from .auth import current_user
@@ -2001,6 +2001,57 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         logger.info("api %s GET /api/v1/documents -> %d, %d with no file", who["name"], len(out), missing)
         return JSONResponse({"documents": out, "count": len(out), "withoutFile": missing},
                             headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/v1/approved-documents")
+    def api_approved_documents(request: Request, customer: str = "", q: str = ""):
+        """The Markdown of every approved document, as it lies in the Current_ReadOnly folders.
+
+        Four things per file: the document's id, its name, its revision and where the Markdown is. This is
+        the AI's list - it reads these files - so it is taken from the folders themselves and not only from
+        the register: a document released by hand is in Current_ReadOnly with its Markdown beside it, and the
+        AI should read that too. What the register knows fills in the id and the revision; what it does not
+        know is read from the Markdown's own first lines, which the DMS wrote when it made the file."""
+        from fastapi.responses import JSONResponse
+        who = api_caller(request, "documents")
+        known = {}
+        for d in sp().documents():
+            for key in ("currentUncPath", "workingUncPath"):
+                p = d.get(key)
+                if p:
+                    known[os.path.normcase(os.path.splitext(os.path.normpath(p))[0])] = d
+        out, seen = [], set()
+        for folder, dirs, names in os.walk(s.repository_root):
+            if os.path.basename(folder).lower() != "current_readonly":
+                dirs[:] = [x for x in dirs if not x.startswith(".")]
+                continue
+            if not api_may_see(who, folder):              # the account the application acts as, folder first
+                continue
+            for name in sorted(names):
+                if not name.lower().endswith(".md"):
+                    continue
+                md = os.path.join(folder, name)
+                if not api_may_see(who, md):
+                    continue
+                stem = os.path.normcase(os.path.splitext(os.path.normpath(md))[0])
+                if stem in seen:
+                    continue
+                seen.add(stem)
+                d = known.get(stem) or {}
+                head = markdown.heading_of(md)            # what the DMS wrote at the top of the file
+                parts = rel_parts(md)
+                of_customer = parts[1] if len(parts) > 2 and parts[0].lower() == s.customers_folder.lower() else ""
+                if customer and of_customer.lower() != customer.lower():
+                    continue
+                item = {"DocID": d.get("documentId") or head.get("Document ID") or "",
+                        "DocName": d.get("title") or head.get("title") or os.path.splitext(name)[0],
+                        "DocRev": d.get("currentRevision") or head.get("Revision") or "",
+                        "DocDMSpath": md}
+                if q and q.lower() not in f"{item['DocID']} {item['DocName']}".lower():
+                    continue
+                out.append(item)
+        out.sort(key=lambda x: (x["DocID"], x["DocName"].lower()))
+        logger.info("api %s GET /api/v1/approved-documents -> %d", who["name"], len(out))
+        return JSONResponse({"documents": out, "count": len(out)}, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/kpi/ping")
     def kpi_ping():

@@ -111,8 +111,39 @@ that is not zero.
 endpoint rather than remembering paths - a new revision moves the old file to `Obsolete_ReadOnly`, and this
 answer is the only place that says what is current.
 
+## GET /api/v1/approved-documents - the list the RAG indexes
+
+The Markdown of every approved document, as it lies in the `Current_ReadOnly` folders. Four things per file:
+
+```json
+{
+  "documents": [
+    { "DocID": "QP-16.1", "DocName": "Control of documents", "DocRev": "03",
+      "DocDMSpath": "E:\\Shares\\01_General\\Quality and Standards\\Current_ReadOnly\\QP-16.1 Rev03.md" }
+  ],
+  "count": 1
+}
+```
+
+| Parameter | |
+| --- | --- |
+| `customer` | only that customer's documents |
+| `q` | the id or the name contains this |
+
+It is taken from the folders, not only from the register: a document released by hand has its Markdown in
+`Current_ReadOnly` too, and the AI should read that as well. Where the register knows the file, the id, the
+name and the revision come from it; where it does not, they are read from the head the DMS wrote at the top
+of the Markdown itself.
+
+**How a RAG should use it:** ask this endpoint, index `DocDMSpath`, and carry `DocID`, `DocName` and `DocRev`
+as the chunk's metadata, so an answer can say which document and which revision it came from. Ask again
+before each run rather than remembering paths - a new revision removes the old Markdown and writes a new one,
+and the answer to this call is the only place that says what is current. The list is already filtered by the
+AD account the key acts as, so an index built from it contains nothing that account may not read; give the
+AI's account the groups it should see and nothing else.
+
 ## What it is not, yet
 
-Two endpoints, read only. The `files` scope has no endpoint yet: a caller that must fetch the bytes still
+Three endpoints, read only. The `files` scope has no endpoint yet: a caller that must fetch the bytes still
 uses the person-facing `/api/files/download` with a Windows sign-in. Nothing under `/api/v1` writes, and a key
 cannot be used to change anything.

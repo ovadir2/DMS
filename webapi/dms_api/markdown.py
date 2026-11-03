@@ -328,6 +328,29 @@ def body_of(path: str) -> str:
     return _via_pdf(path)
 
 
+def heading_of(path: str) -> dict:
+    """What the DMS wrote at the top of a Markdown file: its title and the facts under it (Document ID,
+    Revision, Type, Area, Approved, Owner, File). Empty for a file that has no such head."""
+    out: dict = {}
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if line.startswith("# ") and "title" not in out:
+                    out["title"] = line[2:].strip()
+                    continue
+                if line.startswith("- "):
+                    label, _, value = line[2:].partition(":")
+                    if value.strip():
+                        out[label.strip()] = value.strip()
+                    continue
+                if line.startswith("---"):
+                    break
+    except OSError:
+        return {}
+    return out
+
+
 def write_beside(path: str, doc: dict | None = None) -> str | None:
     """Write <document>.md beside the approved document. It opens with what the document is - the DMS id, the
     revision, when it was approved and where it lives - so an answer can say which document it came from and
