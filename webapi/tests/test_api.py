@@ -2534,6 +2534,10 @@ def test_a_record_follows_its_document_through_a_renamed_folder(tmp_path):
     after = sp.document(d["id"])
     assert after["currentUncPath"] == str(moved) and after["lifecycleStatus"] != s.choices["Archived"]
 
+    # a search far from home is narrower: a file of the same name somewhere else in the repository answers
+    # only from the same kind of folder, so an approved file is never answered with an obsolete one
+    assert file_service._by_name(s.repository_root, moved.name, like="Obsolete_ReadOnly") is None
+
 
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by

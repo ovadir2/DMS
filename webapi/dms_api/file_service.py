@@ -158,10 +158,11 @@ def relocate(root: str, path: str | None, sha: str | None = None) -> str | None:
             candidate = os.path.join(base, *parts[i:])
             if os.path.isfile(candidate) and (not sha or _sha256(candidate).lower() == sha.lower()):
                 return candidate
-    return _by_name(root, parts[-1], sha)
+    here_in = os.path.basename(os.path.dirname(path.replace("/", "\\")))
+    return _by_name(root, parts[-1], sha, here_in if here_in in WORKFLOW_FOLDERS else "")
 
 
-def _by_name(root: str, name: str, sha: str | None = None) -> str | None:
+def _by_name(root: str, name: str, sha: str | None = None, like: str = "") -> str | None:
     """The last resort: the file by its own name, anywhere under the repository. A folder somebody renamed -
     a customer that became the skeleton, a department spelt differently - leaves every record under it
     pointing at a path that no longer exists, and the file itself untouched a few folders away. One match is
@@ -171,6 +172,11 @@ def _by_name(root: str, name: str, sha: str | None = None) -> str | None:
     found: list[str] = []
     for folder, dirs, names in os.walk(root):
         dirs[:] = [d for d in dirs if d not in ("04_Workflow_System", "05_Exchange_Quarantine") and not d.startswith(".")]
+        # A file of the same name in another part of the workflow is not this one: an approved file that was
+        # deleted must not be answered with the obsolete revision beside it, or the DMS would say the
+        # document is still in force while nothing is.
+        if like and os.path.basename(folder) != like:
+            continue
         if name in names:
             here = os.path.join(folder, name)
             if sha:
