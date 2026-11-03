@@ -2392,6 +2392,12 @@ def test_a_new_customer_is_cut_from_the_skeleton(tmp_path):
                                           "submit": False}).status_code == 403
     assert c.get("/api/browse", params={"path": str(shape)}).json()["skeletonNote"] is True
 
+    # and no folders either: a folder made in the shape would be copied into every customer after it
+    refused_folder = c.post("/api/folders", json={"parent": str(shape), "name": "dd"})
+    assert refused_folder.status_code == 403 and "Customer_Skeleton" in refused_folder.text
+    assert not (shape / "dd").exists()
+    assert c.post("/api/folders", json={"parent": str(shape / "Commercial"), "name": "dd"}).status_code == 403
+
     # every other way a file could arrive: released without workflow, and a first loading into the shape
     assert c.post("/api/files/release",
                   json={"paths": [str(shape / "Commercial" / "Left here.docx")]}).json()["results"][0].get("error")

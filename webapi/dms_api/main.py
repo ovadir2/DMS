@@ -665,6 +665,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             break
         if not may_add(user, existing):
             raise HTTPException(403, "You do not have permission to create folders here")
+        if in_skeleton(full):
+            raise HTTPException(403, "The customer skeleton is not changed from here")
         os.makedirs(full, exist_ok=True)
         log(user, "new-folder", full)
         return {"path": full, "canWrite": may_add(user, full)}
@@ -1096,6 +1098,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only)")
         if not may_add(user, parent):
             raise HTTPException(403, "You do not have permission to create folders here")
+        shape = in_skeleton(parent)
+        if shape:
+            raise HTTPException(403, f"{shape} is the shape every new customer is cut from, and it is not "
+                                     f"changed from here: a new customer goes under {s.customers_folder}, "
+                                     f"and the shape itself is changed on the file server.")
         try:
             path = files.make_folder(s.repository_root, parent, req.name)
         except FileExistsError:
