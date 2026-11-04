@@ -783,6 +783,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 f["canEdit"] = ((not read_only_file(f["path"]) and not doc_locked(f.get("document"))
                                  or editable_in_approval(user, f["path"], f.get("document")))
                                 and may_write(user, f["path"]))
+                if not f["canEdit"]:
+                    # ...and when it is not, why. A greyed pencil with no reason has cost this pilot days:
+                    # the answer is one of four, and the row says which.
+                    doc, who = f.get("document") or {}, (st or {}).get("by") or ""
+                    f["editWhy"] = (
+                        f"{who} has it out for editing" if st and st.get("edit") and not st.get("mine")
+                        else "it is released by the DMS (read only)" if read_only_file(f["path"])
+                        else f"its state is {doc.get('lifecycleStatus') or doc.get('statusKey')}: "
+                             "this revision is the record" if doc_locked(doc)
+                        else "AD gives you no Modify on this folder")
                 if st and st.get("url"):
                     f.update(officeUri=st["url"], editable=bool(st.get("edit")))
         if in_shared_folder(os.path.join(result["path"], "x")):
