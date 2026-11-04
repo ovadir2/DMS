@@ -379,7 +379,11 @@ const busy = on => { busyN = Math.max(0, busyN + (on ? 1 : -1)); document.body.c
   if (!$('#busybar')) document.body.insertAdjacentHTML('afterbegin', '<div id="busybar"></div>'); };
 async function api(path, opts = {}) {
   busy(true);
-  try { return await apiCall(path, opts); } finally { busy(false); }
+  try {
+    const out = await apiCall(path, opts);
+    if ((opts.method || 'GET').toUpperCase() !== 'GET') TREE.kids.clear();   // the tree is drawn from a cache
+    return out;
+  } finally { busy(false); }
 }
 async function apiCall(path, opts = {}) {
   const t = await token();
@@ -488,7 +492,7 @@ $('#q').onkeydown = e => {
   else if (e.key === 'Escape') taClose();
 };
 $('#q').onblur = () => setTimeout(taClose, 150);
-$('#refresh').onclick = () => render();
+$('#refresh').onclick = () => { treeForget(); render(); };   // the tree is read again too, not only the list
 // The RH logo / system name: back to the home screen, fresh (like reloading the page)
 document.querySelector('.brand').title = T.welcome;
 document.querySelector('.brand').onclick = () => {
@@ -583,8 +587,11 @@ const inCurrentRo = p => /[\\/]Current_ReadOnly[\\/]/i.test(p || '');
 // What a file explorer has on its side: the folders, opened one branch at a time. A branch is read from the
 // DMS the first time it is opened and kept, so moving around does not ask again, and what the user opened
 // stays open while they work.
-const TREE = { kids: new Map(), open: new Set() };
+const TREE = { kids: new Map(), open: new Set(), read: new Map(), KEEP: 30000 };
+const treeForget = () => { TREE.kids.clear(); TREE.read.clear(); };
 async function treeKids(path) {
+  const when = TREE.read.get(path) || 0;
+  if (TREE.kids.has(path) && Date.now() - when > TREE.KEEP) TREE.kids.delete(path);   // half a minute old
   if (!TREE.kids.has(path)) {
     try {
       const r = await api('/api/browse?path=' + encodeURIComponent(path || ''));
@@ -593,6 +600,7 @@ async function treeKids(path) {
         .map(f => ({ name: lbl(f.label) || f.name, path: f.path, lock: !!f.workflowFolder,
                      bp: !!(f.label && f.label.kind !== 'project') })));
     } catch (_) { TREE.kids.set(path, []); }      // a folder this person may not read: nothing under it
+    TREE.read.set(path, Date.now());
   }
   return TREE.kids.get(path);
 }
@@ -1040,8 +1048,10 @@ async function browse(v) {
     </table>` : ''}${folders.length + r.files.length ? '' : `<p class="muted">${T.none}</p>`}
     ${r.canDrop && !r.managed && !r.skeletonNote ? `<div class="dropzone">\u2B07 ${T.dropHere}</div>` : ''}`;
   if (explorerOn()) {
+    // what the right side is showing is what the tree shows for this folder, without asking again
     TREE.kids.set(r.path, folders.map(f => ({ name: lbl(f.label) || f.name, path: f.path,
       lock: !!f.workflowFolder, bp: !!(f.label && f.label.kind !== 'project') })));
+    TREE.read.set(r.path, Date.now());
     // the tree on one side, this folder's contents on the other - the contents are exactly what was drawn
     // above, moved into the second column, so nothing about them changes
     const main = document.createElement('div');
