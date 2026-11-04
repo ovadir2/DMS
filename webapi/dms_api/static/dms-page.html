@@ -1195,7 +1195,7 @@ async function approvalsView(v) {
       <td class="small">${d.stage === 1 ? T.stage1 : T.stage2}${d.approved.length ? `<div class="muted">${T.approvedBy}: ${d.approved.map(a => esc(a.split('@')[0])).join(', ')}</div>` : ''}${(d.returned || []).length ? `<div class="muted">${T.returnedBy}: ${d.returned.map(r => `${esc(r.by.split('@')[0])} - ${esc(r.comment)}`).join('; ')}</div>` : ''}
         ${!d.mine ? `<div class="muted">${T.waitingFor}: ${d.pending.map(p => esc(p.split('@')[0])).join(', ')}</div>` : ''}</td>
       <td class="hide-s small muted">${when(d.submittedUtc)}${days(d.submittedUtc) !== null ? `<div>${T.waiting} ${days(d.submittedUtc)} ${T.days}</div>` : ''}</td>
-      <td class="actions">${d.editWhy ? `<span class="muted small" title="${esc(d.editWhy)}">\u270E</span> ` : ''}${fileLinks(d.file, d.officeUri, d.viewUri, d.editable, d.viaDms, d)}
+      <td class="actions">${d.editWhy ? `<button type="button" class="link" data-ext="" disabled title="${esc(d.editWhy)}">\u270E ${T.openEditFile}</button>` : ''}${fileLinks(d.file, d.officeUri, d.viewUri, d.editable, d.viaDms, d)}
         ${remarksLine(d.id, d.remarks)}
         ${d.file ? `<button type="button" class="link" data-dl="${esc(d.file)}">${T.download}</button>${d.viaDms ? '' : `<button type="button" class="link" data-cl="${esc(d.file)}">🔗 ${T.copyLink}</button>`}` : ''}
         <div style="margin-top:6px"><button type="button" class="pillbtn small" data-ok="${d.id}">✔ ${T.approve}${d.mine ? '' : ' (' + T.asSuper + ')'}</button>
