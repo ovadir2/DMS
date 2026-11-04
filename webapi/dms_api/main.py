@@ -1446,7 +1446,18 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                             # remarks are a file of their own beside it
                             # in SharePoint while it is approved: Office Online opens it with the person's own
                             # Microsoft account, so nobody needs rights on the file server
-                            "officeUri": (office := kept.get("url")),
+                            # In SharePoint while it is approved: Office Online opens the copy with the
+                            # person's own Microsoft account. Without the bridge, the file itself - for
+                            # someone AD gives Modify, which is the same rule as everywhere else.
+                            "officeUri": (office := kept.get("url") or (
+                                files.open_uri(file, edit=True)
+                                if (file and s.submitted_editable and not review_on()
+                                    and (user.email in st["pending"]
+                                         or (d.get("ownerEmail") or "").lower() == user.email)
+                                    # the file itself, so AD must really give them Modify - the standing
+                                    # permission an approval carries is for the copy in SharePoint, not for
+                                    # the file server
+                                    and user.can(file, "write")) else None)),
                             # View makes a PDF copy for this reader (the bridge). The copy the approvers edit
                             # is never View: a standing permission on that library beats the "view" in its
                             # address, and Excel ignores it outright. Without the bridge it is the file itself,
@@ -1457,7 +1468,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                 or (files.open_uri(file) if file and user.can(file) else None)),
                             "viaDms": bool(file) and not user.can(file),   # no rights on the file server: the DMS serves it
                             "remarks": remarks_of(d.get("documentId") or ""),
-                            "editable": bool((REVIEW.get(d.get("documentId") or "") or {}).get("url")),   # in SharePoint: they edit it there
+                            # Who may write in a document that is waiting for an answer: the people it waits
+                            # on and its owner, while DMS_SUBMITTED_EDITABLE allows it. It was read from a
+                            # map the DMS keeps in memory, so a restart left an approver with nothing but
+                            # View on a document they were being asked about - and the one submitted after
+                            # the restart was editable, which is how it was noticed.
+                            "editable": bool(office) and s.submitted_editable
+                                        and (user.email in st["pending"]
+                                             or (d.get("ownerEmail") or "").lower() == user.email
+                                             or is_admin(user)),
                             "mine": user.email in st["pending"]})
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
 
@@ -1508,6 +1527,18 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         key = doc.get("statusKey") or next((k for k, v in s.choices.items() if v == doc.get("lifecycleStatus")), "")
         return key in LOCKED_STATES
 
+    def doc_submitted(doc: dict | None) -> bool:
+        if not doc:
+            return False
+        key = doc.get("statusKey") or next((k for k, v in s.choices.items() if v == doc.get("lifecycleStatus")), "")
+        return key == "Submitted"
+
+    def in_this_approval(user: User, path: str, doc: dict | None = None) -> bool:
+        """The people a submitted document is waiting on: whoever still has to answer for it, and its owner."""
+        if (doc or {}).get("ownerEmail", "").lower() == user.email:
+            return True
+        return os.path.normcase(os.path.normpath(path)) in awaiting_approval(user)
+
     def may_change(user: User, path: str, doc: dict | None = None) -> bool:
         """Who may change this document. Rights on the file server say yes, and so does being its owner: with
         the SharePoint bridge the DMS is the one that writes the file, and an owner who has no rights on
@@ -1539,6 +1570,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             # a document returned to its owner is theirs to change, even when the file still carries the
             # read-only flag it was given while it was submitted: the DMS clears that when they open it
             released = doc_locked(doc) or (read_only_file(path) and not doc_in_work(doc))
+            # ...and a document waiting for an answer is open to the people it is waiting on: an approver
+            # writes their remarks in the file itself (track changes, comments) and the owner may fix what
+            # they were asked to fix without the approval being withdrawn first. DMS_SUBMITTED_EDITABLE=0
+            # turns that off, and then a submitted document is read only for everyone.
+            if released and s.submitted_editable and doc_submitted(doc) and in_this_approval(user, path, doc):
+                released = False
             may_edit = not released and may_change(user, path, doc)
             if review_on():
                 return {"bridge": True, "canEdit": may_edit, "checkedOut": checkout_state(path, user)}

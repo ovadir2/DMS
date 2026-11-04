@@ -763,7 +763,13 @@ def test_page_approvals_reject_and_waiting_for(tmp_path):
     assert wf["statusKey"] == "Submitted" and "editUri" in wf                     # the owner may add remarks
     s.dev_user = "dana@rh.co.il"
     ap = next(i for i in c.get("/api/approvals").json() if i["id"] == d["id"])
-    assert not ap["editable"] and ap["officeUri"] is None      # read only: remarks are attached, the document is not changed
+    # A document waiting for an answer is open to the person it waits on, where AD gives them Modify: an
+    # approver's remarks often belong in the file itself. Their remarks file is still written beside it.
+    assert ap["editable"] and ap["officeUri"]
+    s.submitted_editable = False
+    ap = next(i for i in c.get("/api/approvals").json() if i["id"] == d["id"])
+    assert not ap["editable"] and ap["officeUri"] is None       # a site that wants it untouchable
+    s.submitted_editable = True
     s.dev_user = USER
     c.post(f"/api/documents/{d['id']}/submit")                                          # new cycle: the old rejection no longer counts
     s.dev_user = "dana@rh.co.il"
@@ -2582,6 +2588,19 @@ def test_a_drop_needs_modify_in_ad(tmp_path, monkeypatch):
     assert c.get("/api/browse", params={"path": str(folder)}).json()["canDrop"] is False
 
 
+def test_an_approver_may_write_their_remarks_in_the_submitted_file(tmp_path):
+    """An approver is asked to answer, and the answer is often in the file itself - track changes, comments.
+    A submitted document was read only for everyone, so the one person it was waiting on could not write in
+    it. The owner may fix what they were asked to fix as well, without the approval being withdrawn first."""
+    c, sp, s, d = _approvals_env(tmp_path, {"mandatory": [USER], "final": "boss@rh.co.il"})
+    row = next(x for x in c.get("/api/approvals").json() if x["id"] == d["id"])
+    assert row["editable"] and row["officeUri"], "the person it waits on may write in it"
+
+    s.submitted_editable = False                       # a site that wants a submitted document untouchable
+    row = next(x for x in c.get("/api/approvals").json() if x["id"] == d["id"])
+    assert not row["editable"] and not row["officeUri"]
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""
@@ -3535,7 +3554,7 @@ def test_review_cycle_all_approvers_return_remarks_then_owner_resubmits(tmp_path
     assert r["returned"] == [{"by": "dana@rh.co.il", "comment": "table 3 is wrong"}]
     s.dev_user = "eli@rh.co.il"
     ap = next(i for i in c.get("/api/approvals").json() if i["id"] == d["id"])
-    assert not ap["editable"] and ap["viewUri"]                  # eli reads it; his remarks go in a file of his own
+    assert ap["editable"] and ap["viewUri"]                      # eli may write in it, and read it as it is
     r = c.post(f"/api/approvals/{d['id']}", json={"approve": False, "comment": "add the test limits"}).json()
     assert r["statusKey"] == "Working"                                                   # everyone answered: back to the owner
     s.dev_user = USER
