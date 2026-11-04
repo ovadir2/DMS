@@ -1438,6 +1438,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 submitted = next((e for e in events if e["event"] == s.choices["SubmittedEvent"]), None)
                 file = submitted_file(d)
                 kept = review_ensure(d) or {}
+                if review_on() and not kept.get("url"):
+                    logger.warning("no copy in SharePoint for %s: an approver cannot open it to write in it",
+                                   d.get("documentId") or d.get("id"))
                 if file and kept.get("name"):   # closed in Word for the web: it is back here before the row is drawn
                     review_pull(d.get("documentId") or "", kept["name"], file, doc_id=d.get("documentId") or "")
                 out.append({**with_key(d), **st, "submittedUtc": submitted["utc"] if submitted else None,
@@ -1473,10 +1476,19 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                             # map the DMS keeps in memory, so a restart left an approver with nothing but
                             # View on a document they were being asked about - and the one submitted after
                             # the restart was editable, which is how it was noticed.
-                            "editable": bool(office) and s.submitted_editable
-                                        and (user.email in st["pending"]
-                                             or (d.get("ownerEmail") or "").lower() == user.email
-                                             or is_admin(user)),
+                            "editable": (editable := bool(office) and s.submitted_editable
+                                         and (user.email in st["pending"]
+                                              or (d.get("ownerEmail") or "").lower() == user.email
+                                              or is_admin(user))),
+                            # ...and when it is not, why. A greyed command with no reason has cost this
+                            # pilot days: the answer is one of four, and the row says which.
+                            "editWhy": "" if editable else (
+                                "DMS_SUBMITTED_EDITABLE is off" if not s.submitted_editable
+                                else "this document is not waiting for you" if not (
+                                    user.email in st["pending"]
+                                    or (d.get("ownerEmail") or "").lower() == user.email or is_admin(user))
+                                else "there is no copy to open: SharePoint did not make one (see the "
+                                     "SharePoint check) and AD gives you no Modify on the file"),
                             "mine": user.email in st["pending"]})
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
 
