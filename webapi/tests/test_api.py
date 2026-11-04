@@ -4178,3 +4178,21 @@ def test_a_released_file_left_writable_is_made_read_only_when_it_is_listed(env):
            if f["name"] == "Pricing.xlsx"][0]
     assert row["readOnly"] and not row.get("editable")
     assert file_service.is_read_only(str(loose))
+
+
+def test_the_approver_opens_the_submitted_file_to_write_in_it_from_the_file_list_too(tmp_path):
+    """The approver found the document in the file list, where Open to edit was greyed and the DMS said it
+    is released, while the approvals row let them write in it. One rule in both places: the people a
+    document is waiting on, and its owner, while DMS_SUBMITTED_EDITABLE allows it."""
+    c, _sp, s, _d = _approvals_env(tmp_path, {"mandatory": [USER], "final": "boss@rh.co.il"})
+    q = tmp_path / "Root" / "02_Customers" / "Customer_A" / "Commercial" / "Quotations"
+    row = lambda: next(x for x in c.get("/api/browse", params={"path": str(q)}).json()["files"]
+                       if x["name"].endswith(".xlsx"))
+    assert row()["editable"] and "ofe" in (row()["officeUri"] or ""), "it is waiting for this person"
+
+    s.dev_user = "nobody@rh.co.il"                     # not an approver of it and not its owner
+    assert not row().get("editable")
+
+    s.dev_user = USER
+    s.submitted_editable = False                       # a site that wants a submitted document untouchable
+    assert not row().get("editable")

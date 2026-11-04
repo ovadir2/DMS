@@ -764,8 +764,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 f["noWorkflow"] = True
             if holds_share_log(f["path"]) or in_shared_folder(f["path"]):
                 f.update(readOnly=True, system=True, noWorkflow=True)   # open (view), download, copy path only
-            elif (f.get("officeUri") and not f.get("readOnly") and not files.in_workflow_folder(s.repository_root, f["path"])
-                  and (not d or d.get("lifecycleStatus") == s.choices["Working"]) and user.can(f["path"], "write")):
+            elif (f.get("officeUri") and not f.get("readOnly") and user.can(f["path"], "write")
+                  and ((not files.in_workflow_folder(s.repository_root, f["path"])
+                        and (not d or d.get("lifecycleStatus") == s.choices["Working"]))
+                       # ...or it is waiting for this person's answer: the row in the file list opens it for
+                       # writing exactly as the approvals row does, so an approver does not have to find the
+                       # other page to answer a remark in the document itself
+                       or editable_in_approval(user, f["path"], d))):
                 # not yet registered (or still in Working): opens in Word / Excel / PowerPoint for editing
                 f.update(officeUri=files.open_uri(f["path"], edit=True), viewUri=files.open_uri(f["path"]), editable=True)
         if review_on():
@@ -775,7 +780,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 st = checkout_state(f["path"], user, reg)
                 f["bridge"] = True
                 f["checkedOut"] = st
-                f["canEdit"] = (not read_only_file(f["path"]) and not doc_locked(f.get("document"))
+                f["canEdit"] = ((not read_only_file(f["path"]) and not doc_locked(f.get("document"))
+                                 or editable_in_approval(user, f["path"], f.get("document")))
                                 and may_write(user, f["path"]))
                 if st and st.get("url"):
                     f.update(officeUri=st["url"], editable=bool(st.get("edit")))
@@ -1583,6 +1589,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             return True
         return os.path.normcase(os.path.normpath(path)) in awaiting_approval(user)
 
+    def editable_in_approval(user: User, path: str, doc: dict | None = None) -> bool:
+        """A document waiting for an answer is open to the people it waits on and to its owner, while
+        DMS_SUBMITTED_EDITABLE allows it - an approver writes their remarks in the file itself. The same
+        rule wherever a file is shown: the approver who found the document in the file list was told it is
+        released by the DMS and could not open it at all, while the approvals row let them."""
+        return bool(s.submitted_editable and doc_submitted(doc) and in_this_approval(user, path, doc))
+
     def may_change(user: User, path: str, doc: dict | None = None) -> bool:
         """Who may change this document. Rights on the file server say yes, and so does being its owner: with
         the SharePoint bridge the DMS is the one that writes the file, and an owner who has no rights on
@@ -1858,7 +1871,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         checkout_sweep()
         edit = bool(req.edit)
         reg = find_registered(full, register_index())
-        if edit and (doc_locked(reg) or (read_only_file(full) and not doc_in_work(reg))):
+        if edit and (doc_locked(reg) or (read_only_file(full) and not doc_in_work(reg))) \
+                and not editable_in_approval(user, full, reg):
             raise HTTPException(403, "This document is released by the DMS (read only): it can be viewed, not edited")
         if edit and not may_change(user, full, reg):
             raise HTTPException(403, "You do not have permission to change this file")
