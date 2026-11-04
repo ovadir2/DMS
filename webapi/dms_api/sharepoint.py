@@ -473,7 +473,51 @@ class SharePoint:
                 "Title": title, "BaseTemplate": 101,                                     # 101 = document library
                 "Description": "Documents the DMS puts here for people to open and edit; the DMS removes them again."})
             logger.info("The review library %s was created on %s", title, site)
+        if self.s.view_library and title == self.s.view_library:
+            self._read_only_library(site, title)
         self._review_ready = ready | {title}
+
+    def _read_only_library(self, site: str, title: str) -> None:
+        """The library of reading copies answers to nobody but the DMS: it stops inheriting the site's
+        permissions, and everyone who had Edit or more there is left with Read. A library created from the
+        site's own permissions gives its members Edit, so a person could type into the copy the DMS made
+        for them to read - which is the one thing View is there to prevent. The DMS itself writes as the
+        application (Sites.Selected), which is not a role assignment here, so it keeps on uploading and
+        removing copies; a site collection administrator is not locked out either, their access does not
+        come from this list. Best effort: a tenant that refuses the call says so in the log, and the copy
+        is a PDF anyway."""
+        q = lambda p: quote(p.replace("'", "''"))
+        lst = f"{site}/_api/web/lists/GetByTitle('{q(title)}')"
+        try:
+            if not self._call("GET", f"{lst}?$select=HasUniqueRoleAssignments").get("HasUniqueRoleAssignments"):
+                self._call("POST", f"{lst}/breakroleinheritance(copyRoleAssignments=true,clearSubscopes=true)")
+                logger.info("%s on %s no longer inherits the site's permissions", title, site)
+            read = self._call("GET", f"{site}/_api/web/roledefinitions/getbyname('Read')?$select=Id")["Id"]
+            rows = self._call("GET", f"{lst}/roleassignments?$expand=RoleDefinitionBindings"
+                                     f"&$select=PrincipalId,RoleDefinitionBindings/Id,RoleDefinitionBindings/Name"
+                              ).get("value", [])
+        except (SharePointError, KeyError, TypeError) as e:
+            logger.warning("The reading copies in %s were left with the site's permissions: %s", title, e)
+            return
+        for row in rows:
+            principal = row.get("PrincipalId")
+            writers = [b for b in row.get("RoleDefinitionBindings") or []
+                       if (b.get("Name") or "") not in self.READ_ROLES and b.get("Id") != read]
+            if not principal or not writers:
+                continue
+            try:
+                self._call("POST", f"{lst}/roleassignments/addroleassignment"
+                                   f"(principalid={principal},roledefid={read})")
+                for b in writers:
+                    self._call("POST", f"{lst}/roleassignments/removeroleassignment"
+                                       f"(principalid={principal},roledefid={b['Id']})")
+                logger.info("%s in %s may now only read the copies there", principal, title)
+            except SharePointError as e:
+                logger.warning("%s kept %s in %s: %s", principal,
+                               ", ".join(b.get("Name") or "" for b in writers), title, e)
+
+    # Roles that cannot change anything: left as they are when the view library is made read only.
+    READ_ROLES = ("Read", "Restricted Read", "View Only", "Limited Access", "Restricted View")
 
     # What a copy only to be read is turned into, so that nothing can be typed into it at all - every format
     # SharePoint can lay out as pages, a spreadsheet included: Excel ignores "open to view" and lets a reader
