@@ -1464,9 +1464,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                             # In SharePoint while it is approved: Office Online opens the copy with the
                             # person's own Microsoft account. Without the bridge, the file itself - for
                             # someone AD gives Modify, which is the same rule as everywhere else.
+                            # The copy in SharePoint when there is one; the file itself when there is not -
+                            # a person AD gives Modify should not be left with nothing to open because
+                            # SharePoint refused to make a copy.
                             "officeUri": (office := kept.get("url") or (
                                 files.open_uri(file, edit=True)
-                                if (file and s.submitted_editable and not review_on()
+                                if (file and s.submitted_editable
                                     and (user.email in st["pending"]
                                          or (d.get("ownerEmail") or "").lower() == user.email)
                                     # the file itself, so AD must really give them Modify - the standing
@@ -1499,9 +1502,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                 else "this document is not waiting for you" if not (
                                     user.email in st["pending"]
                                     or (d.get("ownerEmail") or "").lower() == user.email or is_admin(user))
-                                else "there is no copy of it in SharePoint to open"
-                                     + (f" (the DMS last said: {last_sp_error()})" if last_sp_error() else
-                                        " and AD gives you no Modify on the file itself")),
+                                else "there is no copy of it in SharePoint to open, and AD gives you no "
+                                     "Modify on the file itself"
+                                     + (f". The DMS last heard from SharePoint: {last_sp_error()}"
+                                        if last_sp_error() else "")),
                             "mine": user.email in st["pending"]})
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
 
