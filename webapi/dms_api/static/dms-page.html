@@ -1038,7 +1038,7 @@ async function browse(v) {
       : ((f.document && (f.document.ownerEmail || '').toLowerCase() === (me.email || '').toLowerCase())
           ? `<button type="button" class="link" data-del="${esc(f.path)}" data-released="1" style="color:var(--err)">${T.del}</button>` : '')}`}</td></tr>`).join('')}
     </table>` : ''}${folders.length + r.files.length ? '' : `<p class="muted">${T.none}</p>`}
-    ${r.canWrite && !r.managed && !r.skeletonNote ? `<div class="dropzone">\u2B07 ${T.dropHere}</div>` : ''}`;
+    ${r.canDrop && !r.managed && !r.skeletonNote ? `<div class="dropzone">\u2B07 ${T.dropHere}</div>` : ''}`;
   if (explorerOn()) {
     TREE.kids.set(r.path, folders.map(f => ({ name: lbl(f.label) || f.name, path: f.path,
       lock: !!f.workflowFolder, bp: !!(f.label && f.label.kind !== 'project') })));
@@ -1055,7 +1055,7 @@ async function browse(v) {
     v.appendChild(wrap);
     treeOpenTo(r.trail).then(() => paintTree(aside, r.path));
   }
-  wireDrop(v, r.path, r.canWrite && !r.managed);
+  wireDrop(v, r.path, r.canDrop && !r.managed && !r.skeletonNote);
   v.querySelector('[data-home]').onclick = () => { state.view = 'customers'; render(); };
   const upb = v.querySelector('#go-up'); if (upb) upb.onclick = () => { if ((r.trail || []).length > 1) { state.folder = r.parent; } else { state.view = 'customers'; } render(); };
   v.querySelector('#go-back').onclick = goBack;
@@ -1564,6 +1564,7 @@ async function dropFiles(folder, files, moveHandles, how = 'work') {
     // audited, exactly as "release without workflow" does.
     fd.set('file', file); fd.set('folder', where); fd.set('overwrite', 'false');
     fd.set('noWorkflow', released ? 'true' : 'false');
+    fd.set('dropped', 'true');                    // a drop asks AD for Modify on the folder, not only to see it
     // A drop is many calls in a row, and a Windows sign-in is renewed per connection: one of them can be
     // cut off mid-flight ("failed to fetch", which is the browser saying nothing arrived rather than the
     // DMS refusing). The file is simply sent again - twice - before anyone is told.

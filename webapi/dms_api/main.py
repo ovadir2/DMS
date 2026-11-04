@@ -765,6 +765,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         # Standing in the customers folder, a new folder is a new customer: the page says so.
         result["customersRoot"] = os.path.normcase(os.path.normpath(result["path"])) == \
             os.path.normcase(os.path.normpath(customers_root()))
+        # A drop asks AD for Modify on this folder, whatever else the DMS is willing to do for the person.
+        result["canDrop"] = bool(result.get("canWrite")) and may_write(user, result["path"])
         kpis = files.kpis_folder(s.repository_root, result["path"])
         same = lambda a, b: os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
         result["kpis"] = bool(kpis) and same(kpis, result["path"])
@@ -888,7 +890,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.post("/api/files/upload", status_code=201)
     def upload(folder: str = Form(...), file: UploadFile = File(...), overwrite: bool = Form(False),
-               noWorkflow: bool = Form(False), user: User = Depends(current_user)):
+               noWorkflow: bool = Form(False), dropped: bool = Form(False),
+               user: User = Depends(current_user)):
         """Save a file from the user's PC into a folder of the repository (the user needs write access there)."""
         target_dir = files.resolve(s.repository_root, folder)
         if not os.path.isdir(target_dir):
@@ -897,6 +900,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "Workflow folders are managed by the DMS")
         if not may_add(user, target_dir):
             raise HTTPException(403, "You do not have permission to save files in this folder")
+        # Dragging a file onto a folder is the file server's own gesture, and it asks the file server's own
+        # question: AD must give this person Modify there. The DMS writes the file either way, but it does
+        # not stand in for a right the person does not have.
+        if dropped and not may_write(user, target_dir):
+            raise HTTPException(403, "Dropping files into this folder needs Modify on it in AD. "
+                                     "Ask IT for it, or use a folder you may change.")
         if in_shared_folder(os.path.join(target_dir, "x")):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only)")
         no_files_in_skeleton(target_dir)

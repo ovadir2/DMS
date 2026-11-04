@@ -2559,6 +2559,29 @@ def test_the_dms_can_test_its_own_page_plumbing(tmp_path):
     assert [f["name"] for f in c.get("/api/kpi/files", params={"t": key}).json()["folders"]] == ["01_General"]
 
 
+def test_a_drop_needs_modify_in_ad(tmp_path, monkeypatch):
+    """Dragging a file onto a folder is the file server's own gesture, and it asks the file server's own
+    question: AD must give this person Modify there. The DMS writes the file with its own account either
+    way, but it does not stand in for a right the person does not have - not even where it is set up to add
+    a document for somebody who may only see the folder."""
+    from dms_api import security
+    root = tmp_path / "Root"
+    folder = root / "01_General" / "Company_Profile"
+    folder.mkdir(parents=True)
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                 add_with_dms_rights=True)          # the DMS may add for someone who only sees the folder
+    c = TestClient(create_app(s))
+    monkeypatch.setattr(security.User, "can", lambda self, path, access=security.READ: access == security.READ)
+
+    sent = {"folder": str(folder), "noWorkflow": "false"}
+    assert c.post("/api/files/upload", data=sent, files={"file": ("a.txt", b"x")}).status_code == 201
+    refused = c.post("/api/files/upload", data={**sent, "dropped": "true"},
+                     files={"file": ("b.txt", b"x")})
+    assert refused.status_code == 403 and "Modify" in refused.text
+    assert not (folder / "b.txt").exists()
+    assert c.get("/api/browse", params={"path": str(folder)}).json()["canDrop"] is False
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""
