@@ -330,6 +330,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     app.state.sp_errors = deque(maxlen=30)               # the last SharePoint errors, for the SharePoint check
     app.state.notify_log = deque(maxlen=20)              # the last notifications (written, skipped, failed)
 
+    def last_sp_error() -> str:
+        """What SharePoint last refused, for a message that would otherwise say only that something failed."""
+        errors = getattr(app.state, "sp_errors", None)
+        return (errors[0]["error"] if errors else "")[:160]
+
     def sp_error(what: str, e: Exception) -> None:
         app.state.sp_errors.appendleft({"utc": datetime.now(timezone.utc).isoformat(timespec="seconds"), "what": what, "error": str(e)[:400]})
 
@@ -1494,8 +1499,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                 else "this document is not waiting for you" if not (
                                     user.email in st["pending"]
                                     or (d.get("ownerEmail") or "").lower() == user.email or is_admin(user))
-                                else "there is no copy to open: SharePoint did not make one (see the "
-                                     "SharePoint check) and AD gives you no Modify on the file"),
+                                else "there is no copy of it in SharePoint to open"
+                                     + (f" (the DMS last said: {last_sp_error()})" if last_sp_error() else
+                                        " and AD gives you no Modify on the file itself")),
                             "mine": user.email in st["pending"]})
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
 
