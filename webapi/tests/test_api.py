@@ -2601,6 +2601,22 @@ def test_an_approver_may_write_their_remarks_in_the_submitted_file(tmp_path):
     assert not row["editable"] and not row["officeUri"]
 
 
+def test_a_super_user_acting_as_someone_is_told_why_they_are_refused(tmp_path):
+    """Acting as somebody is being them - that is the point of it - so a super user's own commands are
+    refused while it lasts. The refusal says so, instead of telling a super user they are not one."""
+    root = tmp_path / "Root"
+    root.mkdir()
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                 admins=[USER], dev_users=["roneno@rh.co.il"])
+    c = TestClient(create_app(s))
+
+    assert c.get("/api/diagnostics/sharepoint").status_code == 200
+    as_them = {"X-DMS-Dev-User": "roneno@rh.co.il"}
+    r = c.get("/api/diagnostics/sharepoint", headers=as_them)
+    assert r.status_code == 403
+    assert "acting as roneno@rh.co.il" in r.text and "stop acting" in r.text
+
+
 def test_the_page_is_never_cached(tmp_path):
     """The page is the whole application: a browser holding yesterday's copy shows a DMS that behaves by
     yesterday's rules, which looks exactly like a change that was never installed."""

@@ -451,6 +451,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         except files.PathNotAllowed:
             return False
 
+    def only_admin(user: User, what: str) -> None:
+        """Refuse, and say the thing that is usually the answer: a super user who is acting as somebody else
+        is that somebody for as long as it lasts - that is the point of it - so the command is theirs to run
+        again once they stop."""
+        if is_admin(user):
+            return
+        acting = f" You are acting as {user.email}: stop acting as them (\u22EE menu) and try again." \
+            if user.acting_from else ""
+        raise HTTPException(403, f"Only a DMS super user can {what}.{acting}")
+
     def is_admin(user: User) -> bool:
         return user.email in s.admins or pilot_owner(user.email)
 
@@ -495,8 +505,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.get("/api/diagnostics/sharepoint")
     def sp_check(user: User = Depends(current_user)):
         """Super users: the DMS lists in SharePoint (exists, items, may this account add), and the last errors."""
-        if not is_admin(user):
-            raise HTTPException(403, "Only a DMS super user can run the SharePoint check")
+        only_admin(user, "run the SharePoint check")
         from .sharepoint import AUDIT, DECISIONS, DELEGATIONS, MATRIX, NOTIFY, REGISTER
         lists = [sp().list_info(rel) for rel in (REGISTER, AUDIT, MATRIX, NOTIFY, DECISIONS, DELEGATIONS)]
         return {"site": s.site_url if s.sharepoint != "memory" else "memory (playground)", "account": user.email,
@@ -511,16 +520,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.post("/api/diagnostics/clear-errors")
     def clear_errors(user: User = Depends(current_user)):
         """Super users: empty the list of last SharePoint errors (it also empties at every restart)."""
-        if not is_admin(user):
-            raise HTTPException(403, "Only a DMS super user can clear the errors")
+        only_admin(user, "clear the errors")
         app.state.sp_errors.clear()
         return {"errors": 0}
 
     @app.post("/api/diagnostics/notify-test")
     def notify_test(user: User = Depends(current_user)):
         """Super users: write one test row to DMS Notifications, addressed to themselves (the DC-P2 flow sends it)."""
-        if not is_admin(user):
-            raise HTTPException(403, "Only a DMS super user can send a test notification")
+        only_admin(user, "send a test notification")
         subject, body, link = notify_text("test", "TEST", "")
         sp().notify(to=[user.email], subject=subject, body=body, link=link, ref="TEST")
         app.state.notify_log.appendleft({"utc": datetime.now(timezone.utc).isoformat(timespec="seconds"), "kind": "test",
@@ -2598,8 +2605,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """Run the file moves now: every approved document goes to Current_ReadOnly in its own folder (the
         previous revision to Obsolete_ReadOnly), read only, with its SHA-256 in the record. A super user can
         run it whenever they like, also when the DMS does not run it on a timer (DMS_FILE_SERVICE_SECONDS)."""
-        if not is_admin(user):
-            raise HTTPException(403, "Only a DMS super user can run the file service")
+        only_admin(user, "run the file service")
         from . import file_service
         r = file_service.run_once(sp(), s)
         log(user, "file-service-run", str(r))
@@ -3091,8 +3097,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """Load documents approved in the old repository: into Current_ReadOnly, registered as Approved,
         File Linker links moved. Runs in the background; follow it with GET /api/first-load/{id}."""
         from . import first_load
-        if not is_admin(user):
-            raise HTTPException(403, "Only a DMS super user can run the First loading")
+        only_admin(user, "run the First loading")
         target = files.resolve(s.repository_root, req.target)
         if not os.path.isdir(target):
             raise HTTPException(404, "The target folder was not found")
