@@ -739,8 +739,20 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         idx = register_index()
         from . import noworkflow
         nw = noworkflow.marked(s.repository_root)
-        from .file_service import to_root
+        from .file_service import _set_read_only, to_root
         for f in result["files"]:
+            # Released means read only on the file server, whoever opens it and whatever AD gives them.
+            # View hands Word / Excel the file itself and the "view" in that address is only a request:
+            # the read-only attribute is what refuses the save. A file that reached Current_ReadOnly /
+            # Obsolete_ReadOnly without it - copied there by hand, restored from a backup, written by a
+            # tool that cleared the flag - is flagged here, at the first look, instead of staying editable
+            # until somebody notices that View let them save.
+            if os.path.basename(os.path.dirname(f["path"])) in WORKFLOW_FOLDERS[2:] and not f.get("readOnly"):
+                try:
+                    _set_read_only(f["path"], True)
+                    f["readOnly"] = True
+                except OSError as exc:
+                    logger.warning("could not make the released file %s read only: %s", f["path"], exc)
             d = find_registered(f["path"], idx)
             f["document"] = with_key(d) if d else None
             if d and f["document"]["statusKey"] in ("Working", "Submitted") and os.path.normcase(os.path.normpath(
@@ -1481,8 +1493,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                             # address, and Excel ignores it outright. Without the bridge it is the file itself,
                             # for someone who has rights on the file server.
                             "viewPdf": review_on() and bool(file),
+                            # Never derived from officeUri: that one is an edit address now, and View is
+                            # read only by policy. Either SharePoint's own view link or the file opened for
+                            # reading - nothing else.
                             "viewUri": None if (review_on() and file) else (
-                                kept.get("viewUrl") or read_only_uri(office)
+                                kept.get("viewUrl") or read_only_uri(kept.get("url"))
                                 or (files.open_uri(file) if file and user.can(file) else None)),
                             "viaDms": bool(file) and not user.can(file),   # no rights on the file server: the DMS serves it
                             "remarks": remarks_of(d.get("documentId") or ""),

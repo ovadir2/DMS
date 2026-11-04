@@ -4162,3 +4162,19 @@ def test_an_approved_document_lands_in_current_readonly_at_once(tmp_path):
     import stat as _stat
     assert landed.is_file() and not landed.stat().st_mode & _stat.S_IWRITE   # there already, and read only
     assert not (q / "Submitted" / "Quote.docx").exists()
+
+
+def test_a_released_file_left_writable_is_made_read_only_when_it_is_listed(env):
+    """View hands Word / Excel the file itself, so a file that reached Current_ReadOnly without the
+    read-only attribute (copied there by hand) was editable through View. The first listing flags it."""
+    from dms_api import file_service
+    c, _, q = env
+    cur = q / "Current_ReadOnly"
+    cur.mkdir(exist_ok=True)
+    loose = cur / "Pricing.xlsx"
+    loose.write_text("x")
+    assert not file_service.is_read_only(str(loose))
+    row = [f for f in c.get("/api/browse", params={"path": str(cur)}).json()["files"]
+           if f["name"] == "Pricing.xlsx"][0]
+    assert row["readOnly"] and not row.get("editable")
+    assert file_service.is_read_only(str(loose))
