@@ -190,7 +190,10 @@
      be deleted - is what the menu offers. */
   .ctx { position:fixed; z-index:60; min-width:230px; max-height:88vh; overscroll-behavior:contain; overflow:auto; background:#fff; border:1px solid var(--line);
          border-radius:10px; box-shadow:0 12px 34px rgba(31,74,114,.22); padding:6px; }
-  .ctx .ctxname { margin:4px 8px 6px; font-size:12px; color:var(--muted); font-weight:600; max-width:340px;
+  /* A long menu scrolls, and the name scrolled out of it: the commands then look as if they belong to the
+     folder you are standing in rather than to the row you right-clicked. It stays at the top now. */
+  .ctx .ctxname { position:sticky; top:-6px; z-index:1; background:#fff; padding:4px 0 6px; margin:0 8px 6px;
+                  font-size:12px; color:var(--navy); font-weight:700; max-width:340px;
                   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .ctx .ctxsep { height:1px; background:var(--line); margin:5px 4px; }
   .ctx .ctxhead { font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
