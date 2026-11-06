@@ -2233,27 +2233,45 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return User(email=account.lower(), name=who.get("name") or account, ad=ad)
 
     @app.get("/api/v1/kpi/folders")
-    def api_kpi_folders(request: Request):
-        """Every KPIs folder of the repository the application's AD account may see: one per department and
-        one per customer, as the blueprint puts them. The KPI Builder reads this to know where a department's
-        KPIs are kept, and publishes into the path it gives back."""
+    def api_kpi_folders(request: Request, missing: bool = True):
+        """Every KPIs folder of the repository the application's AD account may see: one in every department
+        and one in every customer, as the blueprint puts them. The Builder reads this to know where each
+        department keeps its KPIs, and publishes into the path it gives back.
+
+        A department whose KPIs folder has not been made yet is listed too, with exists=false - publishing
+        into it makes it, as the blueprint says it belongs there. missing=false leaves those out."""
         from fastapi.responses import JSONResponse
         who = api_caller(request, "kpi")
         out = []
-        for folder, dirs, _names in os.walk(s.repository_root):
-            dirs[:] = [d for d in dirs if not d.startswith(".") and d not in WORKFLOW_FOLDERS]
-            if os.path.basename(folder).lower() != "kpis" or not files.kpis_folder(s.repository_root, folder):
-                continue
-            if not api_may_see(who, folder):
-                continue
-            parts = rel_parts(folder)
-            of_customer = parts[1] if len(parts) > 2 and parts[0].lower() == s.customers_folder.lower() else ""
-            out.append({"path": folder, "owner": of_customer or (parts[1] if len(parts) > 1 else ""),
-                        "kind": "customer" if of_customer else "department",
+
+        def add(owner: str, kind: str, parent: str) -> None:
+            folder = os.path.join(parent, "KPIs")
+            if not api_may_see(who, folder if os.path.isdir(folder) else parent):
+                return
+            there = os.path.isdir(folder)
+            if not there and not missing:
+                return
+            out.append({"path": folder, "owner": owner, "kind": kind, "exists": there,
                         "kpis": sorted(e.name for e in os.scandir(folder)
-                                       if e.is_dir() and e.name not in WORKFLOW_FOLDERS)})
-        out.sort(key=lambda x: (x["kind"], x["owner"].lower()))
-        logger.info("api %s GET /api/v1/kpi/folders -> %d", who["name"], len(out))
+                                       if e.is_dir() and e.name not in WORKFLOW_FOLDERS) if there else []})
+
+        general = os.path.join(s.repository_root, "01_General")
+        try:
+            with os.scandir(general) as it:          # every department of the company
+                for e in sorted(it, key=lambda x: x.name.lower()):
+                    if e.is_dir() and not e.name.startswith(".") and e.name not in WORKFLOW_FOLDERS:
+                        add(blueprint.describe(["01_General", e.name]).get("en") or e.name, "department", e.path)
+        except OSError as e:
+            logger.info("the departments could not be read: %s", e)
+        try:
+            with os.scandir(customers_root()) as it:  # and every customer, measured the same way
+                for e in sorted(it, key=lambda x: x.name.lower()):
+                    if e.is_dir() and not e.name.startswith(".") and not is_skeleton(e.name):
+                        add(e.name, "customer", e.path)
+        except OSError as e:
+            logger.info("the customers could not be read: %s", e)
+        logger.info("api %s GET /api/v1/kpi/folders -> %d (%d not made yet)", who["name"], len(out),
+                    sum(1 for f in out if not f["exists"]))
         return JSONResponse({"folders": out, "count": len(out)}, headers={"Cache-Control": "no-store"})
 
     @app.post("/api/v1/kpi/publish", status_code=201)
@@ -2272,11 +2290,20 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         who = api_caller(request, "kpi")
         actor = api_user(who)
         target = files.resolve(s.repository_root, folder)
-        if not os.path.isdir(target):
-            raise HTTPException(404, "Folder not found")
         if not files.kpis_folder(s.repository_root, target):
             raise HTTPException(400, "This is not a KPIs folder of the blueprint. /api/v1/kpi/folders gives "
                                      "the ones this account may see.")
+        if not os.path.isdir(target):
+            # The blueprint says a KPIs folder belongs here, so the first publish makes it rather than
+            # asking somebody to create it by hand in every department first.
+            parent = os.path.dirname(target)
+            if not os.path.isdir(parent):
+                raise HTTPException(404, "Folder not found")
+            if not may_write(actor, parent):
+                raise HTTPException(403, f"{who['name']} acts as {who['as']}, and AD gives that account no "
+                                         f"Modify on {parent}.")
+            os.makedirs(target, exist_ok=True)
+            logger.info("api %s made the KPIs folder %s", who["name"], target)
         if not may_write(actor, target):
             raise HTTPException(403, f"{who['name']} acts as {who['as']}, and AD gives that account no "
                                      f"Modify on this folder.")

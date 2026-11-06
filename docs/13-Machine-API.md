@@ -144,18 +144,26 @@ AI's account the groups it should see and nothing else.
 
 ## GET /api/v1/kpi/folders
 
-Scope `kpi`. Every KPIs folder the key's AD account may see - one per department, one per customer, as the
-blueprint puts them - with the KPIs already in it.
+Scope `kpi`. Every KPIs folder the key's AD account may see - one in **every** department and one in every
+customer, as the blueprint puts them - with the KPIs already in each.
 
 ```json
 {
   "folders": [
     { "path": "E:\\Shares\\01_General\\Commercial\\KPIs", "owner": "Commercial",
-      "kind": "department", "kpis": ["Orders", "Quotes"] }
+      "kind": "department", "exists": true,  "kpis": ["Orders", "Quotes"] },
+    { "path": "E:\\Shares\\01_General\\Production\\KPIs", "owner": "Production",
+      "kind": "department", "exists": false, "kpis": [] },
+    { "path": "E:\\Shares\\02_Customers\\Elbit\\KPIs", "owner": "Elbit",
+      "kind": "customer",   "exists": false, "kpis": [] }
   ],
-  "count": 1
+  "count": 3
 }
 ```
+
+A department whose KPIs folder has not been made yet is listed with `exists: false`, and publishing into it
+makes it - the blueprint says it belongs there. `?missing=false` leaves those out. The customer skeleton is
+never listed.
 
 ## POST /api/v1/kpi/publish
 

@@ -4205,6 +4205,9 @@ def test_the_kpi_builder_publishes_a_page_and_its_data_in_one_call(tmp_path):
     root = tmp_path / "Root"
     kpis = root / "01_General" / "Commercial" / "KPIs"
     kpis.mkdir(parents=True)
+    (root / "01_General" / "Production").mkdir()                 # a department with no KPIs folder yet
+    (root / "02_Customers" / "Customer_Skeleton").mkdir(parents=True)
+    (root / "02_Customers" / "Elbit").mkdir()
     s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory")
     s.api_keys = {"builder": {"name": "kpi-builder", "scopes": ["kpi"], "as": "svc_kpi@rh.co.il"},
                   "reader": {"name": "reports", "scopes": ["documents"], "as": "svc_reports@rh.co.il"}}
@@ -4214,7 +4217,22 @@ def test_the_kpi_builder_publishes_a_page_and_its_data_in_one_call(tmp_path):
     assert c.get("/api/v1/kpi/folders").status_code == 401                      # a key is needed
     assert c.get("/api/v1/kpi/folders", headers={"X-DMS-Api-Key": "reader"}).status_code == 403
     folders = c.get("/api/v1/kpi/folders", headers=key).json()["folders"]
-    assert [(f["owner"], f["kind"]) for f in folders] == [("Commercial", "department")]
+    # every department and every customer, not only the ones whose KPIs folder happens to exist
+    assert [(f["owner"], f["kind"], f["exists"]) for f in folders] == [
+        ("Commercial", "department", True), ("Production", "department", False),
+        ("Elbit", "customer", False)]
+    assert all(f["path"].endswith(os.sep + "KPIs") for f in folders)
+    assert [f["owner"] for f in c.get("/api/v1/kpi/folders", headers=key,
+                                      params={"missing": False}).json()["folders"]] == ["Commercial"]
+
+    # a department whose KPIs folder was never made: publishing into it makes it
+    prod = next(f for f in folders if f["owner"] == "Production")
+    made = c.post("/api/v1/kpi/publish", headers=key, data={"folder": prod["path"]},
+                  files=[("files", ("Yield.html", b"<!doctype html><title>Yield</title>", "text/html")),
+                         ("files", ("Yield.json", b'{"value": 2}', "application/json"))])
+    assert made.status_code == 201, made.text
+    assert (root / "01_General" / "Production" / "KPIs" / "Yield" / "Yield.html").is_file()
+    assert (root / "01_General" / "Production" / "KPIs" / "Yield" / "Current_ReadOnly" / "Yield.json").is_file()
 
     r = c.post("/api/v1/kpi/publish", headers=key, data={"folder": folders[0]["path"]},
                files=[("files", ("Orders.html", b"<!doctype html><title>Orders</title>", "text/html")),
