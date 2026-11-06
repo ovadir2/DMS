@@ -547,7 +547,10 @@ function bridgeActions(f) {
   // ask again whether they may take it out - that question was answered when it went out. Asking it again is
   // what left a document editable once: after the first edit the row showed View alone.
   if (co && co.mine && co.url && co.edit) {
-    out.push(`<a class="link" href="${esc(co.url)}" target="_blank" rel="noopener">\u270E ${T.openEditFile}</a>`);
+    // data-back marks it as the Open-to-edit command: the right-click menu looks for the command by its
+    // attribute, and this one is a link rather than a button - so once a document was out for editing the
+    // menu showed Open to edit greyed although the row was offering it. The row and the menu are one thing.
+    out.push(`<a class="link" data-back href="${esc(co.url)}" target="_blank" rel="noopener">\u270E ${T.openEditFile}</a>`);
     // reading it while it is out is still reading: a copy of its own, and the editing copy is untouched
     out.push(viewBtn(f));
     // "Done editing" is the way out when Office never lets the copy go - it is kept for a copy that has been
@@ -567,7 +570,7 @@ function bridgeActions(f) {
 }
 function fileActions(f) {
   if (isDash(f.name || f.path)) return dashBtn(f);
-  return `${f.bridge ? bridgeActions(f) : f.officeUri ? `${openBtn(f.officeUri, f.path, f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open))}${f.editable && f.viewUri ? openBtn(f.viewUri, f.path, T.viewRo) : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">${f.editable === false || f.readOnly ? T.viewRo : '✎ ' + T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (isHtml(f.name || f.path) ? dashBtn(f) : TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cl="${esc(f.path)}">🔗 ${T.copyLink}</button>`
+  return `${f.bridge ? bridgeActions(f) : f.officeUri ? `${openBtn(f.officeUri, f.path, f.editable ? '✎ ' + T.openEditFile : (/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open), f.editable ? 'edit' : 'view')}${f.editable && f.viewUri ? openBtn(f.viewUri, f.path, T.viewRo, 'view') : ''}` : `${TEXT_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-tx="${esc(f.path)}">${f.editable === false || f.readOnly ? T.viewRo : '✎ ' + T.editHere}</button>` : ''}${VIEW_EXT.test(f.name || f.path) ? `<button type="button" class="link" data-vw="${esc(f.path)}">${/[\\/]Current_ReadOnly[\\/][^\\/]+$/.test(f.path) ? T.viewRo : T.open}</button>` : (isHtml(f.name || f.path) ? dashBtn(f) : TEXT_EXT.test(f.name || f.path) ? '' : `<button type="button" class="link" data-noopen="${esc(f.path)}">${T.open}</button>`)}`}<button type="button" class="link" data-dl="${esc(f.path)}">${T.download}</button><button type="button" class="link" data-cl="${esc(f.path)}">🔗 ${T.copyLink}</button>`
     + (f.document ? (f.document.statusKey === 'Working' ? `<button type="button" class="link" data-sub="${f.document.id}">${T.submit}</button><button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button><button type="button" class="link" data-drn="${f.document.id}" data-name="${esc(f.name)}">${T.rename}</button><button type="button" class="link" data-ddel="${f.document.id}" style="color:var(--err)">${T.del}</button>` : '')
         + (f.document.statusKey === 'Submitted' ? `<button type="button" class="link" data-wd="${f.document.id}" style="color:var(--err)">${T.withdraw}</button>${f.document.nextRevision ? '' : `<button type="button" class="link" data-relp="${esc(f.path)}">${T.relNw}</button>`}` : '')
         + (f.document.statusKey === 'Approved_ReadOnly' && samePath(f.path, f.document.currentUncPath) ? `${f.document.nextRevision ? `<button type="button" class="link" data-rev="${f.document.id}" disabled title="${esc(T.nextRev.replace('{rev}', f.document.nextRevision.revision || '').replace('{status}', f.document.nextRevision.status || ''))}">⟳ ${T.newRev}</button>` : `<button type="button" class="link" data-rev="${f.document.id}">⟳ ${T.newRev}</button>`}<button type="button" class="link" data-share="${f.document.id}">✉ ${isHr(f.path) ? T.shareHrBtn : T.share}</button>` : '')
@@ -722,9 +725,9 @@ function ctxOpen(host, x, y) {
   // not offer - because of what it is, where it sits or who you are - is there in grey, so the menu reads the
   // same way on every file and folder and nobody hunts for a line that moved.
   const CANON = [
-    [0, ['data-f', 'data-dash'], () => T.open],
-    [0, ['data-ckout', 'data-ext', 'data-tx'], () => '\u270E ' + T.openEditFile],
-    [0, ['data-vpdf', 'data-ckview', 'data-vw', 'data-txv'], () => T.viewRo],
+    [0, ['data-f', 'data-dash', 'data-oopen'], () => T.open],
+    [0, ['data-ckout', 'data-back', 'data-oedit', 'data-ext', 'data-tx'], () => '\u270E ' + T.openEditFile],
+    [0, ['data-vpdf', 'data-ckview', 'data-vw', 'data-txv', 'data-oview'], () => T.viewRo],
     [0, ['data-ckin'], () => '\u2713 ' + T.doneEditing],
     // Starting the approval is one thing, whether the document has a record yet or not: an unregistered file
     // is registered and sent, a registered one is sent. Two lines for it only made people ask which is which.
@@ -1023,8 +1026,11 @@ const remarksLine = (id, list) => !list || !list.length ? '' :
 // A SharePoint address is an ordinary link and opens in a tab of its own; only an application link
 // (ms-word:, rh-dms:) goes through openExternal, which navigates this page.
 const webLink = u => /^https?:/i.test(u || '');
-const openBtn = (uri, file, label) => webLink(uri)
-  ? `<a class="link" href="${esc(uri)}" target="_blank" rel="noopener">${label}</a>`
+// `role` says which command this is - edit, view or plain open - so the right-click menu finds it by its
+// attribute whether it came out as a link (an address the browser opens) or as a button (an address the PC
+// opens). Without it a command drawn as a link was greyed in the menu while the row was offering it.
+const openBtn = (uri, file, label, role) => webLink(uri)
+  ? `<a class="link" data-o${role || 'open'} href="${esc(uri)}" target="_blank" rel="noopener">${label}</a>`
   : `<button type="button" class="link" data-ext="${esc(uri)}" data-f="${esc(file)}">${label}</button>`;
 function fileLinks(file, editUri, viewUri, canEdit, viaDms, row) {
   if (!file) return '';
@@ -1037,12 +1043,12 @@ function fileLinks(file, editUri, viewUri, canEdit, viaDms, row) {
       + `<button type="button" class="link" data-txv="${esc(file)}">${T.viewRo}</button>`;
   }
   const out = [];
-  if (editUri && canEdit) out.push(openBtn(editUri, file, '✎ ' + T.openEdit));
+  if (editUri && canEdit) out.push(openBtn(editUri, file, '✎ ' + T.openEdit, 'edit'));
   if (VIEW_EXT.test(file)) out.push(`<button type="button" class="link" data-vw="${esc(file)}">${T.viewRo}</button>`);
   // View is a PDF copy the DMS makes for this reader, never the copy the approvers edit: that one opens in
   // PowerPoint / Word / Excel, and a standing permission on the library beats the "view" in its address.
   else if (row && row.viewPdf) out.push(`<button type="button" class="link" data-ckview="${esc(file)}">${T.viewRo}</button>`);
-  else if (viewUri) out.push(openBtn(viewUri, file, T.viewRo));
+  else if (viewUri) out.push(openBtn(viewUri, file, T.viewRo, 'view'));
   else if (!out.length && !viaDms) out.push(`<button type="button" class="link" data-noopen="${esc(file)}">${T.open}</button>`);
   return out.join('\n');
 }
@@ -1442,7 +1448,7 @@ function suggestionHtml(x) {
   const loc = x.relative.split(/[\\/]/).slice(0, -1).join(' › ');
   return `<div class="sugg"><div class="sg-n">${esc(x.name)} ${x.document ? statusTag(x.document) : ''}</div>
     <div class="muted small ltr">${esc(loc)}</div>${x.reason ? `<div class="small sg-r">${esc(x.reason)}</div>` : ''}
-    <div class="small sg-a">${x.bridge ? bridgeActions(x) : x.officeUri ? openBtn(x.officeUri, x.path, x.editable ? '✎ ' + T.openEditFile : T.open) : ''}
+    <div class="small sg-a">${x.bridge ? bridgeActions(x) : x.officeUri ? openBtn(x.officeUri, x.path, x.editable ? '✎ ' + T.openEditFile : T.open, x.editable ? 'edit' : 'open') : ''}
       <button type="button" class="link" data-f="${esc(x.folder)}">${T.goFolder}</button>
       <button type="button" class="link" data-dl="${esc(x.path)}">${T.download}</button></div></div>`;
 }
