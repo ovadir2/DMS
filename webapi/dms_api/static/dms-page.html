@@ -560,8 +560,10 @@ function bridgeActions(f) {
   // whether this person may still read it, and a copy made under an older rule is made again in the right place.
   // Whoever may change a document may also just read it: both ways in, never one instead of the other.
   if (f.canEdit) return `<button type="button" class="link" data-ckout="${esc(f.path)}">\u270E ${T.openEditFile}</button>\n` + viewBtn(f);
-  // No pencil: the row says why, where the pencil would have been.
-  return viewBtn(f) + (f.editWhy ? `\n<div class="muted small">\u270E ${esc(f.editWhy)}</div>` : '');
+  // No pencil to press: it stays in its place, greyed, saying why - in the row and in the menu alike.
+  return (f.editWhy ? `<button type="button" class="link" data-ckout="${esc(f.path)}" disabled
+      title="${esc(f.editWhy)}">\u270E ${T.openEditFile}</button>\n` : '') + viewBtn(f)
+    + (f.editWhy ? `\n<div class="muted small">${esc(f.editWhy)}</div>` : '');
 }
 function fileActions(f) {
   if (isDash(f.name || f.path)) return dashBtn(f);
@@ -708,6 +710,11 @@ function ctxOpen(host, x, y) {
     b.type = 'button';
     b.textContent = (src.textContent || '').trim();
     if (src.hasAttribute('disabled')) { b.disabled = true; b.title = src.title || ''; }
+    if (b.disabled && b.title) {        // the reason the row carries is read in the menu too
+      m.appendChild(b);
+      m.appendChild(Object.assign(document.createElement('div'), { className: 'ctxwhy', textContent: b.title }));
+      return;
+    }
     if ((src.getAttribute('style') || '').includes('--err')) b.style.color = 'var(--err)';
     b.onclick = () => { ctxClose(); src.click(); };
     m.appendChild(b);
