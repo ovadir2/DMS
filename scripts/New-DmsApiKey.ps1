@@ -9,7 +9,7 @@
     This prints the line to paste into webapi\.env after DMS_API_KEYS= (several callers separated by |).
     The DMS never shows a key again, and never writes one to the log or into an answer.
 
-    Scopes: customers, documents, files.
+    Scopes: customers, documents, files, kpi (the KPI Builder: it also publishes).
 
     -ActsAs is the AD account the caller acts as. An application is not a super user: every answer is
     filtered against that account's own AD rights, folder by folder. A key without one is told nothing.

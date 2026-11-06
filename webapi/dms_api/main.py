@@ -2220,6 +2220,80 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         logger.info("api %s GET /api/v1/approved-documents -> %d", who["name"], len(out))
         return JSONResponse({"documents": out, "count": len(out)}, headers={"Cache-Control": "no-store"})
 
+    def api_user(who: dict) -> User:
+        """The AD account an application acts as, as a user of the DMS. Everything it does is then asked of
+        AD exactly as it is asked of a person: a key is a name and an account, never a super user."""
+        account = (who.get("as") or "").strip()
+        ad = None
+        try:
+            from .security import AdUser
+            ad = AdUser.get(account)
+        except Exception as e:  # noqa: BLE001 - not a domain machine (a playground): AD cannot be asked here
+            logger.info("the AD rights of %s could not be read: %s", account, e)
+        return User(email=account.lower(), name=who.get("name") or account, ad=ad)
+
+    @app.get("/api/v1/kpi/folders")
+    def api_kpi_folders(request: Request):
+        """Every KPIs folder of the repository the application's AD account may see: one per department and
+        one per customer, as the blueprint puts them. The KPI Builder reads this to know where a department's
+        KPIs are kept, and publishes into the path it gives back."""
+        from fastapi.responses import JSONResponse
+        who = api_caller(request, "kpi")
+        out = []
+        for folder, dirs, _names in os.walk(s.repository_root):
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d not in WORKFLOW_FOLDERS]
+            if os.path.basename(folder).lower() != "kpis" or not files.kpis_folder(s.repository_root, folder):
+                continue
+            if not api_may_see(who, folder):
+                continue
+            parts = rel_parts(folder)
+            of_customer = parts[1] if len(parts) > 2 and parts[0].lower() == s.customers_folder.lower() else ""
+            out.append({"path": folder, "owner": of_customer or (parts[1] if len(parts) > 1 else ""),
+                        "kind": "customer" if of_customer else "department",
+                        "kpis": sorted(e.name for e in os.scandir(folder)
+                                       if e.is_dir() and e.name not in WORKFLOW_FOLDERS)})
+        out.sort(key=lambda x: (x["kind"], x["owner"].lower()))
+        logger.info("api %s GET /api/v1/kpi/folders -> %d", who["name"], len(out))
+        return JSONResponse({"folders": out, "count": len(out)}, headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/v1/kpi/publish", status_code=201)
+    def api_kpi_publish(request: Request, folder: str = Form(...), files_in: list[UploadFile] = File(..., alias="files")):
+        """The KPI Builder publishes a KPI: its page and the data behind it, in one call.
+
+        Both files go in together - the built page (.html) and the approved data (.json) - and each lands
+        where the DMS keeps that kind of thing: the page at the root of the KPI's folder, writable, so the
+        next build replaces it; the data released into Current_ReadOnly beside it, read only and traced in
+        the register like any other released document. Dropping the same files onto the folder in the page
+        does exactly this; the Builder has no browser, so it says the same thing here.
+
+        `folder` is a KPIs folder (or a KPI inside one) from /api/v1/kpi/folders. The application acts as its
+        AD account: that account needs Modify on the folder, as a person would."""
+        from fastapi.responses import JSONResponse
+        who = api_caller(request, "kpi")
+        actor = api_user(who)
+        target = files.resolve(s.repository_root, folder)
+        if not os.path.isdir(target):
+            raise HTTPException(404, "Folder not found")
+        if not files.kpis_folder(s.repository_root, target):
+            raise HTTPException(400, "This is not a KPIs folder of the blueprint. /api/v1/kpi/folders gives "
+                                     "the ones this account may see.")
+        if not may_write(actor, target):
+            raise HTTPException(403, f"{who['name']} acts as {who['as']}, and AD gives that account no "
+                                     f"Modify on this folder.")
+        done, failed = [], []
+        for one in files_in:
+            try:
+                done.append(upload(folder=target, file=one, overwrite=True, noWorkflow=False,
+                                   dropped=False, user=actor))
+            except HTTPException as e:
+                failed.append({"name": one.filename, "error": e.detail})
+        logger.info("api %s POST /api/v1/kpi/publish %s -> %d saved, %d failed",
+                    who["name"], target, len(done), len(failed))
+        if failed and not done:
+            raise HTTPException(409, "; ".join(f"{f['name']}: {f['error']}" for f in failed))
+        return JSONResponse({"folder": target, "saved": done, "failed": failed},
+                            status_code=201, headers={"Cache-Control": "no-store"})
+
     @app.get("/api/kpi/ping")
     def kpi_ping():
         """Can a page reach the DMS at all? This one answers without a key and without a sign-in, so it says

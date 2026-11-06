@@ -25,7 +25,7 @@ without one there is no rule to apply, and a key is not permission.
 Give that account the AD groups it should read, like any other member of staff; take them away and the
 caller stops seeing those folders at the next call.
 
-Several callers are separated by `|`. Scopes are `customers`, `documents`, `files`; a caller with no scope
+Several callers are separated by `|`. Scopes are `customers`, `documents`, `files`, `kpi`; a caller with no scope
 named gets `customers`. The DMS never writes a key to the log, never answers one back, and compares them so
 that a wrong key says nothing about how wrong it was.
 
@@ -142,8 +142,58 @@ and the answer to this call is the only place that says what is current. The lis
 AD account the key acts as, so an index built from it contains nothing that account may not read; give the
 AI's account the groups it should see and nothing else.
 
+## GET /api/v1/kpi/folders
+
+Scope `kpi`. Every KPIs folder the key's AD account may see - one per department, one per customer, as the
+blueprint puts them - with the KPIs already in it.
+
+```json
+{
+  "folders": [
+    { "path": "E:\\Shares\\01_General\\Commercial\\KPIs", "owner": "Commercial",
+      "kind": "department", "kpis": ["Orders", "Quotes"] }
+  ],
+  "count": 1
+}
+```
+
+## POST /api/v1/kpi/publish
+
+Scope `kpi`. The KPI Builder publishes one KPI: the built page and the data behind it, in the same call.
+`multipart/form-data`:
+
+| Field | |
+| --- | --- |
+| `folder` | a KPIs folder (or one KPI inside it) from `/api/v1/kpi/folders` |
+| `files` | the files themselves, repeated - `<KPI>.html` and `<KPI>.json` |
+
+```
+curl -X POST https://dms-pilot.rh.tech/api/v1/kpi/publish ^
+  -H "X-DMS-Api-Key: <key>" ^
+  -F "folder=E:\Shares\01_General\Commercial\KPIs" ^
+  -F "files=@Orders.html" -F "files=@Orders.json"
+```
+
+Each file lands where the DMS keeps that kind of thing, exactly as dropping the two onto the folder in the
+page does:
+
+| | Where it goes | |
+| --- | --- | --- |
+| `Orders.html` | `…\Commercial\KPIs\Orders\Orders.html` | writable: the next build replaces it |
+| `Orders.json` | `…\Commercial\KPIs\Orders\Current_ReadOnly\Orders.json` | released, read only, in the Document Register and the Control Audit |
+
+The KPI's folder is named after the files (`Orders.html` → `Orders`), and is created on the first publish.
+A page named `dashboard_<something>.html` belongs to the department rather than to one KPI: it stays at the
+root of the KPIs folder and what it reads is released into that folder's own `Current_ReadOnly`.
+
+The answer is `201` with `saved` (what was written, with the register row of anything released) and
+`failed` (name and reason). A call where nothing could be written answers `409` and says why for each file.
+
+The application acts as its AD account here too: that account needs **Modify** on the folder, as a person
+would, and a key that names no account is refused. Publishing is the only thing a key can write.
+
 ## What it is not, yet
 
-Three endpoints, read only. The `files` scope has no endpoint yet: a caller that must fetch the bytes still
-uses the person-facing `/api/files/download` with a Windows sign-in. Nothing under `/api/v1` writes, and a key
-cannot be used to change anything.
+The `files` scope has no endpoint yet: a caller that must fetch the bytes still uses the person-facing
+`/api/files/download` with a Windows sign-in. Apart from `/api/v1/kpi/publish`, nothing under `/api/v1`
+writes.

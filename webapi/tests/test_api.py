@@ -4196,3 +4196,39 @@ def test_the_approver_opens_the_submitted_file_to_write_in_it_from_the_file_list
     s.dev_user = USER
     s.submitted_editable = False                       # a site that wants a submitted document untouchable
     assert not row().get("editable")
+
+
+def test_the_kpi_builder_publishes_a_page_and_its_data_in_one_call(tmp_path):
+    """The Builder has no browser: it sends the built page and the approved data together, and each lands
+    where the DMS keeps that kind of thing - the page writable at the root of the KPI's folder, so the next
+    build replaces it, the data released into Current_ReadOnly beside it, read only and in the register."""
+    root = tmp_path / "Root"
+    kpis = root / "01_General" / "Commercial" / "KPIs"
+    kpis.mkdir(parents=True)
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory")
+    s.api_keys = {"builder": {"name": "kpi-builder", "scopes": ["kpi"], "as": "svc_kpi@rh.co.il"},
+                  "reader": {"name": "reports", "scopes": ["documents"], "as": "svc_reports@rh.co.il"}}
+    c = TestClient(create_app(s))
+    key = {"X-DMS-Api-Key": "builder"}
+
+    assert c.get("/api/v1/kpi/folders").status_code == 401                      # a key is needed
+    assert c.get("/api/v1/kpi/folders", headers={"X-DMS-Api-Key": "reader"}).status_code == 403
+    folders = c.get("/api/v1/kpi/folders", headers=key).json()["folders"]
+    assert [(f["owner"], f["kind"]) for f in folders] == [("Commercial", "department")]
+
+    r = c.post("/api/v1/kpi/publish", headers=key, data={"folder": folders[0]["path"]},
+               files=[("files", ("Orders.html", b"<!doctype html><title>Orders</title>", "text/html")),
+                      ("files", ("Orders.json", b'{"value": 1}', "application/json"))])
+    assert r.status_code == 201, r.text
+    saved = {os.path.basename(x["path"]): x["path"] for x in r.json()["saved"]}
+    assert not r.json()["failed"]
+    assert saved["Orders.html"] == str(kpis / "Orders" / "Orders.html")          # the page runs from here
+    assert saved["Orders.json"] == str(kpis / "Orders" / "Current_ReadOnly" / "Orders.json")
+    from dms_api import file_service
+    assert not file_service.is_read_only(saved["Orders.html"])                   # the next build replaces it
+    assert file_service.is_read_only(saved["Orders.json"])                       # released: read only
+
+    # a folder that is not a KPIs folder of the blueprint is refused, by name
+    other = root / "01_General" / "Commercial"
+    assert c.post("/api/v1/kpi/publish", headers=key, data={"folder": str(other)},
+                  files=[("files", ("x.json", b"{}", "application/json"))]).status_code == 400

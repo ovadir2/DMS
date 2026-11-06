@@ -216,3 +216,18 @@ no-workflow releases are written to Control Audit with the person's email (**SEC
 Until 1 and 2 exist, the DMS side stops at: the KPIs folders are part of the skeleton, a KPI package dropped
 into one lands as one KPI, its page runs in a sandbox, and everything beside the page follows the ordinary
 rules of a released document.
+
+## The Builder publishes without a browser
+
+The Builder sends the two files of a KPI to the DMS itself, with a key of its own
+(`.\scripts\New-DmsApiKey.ps1 -Name kpi-builder -Scopes kpi -ActsAs svc_kpi@rh.co.il`):
+
+1. `GET /api/v1/kpi/folders` - every KPIs folder that account may see, by department and by customer.
+2. `POST /api/v1/kpi/publish` - `folder` plus the files themselves (`files=@Orders.html`,
+   `files=@Orders.json`) in one `multipart/form-data` call.
+
+The page lands writable at the root of the KPI's own folder, so the next build replaces it; the JSON is
+released into `Current_ReadOnly` beside it, read only and traced in the Document Register and the Control
+Audit. It is the same rule as dropping the two files onto the folder in the page - see
+`docs/13-Machine-API.md` for the exact fields and answers. The account the key acts as needs **Modify** on
+the folder, like a person.
