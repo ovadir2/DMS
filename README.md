@@ -33,6 +33,7 @@ Implementation of **IT-DOC-BP-001 "Enterprise Document Control and Large-File Ex
 | [`docs/11-Project-Context.md`](docs/11-Project-Context.md) | The brief as it was actually given: the standing rules, the decisions and what each was a reaction to, and what is still open - enough to carry the work on without the conversation it came from |
 | [`docs/12-KPI-Integration.md`](docs/12-KPI-Integration.md) | KPIs and dashboards: where a KPI package lives, how a page of the repository runs and reads its data, and how the KPI Builder publishes |
 | [`docs/13-Machine-API.md`](docs/13-Machine-API.md) | The machine API: a key for an application, what each endpoint answers, and the AD account a key acts as |
+| [`docs/15-KPI-Builder-Contract.md`](docs/15-KPI-Builder-Contract.md) | What the KPI Builder sends the DMS and gets back: its key, the departments, publishing a KPI, and what its page may do at runtime |
 | [`docs/14-API-Reference.md`](docs/14-API-Reference.md) | Every endpoint of the DMS with its parameters, written from the API itself (`scripts/New-DmsApiDocs.ps1`) |
 | [`docs/Go-Live.md`](docs/Go-Live.md) | From the pilot to production: the names, the pilot's data, first loading, separating the package from what exists only to try it, and what the pilot taught |
 
