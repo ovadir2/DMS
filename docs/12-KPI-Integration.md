@@ -224,8 +224,8 @@ The Builder sends the two files of a KPI to the DMS itself, with a key of its ow
 
 1. `POST /api/v1/kpi/publish` - `department` (or `customer`), `kpi`, and the two files
    (`files=@Yield.html`, `files=@Yield.json`) in one `multipart/form-data` call.
-2. `GET /api/v1/kpi/folders` - when it needs the list: every KPIs folder that account may see, one per
-   department and one per customer, with the KPIs already in each.
+2. `GET /api/v1/departments` (and `/api/v1/customers`) - when it needs the list: every department that
+   account may see, with the KPIs folder of each and whether it has been made yet.
 
 The page lands writable at the root of the KPI's own folder, so the next build replaces it; the JSON is
 released into `Current_ReadOnly` beside it, read only and traced in the Document Register and the Control

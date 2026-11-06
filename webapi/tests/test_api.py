@@ -2502,10 +2502,23 @@ def test_the_rag_asks_which_markdown_to_read(tmp_path):
     assert r.status_code == 200
     by_id = {x["DocID"]: x for x in r.json()["documents"]}
     assert set(by_id) == {d["documentId"], "QP-7"}
-    assert by_id["QP-7"] == {"DocID": "QP-7", "DocName": "Travel policy", "DocRev": "03",
-                             "DocDMSpath": str(other / "Policy.md")}
+    assert {k: by_id["QP-7"][k] for k in ("DocID", "DocName", "DocRev", "DocDMSpath", "DocFileName")} == {
+        "DocID": "QP-7", "DocName": "Travel policy", "DocRev": "03",
+        "DocDMSpath": str(other / "Policy.md"), "DocFileName": ""}    # Markdown alone: no file beside it
     mine = by_id[d["documentId"]]
     assert mine["DocDMSpath"] == str(md) and mine["DocRev"] == "01"
+    # the released file itself is named too - that is what the Markdown is about
+    assert mine["DocFile"] == str(cur) and mine["DocFileName"] == cur.name and mine["hasMarkdown"]
+    assert sorted(f["name"] for f in mine["files"]) == sorted([cur.name, md.name])
+
+    # a released file with no Markdown of its own (a drawing, a picture) is in the list all the same
+    (other / "Layout.pdf").write_bytes(b"%PDF-1.4 x")
+    plain = c.get("/api/v1/approved-documents", headers=key).json()["documents"]
+    assert not [x for x in plain if x["DocFileName"] == "Layout.pdf"]   # the RAG reads Markdown
+    pdf = next(x for x in c.get("/api/v1/approved-documents", headers=key,
+                                params={"all": True}).json()["documents"]
+               if x["DocFileName"] == "Layout.pdf")
+    assert pdf["hasMarkdown"] is False and pdf["DocDMSpath"] == "" and pdf["DocName"] == "Layout"
 
     assert c.get("/api/v1/approved-documents", headers=key,
                  params={"customer": "Customer_A"}).json()["count"] == 1
@@ -4214,19 +4227,16 @@ def test_the_kpi_builder_publishes_a_page_and_its_data_in_one_call(tmp_path):
     c = TestClient(create_app(s))
     key = {"X-DMS-Api-Key": "builder"}
 
-    assert c.get("/api/v1/kpi/folders").status_code == 401                      # a key is needed
-    assert c.get("/api/v1/kpi/folders", headers={"X-DMS-Api-Key": "reader"}).status_code == 403
-    folders = c.get("/api/v1/kpi/folders", headers=key).json()["folders"]
-    # every department and every customer, not only the ones whose KPIs folder happens to exist
-    assert [(f["owner"], f["kind"], f["exists"]) for f in folders] == [
-        ("Commercial", "department", True), ("Production", "department", False),
-        ("Elbit", "customer", False)]
-    assert all(f["path"].endswith(os.sep + "KPIs") for f in folders)
-    assert [f["owner"] for f in c.get("/api/v1/kpi/folders", headers=key,
-                                      params={"missing": False}).json()["folders"]] == ["Commercial"]
+    assert c.get("/api/v1/departments").status_code == 401                      # a key is needed
+    assert c.get("/api/v1/departments", headers={"X-DMS-Api-Key": "reader"}).status_code == 403
+    deps = c.get("/api/v1/departments", headers=key).json()["departments"]
+    # every department, with its KPIs folder - whether that folder has been made yet or not
+    assert [(d["name"], d["kpisExists"]) for d in deps] == [("Commercial", True), ("Production", False)]
+    assert all(d["kpis"].endswith(os.sep + "KPIs") for d in deps)
+    custs = c.get("/api/v1/customers", headers=key).json()["customers"]          # the same for a customer
+    assert [(x["name"], x["kpisExists"]) for x in custs] == [("Elbit", False)]
 
     # a department whose KPIs folder was never made: publishing into it makes it
-    assert next(f for f in folders if f["owner"] == "Production")["exists"] is False
     made = c.post("/api/v1/kpi/publish", headers=key, data={"department": "production"},
                   files=[("files", ("Yield.html", b"<!doctype html><title>Yield</title>", "text/html")),
                          ("files", ("Yield.json", b'{"value": 2}', "application/json"))])

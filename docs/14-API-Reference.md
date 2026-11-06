@@ -2,7 +2,7 @@
 
 Every endpoint of the DMS, written from the API itself (`python -m dms_api.apidocs`, or `scripts\New-DmsApiDocs.ps1`), so it cannot drift from the code. The machine API has a guide of its own in `13-Machine-API.md`, and the page key in `12-KPI-Integration.md`.
 
-Written from DMS 21f6027.
+Written from DMS a5b87f2.
 
 ## How a caller is known
 
@@ -589,6 +589,7 @@ know is read from the Markdown's own first lines, which the DMS wrote when it ma
 | --- | --- | --- | --- | --- |
 | `customer` | query | no | string |  |
 | `q` | query | no | string |  |
+| `all` | query | no | boolean | Also the released files that have no Markdown of their own (a drawing, a picture) |
 
 ### GET /api/v1/customers
 
@@ -601,6 +602,17 @@ new customers are cut from is not one of them.
 | --- | --- | --- | --- | --- |
 | `q` | query | no | string |  |
 | `with_projects` | query | no | boolean |  |
+
+### GET /api/v1/departments
+
+The departments of the company: the folders under General, with the name the page shows and the KPIs folder of each.
+
+For an application, not for a person. AD decides here as everywhere: a department the key's account
+may not see is not in the answer.
+
+| Parameter | In | Required | Type | |
+| --- | --- | --- | --- | --- |
+| `q` | query | no | string |  |
 
 ### GET /api/v1/documents
 
@@ -616,17 +628,6 @@ revision that has been replaced is not here; nor is anything still in work.
 | `q` | query | no | string |  |
 | `since` | query | no | string |  |
 | `with_markdown` | query | no | boolean |  |
-
-### GET /api/v1/kpi/folders
-
-Every KPIs folder of the repository the application's AD account may see: one in every department and one in every customer, as the blueprint puts them. The Builder reads this to know where each department keeps its KPIs, and publishes into the path it gives back.
-
-A department whose KPIs folder has not been made yet is listed too, with exists=false - publishing
-into it makes it, as the blueprint says it belongs there. missing=false leaves those out.
-
-| Parameter | In | Required | Type | |
-| --- | --- | --- | --- | --- |
-| `missing` | query | no | boolean |  |
 
 ### POST /api/v1/kpi/publish
 

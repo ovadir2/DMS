@@ -48,6 +48,22 @@ X-DMS-Api-Key: kR7...
 IIS must let these calls through without a Windows sign-in, the same way it does for `/api/kpi`:
 `scripts\Set-DmsKpiKeyAccess.ps1` and the `<location path="api/v1">` block in `webapi\web.config.example`.
 
+## Three questions, and one thing it may write
+
+An application does not need an endpoint per screen: it needs to know what is released, and where the work
+is kept. AD does the rest - a key acts as an account, and an account that may not see a folder is not told
+about it, exactly as a person is not.
+
+| | |
+| --- | --- |
+| `GET /api/v1/approved-documents` | everything released: `Current_ReadOnly` everywhere, with the document id, the name, the revision, the Markdown the AI reads and the file itself |
+| `GET /api/v1/departments` | the departments under General, with the KPIs folder of each |
+| `GET /api/v1/customers` | the customers, with the KPIs folder of each |
+| `POST /api/v1/kpi/publish` | the KPI Builder's page and data (the only thing a key may write) |
+
+`GET /api/v1/documents` answers the same released documents from the register rather than from the folders;
+it is kept for callers that already ask it.
+
 ## GET /api/v1/customers
 
 The customers the DMS knows - the folders under the customers folder of the repository. The skeleton new
@@ -67,6 +83,31 @@ customers are cut from is not one of them.
   "count": 2
 }
 ```
+
+Each customer carries `path`, and `kpis` / `kpisExists` - the customer's KPIs folder, and whether it has
+been made yet.
+
+## GET /api/v1/departments
+
+Scope `customers` or `kpi`. The departments of the company: the folders under `01_General`, with the name
+the page shows (English and Hebrew), the folder's own name, and the KPIs folder of each.
+
+```json
+{
+  "departments": [
+    { "name": "Commercial", "folderName": "Commercial", "he": "מסחרי",
+      "path": "E:\\Shares\\01_General\\Commercial",
+      "kpis": "E:\\Shares\\01_General\\Commercial\\KPIs", "kpisExists": true }
+  ],
+  "count": 1
+}
+```
+
+| Parameter | |
+| --- | --- |
+| `q` | the name contains this, in either language |
+
+A department the key's account may not see is not in the answer.
 
 ## GET /api/v1/documents
 
@@ -113,13 +154,21 @@ answer is the only place that says what is current.
 
 ## GET /api/v1/approved-documents - the list the RAG indexes
 
-The Markdown of every approved document, as it lies in the `Current_ReadOnly` folders. Four things per file:
+Everything released, read from the `Current_ReadOnly` folders themselves - every department, every
+customer, every project. Per released document: its id, its name, its revision, **the Markdown the RAG
+reads**, and the released file itself beside it.
 
 ```json
 {
   "documents": [
     { "DocID": "QP-16.1", "DocName": "Control of documents", "DocRev": "03",
-      "DocDMSpath": "E:\\Shares\\01_General\\Quality and Standards\\Current_ReadOnly\\QP-16.1 Rev03.md" }
+      "DocDMSpath": "E:\\Shares\\01_General\\Quality and Standards\\Current_ReadOnly\\QP-16.1 Rev03.md",
+      "DocFile":    "E:\\Shares\\01_General\\Quality and Standards\\Current_ReadOnly\\QP-16.1 Rev03.docx",
+      "DocFileName": "QP-16.1 Rev03.docx",
+      "files": [ { "name": "QP-16.1 Rev03.docx", "path": "E:\\Shares\\...", "size": 182144 },
+                 { "name": "QP-16.1 Rev03.md",   "path": "E:\\Shares\\...", "size": 7431 } ],
+      "folder": "E:\\Shares\\01_General\\Quality and Standards\\Current_ReadOnly",
+      "customer": "", "hasMarkdown": true }
   ],
   "count": 1
 }
@@ -128,7 +177,8 @@ The Markdown of every approved document, as it lies in the `Current_ReadOnly` fo
 | Parameter | |
 | --- | --- |
 | `customer` | only that customer's documents |
-| `q` | the id or the name contains this |
+| `q` | the id, the name or the file name contains this |
+| `all` | also the released files that have no Markdown of their own - a drawing, a picture, a page (off by default: the RAG reads Markdown) |
 
 It is taken from the folders, not only from the register: a document released by hand has its Markdown in
 `Current_ReadOnly` too, and the AI should read that as well. Where the register knows the file, the id, the
@@ -142,29 +192,6 @@ and the answer to this call is the only place that says what is current. The lis
 AD account the key acts as, so an index built from it contains nothing that account may not read; give the
 AI's account the groups it should see and nothing else.
 
-## GET /api/v1/kpi/folders
-
-Scope `kpi`. Every KPIs folder the key's AD account may see - one in **every** department and one in every
-customer, as the blueprint puts them - with the KPIs already in each.
-
-```json
-{
-  "folders": [
-    { "path": "E:\\Shares\\01_General\\Commercial\\KPIs", "owner": "Commercial",
-      "kind": "department", "exists": true,  "kpis": ["Orders", "Quotes"] },
-    { "path": "E:\\Shares\\01_General\\Production\\KPIs", "owner": "Production",
-      "kind": "department", "exists": false, "kpis": [] },
-    { "path": "E:\\Shares\\02_Customers\\Elbit\\KPIs", "owner": "Elbit",
-      "kind": "customer",   "exists": false, "kpis": [] }
-  ],
-  "count": 3
-}
-```
-
-A department whose KPIs folder has not been made yet is listed with `exists: false`, and publishing into it
-makes it - the blueprint says it belongs there. `?missing=false` leaves those out. The customer skeleton is
-never listed.
-
 ## POST /api/v1/kpi/publish
 
 Scope `kpi`. One call, one KPI of one department: the built page and the data behind it, together.
@@ -175,7 +202,7 @@ Scope `kpi`. One call, one KPI of one department: the built page and the data be
 | `department` | the department these KPIs belong to - `Production`, `Supply chain`, `שרשרת אספקה`; the folder name, the English name or the Hebrew one, spaces or underscores |
 | `customer` | ...or a customer, measured the same way (instead of `department`) |
 | `kpi` | the KPI's name. Left out, it is taken from the page's file name (`Yield.html` → `Yield`) |
-| `folder` | a path from `/api/v1/kpi/folders`, instead of a name |
+| `folder` | a path from `/api/v1/departments` or `/api/v1/customers`, instead of a name |
 | `files` | the files themselves, repeated - the page and its data |
 
 ```
@@ -210,10 +237,17 @@ dashboard's layout and the numbers it reads across the department's KPIs belong.
 
 The answer is `201` with `folder`, `kpi`, `created` (folders the call made), `saved` (what was written, with
 the register row of anything released) and `failed` (name and reason). Nothing written at all answers `409`
-and says why for each file; an unknown department answers `404` and points at `/api/v1/kpi/folders`.
+and says why for each file; an unknown department answers `404` and points at `/api/v1/departments`.
 
 The application acts as its AD account here too: that account needs **Modify** on the folder, as a person
 would, and a key that names no account is refused. Publishing is the only thing a key can write.
+
+## Why so few
+
+Because AD is the rule, not the API. A key names an account; the DMS answers that account exactly what it
+may see, and refuses what it may not - the same answer the person would get. So an application does not need
+an endpoint per question: three reads cover what is released and where the work is kept, and the only thing
+a key may write is a KPI the Builder built.
 
 ## What it is not, yet
 

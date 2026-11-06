@@ -2071,7 +2071,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     # and no AD rights: it is given a key, and the key is an identity - a name, what it may read, and a line
     # in the log for every call it makes. The key never appears in the log or in an answer.
 
-    def api_caller(request: Request, scope: str) -> dict:
+    def api_caller(request: Request, scope: str | tuple[str, ...]) -> dict:
         from . import apikeys
         sent = (request.headers.get("X-DMS-Api-Key") or "").strip()
         if not sent:
@@ -2084,8 +2084,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                         request.method, request.url.path)
             raise HTTPException(401, "This call needs the key of an application known to the DMS "
                                      "(X-DMS-Api-Key). Ask IT for one.")
-        if scope not in who["scopes"]:
-            raise HTTPException(403, f"{who['name']} may not read {scope}")
+        wanted = (scope,) if isinstance(scope, str) else tuple(scope)
+        if not any(x in who["scopes"] for x in wanted):
+            raise HTTPException(403, f"{who['name']} may not read {' or '.join(wanted)}")
         if not who.get("as"):
             raise HTTPException(403, f"{who['name']} names no AD account to act as. An application is not a "
                                      f"super user: the DMS answers it only what that account may see, so a "
@@ -2105,7 +2106,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         For an application, not for a person - see /api/customers for the signed-in page. The skeleton that
         new customers are cut from is not one of them."""
         from fastapi.responses import JSONResponse
-        who = api_caller(request, "customers")
+        who = api_caller(request, ("customers", "kpi"))
         base = customers_root()
         out = []
         try:
@@ -2117,7 +2118,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                         continue
                     if q and q.lower() not in e.name.lower():
                         continue
-                    item = {"name": e.name, "path": e.path}
+                    kpis = os.path.join(e.path, "KPIs")
+                    item = {"name": e.name, "path": e.path, "kpis": kpis, "kpisExists": os.path.isdir(kpis)}
                     if with_projects:
                         item["products"] = sorted(
                             p.name for p in os.scandir(os.path.join(e.path, *blueprint.PRODUCTS))
@@ -2130,6 +2132,35 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         logger.info(log_line)
         return JSONResponse({"customers": out, "count": len(out)},
                             headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/v1/departments")
+    def api_departments(request: Request, q: str = ""):
+        """The departments of the company: the folders under General, with the name the page shows and the
+        KPIs folder of each.
+
+        For an application, not for a person. AD decides here as everywhere: a department the key's account
+        may not see is not in the answer."""
+        from fastapi.responses import JSONResponse
+        who = api_caller(request, ("customers", "kpi"))
+        out = []
+        base = os.path.join(s.repository_root, "01_General")
+        try:
+            with os.scandir(base) as it:
+                for e in sorted(it, key=lambda x: x.name.lower()):
+                    if not e.is_dir() or e.name.startswith(".") or e.name in WORKFLOW_FOLDERS:
+                        continue
+                    if not api_may_see(who, e.path):
+                        continue
+                    d = blueprint.describe(["01_General", e.name]) or {}
+                    if q and q.lower() not in f"{e.name} {d.get('en') or ''} {d.get('he') or ''}".lower():
+                        continue
+                    kpis = os.path.join(e.path, "KPIs")
+                    out.append({"name": d.get("en") or e.name, "folderName": e.name, "he": d.get("he") or "",
+                                "path": e.path, "kpis": kpis, "kpisExists": os.path.isdir(kpis)})
+        except OSError as e:
+            raise HTTPException(503, f"The repository could not be read: {e}") from None
+        logger.info("api %s GET /api/v1/departments -> %d", who["name"], len(out))
+        return JSONResponse({"departments": out, "count": len(out)}, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/v1/documents")
     def api_documents(request: Request, customer: str = "", q: str = "", since: str = "",
@@ -2186,7 +2217,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                             headers={"Cache-Control": "no-store"})
 
     @app.get("/api/v1/approved-documents")
-    def api_approved_documents(request: Request, customer: str = "", q: str = ""):
+    def api_approved_documents(request: Request, customer: str = "", q: str = "",
+                               all: bool = Query(False, description="Also the released files that have no "
+                                                                    "Markdown of their own (a drawing, a picture)")):
         """The Markdown of every approved document, as it lies in the Current_ReadOnly folders.
 
         Four things per file: the document's id, its name, its revision and where the Markdown is. This is
@@ -2209,27 +2242,45 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 continue
             if not api_may_see(who, folder):              # the account the application acts as, folder first
                 continue
+            # One entry per released document, by its name without the extension: the Markdown the AI
+            # reads and the document itself are two files of the same thing, and a released file that has
+            # no Markdown (a drawing, a picture, a page) is still in Current_ReadOnly and still the RAG's
+            # to know about - it says there is no Markdown rather than leaving the document out.
+            by_stem: dict[str, list[str]] = {}
             for name in sorted(names):
-                if not name.lower().endswith(".md"):
+                if not api_may_see(who, os.path.join(folder, name)):
                     continue
-                md = os.path.join(folder, name)
-                if not api_may_see(who, md):
-                    continue
-                stem = os.path.normcase(os.path.splitext(os.path.normpath(md))[0])
+                by_stem.setdefault(os.path.splitext(name)[0], []).append(name)
+            for base_name, group in sorted(by_stem.items()):
+                here = os.path.join(folder, base_name)
+                stem = os.path.normcase(os.path.normpath(here))
                 if stem in seen:
                     continue
                 seen.add(stem)
+                md_name = next((n for n in group if n.lower().endswith(".md")), "")
+                md = os.path.join(folder, md_name) if md_name else ""
+                doc_names = [n for n in group if not n.lower().endswith(".md")]
                 d = known.get(stem) or {}
-                head = markdown.heading_of(md)            # what the DMS wrote at the top of the file
-                parts = rel_parts(md)
+                head = markdown.heading_of(md) if md else {}   # what the DMS wrote at the top of the file
+                parts = rel_parts(md or os.path.join(folder, doc_names[0] if doc_names else base_name))
                 of_customer = parts[1] if len(parts) > 2 and parts[0].lower() == s.customers_folder.lower() else ""
                 if customer and of_customer.lower() != customer.lower():
                     continue
                 item = {"DocID": d.get("documentId") or head.get("Document ID") or "",
-                        "DocName": d.get("title") or head.get("title") or os.path.splitext(name)[0],
+                        "DocName": d.get("title") or head.get("title") or base_name,
                         "DocRev": d.get("currentRevision") or head.get("Revision") or "",
-                        "DocDMSpath": md}
-                if q and q.lower() not in f"{item['DocID']} {item['DocName']}".lower():
+                        "DocDMSpath": md,
+                        # the released file itself, beside its Markdown: its name, where it is, how big
+                        "DocFile": os.path.join(folder, doc_names[0]) if doc_names else "",
+                        "DocFileName": doc_names[0] if doc_names else "",
+                        "files": [{"name": n, "path": os.path.join(folder, n),
+                                   "size": os.path.getsize(os.path.join(folder, n))
+                                   if os.path.isfile(os.path.join(folder, n)) else 0} for n in group],
+                        "folder": folder, "customer": of_customer,
+                        "hasMarkdown": bool(md)}
+                if not md and not all:
+                    continue          # the RAG reads the Markdown: a file without one is asked for by all=true
+                if q and q.lower() not in f"{item['DocID']} {item['DocName']} {item['DocFileName']}".lower():
                     continue
                 out.append(item)
         out.sort(key=lambda x: (x["DocID"], x["DocName"].lower()))
@@ -2247,48 +2298,6 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         except Exception as e:  # noqa: BLE001 - not a domain machine (a playground): AD cannot be asked here
             logger.info("the AD rights of %s could not be read: %s", account, e)
         return User(email=account.lower(), name=who.get("name") or account, ad=ad)
-
-    @app.get("/api/v1/kpi/folders")
-    def api_kpi_folders(request: Request, missing: bool = True):
-        """Every KPIs folder of the repository the application's AD account may see: one in every department
-        and one in every customer, as the blueprint puts them. The Builder reads this to know where each
-        department keeps its KPIs, and publishes into the path it gives back.
-
-        A department whose KPIs folder has not been made yet is listed too, with exists=false - publishing
-        into it makes it, as the blueprint says it belongs there. missing=false leaves those out."""
-        from fastapi.responses import JSONResponse
-        who = api_caller(request, "kpi")
-        out = []
-
-        def add(owner: str, kind: str, parent: str) -> None:
-            folder = os.path.join(parent, "KPIs")
-            if not api_may_see(who, folder if os.path.isdir(folder) else parent):
-                return
-            there = os.path.isdir(folder)
-            if not there and not missing:
-                return
-            out.append({"path": folder, "owner": owner, "kind": kind, "exists": there,
-                        "kpis": sorted(e.name for e in os.scandir(folder)
-                                       if e.is_dir() and e.name not in WORKFLOW_FOLDERS) if there else []})
-
-        general = os.path.join(s.repository_root, "01_General")
-        try:
-            with os.scandir(general) as it:          # every department of the company
-                for e in sorted(it, key=lambda x: x.name.lower()):
-                    if e.is_dir() and not e.name.startswith(".") and e.name not in WORKFLOW_FOLDERS:
-                        add(blueprint.describe(["01_General", e.name]).get("en") or e.name, "department", e.path)
-        except OSError as e:
-            logger.info("the departments could not be read: %s", e)
-        try:
-            with os.scandir(customers_root()) as it:  # and every customer, measured the same way
-                for e in sorted(it, key=lambda x: x.name.lower()):
-                    if e.is_dir() and not e.name.startswith(".") and not is_skeleton(e.name):
-                        add(e.name, "customer", e.path)
-        except OSError as e:
-            logger.info("the customers could not be read: %s", e)
-        logger.info("api %s GET /api/v1/kpi/folders -> %d (%d not made yet)", who["name"], len(out),
-                    sum(1 for f in out if not f["exists"]))
-        return JSONResponse({"folders": out, "count": len(out)}, headers={"Cache-Control": "no-store"})
 
     def kpis_of(department: str = "", customer: str = "") -> str:
         """The KPIs folder of a department (or of a customer), by name. The name is matched as it is written
@@ -2312,13 +2321,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     raise HTTPException(400, f"{name} is the shape new customers are cut from, not a customer")
                 return os.path.join(base, name, "KPIs")
         raise HTTPException(404, f"There is no {'department' if department else 'customer'} called "
-                                 f"{department or customer!r}. /api/v1/kpi/folders lists them.")
+                                 f"{department or customer!r}. /api/v1/departments and /api/v1/customers list them.")
 
     @app.post("/api/v1/kpi/publish", status_code=201)
     def api_kpi_publish(request: Request, department: str = Form("", description="The department these KPIs belong to"),
                         customer: str = Form("", description="...or the customer"),
                         kpi: str = Form("", description="The KPI's name; taken from the file names when it is not given"),
-                        folder: str = Form("", description="A path instead of a name, from /api/v1/kpi/folders"),
+                        folder: str = Form("", description="A path instead of a name, from /api/v1/departments"),
                         files_in: list[UploadFile] = File(..., alias="files")):
         """The KPI Builder publishes one KPI of one department: its page and the data behind it, together.
 
@@ -2343,8 +2352,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(400, "Name one of department, customer or folder")
         target = files.resolve(s.repository_root, folder) if folder.strip() else kpis_of(department, customer)
         if not files.kpis_folder(s.repository_root, target):
-            raise HTTPException(400, "This is not a KPIs folder of the blueprint. /api/v1/kpi/folders gives "
-                                     "the ones this account may see.")
+            raise HTTPException(400, "This is not a KPIs folder of the blueprint. /api/v1/departments and "
+                                     "/api/v1/customers give the ones this account may see.")
         # The KPI's own folder, named by the caller or by the files themselves. A dashboard belongs to the
         # department and not to one KPI, so it is published into the KPIs folder itself.
         dash = any(files.is_dashboard(f.filename or "") for f in files_in)
