@@ -579,8 +579,7 @@ async function takeOut(path, edit) {
   // is why View used to work only on the second try.
   const w = window.open('', '_blank');
   const what = edit ? T.oneMomentEdit : T.oneMoment;
-  if (!edit) banner(T.viewNoSave);
-  if (w) try { w.document.write(`<title>${edit ? T.openEditFile : T.viewRo}</title><body style="font:15px system-ui;padding:24px">${what}${edit ? '' : `<p style="font-weight:600;color:#664d03">${T.viewNoSave}</p>`}</body>`); } catch (_) { /* a tab that is already gone */ }
+  if (w) try { w.document.write(`<title>${edit ? T.openEditFile : T.viewRo}</title><body style="font:15px system-ui;padding:24px">${what}</body>`); } catch (_) { /* a tab that is already gone */ }
   try {
     const r = await api('/api/files/checkout', { method:'POST', body: JSON.stringify({ path, edit }) });
     if (r.url) { if (w) w.location = r.url; else location.href = r.url; }
@@ -986,9 +985,10 @@ function wireLevels(v) {
 // A read-only address: ms-excel:ofv / ms-word:ofv, the rh-dms: handler's ro/, SharePoint's action=view.
 const readOnlyUri = u => /:ofv\||rh-dms:ro\/|action=view/i.test(u || '');
 function openExternal(uri, file) {
-  // Excel and Word let a reader type into the sheet whatever "open to view" asked for, and Save writes
-  // nowhere the DMS keeps: the page says so before the program opens, rather than after the work is lost.
-  if (readOnlyUri(uri)) banner(T.viewNoSave);
+  // Only where it is not already obvious: a released document is read only on the file server and Office
+  // says so itself, and the bridge hands the reader a PDF. This is the one case left - Word or Excel opening
+  // a file that can still be typed into, with a Save that writes nowhere the DMS keeps.
+  if (readOnlyUri(uri) && file && !/[\\/](Current_ReadOnly|Obsolete_ReadOnly)[\\/]/i.test(file)) banner(T.viewNoSave);
   let left = false;
   const mark = () => { left = true; };
   addEventListener('blur', mark, { once: true });
