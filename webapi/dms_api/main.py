@@ -797,6 +797,21 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                        or editable_in_approval(user, f["path"], d))):
                 # not yet registered (or still in Working): opens in Word / Excel / PowerPoint for editing
                 f.update(officeUri=files.open_uri(f["path"], edit=True), viewUri=files.open_uri(f["path"]), editable=True)
+        for f in result["files"]:
+            # Why this file cannot be opened for editing, whichever way the DMS opens files here. The page
+            # prints it where the pencil would have been: a greyed command with no reason is the slowest
+            # thing in this pilot.
+            if not f.get("editable"):
+                doc = f.get("document") or {}
+                f["editWhy"] = (
+                    "it is released by the DMS (read only)" if read_only_file(f["path"])
+                    else f"its state is {doc.get('lifecycleStatus') or ''}: this revision is the record"
+                    if doc_locked(doc) else "AD gives you no Modify on this file"
+                    if not may_write(user, f["path"]) else
+                    "it sits in a folder the DMS keeps (Submitted / Current_ReadOnly / Obsolete_ReadOnly)"
+                    if files.in_workflow_folder(s.repository_root, f["path"])
+                    else "this PC has no program the DMS can open it with"
+                    if not f.get("officeUri") else "")
         if review_on():
             # nobody but the DMS has rights on the file server: a document is looked at, and changed, in SharePoint
             reg = checkout.read(s.repository_root)
@@ -807,7 +822,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 f["canEdit"] = ((not read_only_file(f["path"]) and not doc_locked(f.get("document"))
                                  or editable_in_approval(user, f["path"], f.get("document")))
                                 and may_write(user, f["path"]))
-                if not f["canEdit"]:
+                if f["canEdit"]:
+                    f.pop("editWhy", None)      # the bridge opens it after all
+                else:
                     # ...and when it is not, why. A greyed pencil with no reason has cost this pilot days:
                     # the answer is one of four, and the row says which.
                     doc, who = f.get("document") or {}, (st or {}).get("by") or ""
