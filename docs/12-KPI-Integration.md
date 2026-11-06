@@ -222,9 +222,10 @@ rules of a released document.
 The Builder sends the two files of a KPI to the DMS itself, with a key of its own
 (`.\scripts\New-DmsApiKey.ps1 -Name kpi-builder -Scopes kpi -ActsAs svc_kpi@rh.co.il`):
 
-1. `GET /api/v1/kpi/folders` - every KPIs folder that account may see, by department and by customer.
-2. `POST /api/v1/kpi/publish` - `folder` plus the files themselves (`files=@Orders.html`,
-   `files=@Orders.json`) in one `multipart/form-data` call.
+1. `POST /api/v1/kpi/publish` - `department` (or `customer`), `kpi`, and the two files
+   (`files=@Yield.html`, `files=@Yield.json`) in one `multipart/form-data` call.
+2. `GET /api/v1/kpi/folders` - when it needs the list: every KPIs folder that account may see, one per
+   department and one per customer, with the KPIs already in each.
 
 The page lands writable at the root of the KPI's own folder, so the next build replaces it; the JSON is
 released into `Current_ReadOnly` beside it, read only and traced in the Document Register and the Control

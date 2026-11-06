@@ -167,35 +167,50 @@ never listed.
 
 ## POST /api/v1/kpi/publish
 
-Scope `kpi`. The KPI Builder publishes one KPI: the built page and the data behind it, in the same call.
+Scope `kpi`. One call, one KPI of one department: the built page and the data behind it, together.
 `multipart/form-data`:
 
 | Field | |
 | --- | --- |
-| `folder` | a KPIs folder (or one KPI inside it) from `/api/v1/kpi/folders` |
-| `files` | the files themselves, repeated - `<KPI>.html` and `<KPI>.json` |
+| `department` | the department these KPIs belong to - `Production`, `Supply chain`, `שרשרת אספקה`; the folder name, the English name or the Hebrew one, spaces or underscores |
+| `customer` | ...or a customer, measured the same way (instead of `department`) |
+| `kpi` | the KPI's name. Left out, it is taken from the page's file name (`Yield.html` → `Yield`) |
+| `folder` | a path from `/api/v1/kpi/folders`, instead of a name |
+| `files` | the files themselves, repeated - the page and its data |
 
 ```
 curl -X POST https://dms-pilot.rh.tech/api/v1/kpi/publish ^
   -H "X-DMS-Api-Key: <key>" ^
-  -F "folder=E:\Shares\01_General\Commercial\KPIs" ^
-  -F "files=@Orders.html" -F "files=@Orders.json"
+  -F "department=Production" -F "kpi=Yield" ^
+  -F "files=@Yield.html" -F "files=@Yield.json"
 ```
 
-Each file lands where the DMS keeps that kind of thing, exactly as dropping the two onto the folder in the
-page does:
+What it makes, under that department's KPIs folder:
 
-| | Where it goes | |
-| --- | --- | --- |
-| `Orders.html` | `…\Commercial\KPIs\Orders\Orders.html` | writable: the next build replaces it |
-| `Orders.json` | `…\Commercial\KPIs\Orders\Current_ReadOnly\Orders.json` | released, read only, in the Document Register and the Control Audit |
+```
+01_General\Production\KPIs\
+    Yield\
+        Yield.html                      the page, writable - the next build replaces it
+        Current_ReadOnly\Yield.json     the data, released: read only, Document Register + Control Audit
+```
 
-The KPI's folder is named after the files (`Orders.html` → `Orders`), and is created on the first publish.
-A page named `dashboard_<something>.html` belongs to the department rather than to one KPI: it stays at the
-root of the KPIs folder and what it reads is released into that folder's own `Current_ReadOnly`.
+One KPI, one folder named after it, made on the first publish - and the KPIs folder itself made if that
+department has none yet.
 
-The answer is `201` with `saved` (what was written, with the register row of anything released) and
-`failed` (name and reason). A call where nothing could be written answers `409` and says why for each file.
+**The department's dashboard** is not one KPI: a page named `dashboard_<something>.html` stays at the root
+of the KPIs folder and its data is released into the KPIs folder's own `Current_ReadOnly`, which is where a
+dashboard's layout and the numbers it reads across the department's KPIs belong.
+
+```
+01_General\Commercial\KPIs\
+    dashboard_Commercial.html
+    Current_ReadOnly\dashboard_Commercial.json
+    Orders\  Quotes\  ...
+```
+
+The answer is `201` with `folder`, `kpi`, `created` (folders the call made), `saved` (what was written, with
+the register row of anything released) and `failed` (name and reason). Nothing written at all answers `409`
+and says why for each file; an unknown department answers `404` and points at `/api/v1/kpi/folders`.
 
 The application acts as its AD account here too: that account needs **Modify** on the folder, as a person
 would, and a key that names no account is refused. Publishing is the only thing a key can write.

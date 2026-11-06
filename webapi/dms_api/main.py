@@ -2274,39 +2274,88 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     sum(1 for f in out if not f["exists"]))
         return JSONResponse({"folders": out, "count": len(out)}, headers={"Cache-Control": "no-store"})
 
+    def kpis_of(department: str = "", customer: str = "") -> str:
+        """The KPIs folder of a department (or of a customer), by name. The name is matched as it is written
+        on the file server, as the page shows it in English, or in Hebrew - "Supply chain", "Supply_chain"
+        and "שרשרת אספקה" are one department, and the caller should not have to know which spelling the
+        folder uses."""
+        want = re.sub(r"[\s_]+", " ", (department or customer).strip()).lower()
+        if not want:
+            raise HTTPException(400, "Name the department (or the customer) whose KPIs these are")
+        base = os.path.join(s.repository_root, "01_General") if department else customers_root()
+        try:
+            names = sorted(e.name for e in os.scandir(base) if e.is_dir() and not e.name.startswith("."))
+        except OSError as e:
+            raise HTTPException(503, f"The repository could not be read: {e}") from None
+        for name in names:
+            d = blueprint.describe((["01_General"] if department else [s.customers_folder]) + [name]) or {}
+            spellings = {re.sub(r"[\s_]+", " ", x).strip().lower()
+                         for x in (name, d.get("en") or "", d.get("he") or "") if x}
+            if want in spellings:
+                if customer and is_skeleton(name):
+                    raise HTTPException(400, f"{name} is the shape new customers are cut from, not a customer")
+                return os.path.join(base, name, "KPIs")
+        raise HTTPException(404, f"There is no {'department' if department else 'customer'} called "
+                                 f"{department or customer!r}. /api/v1/kpi/folders lists them.")
+
     @app.post("/api/v1/kpi/publish", status_code=201)
-    def api_kpi_publish(request: Request, folder: str = Form(...), files_in: list[UploadFile] = File(..., alias="files")):
-        """The KPI Builder publishes a KPI: its page and the data behind it, in one call.
+    def api_kpi_publish(request: Request, department: str = Form("", description="The department these KPIs belong to"),
+                        customer: str = Form("", description="...or the customer"),
+                        kpi: str = Form("", description="The KPI's name; taken from the file names when it is not given"),
+                        folder: str = Form("", description="A path instead of a name, from /api/v1/kpi/folders"),
+                        files_in: list[UploadFile] = File(..., alias="files")):
+        """The KPI Builder publishes one KPI of one department: its page and the data behind it, together.
 
-        Both files go in together - the built page (.html) and the approved data (.json) - and each lands
-        where the DMS keeps that kind of thing: the page at the root of the KPI's folder, writable, so the
-        next build replaces it; the data released into Current_ReadOnly beside it, read only and traced in
-        the register like any other released document. Dropping the same files onto the folder in the page
-        does exactly this; the Builder has no browser, so it says the same thing here.
+            POST /api/v1/kpi/publish   department=Production  kpi=Yield
+                                       files=@Yield.html  files=@Yield.json
 
-        `folder` is a KPIs folder (or a KPI inside one) from /api/v1/kpi/folders. The application acts as its
-        AD account: that account needs Modify on the folder, as a person would."""
+        What it makes, under that department's KPIs folder:
+
+            KPIs\\Yield\\Yield.html                      the page, writable - the next build replaces it
+            KPIs\\Yield\\Current_ReadOnly\\Yield.json    the data, released: read only, in the register
+
+        One KPI, one folder named after it, made on the first publish - and the KPIs folder itself made if
+        the department has none yet. A page named dashboard_<something>.html is the department's dashboard
+        rather than one KPI: it stays at the root of KPIs and its data is released into the KPIs folder's
+        own Current_ReadOnly, which is where a dashboard layout belongs.
+
+        The application acts as its AD account: that account needs Modify there, as a person would."""
         from fastapi.responses import JSONResponse
         who = api_caller(request, "kpi")
         actor = api_user(who)
-        target = files.resolve(s.repository_root, folder)
+        if sum(1 for x in (department, customer, folder) if x.strip()) != 1:
+            raise HTTPException(400, "Name one of department, customer or folder")
+        target = files.resolve(s.repository_root, folder) if folder.strip() else kpis_of(department, customer)
         if not files.kpis_folder(s.repository_root, target):
             raise HTTPException(400, "This is not a KPIs folder of the blueprint. /api/v1/kpi/folders gives "
                                      "the ones this account may see.")
-        if not os.path.isdir(target):
-            # The blueprint says a KPIs folder belongs here, so the first publish makes it rather than
-            # asking somebody to create it by hand in every department first.
-            parent = os.path.dirname(target)
+        # The KPI's own folder, named by the caller or by the files themselves. A dashboard belongs to the
+        # department and not to one KPI, so it is published into the KPIs folder itself.
+        dash = any(files.is_dashboard(f.filename or "") for f in files_in)
+        name = (kpi or "").strip() or ("" if dash else os.path.splitext(
+            os.path.basename((next((f.filename for f in files_in
+                                    if (f.filename or "").lower().endswith((".html", ".htm"))),
+                                   files_in[0].filename) or "").replace("\\", "/")))[0])
+        if name:
+            try:
+                target = os.path.join(target, files.valid_name(name))
+            except files.PathNotAllowed as e:
+                raise HTTPException(400, str(e)) from None
+        made = []
+        for folder_now in [p for p in (os.path.dirname(target), target) if not os.path.isdir(p)]:
+            # The blueprint says a KPIs folder belongs in every department, and one KPI is one folder: the
+            # first publish makes them rather than asking for twenty folders by hand.
+            parent = os.path.dirname(folder_now)
             if not os.path.isdir(parent):
-                raise HTTPException(404, "Folder not found")
+                raise HTTPException(404, f"{parent} is not there")
             if not may_write(actor, parent):
                 raise HTTPException(403, f"{who['name']} acts as {who['as']}, and AD gives that account no "
                                          f"Modify on {parent}.")
-            os.makedirs(target, exist_ok=True)
-            logger.info("api %s made the KPIs folder %s", who["name"], target)
+            os.makedirs(folder_now, exist_ok=True)
+            made.append(folder_now)
         if not may_write(actor, target):
             raise HTTPException(403, f"{who['name']} acts as {who['as']}, and AD gives that account no "
-                                     f"Modify on this folder.")
+                                     f"Modify on {target}.")
         done, failed = [], []
         for one in files_in:
             try:
@@ -2314,11 +2363,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                    dropped=False, user=actor))
             except HTTPException as e:
                 failed.append({"name": one.filename, "error": e.detail})
-        logger.info("api %s POST /api/v1/kpi/publish %s -> %d saved, %d failed",
-                    who["name"], target, len(done), len(failed))
+        logger.info("api %s POST /api/v1/kpi/publish %s -> %d saved, %d failed%s",
+                    who["name"], target, len(done), len(failed),
+                    f", made {', '.join(made)}" if made else "")
         if failed and not done:
             raise HTTPException(409, "; ".join(f"{f['name']}: {f['error']}" for f in failed))
-        return JSONResponse({"folder": target, "saved": done, "failed": failed},
+        return JSONResponse({"folder": target, "kpi": name, "created": made, "saved": done, "failed": failed},
                             status_code=201, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/kpi/ping")

@@ -4226,15 +4226,15 @@ def test_the_kpi_builder_publishes_a_page_and_its_data_in_one_call(tmp_path):
                                       params={"missing": False}).json()["folders"]] == ["Commercial"]
 
     # a department whose KPIs folder was never made: publishing into it makes it
-    prod = next(f for f in folders if f["owner"] == "Production")
-    made = c.post("/api/v1/kpi/publish", headers=key, data={"folder": prod["path"]},
+    assert next(f for f in folders if f["owner"] == "Production")["exists"] is False
+    made = c.post("/api/v1/kpi/publish", headers=key, data={"department": "production"},
                   files=[("files", ("Yield.html", b"<!doctype html><title>Yield</title>", "text/html")),
                          ("files", ("Yield.json", b'{"value": 2}', "application/json"))])
     assert made.status_code == 201, made.text
     assert (root / "01_General" / "Production" / "KPIs" / "Yield" / "Yield.html").is_file()
     assert (root / "01_General" / "Production" / "KPIs" / "Yield" / "Current_ReadOnly" / "Yield.json").is_file()
 
-    r = c.post("/api/v1/kpi/publish", headers=key, data={"folder": folders[0]["path"]},
+    r = c.post("/api/v1/kpi/publish", headers=key, data={"department": "Commercial", "kpi": "Orders"},
                files=[("files", ("Orders.html", b"<!doctype html><title>Orders</title>", "text/html")),
                       ("files", ("Orders.json", b'{"value": 1}', "application/json"))])
     assert r.status_code == 201, r.text
@@ -4246,7 +4246,22 @@ def test_the_kpi_builder_publishes_a_page_and_its_data_in_one_call(tmp_path):
     assert not file_service.is_read_only(saved["Orders.html"])                   # the next build replaces it
     assert file_service.is_read_only(saved["Orders.json"])                       # released: read only
 
-    # a folder that is not a KPIs folder of the blueprint is refused, by name
+    # the KPI folder is named by the files when the caller does not name it
+    assert (root / "01_General" / "Production" / "KPIs" / "Yield").is_dir()
+
+    # the department's own dashboard is not a KPI: it stays at the root of KPIs, its data beside it
+    dash = c.post("/api/v1/kpi/publish", headers=key, data={"department": "Commercial"},
+                  files=[("files", ("dashboard_Commercial.html", b"<!doctype html><title>d</title>", "text/html")),
+                         ("files", ("dashboard_Commercial.json", b"{}", "application/json"))])
+    assert dash.status_code == 201, dash.text
+    assert (kpis / "dashboard_Commercial.html").is_file()
+    assert (kpis / "Current_ReadOnly" / "dashboard_Commercial.json").is_file()
+
+    # a department that does not exist, a folder that is not a KPIs folder, and naming nothing
+    assert c.post("/api/v1/kpi/publish", headers=key, data={"department": "Marketing dept"},
+                  files=[("files", ("x.json", b"{}", "application/json"))]).status_code == 404
     other = root / "01_General" / "Commercial"
     assert c.post("/api/v1/kpi/publish", headers=key, data={"folder": str(other)},
+                  files=[("files", ("x.json", b"{}", "application/json"))]).status_code == 400
+    assert c.post("/api/v1/kpi/publish", headers=key, data={},
                   files=[("files", ("x.json", b"{}", "application/json"))]).status_code == 400
