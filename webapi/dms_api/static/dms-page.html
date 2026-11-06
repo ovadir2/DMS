@@ -543,7 +543,10 @@ function bridgeActions(f) {
       + `<button type="button" class="link" data-txv="${esc(f.path)}">${T.viewRo}</button>`;
   }
   if (co && !co.mine && co.edit) return `<span class="muted small">\uD83D\uDD0F ${esc(T.outWith.replace('{who}', co.by || ''))}</span>`;
-  if (co && co.mine && co.url && co.edit && f.canEdit) {           // already out for editing: go back to that copy
+  // Already out for editing, by this person: the copy exists and is theirs, so the way back to it does not
+  // ask again whether they may take it out - that question was answered when it went out. Asking it again is
+  // what left a document editable once: after the first edit the row showed View alone.
+  if (co && co.mine && co.url && co.edit) {
     out.push(`<a class="link" href="${esc(co.url)}" target="_blank" rel="noopener">\u270E ${T.openEditFile}</a>`);
     // reading it while it is out is still reading: a copy of its own, and the editing copy is untouched
     out.push(viewBtn(f));

@@ -498,6 +498,30 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 "blueprintKind": kind or "", "canWriteHere": files.list_folder(s.repository_root, full,
                                                                               user.can).get("canWrite")}
 
+    @app.get("/api/diagnostics/file")
+    def file_check(path: str, user: User = Depends(current_user)):
+        """Why can this person not edit this file? Every answer the row is drawn from, in one place: what the
+        DMS knows about the file, what AD gives this person on it, what the register says, and whether a copy
+        of it is out in SharePoint. Open it in the browser:
+        /api/diagnostics/file?path=<the file>. It answers for whoever is signed in."""
+        full = files.resolve(s.repository_root, path)
+        if not files.is_file(full):
+            raise HTTPException(404, "File not found")
+        doc = find_registered(full, register_index())
+        st = checkout_state(full, user)
+        can = ((not read_only_file(full) and not doc_locked(doc) or editable_in_approval(user, full, doc))
+               and may_write(user, full))
+        return {"path": full, "user": user.email, "canEdit": can,
+                "readOnlyFlag": files.is_read_only(full), "releasedByDms": read_only_file(full),
+                "inWorkflowFolder": files.in_workflow_folder(s.repository_root, full),
+                "registered": bool(doc), "status": (doc or {}).get("lifecycleStatus") or "",
+                "statusKey": with_key(doc)["statusKey"] if doc else "",
+                "lockedByStatus": doc_locked(doc), "waitingForYou": editable_in_approval(user, full, doc),
+                "adWrite": user.can(full, "write"), "mayWrite": may_write(user, full),
+                "bridge": review_on(), "checkedOut": st,
+                "checkedOutFile": os.path.join(s.repository_root, checkout.FILE),
+                "lastSharePointError": last_sp_error()}
+
     @app.get("/api/diagnostics/dashboard")
     def dashboard_check(name: str = "dashboard_DB.html"):
         """Does this DMS know what a dashboard page is, and does it see this name as one? A name that comes
