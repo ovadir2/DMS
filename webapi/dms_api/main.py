@@ -357,11 +357,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/health")
     def health():
+        """Is the DMS up, and which build is it? Open it in the browser after a pull and a restart."""
         return {"status": "ok", "version": version, "repositoryRoot": s.repository_root,
                 "rootReachable": os.path.isdir(s.repository_root), "certDaysLeft": cert_days_left(app.state.sp)}
 
     @app.get("/api/client-config")
     def client_config(request: Request):
+        """What the page needs to draw itself: the language, the features this DMS has turned on, the
+        address of the Builder, the limits. The page asks for it once, when it opens."""
         from . import ntlm
         # the drive letters of the PC that runs the DMS belong to that PC only: another PC gets the path it
         # can open (DMS_CLIENT_ROOT), else the path as it is. Its own letters the page adds itself.
@@ -429,6 +432,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/dms/dms-page", include_in_schema=False)
     def page():
+        """The DMS page itself: one HTML file, served to the signed-in browser."""
         # Never cached. The page is the whole application, and a browser that keeps yesterday's copy shows a
         # DMS that behaves by yesterday's rules - which looks like a change that was never installed.
         return FileResponse(STATIC / "dms-page.html", media_type="text/html; charset=utf-8",
@@ -593,6 +597,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/me")
     def me(user: User = Depends(current_user)):
+        """Who the DMS thinks you are: the account AD gave it, your name, and whether you are a super user
+        (and, when a super user is acting as somebody, who that is)."""
         out = {"email": user.email, "name": user.name, "admin": is_admin(user), "actingFrom": user.acting_from}
         if is_admin(user):
             out["certDaysLeft"] = cert_days_left(app.state.sp)  # the page warns before SharePoint stops working
@@ -603,6 +609,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/options")
     def options(_: User = Depends(current_user)):
+        """The choices the Document Register offers - document types, areas, lifecycle states - as SharePoint
+        holds them, so the page shows the same words the register stores."""
         return {f: sp().choices(f) for f in ("DocumentType", "DocumentArea", "ControlMode")}
 
     def classify(folder: str) -> dict:
@@ -743,6 +751,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/browse")
     def browse(path: str | None = None, user: User = Depends(current_user)):
+        """One folder of the repository: its folders and its files, with what may be done to each.
+
+        Only what AD lets this person see is in the answer, and every row says how it opens (in Office, in
+        SharePoint, as a PDF), whether it may be edited and - when it may not - why."""
         try:
             result = files.list_folder(s.repository_root, path, listing_access(user))
         except FileNotFoundError:
@@ -1181,6 +1193,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.post("/api/folders", status_code=201)
     def new_folder(req: NewFolderRequest, user: User = Depends(current_user)):
+        """Make a folder. Workflow folders, the customer skeleton and the customer's Shared folder are not
+        places to make one; a new folder under the customers folder is a new customer, cut from the skeleton."""
         parent = files.resolve(s.repository_root, req.parent)
         if files.in_workflow_folder(s.repository_root, parent):
             raise HTTPException(403, "Workflow folders are managed by the DMS")
@@ -1222,6 +1236,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.post("/api/items/rename")
     def rename(req: RenameRequest, user: User = Depends(current_user)):
+        """Rename a file or a folder (the user needs write access, and a registered document is renamed
+        through its own record so the register follows)."""
         full = files.resolve(s.repository_root, req.path)
         if not (user.can(full, "write") and user.can(os.path.dirname(full), "write")):
             raise HTTPException(403, "You do not have permission to rename this item")
@@ -2864,6 +2880,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/ai/status")
     def ai_status(_: User = Depends(current_user)):
+        """Is AI Insights set up here, and which knowledge bases and RAG tools the portal offers."""
         return {"enabled": app.state.ai.enabled, "model": s.ai_model, "knowledge": bool(s.ai_knowledge_ids), "url": s.ai_url.rstrip("/"),
                 "rag": [{"tool": t, "page": app.state.rag.page(t)} for t in s.rag_tools] if app.state.rag.enabled else []}
 
@@ -2991,6 +3008,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     @app.get("/api/documents")
     def documents(mine: bool = False, status: str | None = Query(None, description="Working | Submitted | Approved_ReadOnly"),
                   user: User = Depends(current_user)):
+        """The Document Register, as this person may see it: the documents whose files AD lets them read."""
         docs = [with_key(d) for d in sp().documents()]
         if mine:
             docs = [d for d in docs if (d.get("ownerEmail") or "").lower() == user.email]
@@ -3002,6 +3020,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/documents/{item_id}")
     def document(item_id: int, user: User = Depends(current_user)):
+        """One document of the register, by its item id."""
         d = sp().document(item_id)
         if (d.get("ownerEmail") or "").lower() != user.email and not visible(d, user):
             raise HTTPException(403, "You do not have access to this document")
@@ -3009,6 +3028,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.post("/api/documents", status_code=201)
     def register(req: RegisterRequest, user: User = Depends(current_user)):
+        """Register a file as a controlled document (and submit it for approval with submit=true): the
+        Document Register row, the Control Audit line, and the file renamed to the document's own name."""
         clean_approvers(req.approvers)                          # a wrong address stops it before anything is created
         path = files.resolve(s.repository_root, req.path)
         if not files.is_file(path):
@@ -3073,6 +3094,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.post("/api/documents/{item_id}/submit")
     def submit(item_id: int, req: SubmitRequest | None = None, user: User = Depends(current_user)):
+        """Send a registered document for approval: it moves to Submitted, the approvers are told, and the
+        file goes to the Submitted folder."""
         doc = sp().document(item_id)
         if req is None or req.approvers is None:                # not said: the same approvers as last time
             approvers = last_chosen(doc.get("documentId") or "")
@@ -3362,6 +3385,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/first-load/{job_id}")
     def first_load_status(job_id: str, user: User = Depends(current_user)):
+        """How the first load is getting on: what it has done, what it could not, and whether it has finished."""
         from . import first_load
         job = first_load.JOBS.get(job_id)
         if not job or (job["actor"] != user.email and not is_admin(user)):
@@ -3612,6 +3636,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.post("/api/files/text")
     def write_text(req: TextRequest, user: User = Depends(current_user)):
+        """Save a text file edited on the page itself."""
         full = _text_file(req.path, user)
         if not may_write(user, full):
             raise HTTPException(403, "You do not have permission to change this file")
@@ -3694,6 +3719,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/documents/{item_id}/remarks/{name}")
     def get_remarks(item_id: int, name: str, user: User = Depends(current_user)):
+        """One file an approver attached as their remarks, as it was uploaded."""
         d = sp().document(item_id)
         if not in_approval(user, d):
             raise HTTPException(403, "You have no part in this document")
@@ -3704,6 +3730,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.get("/api/files/download")
     def download(path: str, user: User = Depends(current_user)):
+        """The file itself, for someone AD lets read it. The DMS reads it with its own account: an approver
+        needs no rights on the file server."""
         full = files.resolve(s.repository_root, path)
         if not files.is_file(full):
             raise HTTPException(404, "File not found")

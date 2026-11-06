@@ -4265,3 +4265,28 @@ def test_the_kpi_builder_publishes_a_page_and_its_data_in_one_call(tmp_path):
                   files=[("files", ("x.json", b"{}", "application/json"))]).status_code == 400
     assert c.post("/api/v1/kpi/publish", headers=key, data={},
                   files=[("files", ("x.json", b"{}", "application/json"))]).status_code == 400
+
+
+def test_the_api_reference_holds_every_endpoint(tmp_path):
+    """The reference is written from the API itself, so it cannot drift - and this says so: every endpoint
+    of the DMS is in docs\\14-API-Reference.md, with a line of its own saying what it does."""
+    from dms_api import apidocs
+    app = create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", sharepoint="memory"))
+    written = apidocs.markdown(app)
+    here = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "docs",
+                        "14-API-Reference.md")
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        end = getattr(route, "endpoint", None)
+        if not path.startswith(("/api", "/dms")) or end is None or path in apidocs.HIDE:
+            continue
+        assert (end.__doc__ or "").strip(), f"{path} has nothing to say about itself"
+        for verb in sorted(getattr(route, "methods", []) or []):
+            if verb in apidocs.VERBS:
+                assert f"### {verb} {path}\n" in written, f"{verb} {path} is not in the reference"
+    if os.path.isfile(here):          # the file in docs is the same reference, without the build line
+        on_disk = open(here, encoding="utf-8").read()
+        import re as _re
+        strip = lambda t: _re.sub(r"\n{3,}", "\n\n", "\n".join(
+            l for l in t.splitlines() if not l.startswith("Written from DMS ")))
+        assert strip(on_disk) == strip(written), "docs\\14-API-Reference.md is behind: run scripts\\New-DmsApiDocs.ps1"

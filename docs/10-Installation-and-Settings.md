@@ -226,6 +226,7 @@ the workflow and blueprint folders stay out of reach either way.
 | `Sync-DmsFileServer.ps1` | **After files were added or deleted by hand on the file server**: one pass over everything - records against files, files nobody registered, read-only flags, dashboards, Markdown, missing blueprint folders |
 | `New-DmsCustomer.ps1` | A new customer cut from `Customer_Skeleton`: its folders and the NTFS permissions on them. `-MakeSkeletonFrom Customer_A` does the one-time rename |
 | `New-DmsApiKey.ps1` | A key for an application that calls the DMS (`/api/v1/...`), with a name and what it may read (`docs/13-Machine-API.md`) |
+| `New-DmsApiDocs.ps1` | Writes `docs/14-API-Reference.md` from the API itself - run it after adding or changing an endpoint |
 | `Set-DmsKpiKeyAccess.ps1` | Lets `/api/kpi` answer a page the DMS serves into a sandbox (it has no sign-in to send; the key in its address is what authorizes it) |
 | `Compare-DmsTree.ps1` | What the DMS shows against what is on the disk |
 | `Restart-Dms.ps1` | Reload the service (`-ComputerName` from another machine) |
