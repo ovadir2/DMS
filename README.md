@@ -35,6 +35,7 @@ Implementation of **IT-DOC-BP-001 "Enterprise Document Control and Large-File Ex
 | [`docs/13-Machine-API.md`](docs/13-Machine-API.md) | The machine API: a key for an application, what each endpoint answers, and the AD account a key acts as |
 | [`docs/15-KPI-Builder-Contract.md`](docs/15-KPI-Builder-Contract.md) | What the KPI Builder sends the DMS and gets back: its key, the departments, publishing a KPI, and what its page may do at runtime |
 | [`docs/14-API-Reference.md`](docs/14-API-Reference.md) | Every endpoint of the DMS with its parameters, written from the API itself (`scripts/New-DmsApiDocs.ps1`) |
+| [`docs/dms-openapi.json`](docs/dms-openapi.json) | The OpenAPI (Swagger) document of the whole API - served live at `/api/openapi.json`, shown at `/dms/api-docs` |
 | [`docs/Go-Live.md`](docs/Go-Live.md) | From the pilot to production: the names, the pilot's data, first loading, separating the package from what exists only to try it, and what the pilot taught |
 
 ## Quick start

@@ -1,8 +1,10 @@
 # 14 - API reference
 
-Every endpoint of the DMS, written from the API itself (`python -m dms_api.apidocs`, or `scripts\New-DmsApiDocs.ps1`), so it cannot drift from the code. The machine API has a guide of its own in `13-Machine-API.md`, and the page key in `12-KPI-Integration.md`.
+Every endpoint of the DMS, written from the API itself (`python -m dms_api.apidocs`, or `scripts\New-DmsApiDocs.ps1`), so it cannot drift from the code. The machine API has a guide of its own in `13-Machine-API.md`, the KPI Builder in `15-KPI-Builder-Contract.md`, and the page key in `12-KPI-Integration.md`.
 
-Written from DMS a5b87f2.
+**Swagger**: the same thing to try and to generate a client from - `https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository as `dms-openapi.json`, for a client generated without reaching the server.
+
+Written from DMS d66d92b.
 
 ## How a caller is known
 
@@ -448,6 +450,16 @@ Every document the user owns or registered/submitted, with its workflow status, 
 
 How many of this person's own documents are waiting for them: returned with remarks, or in work after a return. The page shows it on My workflows, the way approvals are counted.
 
+### POST /api/playground/decide/{item_id}
+
+Playground only (DMS_SHAREPOINT=memory): approve or reject as the approvers would in Teams.
+
+| Parameter | In | Required | Type | |
+| --- | --- | --- | --- | --- |
+| `item_id` | path | yes | integer |  |
+| `approve` | query | no | boolean |  |
+| `comment` | query | no | string |  |
+
 ## AI Insights
 
 Questions about a document or about the company's knowledge, asked of the RH AI portal. The DMS never sends a file the person may not read.
@@ -709,30 +721,35 @@ Open for a path too long for Office (Hebrew names): Word / Excel / PowerPoint op
 | `token` | path | yes | string |  |
 | `name` | path | yes | string |  |
 
-## The rest
-
-Answers that are not JSON - an image, a file, a page - and so are not in the machine-readable schema.
-
-### GET /dms/logo.png
-
-The company logo: put logo.png in dms_api/static (a drawn "rh" is shown without it).
-
-### GET /dms/icon.png
-
-The tab's icon: the logo on a white square that it fills, the shape a tab icon is drawn in. The wide logo itself is shrunk into a corner of the tab instead. Without any icon the browser shows whatever it likes - often the icon of the site that tab held before.
-
 ### GET /dms/go/{token}
 
 The other end of that link: the DMS page, standing at the file the token names.
+
+| Parameter | In | Required | Type | |
+| --- | --- | --- | --- | --- |
+| `token` | path | yes | string |  |
+| `lang` | query | no | string |  |
+
+## The page itself
+
+The DMS page, its logo and its icon.
 
 ### GET /dms/dms-page
 
 The DMS page itself: one HTML file, served to the signed-in browser.
 
+### GET /dms/icon.png
+
+The tab's icon: the logo on a white square that it fills, the shape a tab icon is drawn in. The wide logo itself is shrunk into a corner of the tab instead. Without any icon the browser shows whatever it likes - often the icon of the site that tab held before.
+
+### GET /dms/logo.png
+
+The company logo: put logo.png in dms_api/static (a drawn "rh" is shown without it).
+
 ### GET /dms/page-test
 
 A page of the DMS's own, served exactly as any HTML in the repository is: into the sandbox, with a key in its address and the bridge in front of it. It then asks the DMS three things and says what came back. If this page works and yours does not, the fault is in the page; if this one fails, it says which of the three steps failed and that is the DMS's side to fix.
 
-### POST /api/playground/decide/{item_id}
-
-Playground only (DMS_SHAREPOINT=memory): approve or reject as the approvers would in Teams.
+| Parameter | In | Required | Type | |
+| --- | --- | --- | --- | --- |
+| `t` | query | no | string |  |

@@ -173,7 +173,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     s = settings or Settings.from_env()
     if not logging.getLogger().handlers:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
-    app = FastAPI(title="RH DMS Web API", version="1.1")
+    # Swagger UI at /dms/api-docs, ReDoc at /dms/api-redoc, the document itself at /api/openapi.json: all
+    # three under the two paths IIS sends to the DMS, so they work on the pilot as they do in the playground.
+    app = FastAPI(title="RH DMS Web API", version="1.1", docs_url="/dms/api-docs",
+                  redoc_url="/dms/api-redoc", openapi_url="/api/openapi.json")
     app.state.settings = s
     files.set_short_paths(s.repository_root, s.short_paths, s.client_root, s.client_short_paths)
     own_register = sharepoint is None                            # False in the tests (they pass their own)
@@ -355,6 +358,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     version = _version()
     logger.info("DMS version %s", version)
 
+    def _openapi() -> dict:
+        """The OpenAPI document: the routes as they are, with what each caller signs in with."""
+        if not app.openapi_schema:
+            from .openapi import spec
+            app.openapi_schema = spec(app, f"1.1 ({version})")
+        return app.openapi_schema
+
+    app.openapi = _openapi
+
     @app.get("/api/health")
     def health():
         """Is the DMS up, and which build is it? Open it in the browser after a pull and a restart."""
@@ -381,7 +393,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def root():
         return RedirectResponse("/dms/dms-page?lang=EN")
 
-    @app.get("/dms/logo.png", include_in_schema=False)
+    @app.get("/dms/logo.png")
     def logo():
         """The company logo: put logo.png in dms_api/static (a drawn "rh" is shown without it)."""
         f = STATIC / "logo.png"
@@ -390,7 +402,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return FileResponse(f)
 
     @app.get("/favicon.ico", include_in_schema=False)
-    @app.get("/dms/icon.png", include_in_schema=False)
+    @app.get("/dms/icon.png")
     def favicon():
         """The tab's icon: the logo on a white square that it fills, the shape a tab icon is drawn in. The wide
         logo itself is shrunk into a corner of the tab instead. Without any icon the browser shows whatever it
@@ -415,7 +427,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         base = str(request.base_url).rstrip("/")
         return {"url": f"{base}/dms/go/{files.open_token(full)}", "name": os.path.basename(full)}
 
-    @app.get("/dms/go/{token}", include_in_schema=False)
+    @app.get("/dms/go/{token}")
     def open_by_link(token: str, lang: str = "", user: User = Depends(current_user)):
         """The other end of that link: the DMS page, standing at the file the token names."""
         from urllib.parse import quote as _q
@@ -430,7 +442,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             where += f"&name={_q(os.path.basename(full))}"
         return RedirectResponse(where)
 
-    @app.get("/dms/dms-page", include_in_schema=False)
+    @app.get("/dms/dms-page")
     def page():
         """The DMS page itself: one HTML file, served to the signed-in browser."""
         # Never cached. The page is the whole application, and a browser that keeps yesterday's copy shows a
@@ -2519,7 +2531,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                                f"'unsafe-eval'; connect-src 'self' {home}",
             "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"})
 
-    @app.get("/dms/page-test", include_in_schema=False)
+    @app.get("/dms/page-test")
     def page_test(request: Request, t: str = "", user: User = Depends(current_user)):
         """A page of the DMS's own, served exactly as any HTML in the repository is: into the sandbox, with a
         key in its address and the bridge in front of it. It then asks the DMS three things and says what came
@@ -2877,7 +2889,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         log(user, "file-service-run", str(r))
         return r
 
-    @app.post("/api/playground/decide/{item_id}", include_in_schema=False)
+    @app.post("/api/playground/decide/{item_id}")
     def playground_decide(item_id: int, approve: bool = True, comment: str = "", user: User = Depends(current_user)):
         """Playground only (DMS_SHAREPOINT=memory): approve or reject as the approvers would in Teams."""
         if s.sharepoint != "memory":

@@ -38,7 +38,8 @@ GROUPS: list[tuple[str, str, str]] = [
     ("The page itself", r"^/dms/",
      "The DMS page, its logo and its icon."),
 ]
-HIDE = ("/api/kpi/{rest:path}",)                       # the browser's own preflight question
+HIDE = ("/api/kpi/{rest:path}",                        # the browser's own preflight question
+        "/api/openapi.json", "/dms/api-docs", "/dms/api-redoc")   # the document and the two readers of it
 VERBS = ("GET", "POST", "PUT", "DELETE", "PROPFIND", "LOCK", "UNLOCK")
 
 
@@ -72,8 +73,12 @@ def markdown(app, version: str = "") -> str:
     lines = ["# 14 - API reference", "",
              "Every endpoint of the DMS, written from the API itself "
              "(`python -m dms_api.apidocs`, or `scripts\\New-DmsApiDocs.ps1`), so it cannot drift from the "
-             "code. The machine API has a guide of its own in `13-Machine-API.md`, and the page key in "
-             "`12-KPI-Integration.md`.", ""]
+             "code. The machine API has a guide of its own in `13-Machine-API.md`, the KPI Builder in "
+             "`15-KPI-Builder-Contract.md`, and the page key in `12-KPI-Integration.md`.", "",
+             "**Swagger**: the same thing to try and to generate a client from - "
+             "`https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the "
+             "OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository "
+             "as `dms-openapi.json`, for a client generated without reaching the server.", ""]
     if version:
         lines += [f"Written from DMS {version}.", ""]
     lines += ["## How a caller is known", "",
@@ -125,6 +130,14 @@ def markdown(app, version: str = "") -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def openapi_json(app) -> str:
+    """The OpenAPI document as the repository keeps it (docs\\dms-openapi.json): the version without the
+    build, so the file changes when the API does and not at every commit."""
+    import json
+    from .openapi import spec
+    return json.dumps(spec(app, "1.1"), indent=1, ensure_ascii=False, sort_keys=True) + "\n"
+
+
 if __name__ == "__main__":   # pragma: no cover - the writer, run by the script
     import sys
     from .config import Settings
@@ -138,4 +151,7 @@ if __name__ == "__main__":   # pragma: no cover - the writer, run by the script
                                capture_output=True, text=True, timeout=5).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         where = ""
-    sys.stdout.write(markdown(app, where))
+    if "--openapi" in sys.argv:
+        sys.stdout.write(openapi_json(app))
+    else:
+        sys.stdout.write(markdown(app, where))

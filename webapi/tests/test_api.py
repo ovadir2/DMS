@@ -4290,6 +4290,8 @@ def test_the_api_reference_holds_every_endpoint(tmp_path):
         end = getattr(route, "endpoint", None)
         if not path.startswith(("/api", "/dms")) or end is None or path in apidocs.HIDE:
             continue
+        if path in ("/api/openapi.json", "/dms/api-docs", "/dms/api-redoc"):
+            continue                       # FastAPI's own: the document, Swagger UI and ReDoc
         assert (end.__doc__ or "").strip(), f"{path} has nothing to say about itself"
         for verb in sorted(getattr(route, "methods", []) or []):
             if verb in apidocs.VERBS:
@@ -4300,3 +4302,41 @@ def test_the_api_reference_holds_every_endpoint(tmp_path):
         strip = lambda t: _re.sub(r"\n{3,}", "\n\n", "\n".join(
             l for l in t.splitlines() if not l.startswith("Written from DMS ")))
         assert strip(on_disk) == strip(written), "docs\\14-API-Reference.md is behind: run scripts\\New-DmsApiDocs.ps1"
+
+
+def test_swagger_describes_every_endpoint_and_how_each_is_called(tmp_path):
+    """One document for the whole API: every endpoint the DMS answers, in its group, with what the caller
+    signs in with - Windows for a person, a page key for a page of the repository, a key for an
+    application. Swagger UI reads it at /dms/api-docs, and the repository keeps a copy."""
+    import json
+    from dms_api import apidocs
+    app = create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", sharepoint="memory"))
+    c = TestClient(app)
+    doc = c.get("/api/openapi.json").json()
+    assert doc["info"]["title"] == "RH DMS Web API" and doc["info"]["description"]
+    assert sorted(doc["components"]["securitySchemes"]) == ["apiKey", "bearer", "pageKey", "windows"]
+
+    inside = {"/api/openapi.json", "/dms/api-docs", "/dms/api-redoc", "/api/kpi/{rest:path}"}
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        if not path.startswith(("/api", "/dms")) or path in inside:
+            continue
+        assert path in doc["paths"], f"{path} is not in the OpenAPI document"
+        for verb, op in doc["paths"][path].items():
+            assert op.get("tags"), f"{verb} {path} is in no group"
+            assert op.get("summary") or op.get("description"), f"{verb} {path} says nothing about itself"
+
+    # how each kind of caller signs in, by where the endpoint lives
+    assert doc["paths"]["/api/v1/customers"]["get"]["security"] == [{"apiKey": []}, {"bearer": []}]
+    assert doc["paths"]["/api/kpi/data"]["get"]["security"] == [{"pageKey": []}]
+    assert doc["paths"]["/api/kpi/ping"]["get"]["security"] == []            # the one that answers anyone
+    assert doc["paths"]["/api/browse"]["get"]["security"] == [{"windows": []}]
+
+    assert c.get("/dms/api-docs").status_code == 200                          # Swagger UI
+    assert c.get("/dms/api-redoc").status_code == 200
+
+    here = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "docs",
+                        "dms-openapi.json")
+    if os.path.isfile(here):          # the copy in docs is the same document
+        assert json.load(open(here, encoding="utf-8")) == json.loads(apidocs.openapi_json(app)), \
+            "docs\\dms-openapi.json is behind: run scripts\\New-DmsApiDocs.ps1"

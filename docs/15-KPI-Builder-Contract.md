@@ -119,6 +119,12 @@ Reading only, only inside the folder the page was opened from, and only for a fe
 (`DMS_PAGE_KEY_HOURS`). The page should read its JSON from `Current_ReadOnly` beside it - that is the
 approved copy - and never assume a path outside its own folder.
 
+## Generating a client
+
+`https://dms-pilot.rh.tech/api/openapi.json` is the OpenAPI document of the whole DMS, and
+`docs/dms-openapi.json` in the DMS repository is the same thing offline. `/dms/api-docs` shows it in Swagger
+UI - put the key in the Authorize box (`X-DMS-Api-Key`) and the publish call can be tried from the page.
+
 ## Rules that do not move
 
 - The page is a tool and stays writable; the data is a document and is released read only.

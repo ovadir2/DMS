@@ -242,6 +242,14 @@ and says why for each file; an unknown department answers `404` and points at `/
 The application acts as its AD account here too: that account needs **Modify** on the folder, as a person
 would, and a key that names no account is refused. Publishing is the only thing a key can write.
 
+## Swagger
+
+`https://dms-pilot.rh.tech/dms/api-docs` is the whole API to read and to try, grouped by who calls it, with
+the three ways in (Windows, the page key, an application key) in its Authorize box. `/dms/api-redoc` reads
+the same document, and `/api/openapi.json` is the document itself - generate a client from it, or from the
+copy in the repository, `docs/dms-openapi.json`. Swagger UI's own files come from jsdelivr, so the browser
+showing it needs the internet; the document and ReDoc do not.
+
 ## Why so few
 
 Because AD is the rule, not the API. A key names an account; the DMS answers that account exactly what it

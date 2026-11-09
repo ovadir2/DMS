@@ -22,4 +22,7 @@ try {
     $out = Join-Path $root 'docs\14-API-Reference.md'
     & $py -m dms_api.apidocs | Set-Content -Path $out -Encoding UTF8
     Write-Host "Written: $out"
+    $json = Join-Path $root 'docs\dms-openapi.json'
+    & $py -m dms_api.apidocs --openapi | Set-Content -Path $json -Encoding UTF8
+    Write-Host "Written: $json"
 } finally { Pop-Location }
