@@ -31,6 +31,11 @@ the site, Change site address. The site keeps its id, its lists, its items and i
 
 ### A2. The DMS: the lines that name them
 
+`.\scripts\Rename-DmsToProduction.ps1` does A2 to A4 in one go - it checks that the renamed sites answer
+before it writes anything, looks at IIS authentication, changes the `.env` (keeping a copy beside it),
+renames the IIS site and pool with `-RenameSite`, then restarts and runs the readiness check. Without
+`-Write` it only says what it would do. By hand, it is this:
+
 In `webapi\.env` - and remember the **first** occurrence of a key wins, so look for a leftover line above:
 
 | | From | To |
