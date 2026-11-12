@@ -3,6 +3,8 @@ scripts/New-DmsFileServerTree.ps1 creates), with English and Hebrew names and sh
 page can guide users to the right folder. "*" stands for any customer or project folder."""
 from __future__ import annotations
 
+import os
+
 # name: (English, Hebrew, children) or (English, Hebrew, children, hint EN, hint HE)
 N = dict
 
@@ -117,6 +119,44 @@ ROOT = N({
 })
 # 03_Operations_Staging, 04_Workflow_System and 05_Exchange_Quarantine are system folders, not shown to users.
 HIDDEN_AT_ROOT = ("03_Operations_Staging", "04_Workflow_System", "05_Exchange_Quarantine")
+
+
+# ---------------------------------------------------------------- what this company really has
+# The blueprint above is the shape the DMS was written with; a company's own departments and the folders
+# inside them are learned from the file server and kept beside it, so that a department somebody really
+# made is as much "the structure" as one written here: grey in the page, not renamed or deleted from a
+# row, with its own KPIs folder. scripts\Update-DmsBlueprint.ps1 (py -m dms_api.learn) writes the file.
+LEARNED = os.path.join("04_Workflow_System", "Blueprint.json")
+
+
+def learn(root: str) -> int:
+    """Merge the folders this company really has into the blueprint. Returns how many were added."""
+    import json
+    try:
+        with open(os.path.join(root, LEARNED), encoding="utf-8") as f:
+            found = json.load(f)
+    except (OSError, ValueError):
+        return 0
+    added = 0
+
+    def put(tree: dict, parts: list, names: dict) -> int:
+        n = 0
+        for name, kids in sorted(names.items()):
+            node = tree.get(name) or next((v for k, v in tree.items() if k.lower() == name.lower()), None)
+            if node is None:
+                label = kids.get("en") or name.replace("_", " ")
+                tree[name] = (label, kids.get("he") or label, N({}), kids.get("hintEn", ""), kids.get("hintHe", ""))
+                node = tree[name]
+                n += 1
+            n += put(node[2], parts + [name], kids.get("folders") or {})
+        return n
+
+    added += put(MANAGEMENT, ["01_General"], (found.get("general") or {}))
+    added += put(CUSTOMER, ["02_Customers", "*"], (found.get("customer") or {}))
+    for key, value in list(MANAGEMENT.items()):          # a department learned now gets its KPIs folder too
+        if "KPIs" not in (value[2] or {}):
+            MANAGEMENT[key] = (value[0], value[1], N({**(value[2] or {}), "KPIs": KPIS})) + tuple(value[3:])
+    return added
 
 
 # A folder the skeleton once made under another spelling. It is the same place, so it keeps its label and

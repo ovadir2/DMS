@@ -234,6 +234,7 @@ the workflow and blueprint folders stay out of reach either way.
 | `Reset-DmsPilotData.ps1` | Clears what the pilot was played with - the SharePoint lists and libraries, and the file server back to the blueprint. Says what it would do; `-Write` does it |
 | `Rename-DmsToProduction.ps1` | The rename in one command: the `.env` lines, the IIS names, the restart and the readiness check. Says what it would do; `-Write` does it |
 | `Move-DmsFolder.ps1` | Renames the installation folder (`C:\DMS-Pilot` → `C:\DMS`) and repoints IIS, `web.config` and what else names it |
+| `Update-DmsBlueprint.ps1` | Learns the departments and folders this company really has, so they count as the structure (grey, kept, with their KPIs folder) |
 | `Set-DmsKpiKeyAccess.ps1` | Lets `/api/kpi` answer a page the DMS serves into a sandbox (it has no sign-in to send; the key in its address is what authorizes it) |
 | `Compare-DmsTree.ps1` | What the DMS shows against what is on the disk |
 | `Restart-Dms.ps1` | Reload the service (`-ComputerName` from another machine) |

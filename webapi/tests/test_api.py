@@ -4457,3 +4457,35 @@ def test_a_script_line_that_continues_a_string_is_wrapped():
                 continue                                          # an expression, or already wrapped
             bad.append(f"{os.path.basename(path)}:{i + 1}: {line.strip()[:70]}")
     assert not bad, "a continued string needs parentheses:\n" + "\n".join(bad)
+
+
+def test_the_company_s_own_departments_become_part_of_the_blueprint(tmp_path):
+    """The blueprint the DMS ships with is a starting shape. A department somebody really made, and the
+    folders in it, are the structure too: grey in the page, kept, and with a KPIs folder of their own. The
+    shape of a customer is learned from the skeleton, so every customer is described the same way."""
+    import importlib
+    from dms_api import learn
+    import dms_api.blueprint as bp
+    importlib.reload(bp)                       # a fresh blueprint: the tests share the module
+    importlib.reload(learn)
+    root = tmp_path / "Root"
+    for d in (("01_General", "Lab", "Reports"), ("01_General", "Lab", "Current_ReadOnly"),
+              ("01_General", "Commercial", "Pricing"), ("02_Customers", "Customer_Skeleton", "Contracts"),
+              ("02_Customers", "Elbit")):
+        (root.joinpath(*d)).mkdir(parents=True, exist_ok=True)
+
+    found = learn.read(str(root), depth=2)
+    assert "Lab" in found["general"] and "Contracts" in found["customer"]
+    assert "Current_ReadOnly" not in found["general"]["Lab"]["folders"], "a workflow folder is not structure"
+    assert set(learn.what_is_new(found)) == {"01_General\\Lab", "01_General\\Lab\\Reports",
+                                             "02_Customers\\<customer>\\Contracts"}
+    assert bp.describe(["01_General", "Lab"]) is None          # not yet
+    learn.write(str(root), found)
+    assert bp.learn(str(root)) == 3
+
+    assert (bp.describe(["01_General", "Lab"]) or {}).get("en") == "Lab"
+    assert (bp.describe(["01_General", "Lab", "Reports"]) or {}).get("en") == "Reports"
+    assert "KPIs" in bp.MANAGEMENT["Lab"][2], "a department measures itself, learned or not"
+    assert (bp.describe(["02_Customers", "Elbit", "Contracts"]) or {}).get("en") == "Contracts"
+    assert bp.learn(str(root)) == 0                            # saying it twice adds nothing
+    importlib.reload(bp)                                        # leave the blueprint as the others expect it

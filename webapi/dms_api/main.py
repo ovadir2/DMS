@@ -385,6 +385,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return "unknown"
     version = _version()
     logger.info("DMS version %s", version)
+    # The departments and folders this company really has, learned from the file server
+    # (py -m dms_api.learn), are part of the structure too - not somebody's own folders.
+    learned = blueprint.learn(s.repository_root)
+    if learned:
+        logger.info("%d folder(s) of this company's own structure were read from %s", learned, blueprint.LEARNED)
 
     def _openapi() -> dict:
         """The OpenAPI document: the routes as they are, with what each caller signs in with."""

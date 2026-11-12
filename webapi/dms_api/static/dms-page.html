@@ -300,7 +300,7 @@
 </head>
 <body>
 <header>
-  <div class="brand">
+  <div class="brand" id="brand">
     <img src="/dms/logo.png" alt="rh" height="30" onerror="this.nextElementSibling.style.display='';this.remove()"><svg style="display:none" direction="ltr" width="52" height="28" viewBox="0 0 52 28" aria-label="rh"><text x="0" y="23" font-family="Arial Black, Arial" font-weight="900" font-style="italic" font-size="26" fill="#1f4a72">rh</text><path d="M37 2h13l-4 10z" fill="#3db7b3"/></svg>
     <span class="sep"></span>
     <span class="welcome" id="t-welcome"></span>
@@ -405,6 +405,15 @@ async function apiCall(path, opts = {}) {
 $('#t-welcome').textContent = T.welcome; $('#t-refresh').textContent = T.refresh;   // the search has no heading: it is the top bar itself
 $('#go').textContent = T.go; $('#q').placeholder = T.searchPh; $('#lang-t').textContent = T.lang; $('#lang').title = T.lang;
 $('#lang').onclick = () => { q.set('lang', lang === 'HE' ? 'EN' : 'HE'); location.search = q.toString(); };
+// The logo is the way home, as it is on every site: back to the top of the repository - the two folders,
+// General and Customers - with the tree and the list showing the same thing, and read afresh rather than
+// from what the page remembers.
+$('#brand').onclick = () => {
+  state.view = 'customers'; state.folder = '';
+  treeForget();                                   // the tree is read again: a folder added on the server shows
+  TREE.open.clear();
+  render();
+};
 // Full screen: the page fills the screen, so a wide table of files is read without the browser's own bars.
 const fsOn = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
 function fsPaint() {
