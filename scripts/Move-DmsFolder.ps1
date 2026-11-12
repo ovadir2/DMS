@@ -169,8 +169,10 @@ for ($i = 1; $i -le 5 -and -not $moved; $i++) {
             # Something holds the folder and will not let go. The contents can still be copied: the new
             # folder becomes the installation, and the old one is deleted later, when whatever holds it has.
             Write-Host "   the folder will not be renamed - copying instead (-Copy)" -ForegroundColor Yellow
-            $log = robocopy $From $To /MIR /R:1 /W:1 /NFL /NDL /NJH /NJS /NP
-            if ($LASTEXITCODE -ge 8) { Start-TheSite; throw "robocopy failed ($LASTEXITCODE): $log" }
+            # Not captured into a variable: a copy of tens of thousands of files (the .venv) with its
+            # output swallowed looks exactly like a hung command. The folder names scroll past instead.
+            robocopy $From $To /MIR /R:1 /W:1 /NFL /NP
+            if ($LASTEXITCODE -ge 8) { Start-TheSite; throw "robocopy failed with exit code $LASTEXITCODE." }
             $moved = $true
             Write-Host "   copied $From -> $To (the old folder stays until you remove it)" -ForegroundColor Green
         }
