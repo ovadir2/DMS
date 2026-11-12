@@ -29,6 +29,11 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\_DmsDefaults.ps1"
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+          ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw "Run this in a PowerShell started as administrator: renaming a folder at the root of a drive " +
+          "needs it, and so does changing IIS."
+}
 if (-not $From) { $From = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }   # ...\DMS-Pilot\app\scripts
 if (-not $Site) { $Site = Get-DmsDefault Site }
 $From = $From.TrimEnd('\'); $To = $To.TrimEnd('\')
@@ -48,6 +53,19 @@ if (Test-Path $web) {
     $inWeb = @(Select-String -Path $web -SimpleMatch $From -ErrorAction SilentlyContinue)
     Write-Host "   $web : $($inWeb.Count) line(s) name it"
 } else { Write-Host "   (no web.config found under $From)" -ForegroundColor Yellow }
+# Windows refuses to rename a folder that is shared - and it says "access denied", which reads like a
+# permission problem rather than what it is. The shares are taken down and put back at the new path.
+$shares = @()
+try {
+    $shares = @(Get-SmbShare -ErrorAction Stop | Where-Object {
+        $_.Path -and ($_.Path.TrimEnd('\') -eq $From -or $_.Path -like "$From\*")
+    })
+} catch { }
+foreach ($sh in $shares) { Write-Host "   share \\$env:COMPUTERNAME\$($sh.Name) -> $($sh.Path)" }
+$open = @()
+try { $open = @(Get-SmbOpenFile -ErrorAction Stop | Where-Object { $_.Path -like "$From*" }) } catch { }
+foreach ($f in $open) { Write-Host "   open over the network: $($f.Path) ($($f.ClientUserName))" -ForegroundColor Yellow }
+
 $tasks = @()
 try {
     $tasks = @(Get-ScheduledTask | Where-Object {
@@ -57,7 +75,8 @@ try {
 foreach ($t in $tasks) { Write-Host "   scheduled task: $($t.TaskName)" }
 
 if (-not $Write) {
-    Write-Host "`nWould: stop '$Site', rename $From -> $To, repoint IIS and web.config, start it again."
+    Write-Host "`nWould: stop '$Site', take down the share(s), rename $From -> $To, put the share(s) back " +
+               "at the new path, repoint IIS and web.config, start it again."
     Write-Host "Nothing was changed. Add -Write to do it." -ForegroundColor Yellow
     return
 }
@@ -90,6 +109,18 @@ foreach ($p in (Get-Process -Name python, python3, pythonw -ErrorAction Silently
     try { if ("$($p.Path)" -like "$From*") { Stop-Process -Id $p.Id -Force; Write-Host "   stopped a python left in the folder (pid $($p.Id))" } } catch { }
 }
 Set-Location $env:SystemDrive\                            # never rename the folder you are standing in
+# the shares, remembered as they are and taken down: a shared folder cannot be renamed
+$kept = @()
+foreach ($sh in $shares) {
+    $kept += [pscustomobject]@{
+        Name = $sh.Name; Path = $sh.Path; Description = $sh.Description
+        Full = @(Get-SmbShareAccess -Name $sh.Name | Where-Object AccessRight -eq 'Full' | ForEach-Object AccountName)
+        Change = @(Get-SmbShareAccess -Name $sh.Name | Where-Object AccessRight -eq 'Change' | ForEach-Object AccountName)
+        Read = @(Get-SmbShareAccess -Name $sh.Name | Where-Object AccessRight -eq 'Read' | ForEach-Object AccountName)
+    }
+    Remove-SmbShare -Name $sh.Name -Force
+    Write-Host "   share $($sh.Name) taken down (it goes back at the new path)"
+}
 $moved = $false
 for ($i = 1; $i -le 5 -and -not $moved; $i++) {
     try {
@@ -99,6 +130,12 @@ for ($i = 1; $i -le 5 -and -not $moved; $i++) {
     } catch {
         $why = $_.Exception.Message
         if ($i -lt 5) { Start-Sleep -Seconds 3 } else {
+            foreach ($k in $kept) {       # put the shares back where they were: nothing was moved
+                New-SmbShare -Name $k.Name -Path $k.Path -Description $k.Description -ErrorAction SilentlyContinue | Out-Null
+                foreach ($a in $k.Full) { Grant-SmbShareAccess -Name $k.Name -AccountName $a -AccessRight Full -Force | Out-Null }
+                foreach ($a in $k.Change) { Grant-SmbShareAccess -Name $k.Name -AccountName $a -AccessRight Change -Force | Out-Null }
+                foreach ($a in $k.Read) { Grant-SmbShareAccess -Name $k.Name -AccountName $a -AccessRight Read -Force | Out-Null }
+            }
             Start-TheSite
             throw "The folder could not be renamed after $i tries ($why).`n" +
                   "Something is holding it open - the usual suspects are VS Code, an Explorer window, a " +
@@ -106,6 +143,15 @@ for ($i = 1; $i -le 5 -and -not $moved; $i++) {
                   "again. The site has been started again, so the DMS is up."
         }
     }
+}
+
+foreach ($k in $kept) {                 # the shares, at the new path, with the same permissions
+    $path = $k.Path -replace [regex]::Escape($From), $To
+    New-SmbShare -Name $k.Name -Path $path -Description $k.Description -ErrorAction Stop | Out-Null
+    foreach ($a in $k.Full) { Grant-SmbShareAccess -Name $k.Name -AccountName $a -AccessRight Full -Force | Out-Null }
+    foreach ($a in $k.Change) { Grant-SmbShareAccess -Name $k.Name -AccountName $a -AccessRight Change -Force | Out-Null }
+    foreach ($a in $k.Read) { Grant-SmbShareAccess -Name $k.Name -AccountName $a -AccessRight Read -Force | Out-Null }
+    Write-Host "   share $($k.Name) -> $path" -ForegroundColor Green
 }
 
 $newPhysical = $physical -replace [regex]::Escape($From), $To
