@@ -72,8 +72,8 @@ $open = @()
 try { $open = @(Get-SmbOpenFile -ErrorAction Stop | Where-Object { $_.Path -like "$From*" }) } catch { }
 foreach ($f in $open) { Write-Host "   open over the network: $($f.Path) ($($f.ClientUserName))" -ForegroundColor Yellow }
 if ($open.Count) {
-    Write-Host "   (these are handles over a share - C`$ counts, so a mapped drive or an Explorer window on " +
-               "another PC is one. They are closed before the rename.)" -ForegroundColor DarkGray
+    Write-Host ("   (these are handles over a share - C`$ counts, so a mapped drive or an Explorer window " +
+                "on another PC is one. They are closed before the rename.)") -ForegroundColor DarkGray
 }
 
 $tasks = @()
@@ -85,8 +85,8 @@ try {
 foreach ($t in $tasks) { Write-Host "   scheduled task: $($t.TaskName)" }
 
 if (-not $Write) {
-    Write-Host "`nWould: stop '$Site', take down the share(s), rename $From -> $To, put the share(s) back " +
-               "at the new path, repoint IIS and web.config, start it again."
+    Write-Host ("`nWould: stop '$Site', take down the share(s), rename $From -> $To, put the share(s) back " +
+                "at the new path, repoint IIS and web.config, start it again.")
     Write-Host "Nothing was changed. Add -Write to do it." -ForegroundColor Yellow
     return
 }

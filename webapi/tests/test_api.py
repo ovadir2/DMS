@@ -4435,3 +4435,25 @@ def test_the_pilot_is_cleared_out_of_sharepoint_with_the_dms_own_account(tmp_pat
     assert not any("/x/Forms" in u for u in deletes)  # the library's own Forms folder is not content
     assert any("Shared%20Documents" in u or "Shared Documents" in u for _m, u, _x in seen)
     assert all(r["removed"] == r["found"] for r in rows)
+
+
+def test_a_script_line_that_continues_a_string_is_wrapped():
+    """PowerShell reads `Write-Host "a" + "b" -ForegroundColor Red` as a parse error, and a parse error in a
+    script is found by the person running it, on the server, in the middle of something. A string split
+    across lines is wrapped in parentheses unless nothing follows it (throw takes an expression)."""
+    import glob
+    bad = []
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for path in sorted(glob.glob(os.path.join(here, "..", "scripts", "*.ps1"))):
+        lines = open(path, encoding="utf-8-sig").read().splitlines()
+        statement = ""                                        # the command the continued lines belong to
+        for i, line in enumerate(lines):
+            if not statement:
+                statement = line.strip().split(" ", 1)[0].lstrip("(")
+            if not line.rstrip().endswith('" +'):
+                statement = ""
+                continue
+            if statement == "throw" or line.count("(") > line.count(")"):
+                continue                                          # an expression, or already wrapped
+            bad.append(f"{os.path.basename(path)}:{i + 1}: {line.strip()[:70]}")
+    assert not bad, "a continued string needs parentheses:\n" + "\n".join(bad)
