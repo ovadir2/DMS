@@ -24,18 +24,22 @@
       5. the DMS restarted, and the readiness check run
 
 .PARAMETER NewHost
-    The production address, e.g. dms.rh.tech. Its DNS entry, binding and certificate have to exist already.
+    The production address, e.g. dms.rh.tech. Left out, the address is not changed - the SharePoint rename
+    and the sign-in settings do not wait for DNS. It is refused if the name does not resolve: a DMS_PAGE_URL
+    nobody can reach sends every notification to a dead link.
 
 .EXAMPLE
     .\scripts\Rename-DmsToProduction.ps1
 .EXAMPLE
     .\scripts\Rename-DmsToProduction.ps1 -Write
 .EXAMPLE
-    .\scripts\Rename-DmsToProduction.ps1 -NewHost dms.rh.tech -RenameSite -EnableWindowsAuth -Write
+    .\scripts\Rename-DmsToProduction.ps1 -RenameSite -EnableWindowsAuth -Write
+.EXAMPLE
+    .\scripts\Rename-DmsToProduction.ps1 -NewHost dms.rh.tech -Write     # once DNS and the binding exist
 #>
 [CmdletBinding()]
 param(
-    [string]$NewHost = 'dms.rh.tech',
+    [string]$NewHost = '',
     [string]$NewSite = 'DMS',
     [string]$Site = '',
     [string]$EnvFile = '',
@@ -47,6 +51,18 @@ param(
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\_DmsDefaults.ps1"
 $root = Split-Path -Parent $PSScriptRoot
+if ($NewHost) {
+    # The address is only written when it answers to DNS: notifications carry it, and a name that does not
+    # resolve is a link nobody can open.
+    try { [void][System.Net.Dns]::GetHostEntry($NewHost) }
+    catch {
+        if (-not $Force) {
+            throw "$NewHost does not resolve on this machine. Make the DNS entry, the IIS binding and the " +
+                  "certificate first, then run this again with -NewHost $NewHost (or -Force to write it anyway)."
+        }
+        Write-Host "   $NewHost does not resolve - writing it anyway (-Force)" -ForegroundColor Yellow
+    }
+}
 if (-not $EnvFile) { $EnvFile = Join-Path $root 'webapi\.env' }
 if (-not (Test-Path $EnvFile)) { throw "No .env at $EnvFile - run this on the DMS server." }
 if (-not $Site) { $Site = Get-DmsDefault Site }
@@ -129,7 +145,7 @@ foreach ($line in $lines) {
         'DMS_SITE_URL' { $new = $value -replace '-TEST', '' }
         'DMS_EX_SITE_URL' { $new = $value -replace '-TEST', '' }
         'DMS_REVIEW_SITE_URL' { $new = $value -replace '-TEST', '' }
-        'DMS_PAGE_URL' { $new = $value -replace '://[^/]+', "://$NewHost" }
+        'DMS_PAGE_URL' { if ($NewHost) { $new = $value -replace '://[^/]+', "://$NewHost" } }
     }
     if ($k -eq 'DMS_DEV_USER' -or $k -eq 'DMS_DEV_USERS') {
         $changes.Add("  - $k=$value   (removed)")
@@ -167,9 +183,10 @@ if ($RenameSite -and $Site -ne $NewSite) {
 
 # ---- 5. restart and look
 Step 'Restart and check'
+$where = if ($NewHost) { "https://$NewHost" } else { Get-DmsDefault Url }
 if ($Write) {
-    & (Join-Path $PSScriptRoot 'Restart-Dms.ps1') -Site $Site -Url "https://$NewHost"
-    & (Join-Path $PSScriptRoot 'Test-DmsProductionReady.ps1') -Url "https://$NewHost"
+    & (Join-Path $PSScriptRoot 'Restart-Dms.ps1') -Site $Site -Url $where
+    & (Join-Path $PSScriptRoot 'Test-DmsProductionReady.ps1') -Url $where
 } else {
     Write-Host "   would run Restart-Dms.ps1 and Test-DmsProductionReady.ps1"
     Write-Host "`nNothing was changed. Add -Write to do it." -ForegroundColor Yellow
