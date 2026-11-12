@@ -94,7 +94,7 @@ if ($Shares) {
     }
     Write-Host "`nPut this line in webapi\.env (it is what users open and copy):" -ForegroundColor Cyan
     Write-Host "DMS_CLIENT_SHORT_PATHS=$GeneralFolder=\\$env:COMPUTERNAME\$GeneralShare;$CustomersFolder=\\$env:COMPUTERNAME\$CustomersShare" -ForegroundColor Yellow
-    Write-Host "then: Restart-WebAppPool DMS-Pilot" -ForegroundColor Cyan
+    Write-Host "then: .\scripts\Restart-Dms.ps1" -ForegroundColor Cyan
 }
 
 # ---------------------------------------------------------------- the report: what is still too long

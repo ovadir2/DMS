@@ -16,14 +16,16 @@
 .EXAMPLE
     .\scripts\Open-DmsSwagger.ps1 -Redoc
 .EXAMPLE
-    .\scripts\Open-DmsSwagger.ps1 -Url https://dms-pilot.rh.tech -NoOpen
+    .\scripts\Open-DmsSwagger.ps1 -Url https://dms.rh.tech -NoOpen
 #>
 [CmdletBinding()]
 param(
-    [string]$Url = 'https://dms-pilot.rh.tech',
+    [string]$Url = '',
     [switch]$Redoc,
     [switch]$NoOpen
 )
+. "$PSScriptRoot\_DmsDefaults.ps1"
+if (-not $Url) { $Url = Get-DmsDefault Url }
 $ErrorActionPreference = 'Stop'
 $base = $Url.TrimEnd('/')
 try {

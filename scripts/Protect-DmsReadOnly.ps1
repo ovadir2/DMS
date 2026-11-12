@@ -27,8 +27,10 @@ param(
     [string]$Root = '',
     [string]$DmsAccount = '',                                       # the account the DMS runs under, e.g. RH\dms_approval
     [string[]]$Folders = @('Current_ReadOnly', 'Obsolete_ReadOnly'),
-    [string]$Site = 'DMS-Pilot'
+    [string]$Site = ''
 )
+. "$PSScriptRoot\_DmsDefaults.ps1"
+if (-not $Site) { $Site = Get-DmsDefault Site }
 
 $ErrorActionPreference = 'Stop'
 

@@ -21,8 +21,10 @@ param(
     [Parameter(Mandatory)] [string]$Name,
     [string[]]$Scopes = @('customers'),
     [Parameter(Mandatory)] [string]$ActsAs,          # the AD account it acts as: what it may see is what that account may see
-    [string]$App = 'C:\DMS-Pilot\app\webapi'
+    [string]$App = ''
 )
+. "$PSScriptRoot\_DmsDefaults.ps1"
+if (-not $App) { $App = Get-DmsDefault App }
 
 $py = Join-Path $App '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $py)) { throw "The DMS python was not found: $py (give -App)" }

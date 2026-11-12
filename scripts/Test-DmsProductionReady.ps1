@@ -21,10 +21,12 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Url = 'https://dms-pilot.rh.tech',
+    [string]$Url = '',
     [string]$EnvFile = '',
     [string]$Repository = ''
 )
+. "$PSScriptRoot\_DmsDefaults.ps1"
+if (-not $Url) { $Url = Get-DmsDefault Url }
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 if (-not $EnvFile) { $EnvFile = Join-Path $root 'webapi\.env' }

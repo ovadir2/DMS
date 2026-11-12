@@ -14,10 +14,10 @@
       server only     it is on disk and the DMS does not show it - a rule above, or a right the person lacks
 
 .EXAMPLE
-  .\Compare-DmsTree.ps1 -DmsUrl https://dms-pilot.rh.tech -Path "01_General\Quality and Standards"
+  .\Compare-DmsTree.ps1 -DmsUrl https://dms.rh.tech -Path "01_General\Quality and Standards"
 
 .EXAMPLE
-  .\Compare-DmsTree.ps1 -DmsUrl https://dms-pilot.rh.tech -Path "02_Customers\Customer_A" -Root E:\Shares -All
+  .\Compare-DmsTree.ps1 -DmsUrl https://dms.rh.tech -Path "02_Customers\Customer_A" -Root E:\Shares -All
   Also lists what the DMS leaves out on purpose, so nothing is taken on trust.
 #>
 [CmdletBinding()]

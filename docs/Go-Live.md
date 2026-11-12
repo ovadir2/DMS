@@ -1,109 +1,94 @@
 # Go-live: from the pilot to production
 
 The pilot runs as `DMS-Pilot` on RHFS02, against the `-TEST` sites, with test documents in the register.
-Going live is not a rename: it is a clean environment, a repository registered from what is really on the
-file server, and a package that no longer carries the pilot with it.
 
-This is the checklist. Nothing here is done automatically - each step says what to run and how to see that it
-worked. Do them in order: the names move first, then the data, then the package, then the pilot goes.
+This is the checklist. Nothing here is done automatically - each step says what to run and how to see that
+it worked.
 
-The decision, taken: **the pilot becomes production.** Not a second installation beside it, not a second
-set of SharePoint sites - the one that runs is the one that stays, and what makes it a pilot is taken out
-of it. Section A is that path, and it is the one to follow. Sections 0-6 below are the full rebuild, kept
-for the day a clean environment is wanted instead.
-
-What that costs, said once so it is not a surprise:
-
-- The sites keep their URLs, `…/sites/DocumentControl-TEST` and `…/sites/LargeFileExchange-TEST`. A
-  SharePoint site's address cannot be changed afterwards; its **title** can, and that is what people see.
-  Renaming the address means a new site, which is the full rebuild.
-- The register keeps every row the pilot wrote. The test documents have to be taken out by hand - there is
-  no "clear the pilot" button, and there should not be.
-- The Control Audit keeps the pilot's lines. That is not a defect: it is the history of those documents.
+The decision, taken: **the pilot becomes production by being renamed.** Not a second installation, not a
+second set of sites - the one that runs is the one that stays. What has to change is the names people see
+and the lines in `.env` that follow them.
 
 ---
 
-## A. Promoting the pilot in place - the chosen path
+## A. The rename - the chosen path
 
-One morning, in this order. Each step says how to see that it worked.
+One sitting. Back up first: a copy of `E:\Shares` and an export of the Document Register, the Control
+Audit and the Approval Decisions.
 
-**A1. Back up first.** A full copy of `E:\Shares`, and an export of the Document Register, the Control
-Audit and the Approval Decisions. Everything here is reversible only from these.
+### A1. SharePoint: drop the `-TEST`
 
-**A2. Take the pilot out of the installation.** In `webapi\.env` (remember: the **first** occurrence of a
-key wins, so look for a leftover line above):
+A SharePoint Online site's **address can be changed**, in the SharePoint admin centre: Active sites, pick
+the site, Change site address. The site keeps its id, its lists, its items and its permissions - so the
+`Sites.Selected` grant and the certificate stay as they are - and the old address redirects for a while.
 
-| Out | Why |
-| --- | --- |
-| `DMS_AUTH_MODE=dev`, `DMS_DEV_USER` | dev mode is a DMS with no authentication at all |
-| `DMS_DEV_USERS` | "Acting as": a super user being somebody else |
-| `DMS_SHAREPOINT=memory` | the playground register |
+- [ ] `…/sites/DocumentControl-TEST` → `…/sites/DocumentControl`
+- [ ] `…/sites/LargeFileExchange-TEST` → `…/sites/LargeFileExchange`
+- [ ] Change the two site **titles** as well, and the titles of the lists that carry "TEST" in their name.
+      The list URLs are internal; nobody reads them.
+- [ ] Give it an hour: the change is not instant, and the DMS answers 404 from SharePoint until it has gone
+      through. Then check with the page's own SharePoint diagnostics (the ⋮ menu, super users).
 
-| In | |
-| --- | --- |
-| `DMS_AUTH_MODE=windows` | |
-| `DMS_FILE_SERVICE_SECONDS=60` | the upkeep pass runs by itself |
-| `DMS_REVIEW_LIBRARY=Approvals`, `DMS_VIEW_LIBRARY=Views` | the bridge: View makes a PDF, approvers edit a copy |
+### A2. The DMS: the lines that name them
 
-Then `.\scripts\Restart-Dms.ps1` and `.\scripts\Test-DmsProductionReady.ps1` - it reads the `.env`, asks
-the DMS, and looks at the file server, and prints PASS or FAIL per line with what to run.
+In `webapi\.env` - and remember the **first** occurrence of a key wins, so look for a leftover line above:
 
-**A3. Clear the pilot's data from the file server.** Delete every `DMS_ACCESS_CANARY_*`, the test drafts,
-and the pilot's `04_Workflow_System\Recycle\*`. `CheckedOut.json` must be empty - a document still out in
-SharePoint has not come back yet, so bring it back on the page first (Done editing). The readiness check
-covers all three.
+| | From | To |
+| --- | --- | --- |
+| `DMS_SITE_URL` | `…/sites/DocumentControl-TEST` | `…/sites/DocumentControl` |
+| `DMS_EX_SITE_URL` | `…/sites/LargeFileExchange-TEST` | `…/sites/LargeFileExchange` |
+| `DMS_REVIEW_SITE_URL` | (if set) the `-TEST` one | the new one |
+| `DMS_PAGE_URL` | `https://dms-pilot.rh.tech/...` | `https://dms.rh.tech/...` |
 
-**A4. Clear the pilot's rows from the register.** The ones that are tests, not documents. For each: open it
-in the Document Register and delete the item, or - better - take the file out of `Current_ReadOnly` on the
-page (the owner's own command moves it to `Obsolete_ReadOnly` with its Markdown). Keep every row whose file
-is a real document. `.\scripts\Repair-DmsRegister.ps1` lists the rows whose file is not on the server any
-more, which is most of the pilot's.
+Then `.\scripts\Restart-Dms.ps1`, and `.\scripts\Test-DmsProductionReady.ps1` - it reads the `.env` the
+way the DMS does, asks the DMS, and says which line still carries a pilot name.
 
-**A5. Make the repository the real one.** The pilot ran against part of `E:\Shares`; production is all of
-it. Point `DMS_REPOSITORY_ROOT` at the root that is wanted, then:
+### A3. The address: drop the `pilot`
 
-```powershell
-.\scripts\Sync-DmsFileServer.ps1 -Write      # what is on the disk and not in the DMS
-.\scripts\New-DmsMarkdown.ps1 -Write         # the Markdown the AI reads, for everything released
-.\scripts\Compare-DmsTree.ps1                # the DMS and the disk agree
-```
+- [ ] DNS: `dms.rh.tech` to the same server.
+- [ ] A certificate that carries `dms.rh.tech` (the same one may carry both, as a SAN).
+- [ ] In IIS, add the `dms.rh.tech` binding to the **same** site, and keep `dms-pilot.rh.tech` answering -
+      as a redirect once people have moved. Everyone has the old address in a mail and a bookmark.
+- [ ] `DMS_PAGE_URL` already points at the new one (A2), so notifications carry it from now on.
 
-A file sitting in a `Current_ReadOnly` that nobody registered is **not** an approved document: list them
-first and decide one by one - register it, or move it out.
+### A4. The installation's own names (optional, nobody outside the server sees them)
 
-**A6. The names people see.** The URLs stay; the titles and the address do not have to:
+- [ ] IIS site and pool `DMS-Pilot` → `DMS`.
+- [ ] Folder `C:\DMS-Pilot` → `C:\DMS`. If you do this, the site's physical path, the pool and
+      `webapi\web.config` all have to follow, and the scheduled task if there is one.
+- [ ] The scripts need no editing either way: they take the site from `DMS_IIS_SITE` (or `-Site`), the
+      address from `DMS_PAGE_URL` (or `-Url`), and the application from the folder they sit in.
 
-- Rename the IIS site and pool `DMS-Pilot` → `DMS` (or leave them: nobody outside the server sees them).
-- Add the production binding `dms.rh.tech` to the same site with its certificate, and keep
-  `dms-pilot.rh.tech` answering as a redirect to it until the bookmarks have followed. Set
-  `DMS_PAGE_URL=https://dms.rh.tech/dms/dms-page` so notifications point at the new one.
-- In SharePoint, change the **titles** of the two sites and of the lists from "… TEST" to the real ones.
-  The URLs keep `-TEST` and nothing breaks: the DMS reads them from `.env`, and people see the titles.
-- `C:\DMS-Pilot` may stay as the folder. Renaming it means IIS, the application pool, the service and
-  `web.config` all follow - cost with no benefit.
+### A5. What still says "pilot" and should not
 
-**A7. New keys for the applications.** A key is an identity, and the pilot's were handed out to try things:
-`.\scripts\New-DmsApiKey.ps1` one per caller (the RAG `documents`, the KPI Builder `kpi`), each with its
-own AD account; remove the old lines from `DMS_API_KEYS`, restart, tell each caller its new key.
+- [ ] The two words in the DMS page's title bar, if the pilot is named there.
+- [ ] `docs/08-Pilot-Process.md`: a first line saying the pilot ran from <date> to <date> and that it is
+      history, not how the system works.
+- [ ] The register: the pilot's test documents are still in it. Take out the ones that are tests - on the
+      page, the owner's own command moves a released file to `Obsolete_ReadOnly` with its Markdown.
+      `.\scripts\Repair-DmsRegister.ps1` lists the rows whose file is no longer on the server.
+- [ ] The file server: `DMS_ACCESS_CANARY_*`, the test drafts, the pilot's
+      `04_Workflow_System\Recycle\*`. `CheckedOut.json` must be empty - bring anything still out back
+      first (Done editing on the page). The readiness check covers all three.
+- [ ] New keys for the applications if the pilot's were handed out to try things
+      (`.\scripts\New-DmsApiKey.ps1`), and the old lines removed from `DMS_API_KEYS`.
 
-**A8. The last look, before anyone is told.** `.\scripts\Test-DmsProductionReady.ps1` with nothing left
-failing, then by hand: submit a document and approve it end to end, watch it land read-only in
-`Current_ReadOnly` with its Markdown beside it, View opens a PDF, share one with a customer, and
-`.\scripts\Open-DmsSwagger.ps1` answers on the production address.
+### A6. Then look at it
 
-**A9. Say it is production.** The address, what changed for people (nothing in how they work), and that the
-pilot is over. `docs/08-Pilot-Process.md` gets a first line saying the pilot ran from <date> to <date>.
+`.\scripts\Test-DmsProductionReady.ps1` with nothing failing, and by hand: submit and approve a document
+end to end, see it land read-only in `Current_ReadOnly` with its Markdown beside it, View opens a PDF,
+share one with a customer, and `.\scripts\Open-DmsSwagger.ps1` answers on `dms.rh.tech`.
 
-What is **not** needed on this path: new SharePoint sites, a new certificate, a new `Sites.Selected` grant,
-a second IIS site, first loading. What is still worth doing, after the move rather than before: the package
-builder (so `git pull` stops installing the playground along with the product) and the operations document.
+Worth doing after the rename, not before: the package builder (so `git pull` stops installing the
+playground and dev mode along with the product) and the operations document.
 
 ---
 
 ## 0. Before the day - the full rebuild (the other path)
 
-> Sections 0-6 describe building production as a separate environment. They are not the chosen path; they
-> are here for the day a clean environment is wanted, or if A4 shows the register is past cleaning.
+> Sections 0-6 describe building production as a separate environment, with its own sites, certificate and
+> first loading. They are **not** the chosen path - section A is - and are kept for the day a clean
+> environment is wanted instead, or if the register turns out to be past cleaning.
 
 - [ ] Decide the production names and write them here once, so every step below reads from one place.
 

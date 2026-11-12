@@ -15,11 +15,14 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Site = 'DMS-Pilot',
+    [string]$Site = '',
     [string]$Pool = '',
-    [string]$Url  = 'https://dms-pilot.rh.tech',
+    [string]$Url  = '',
     [string]$ComputerName = ''
 )
+. "$PSScriptRoot\_DmsDefaults.ps1"
+if (-not $Site) { $Site = Get-DmsDefault Site }
+if (-not $Url) { $Url = Get-DmsDefault Url }
 
 $work = {
     param($Site, $Pool, $Url)

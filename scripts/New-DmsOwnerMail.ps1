@@ -18,8 +18,10 @@ param(
     [string]$OutDir     = (Join-Path $PSScriptRoot 'out\owner-mail'),
     [string]$Department = '',
     [ValidateSet('HE', 'EN')][string]$Language = 'HE',
-    [string]$DmsUrl     = 'https://dms-pilot.rh.tech'
+    [string]$DmsUrl     = ''
 )
+. "$PSScriptRoot\_DmsDefaults.ps1"
+if (-not $DmsUrl) { $DmsUrl = Get-DmsDefault Url }
 
 $rows = Import-Csv -LiteralPath $Csv | Where-Object { $_.Department -and $_.Department -ne '01_General' }
 if ($Department) { $rows = $rows | Where-Object Department -eq $Department }

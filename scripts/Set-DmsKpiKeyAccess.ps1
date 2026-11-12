@@ -15,13 +15,15 @@
 .EXAMPLE
     .\scripts\Set-DmsKpiKeyAccess.ps1
 .EXAMPLE
-    .\scripts\Set-DmsKpiKeyAccess.ps1 -Site DMS-Pilot -Undo
+    .\scripts\Set-DmsKpiKeyAccess.ps1 -Site DMS -Undo
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [string]$Site = 'DMS-Pilot',
+    [string]$Site = '',
     [switch]$Undo
 )
+. "$PSScriptRoot\_DmsDefaults.ps1"
+if (-not $Site) { $Site = Get-DmsDefault Site }
 
 $ErrorActionPreference = 'Stop'
 $appcmd = Join-Path $env:windir 'system32\inetsrv\appcmd.exe'

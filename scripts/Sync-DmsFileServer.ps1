@@ -25,11 +25,13 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$App = 'C:\DMS-Pilot\app\webapi',
+    [string]$App = '',
     [switch]$Write,
     [switch]$Register,
     [string]$Log = (Join-Path $PSScriptRoot 'out\align.log')
 )
+. "$PSScriptRoot\_DmsDefaults.ps1"
+if (-not $App) { $App = Get-DmsDefault App }
 
 $py = Join-Path $App '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $py)) { throw "The DMS python was not found: $py (give -App)" }
