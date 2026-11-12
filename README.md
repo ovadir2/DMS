@@ -115,9 +115,11 @@ The on-prem side of the approval runs inside the DMS itself (`webapi/dms_api/fil
 
 ## Requirements, and whether they are met
 
-The blueprint's own requirements, and the ones the pilot added once people used it. **Checked** means it was
-tried on the pilot and behaved as written; **built** means it is in the product but nobody has put it through
-its paces yet.
+This is the specification of the system as it stands: every requirement the DMS answers, where it came
+from, and how it is met. The blueprint's own requirements came first; the rest were asked for on the pilot,
+by the people using it, and each row is the rule that came out of a real day's work. **Checked** means it
+was tried on the pilot and behaved as written; **built** means it is in the product but nobody has put it
+through its paces yet. What was asked for and is not there yet has a table of its own, below.
 
 ### From the blueprint
 
@@ -158,6 +160,30 @@ its paces yet.
 | REQ-P18 | A new customer starts as a copy of the customer skeleton, AD rights and all | One folder under `02_Customers` is the shape (`DMS_CUSTOMER_SKELETON`, `Customer_Skeleton`). Making a customer - on the page or with `New-DmsCustomer.ps1` - copies its folders and, on the file server, the NTFS permissions each folder carries, which the blueprint cannot hold. The skeleton is not a customer: it is out of the customer lists and no document may be filed in it, so the shape stays a shape | Checked |
 | REQ-P19 | An application can ask the DMS, and it is answered as its AD account, not as a super user | A caller with no person behind it uses a key of its own (`DMS_API_KEYS`, made by `New-DmsApiKey.ps1`): a name, what it may read, **the AD account it acts as**, and a line in the log for every call. Every answer is filtered folder by folder against that account's own AD rights, and a key that names no account is told nothing. `GET /api/v1/customers`, `GET /api/v1/documents` (what is approved and where its file is) and `GET /api/v1/approved-documents` (DocID, DocName, DocRev, DocDMSpath for every Markdown under `Current_ReadOnly` - the list the RAG indexes); the key never appears in the log or in an answer, and nothing under `/api/v1` writes. `docs/13-Machine-API.md` | Checked |
 | REQ-P14 | The DMS keeps itself in order without being asked | One pass (`DMS_FILE_SERVICE_SECONDS`) moves files to match each document's status, puts back a read-only flag that was cleared, writes a Markdown that is missing, and brings back a copy whose editor has closed it | Built: the pass exists; it is off until that setting is given a value |
+| REQ-P20 | A document waiting for an answer is open to the people it waits on | The approvers of the stage and the owner may write in it while `DMS_SUBMITTED_EDITABLE` allows it - a remark is answered in the document itself. One rule, used by the approvals row, the file list and the checkout alike | Checked |
+| REQ-P21 | A command that cannot be used says why, where it would have been | The greyed line stays in place and carries its reason - released by the DMS, the state of its record, no Modify in AD, somebody has it out, a folder the DMS keeps - in the row and in the right-click menu | Checked |
+| REQ-P22 | One answer decides one document | A decision redraws the table, so a second click landed on the next document: clicks are ignored while a decision is on its way, and the question names the document it is about | Checked |
+| REQ-P23 | Released means read only on the file server, always | Every listing puts the read-only flag back on a file in `Current_ReadOnly` or `Obsolete_ReadOnly` that arrived without it - copied by hand, restored from a backup - so View cannot be saved over | Checked |
+| REQ-P24 | The copies the DMS makes for reading cannot be written in | The `Views` library stops inheriting the site's permissions and everyone who could write there is left with Read; the copy itself is a PDF, and it is removed minutes later | Built |
+| REQ-P25 | A reader is told when a save would go nowhere | Opening a writable file read-only in Word or Excel says so once, on the page; where it is already obvious - a released file, a PDF from the bridge - it says nothing | Checked |
+| REQ-P26 | The KPI Builder publishes without a browser | `POST /api/v1/kpi/publish` with the department's name and the two files: the page lands writable in `KPIs\<KPI>`, the data is released into its `Current_ReadOnly`, and the folders are made on the first publish | Built |
+| REQ-P27 | An application needs three questions, not thirty | What is released (`/api/v1/approved-documents`, the RAG's list), the departments and the customers - each answered as the key's AD account, with publishing the only thing a key may write | Built |
+| REQ-P28 | Every endpoint is described, and the description cannot drift | Swagger UI at `/dms/api-docs`, the document at `/api/openapi.json`, the reference in `docs/14-API-Reference.md` - all generated from the routes, with a test that fails when an endpoint is missing or undescribed | Checked |
+| REQ-P29 | The structure this company really has is the structure the DMS knows | The departments and their folders are in the blueprint, in both languages, each with its KPIs folder; a department added later is learned from the file server (`scripts\Update-DmsBlueprint.ps1`) without touching the code | Checked |
+| REQ-P30 | Going live is a rename, not a rebuild | The SharePoint sites lose their `-TEST`, the `.env` follows, the IIS site and pool are renamed, and `Reset-DmsPilotData.ps1` clears what the pilot was played with - the lists emptied, the file server back to the blueprint | Checked |
+| REQ-P31 | A super user may answer for somebody, and only for the people named | "Acting as" is limited to the accounts `DMS_DEV_USERS` names - nobody when it names nobody - and `DMS_ACTING_AS=0` takes it away; the real account is in every audit line | Checked |
+| REQ-P32 | Whether this installation is still a pilot is one command | `Test-DmsProductionReady.ps1` reads the `.env` the way the DMS does, asks the DMS, and looks at the file server: the sign-in, the names, the upkeep pass, the certificate, the canaries, what is still checked out | Checked |
+| REQ-P33 | The page can always be brought back to a known state | The logo fetches the page again under a fresh address - the browser's copy is never what is shown after an install - and lands at the top of the repository, in the tree and the list at once | Checked |
+| REQ-P34 | AI Insights asks one thing | The document on the screen when there is one, and otherwise everything the company has released. The person is not asked to choose which knowledge base their question belongs to | Checked |
+| REQ-P35 | No script carries one installation's names | The address comes from `DMS_PAGE_URL`, the IIS site is the one whose folder holds the scripts, the application is the folder they sit in - so a rename needs no editing in `scripts\` | Checked |
+
+### Asked for, and not built yet
+
+| | What it would be | Why it is not done |
+| --- | --- | --- |
+| A package builder | An install set - `webapi\`, the scripts that run a DMS, `assets\`, the documents - instead of a copy of the working tree | Until it exists, `git pull` on the server installs the playground and the testing switches along with the product. The production `.env` keeps them off, but they should not be installed at all |
+| An operations guide | Restart, the logs, the certificate's expiry, what the upkeep pass does, what to do when SharePoint refuses | The knowledge is in this project's history and in the scripts' own help, which is not where somebody looks at two in the morning |
+| The production address | `dms.rh.tech` with its certificate and an IIS binding | Waiting on DNS and a certificate; the command that finishes it is one line (`Rename-DmsToProduction.ps1 -NewHost dms.rh.tech -Write`) |
 
 ### Known limits
 
