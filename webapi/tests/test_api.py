@@ -4340,3 +4340,46 @@ def test_swagger_describes_every_endpoint_and_how_each_is_called(tmp_path):
     if os.path.isfile(here):          # the copy in docs is the same document
         assert json.load(open(here, encoding="utf-8")) == json.loads(apidocs.openapi_json(app)), \
             "docs\\dms-openapi.json is behind: run scripts\\New-DmsApiDocs.ps1"
+
+
+def test_back_to_the_blueprint_leaves_the_shape_and_nothing_else(tmp_path):
+    """What the pilot was played with - documents, drafts, the folder a KPI build made, something somebody
+    dropped to see what would happen - is not what production starts from. The shape stays: every folder the
+    blueprint defines, the KPIs folders among them, each customer with its own tree."""
+    from dms_api import reset
+    root = tmp_path / "Root"
+    for d in (("01_General", "Commercial", "Pricing", "Current_ReadOnly"),
+              ("01_General", "Commercial", "KPIs", "Orders", "Current_ReadOnly"),
+              ("01_General", "Commercial", "whatever"),
+              ("02_Customers", "Customer_Skeleton", "Commercial"),
+              ("02_Customers", "Elbit", "Commercial"),
+              ("04_Workflow_System", "Recycle")):
+        (root.joinpath(*d)).mkdir(parents=True, exist_ok=True)
+    (root / "01_General" / "Commercial" / "Pricing" / "Current_ReadOnly" / "a.xlsx").write_text("x")
+    (root / "01_General" / "Commercial" / "KPIs" / "Orders" / "Orders.html").write_text("x")
+    (root / "04_Workflow_System" / "CheckedOut.json").write_text("{}")
+    (root / "04_Workflow_System" / "Recycle" / "old.xlsx").write_text("x")
+
+    what = reset.plan(str(root))
+    gone = {os.path.relpath(p, root).replace("\\", "/") for p in what["folders"]}
+    assert gone == {"01_General/Commercial/whatever", "01_General/Commercial/KPIs/Orders",
+                    "01_General/Commercial/Pricing/Current_ReadOnly"}
+    # a file inside a folder that is going is not named twice: the folder takes it with it
+    assert {os.path.basename(f) for f in what["files"]} == {"CheckedOut.json", "old.xlsx"}
+    assert len(what["files"]) == len(set(what["files"]))
+    assert not (root / "01_General" / "Finance").is_dir()                 # the blueprint is not all there yet
+    assert any(p.endswith(os.path.join("01_General", "Finance")) for p in what["missing"])
+
+    reset.apply(what)
+    folders = {os.path.relpath(os.path.join(p, d), root).replace("\\", "/")
+               for p, ds, _f in os.walk(root) for d in ds}
+    assert "01_General/Commercial/KPIs" in folders                        # KPIs is blueprint, it stays
+    assert "02_Customers/Elbit/KPIs" in folders                           # and every customer gets its own
+    assert "04_Workflow_System/Recycle" in folders                        # the system folders keep their shape
+    assert "01_General/Commercial/whatever" not in folders
+    assert [f for _p, _d, fs in os.walk(root) for f in fs] == []          # not one file left
+
+    # the customers themselves are kept unless they are asked for, and the skeleton always is
+    second = reset.plan(str(root), customers=True)
+    named = {os.path.basename(p) for p in second["folders"]}
+    assert "Elbit" in named and "Customer_Skeleton" not in named

@@ -64,12 +64,21 @@ way the DMS does, asks the DMS, and says which line still carries a pilot name.
 - [ ] The two words in the DMS page's title bar, if the pilot is named there.
 - [ ] `docs/08-Pilot-Process.md`: a first line saying the pilot ran from <date> to <date> and that it is
       history, not how the system works.
-- [ ] The register: the pilot's test documents are still in it. Take out the ones that are tests - on the
-      page, the owner's own command moves a released file to `Obsolete_ReadOnly` with its Markdown.
-      `.\scripts\Repair-DmsRegister.ps1` lists the rows whose file is no longer on the server.
-- [ ] The file server: `DMS_ACCESS_CANARY_*`, the test drafts, the pilot's
-      `04_Workflow_System\Recycle\*`. `CheckedOut.json` must be empty - bring anything still out back
-      first (Done editing on the page). The readiness check covers all three.
+- [ ] **Everything that was played with, in one command.** `.\scripts\Reset-DmsPilotData.ps1` says what it
+      would clear and changes nothing; `-Write` does it, after typing RESET:
+
+      | | |
+      | --- | --- |
+      | SharePoint, the control site | Document Register, Control Audit, Approval Decisions, Delegations, DMS Notifications - emptied, not deleted. The **Approver Matrix is left alone**: those are the rules, not the pilot's data |
+      | SharePoint, both sites | the `Approvals` and `Views` libraries, and the Exchange site's libraries - the copies and what was shared with customers |
+      | The file server | every file, every workflow folder, the folders somebody made (a KPI build's folder included), the canaries, the recycle folder, `CheckedOut.json` |
+
+      What is left is the blueprint: every folder it defines, the KPIs folders among them, each customer
+      with its own tree, and the system folders with their shape. `-Customers` removes the customer folders
+      too (the skeleton always stays). Back up `E:\Shares` and export the lists first - this cannot be
+      undone.
+- [ ] Anything still out for editing in SharePoint comes back **before** the reset (Done editing on the
+      page): a copy that comes back afterwards writes a file into a folder that was just cleared.
 - [ ] New keys for the applications if the pilot's were handed out to try things
       (`.\scripts\New-DmsApiKey.ps1`), and the old lines removed from `DMS_API_KEYS`.
 
