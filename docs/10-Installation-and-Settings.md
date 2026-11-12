@@ -233,6 +233,7 @@ the workflow and blueprint folders stay out of reach either way.
 | `Test-DmsProductionReady.ps1` | Every check that says whether this installation is still a pilot: the `.env`, the DMS, the file server, the certificate |
 | `Reset-DmsPilotData.ps1` | Clears what the pilot was played with - the SharePoint lists and libraries, and the file server back to the blueprint. Says what it would do; `-Write` does it |
 | `Rename-DmsToProduction.ps1` | The rename in one command: the `.env` lines, the IIS names, the restart and the readiness check. Says what it would do; `-Write` does it |
+| `Move-DmsFolder.ps1` | Renames the installation folder (`C:\DMS-Pilot` → `C:\DMS`) and repoints IIS, `web.config` and what else names it |
 | `Set-DmsKpiKeyAccess.ps1` | Lets `/api/kpi` answer a page the DMS serves into a sandbox (it has no sign-in to send; the key in its address is what authorizes it) |
 | `Compare-DmsTree.ps1` | What the DMS shows against what is on the disk |
 | `Restart-Dms.ps1` | Reload the service (`-ComputerName` from another machine) |
