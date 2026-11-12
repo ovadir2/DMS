@@ -348,13 +348,41 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     # ------------------------------------------------------------------ public
     def _version() -> str:
-        """The git commit this DMS runs (to check that a pull + restart took effect)."""
+        """The git commit this DMS runs (to check that a pull + restart took effect). Read from .git itself
+        when git is not on the path - the account an application pool runs under usually has no git, and a
+        build that says "unknown" is a build nobody can check."""
         import subprocess
+        here = os.path.dirname(os.path.abspath(__file__))
         try:
-            return subprocess.run(["git", "-C", os.path.dirname(os.path.abspath(__file__)), "rev-parse", "--short", "HEAD"],
-                                  capture_output=True, text=True, timeout=5).stdout.strip() or "unknown"
+            out = subprocess.run(["git", "-C", here, "rev-parse", "--short", "HEAD"],
+                                 capture_output=True, text=True, timeout=5).stdout.strip()
+            if out:
+                return out
         except (OSError, subprocess.SubprocessError):
-            return "unknown"
+            pass
+        folder = here
+        for _ in range(4):                                   # webapi\dms_api -> the repository
+            folder = os.path.dirname(folder)
+            git = os.path.join(folder, ".git")
+            if not os.path.isdir(git):
+                continue
+            try:
+                head = open(os.path.join(git, "HEAD"), encoding="utf-8").read().strip()
+                if head.startswith("ref:"):
+                    ref = head.split(" ", 1)[1].strip()
+                    path = os.path.join(git, *ref.split("/"))
+                    if os.path.isfile(path):
+                        return open(path, encoding="utf-8").read().strip()[:7]
+                    packed = os.path.join(git, "packed-refs")  # a branch whose ref file was packed away
+                    if os.path.isfile(packed):
+                        for line in open(packed, encoding="utf-8"):
+                            if line.rstrip().endswith(" " + ref):
+                                return line.split(" ", 1)[0][:7]
+                elif head:
+                    return head[:7]                            # detached: the commit itself
+            except OSError:
+                break
+        return "unknown"
     version = _version()
     logger.info("DMS version %s", version)
 

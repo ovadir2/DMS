@@ -27,7 +27,10 @@ function Get-DmsEnvValue([string]$Name) {
     foreach ($line in Get-Content $file) {                 # the first occurrence wins, as the DMS reads it
         if ($line -match '^\s*#' -or $line -notmatch '=') { continue }
         $k, $v = $line -split '=', 2
-        if ($k.Trim() -eq $Name) { return $v.Trim() }
+        if ($k.Trim() -eq $Name) {
+            # a comment after the value (" # ..."), the way the DMS reads its own .env
+            return ($v -replace '\s+#.*$', '').Trim().Trim("'", '"')
+        }
     }
     return ''
 }
@@ -42,23 +45,21 @@ function Get-DmsDefault([ValidateSet('Url', 'Site', 'App')][string]$What) {
         }
         'Site' {
             if ($env:DMS_IIS_SITE) { return $env:DMS_IIS_SITE }
-            # Ask IIS rather than guess: the site whose folder is this installation is the one these
-            # scripts belong to, whatever it is called - DMS, DMS-Pilot or anything else. Only when IIS
-            # cannot be read (a PC that just maps the drive) is a name assumed.
-            $app = Split-Path -Parent $PSScriptRoot
-            if (Get-Module -ListAvailable -Name WebAdministration) {
-                try {
-                    Import-Module WebAdministration -ErrorAction Stop
-                    $sites = @(Get-ChildItem IIS:\Sites -ErrorAction Stop)
-                    $mine = $sites | Where-Object {
-                        $p = $_.physicalPath
-                        $p -and ((Join-Path $p '') -like (Join-Path $app '*') -or $app -like ((Join-Path $p '') + '*'))
-                    }
-                    if ($mine) { return $mine[0].Name }
-                    $named = $sites | Where-Object { $_.Name -in @('DMS', 'DMS-Pilot') }
-                    if ($named) { return $named[0].Name }
-                } catch { }
-            }
+            # Ask IIS rather than guess: the site whose folder holds these scripts is the one they belong
+            # to, whatever it is called - DMS, DMS-Pilot or anything else. A name is assumed only where
+            # IIS cannot be read at all (a PC that just maps the drive).
+            $app = (Split-Path -Parent $PSScriptRoot).ToLower().TrimEnd('\')
+            try {
+                Import-Module WebAdministration -ErrorAction Stop
+                $all = @(Get-Website)
+                $mine = @($all | Where-Object {
+                    $p = "$($_.physicalPath)".ToLower().TrimEnd('\')
+                    $p -and ($app -eq $p -or $app.StartsWith($p + '\') -or $p.StartsWith($app + '\'))
+                })
+                if ($mine.Count -and $mine[0].Name) { return "$($mine[0].Name)" }
+                $named = @($all | Where-Object { $_.Name -eq 'DMS' -or $_.Name -eq 'DMS-Pilot' })
+                if ($named.Count) { return "$($named[0].Name)" }
+            } catch { }
             return 'DMS'
         }
         'App' {

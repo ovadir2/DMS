@@ -44,7 +44,9 @@ if (Test-Path $EnvFile) {
     foreach ($line in Get-Content $EnvFile) {
         if ($line -match '^\s*#' -or $line -notmatch '=') { continue }
         $k, $v = $line -split '=', 2
-        $k = $k.Trim(); if (-not $cfg.ContainsKey($k)) { $cfg[$k] = $v.Trim() }
+        $k = $k.Trim()
+        $v = ($v -replace '\s+#.*$', '').Trim().Trim("'", '"')    # a comment after the value, as the DMS reads it
+        if (-not $cfg.ContainsKey($k)) { $cfg[$k] = $v }
     }
 } else { Say $false ".env not found at $EnvFile" "run this on the DMS server, or give -EnvFile" }
 function Get-Cfg([string]$k, [string]$d = '') { if ($cfg.ContainsKey($k) -and $cfg[$k]) { $cfg[$k] } else { $d } }

@@ -32,14 +32,20 @@ $work = {
     }
     Import-Module WebAdministration -ErrorAction Stop
 
+    if (-not $Site) {
+        $there = (Get-Website | ForEach-Object { $_.Name }) -join ', '
+        throw "Which IIS site? This machine has: $there. Give -Site <name>, or set DMS_IIS_SITE in webapi\.env."
+    }
     if (-not (Test-Path "IIS:\Sites\$Site")) {
         $there = (Get-ChildItem IIS:\Sites | ForEach-Object { $_.Name }) -join ', '
         throw "There is no IIS site called '$Site' on $env:COMPUTERNAME. The sites here are: $there. " +
               "Give -Site <name>, or set DMS_IIS_SITE in webapi\.env."
     }
     if (-not $Pool) {
-        $Pool = (Get-Item "IIS:\Sites\$Site" -ErrorAction Stop).applicationPool
+        $Pool = "$((Get-Website -Name $Site).applicationPool)"
+        if (-not $Pool) { $Pool = "$((Get-Item "IIS:\Sites\$Site" -ErrorAction Stop).applicationPool)" }
     }
+    if (-not $Pool) { throw "The site '$Site' names no application pool: give -Pool <name>." }
 
     $state = (Get-WebAppPoolState -Name $Pool).Value
     Write-Host "Application pool '$Pool' is $state"
