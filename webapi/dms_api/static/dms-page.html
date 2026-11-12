@@ -409,10 +409,14 @@ $('#lang').onclick = () => { q.set('lang', lang === 'HE' ? 'EN' : 'HE'); locatio
 // General and Customers - with the tree and the list showing the same thing, and read afresh rather than
 // from what the page remembers.
 $('#brand').onclick = () => {
-  state.view = 'customers'; state.folder = '';
-  treeForget();                                   // the tree is read again: a folder added on the server shows
-  TREE.open.clear();
-  render();
+  // Ctrl-F5, in one click: the page itself is fetched again - not the copy the browser kept - and it comes
+  // back at the top of the repository. A build pushed an hour ago is otherwise still the page on screen.
+  const u = new URL(location.href);
+  u.searchParams.set('lang', lang);
+  u.searchParams.delete('view');
+  u.searchParams.delete('path');
+  u.searchParams.set('r', Date.now().toString(36));     // a new address: nothing is served from the cache
+  location.replace(u.toString());
 };
 // Full screen: the page fills the screen, so a wide table of files is read without the browser's own bars.
 const fsOn = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
