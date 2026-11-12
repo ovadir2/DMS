@@ -16,8 +16,9 @@
     By default it only says what it would do. -Write does it.
 
 .PARAMETER Copy
-    When the folder cannot be renamed because something holds it, copy it to the new place instead
-    (robocopy /MIR) and leave the old one to be deleted later. The DMS runs from the new folder either way.
+    When the folder cannot be renamed because something holds it, move its contents into the new folder
+    instead and leave the old one behind, empty, to be deleted later. On the same drive that is instant -
+    what holds the folder does not hold the things inside it. Anything that will not move is copied.
 
 .EXAMPLE
     .\scripts\Move-DmsFolder.ps1
@@ -166,15 +167,23 @@ for ($i = 1; $i -le 5 -and -not $moved; $i++) {
         $why = $_.Exception.Message
         if ($i -lt 5) { Start-Sleep -Seconds 3 }
         elseif ($Copy) {
-            # Something holds the folder and will not let go. The contents can still be copied: the new
-            # folder becomes the installation, and the old one is deleted later, when whatever holds it has.
-            Write-Host "   the folder will not be renamed - copying instead (-Copy)" -ForegroundColor Yellow
-            # Not captured into a variable: a copy of tens of thousands of files (the .venv) with its
-            # output swallowed looks exactly like a hung command. The folder names scroll past instead.
-            robocopy $From $To /MIR /R:1 /W:1 /NFL /NP
-            if ($LASTEXITCODE -ge 8) { Start-TheSite; throw "robocopy failed with exit code $LASTEXITCODE." }
+            # Something holds the old folder and will not let go of it. What it holds is that folder - not
+            # the things inside it - so the contents move into a new one instead. On the same drive that is
+            # a metadata change: instant, whatever the .venv weighs. Only what will not move is copied.
+            Write-Host "   the folder will not be renamed - moving its contents instead" -ForegroundColor Yellow
+            New-Item -ItemType Directory -Path $To -Force | Out-Null
+            $stayed = @()
+            foreach ($item in (Get-ChildItem -LiteralPath $From -Force)) {
+                try { Move-Item -LiteralPath $item.FullName -Destination $To -Force -ErrorAction Stop }
+                catch { $stayed += $item }
+            }
+            foreach ($item in $stayed) {        # held open as well: copy that one and leave it behind
+                Write-Host "   $($item.Name) would not move - copying it" -ForegroundColor Yellow
+                if ($item.PSIsContainer) { robocopy $item.FullName (Join-Path $To $item.Name) /MIR /R:1 /W:1 /NFL /NP | Out-Null }
+                else { Copy-Item -LiteralPath $item.FullName -Destination $To -Force }
+            }
             $moved = $true
-            Write-Host "   copied $From -> $To (the old folder stays until you remove it)" -ForegroundColor Green
+            Write-Host "   moved into $To ($($stayed.Count) item(s) had to be copied; $From stays behind)" -ForegroundColor Green
         }
         else {
             foreach ($k in $kept) {       # put the shares back where they were: nothing was moved
