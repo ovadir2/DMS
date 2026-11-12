@@ -573,7 +573,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     @app.post("/api/blueprint/learn")
     def learn_blueprint(write: bool = Query(True, description="false: only say what it would learn"),
-                        depth: int = Query(2, ge=1, le=5), user: User = Depends(current_user)):
+                        depth: int = Query(6, ge=1, le=12), user: User = Depends(current_user)):
         """Super users: learn the structure this company really has.
 
         The blueprint the DMS ships with is a starting shape. The departments somebody really made under

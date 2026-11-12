@@ -4,7 +4,7 @@ Every endpoint of the DMS, written from the API itself (`python -m dms_api.apido
 
 **Swagger**: the same thing to try and to generate a client from - `https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository as `dms-openapi.json`, for a client generated without reaching the server.
 
-Written from DMS 240bbb1.
+Written from DMS 59d89a3.
 
 ## How a caller is known
 

@@ -128,6 +128,37 @@ HIDDEN_AT_ROOT = ("03_Operations_Staging", "04_Workflow_System", "05_Exchange_Qu
 # row, with its own KPIs folder. scripts\Update-DmsBlueprint.ps1 (py -m dms_api.learn) writes the file.
 LEARNED = os.path.join("04_Workflow_System", "Blueprint.json")
 
+# The Hebrew of a folder learned from the file server. A company names its folders in English and the page
+# is read in both languages, so a word the DMS knows is translated rather than left in English. What is not
+# here keeps its own name, and the Hebrew written into Blueprint.json is never overwritten: correct it once
+# in that file (or here, for everybody) and learning again keeps it.
+HEBREW = {
+    "operations": "תפעול", "production": "ייצור", "production engineering": "הנדסת ייצור",
+    "manufacturing": "ייצור", "quality": "איכות", "quality assurance": "אבטחת איכות",
+    "quality control": "בקרת איכות", "develop": "פיתוח", "development": "פיתוח", "r&d": "מחקר ופיתוח",
+    "management": "הנהלה", "engineering": "הנדסה", "mechanics": "מכניקה", "electronics": "אלקטרוניקה",
+    "software": "תוכנה", "hardware": "חומרה", "testing": "בדיקות", "test": "בדיקות", "lab": "מעבדה",
+    "maintenance": "תחזוקה", "logistics": "לוגיסטיקה", "purchasing": "רכש", "procurement": "רכש",
+    "warehouse": "מחסן", "shipping": "משלוחים", "planning": "תכנון", "planners": "תכנון",
+    "projects": "פרויקטים", "project management": "ניהול פרויקטים", "products": "מוצרים",
+    "customers": "לקוחות", "suppliers": "ספקים", "contracts": "חוזים", "quotations": "הצעות מחיר",
+    "quotes": "הצעות מחיר", "rfq": "בקשות להצעת מחיר", "orders": "הזמנות", "pricing": "תמחור",
+    "invoices": "חשבוניות", "finance": "כספים", "accounting": "הנהלת חשבונות", "budget": "תקציב",
+    "hr": "משאבי אנוש", "training": "הדרכה", "safety": "בטיחות", "legal": "משפטי",
+    "procedures": "נהלים", "instructions": "הוראות עבודה", "forms": "טפסים", "templates": "תבניות",
+    "reports": "דוחות", "audits": "מבדקים", "certifications": "הסמכות", "standards": "תקנים",
+    "drawings": "שרטוטים", "specifications": "מפרטים", "datasheets": "דפי נתונים", "manuals": "מדריכים",
+    "presentations": "מצגות", "meetings": "ישיבות", "archive": "ארכיון", "shared": "משותף",
+    "general": "כללי", "marketing": "שיווק", "sales": "מכירות", "support": "תמיכה", "service": "שירות",
+    "it": "מערכות מידע", "security": "אבטחה", "kpis": "מדדים", "dashboards": "לוחות מחוונים",
+}
+
+
+def hebrew_of(name: str) -> str:
+    """The Hebrew for a folder name, or the name itself. Underscores and case do not matter."""
+    plain = name.replace("_", " ").replace("-", " ").strip()
+    return HEBREW.get(plain.lower(), "")
+
 
 def learn(root: str) -> int:
     """Merge the folders this company really has into the blueprint. Returns how many were added."""
@@ -145,7 +176,8 @@ def learn(root: str) -> int:
             node = tree.get(name) or next((v for k, v in tree.items() if k.lower() == name.lower()), None)
             if node is None:
                 label = kids.get("en") or name.replace("_", " ")
-                tree[name] = (label, kids.get("he") or label, N({}), kids.get("hintEn", ""), kids.get("hintHe", ""))
+                tree[name] = (label, kids.get("he") or hebrew_of(name) or label, N({}),
+                              kids.get("hintEn", ""), kids.get("hintHe", ""))
                 node = tree[name]
                 n += 1
             n += put(node[2], parts + [name], kids.get("folders") or {})

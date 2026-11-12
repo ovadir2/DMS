@@ -25,7 +25,7 @@
 param(
     [string]$Root = '',
     [string]$App = '',
-    [int]$Depth = 2,
+    [int]$Depth = 6,
     [switch]$Write
 )
 $ErrorActionPreference = 'Stop'

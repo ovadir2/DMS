@@ -1171,8 +1171,8 @@
       "name": "depth",
       "required": false,
       "schema": {
-       "default": 2,
-       "maximum": 5,
+       "default": 6,
+       "maximum": 12,
        "minimum": 1,
        "title": "Depth",
        "type": "integer"

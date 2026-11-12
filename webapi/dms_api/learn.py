@@ -7,7 +7,7 @@ server and writes what it finds to `04_Workflow_System\\Blueprint.json`, which t
 
     py -m dms_api.learn                 # says what it would add
     py -m dms_api.learn --write         # writes it
-    py -m dms_api.learn --write --depth 3
+    py -m dms_api.learn --write --depth 3     # fewer levels
 
 What it never learns: the workflow folders, a KPI's own folder, the customers themselves (any folder under
 the customers folder is a customer already), and anything hidden or starting with a dot.
@@ -23,7 +23,9 @@ from .config import WORKFLOW_FOLDERS, Settings
 SKIP = {*WORKFLOW_FOLDERS, "Recycle"}
 
 
-def _tree(folder: str, depth: int) -> dict:
+def _tree(folder: str, depth: int, known: dict | None = None) -> dict:
+    """Every folder under here, to `depth` levels. A Hebrew name already written for a folder is kept as
+    it is: somebody corrected it, and learning again must not undo that."""
     out: dict = {}
     if depth <= 0:
         return out
@@ -34,18 +36,29 @@ def _tree(folder: str, depth: int) -> dict:
     for e in entries:
         if not e.is_dir() or e.name.startswith(".") or e.name in SKIP:
             continue
-        out[e.name] = {"en": e.name.replace("_", " "), "folders": _tree(e.path, depth - 1)}
+        was = (known or {}).get(e.name) or {}
+        out[e.name] = {"en": was.get("en") or e.name.replace("_", " "),
+                       "he": was.get("he") or blueprint.hebrew_of(e.name) or "",
+                       "folders": _tree(e.path, depth - 1, was.get("folders"))}
     return out
 
 
-def read(root: str, *, depth: int = 2, skeleton: str = "") -> dict:
-    """What the file server has: the departments under General with their folders, and the shape shared by
-    the customers (taken from the skeleton, which is what a new customer is cut from)."""
-    general = _tree(os.path.join(root, "01_General"), depth)
+def read(root: str, *, depth: int = 6, skeleton: str = "") -> dict:
+    """What the file server has: the departments under General with their folders, all the way down, and
+    the shape shared by the customers (taken from the skeleton, which is what a new customer is cut from).
+
+    What was learned before is read first, so a Hebrew name somebody corrected in Blueprint.json survives."""
+    was = {}
+    try:
+        with open(os.path.join(root, blueprint.LEARNED), encoding="utf-8") as f:
+            was = json.load(f)
+    except (OSError, ValueError):
+        was = {}
+    general = _tree(os.path.join(root, "01_General"), depth, was.get("general"))
     customer = {}
     shape = os.path.join(root, "02_Customers", skeleton or "Customer_Skeleton")
     if os.path.isdir(shape):
-        customer = _tree(shape, depth)
+        customer = _tree(shape, depth, was.get("customer"))
     return {"general": general, "customer": customer}
 
 
@@ -76,7 +89,7 @@ def write(root: str, found: dict) -> str:
 def main(argv: list[str]) -> int:   # pragma: no cover - the command
     s = Settings.from_env()
     root = next((a for a in argv[1:] if not a.startswith("--")), "") or s.repository_root
-    depth = 2
+    depth = 6
     if "--depth" in argv:
         try:
             depth = int(argv[argv.index("--depth") + 1])
