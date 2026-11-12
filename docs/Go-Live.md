@@ -69,7 +69,7 @@ way the DMS does, asks the DMS, and says which line still carries a pilot name.
 
       | | |
       | --- | --- |
-      | SharePoint, the control site | Document Register, Control Audit, Approval Decisions, Delegations, DMS Notifications - emptied, not deleted. The **Approver Matrix is left alone**: those are the rules, not the pilot's data |
+      | SharePoint, the control site | Document Register, Control Audit, Approval Decisions, Delegations, DMS Notifications - emptied, not deleted. The **Approver Matrix is left alone**: those are the rules, not the pilot's data. The DMS's own certificate does it, so there is nothing to install and no site administrator is needed |
       | SharePoint, both sites | the `Approvals` and `Views` libraries, and the Exchange site's libraries - the copies and what was shared with customers |
       | The file server | every file, every workflow folder, the folders somebody made (a KPI build's folder included), the canaries, the recycle folder, `CheckedOut.json` |
 
@@ -77,6 +77,8 @@ way the DMS does, asks the DMS, and says which line still carries a pilot name.
       with its own tree, and the system folders with their shape. `-Customers` removes the customer folders
       too (the skeleton always stays). Back up `E:\Shares` and export the lists first - this cannot be
       undone.
+- [ ] `.\scripts\Restart-Dms.ps1` after the reset: the DMS keeps the register for a minute, so the page
+      still shows the old documents until it does.
 - [ ] Anything still out for editing in SharePoint comes back **before** the reset (Done editing on the
       page): a copy that comes back afterwards writes a file into a folder that was just cleared.
 - [ ] New keys for the applications if the pilot's were handed out to try things

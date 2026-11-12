@@ -4383,3 +4383,46 @@ def test_back_to_the_blueprint_leaves_the_shape_and_nothing_else(tmp_path):
     second = reset.plan(str(root), customers=True)
     named = {os.path.basename(p) for p in second["folders"]}
     assert "Elbit" in named and "Customer_Skeleton" not in named
+
+
+def test_the_pilot_is_cleared_out_of_sharepoint_with_the_dms_own_account(tmp_path):
+    """No second sign-in and nothing to install: the DMS already talks to SharePoint with its certificate,
+    so emptying the lists it filled goes the same way. The lists are emptied, never deleted, and the
+    Approver Matrix is left alone - those are the company's rules, not the pilot's data."""
+    from dms_api import spreset
+    from dms_api.sharepoint import SharePoint
+    s = Settings(site_url="https://rhisrael.sharepoint.com/sites/DocumentControl-TEST",
+                 ex_site_url="https://rhisrael.sharepoint.com/sites/LargeFileExchange-TEST")
+    sp = SharePoint(s, None)
+    seen = []
+
+    def call(method, url, json=None, headers=None, data=None, raw=False):
+        seen.append((method, url, (headers or {}).get("X-HTTP-Method")))
+        if method == "GET" and "/items?" in url:
+            return {"value": [{"Id": 1}, {"Id": 2}]}
+        if method == "GET" and url.endswith("/Folders?$select=Name,ServerRelativeUrl"):
+            return {"value": [{"Name": "Forms", "ServerRelativeUrl": "/x/Forms"},
+                              {"Name": "view-1", "ServerRelativeUrl": "/x/view-1"}]}
+        if method == "GET" and url.endswith("/Files?$select=Name,ServerRelativeUrl"):
+            return {"value": [{"Name": "a.pdf", "ServerRelativeUrl": "/x/a.pdf"}]}
+        if method == "GET" and "lists?$select=Title" in url:
+            return {"value": [{"Title": "Shared Documents", "BaseTemplate": 101, "Hidden": False},
+                              {"Title": "Site Assets", "BaseTemplate": 101, "Hidden": False}]}
+        return {}
+
+    sp._call = call
+    rows = spreset.run(sp, write=False, libraries=("Approvals", "Views"))
+    assert all(r["removed"] == 0 for r in rows), "a dry run removes nothing"
+    assert {r.get("list") for r in rows if r.get("list")} == {
+        "Lists/DocumentRegister", "Lists/ControlAudit", "Lists/ApprovalDecisions",
+        "Lists/Delegations", "Lists/DmsNotifications"}
+    assert not any("ApproverMatrix" in (r.get("list") or "") for r in rows)    # the rules stay
+
+    seen.clear()
+    rows = spreset.run(sp, write=True, libraries=("Approvals", "Views"))
+    deletes = [u for m, u, x in seen if x == "DELETE"]
+    # five lists of two items, then Approvals, Views and the Exchange library: a folder and a file each
+    assert len(deletes) == 5 * 2 + 3 * 2
+    assert not any("/x/Forms" in u for u in deletes)  # the library's own Forms folder is not content
+    assert any("Shared%20Documents" in u or "Shared Documents" in u for _m, u, _x in seen)
+    assert all(r["removed"] == r["found"] for r in rows)

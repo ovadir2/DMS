@@ -21,15 +21,12 @@
 .PARAMETER Customers
     Also remove the customer folders, keeping the skeleton. Without it a customer is kept and cleared.
 
-.PARAMETER ClientId
-    The Entra app registration PnP signs in with (the same one Provision-DMS.ps1 uses).
-
 .EXAMPLE
     .\scripts\Reset-DmsPilotData.ps1
 .EXAMPLE
     .\scripts\Reset-DmsPilotData.ps1 -Scope FileServer -Write
 .EXAMPLE
-    .\scripts\Reset-DmsPilotData.ps1 -ClientId <guid> -Write
+    .\scripts\Reset-DmsPilotData.ps1 -Write
 #>
 [CmdletBinding()]
 param(
@@ -38,7 +35,6 @@ param(
     [string]$ExSiteUrl = '',
     [string]$Root = '',
     [string]$App = '',
-    [string]$ClientId = '',
     [switch]$Customers,
     [switch]$Write,
     [switch]$Force
@@ -49,7 +45,6 @@ if (-not $App) { $App = Get-DmsDefault App }
 if (-not $SiteUrl) { $SiteUrl = Get-DmsEnvValue 'DMS_SITE_URL' }
 if (-not $ExSiteUrl) { $ExSiteUrl = Get-DmsEnvValue 'DMS_EX_SITE_URL' }
 if (-not $Root) { $Root = Get-DmsEnvValue 'DMS_REPOSITORY_ROOT' }
-if (-not $ClientId) { $ClientId = Get-DmsEnvValue 'DMS_CLIENT_ID' }
 
 if ($Write -and -not $Force) {
     Write-Host "This removes the pilot's data from:" -ForegroundColor Yellow
@@ -78,41 +73,23 @@ if ($Scope -ne 'SharePoint') {
 # ---------------------------------------------------------------- SharePoint
 if ($Scope -ne 'FileServer') {
     Write-Host "`n== SharePoint" -ForegroundColor Cyan
-    if (-not (Get-Module -ListAvailable -Name PnP.PowerShell)) {
-        throw 'PnP.PowerShell is not installed: Install-Module PnP.PowerShell -Scope CurrentUser'
-    }
-    Import-Module PnP.PowerShell -ErrorAction Stop
-
-    # The lists that hold what the pilot did. The Approver Matrix is not here: those are the rules.
-    $lists = @('DocumentRegister', 'ControlAudit', 'ApprovalDecisions', 'Delegations', 'DmsNotifications')
-    $libraries = @('Approvals', 'Views')          # the copies the DMS makes for approving and for reading
-
-    function Clear-DmsList([string]$Title) {
-        $list = Get-PnPList -Identity $Title -ErrorAction SilentlyContinue
-        if (-not $list) { Write-Host "  (no list $Title)" -ForegroundColor DarkGray; return }
-        $items = Get-PnPListItem -List $Title -PageSize 500 -Fields Id
-        Write-Host ("  {0,-20} {1} item(s)" -f $Title, $items.Count)
-        if (-not $Write) { return }
-        foreach ($item in $items) { Remove-PnPListItem -List $Title -Identity $item.Id -Force | Out-Null }
-        Write-Host ("  {0,-20} emptied" -f $Title) -ForegroundColor Green
-    }
-
-    foreach ($url in @($SiteUrl, $ExSiteUrl | Where-Object { $_ })) {
-        Write-Host "`n-- $url"
-        if ($ClientId) { Connect-PnPOnline -Url $url -Interactive -ClientId $ClientId }
-        else { Connect-PnPOnline -Url $url -Interactive }
-        if ($url -eq $SiteUrl) { foreach ($l in $lists) { Clear-DmsList $l } }
-        foreach ($lib in $libraries) { Clear-DmsList $lib }
-        # The Exchange site holds what was shared with customers: its document libraries, emptied.
-        if ($url -eq $ExSiteUrl) {
-            foreach ($lib in (Get-PnPList | Where-Object { $_.BaseTemplate -eq 101 -and -not $_.Hidden })) {
-                Clear-DmsList $lib.Title
-            }
-        }
-        Disconnect-PnPOnline
-    }
+    # The DMS's own account does it: it already signs in to SharePoint with its certificate, so there is
+    # nothing to install here and nobody has to be an administrator of the sites to run this.
+    $py = Join-Path $App '.venv\Scripts\python.exe'
+    if (-not (Test-Path -LiteralPath $py)) { $py = 'py' }
+    Push-Location $App
+    try {
+        $argv = @('-m', 'dms_api.spreset')
+        if ($Write) { $argv += '--write' }
+        $env:PYTHONPATH = '.'
+        & $py @argv
+    } finally { Pop-Location }
 }
 
 Write-Host ""
-if ($Write) { Write-Host 'Done. Run .\scripts\Test-DmsProductionReady.ps1 to see what is left.' -ForegroundColor Green }
+if ($Write) {
+    Write-Host 'Done. The DMS keeps the register for a minute, so restart it before looking at the page:'
+    Write-Host '  .\scripts\Restart-Dms.ps1'
+    Write-Host '  .\scripts\Test-DmsProductionReady.ps1' -ForegroundColor Green
+}
 else { Write-Host 'Nothing was changed. Add -Write to do it.' -ForegroundColor Yellow }
