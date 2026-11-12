@@ -217,6 +217,10 @@ through its paces yet. What was asked for and is not there yet has a table of it
 | REQ-P74 | A share does not last for ever | Files on the Exchange site are removed a set number of days after their last share (`DMS_EX_DAYS`), and the page shows a share that has expired as expired - what was sent for one quotation is not still downloadable a year later | Built |
 | REQ-P75 | HR shares with a person, not with a customer | A file under `01_General\HR` is shared with a candidate the same way - their own folder on the Exchange site, a guest invitation, the same log and audit - without appearing in the customers list or making a customer folder | Checked |
 | REQ-P76 | The share log is the DMS's, not somebody's spreadsheet | The `Shared` folder and its log are kept by the DMS: read only on the page, no workflow, no rename, no delete - they are the record of what left the company | Checked |
+| REQ-P77 | The share log says everything a question about a share needs | One row per file shared and per share that expired: the date in UTC, the action, who shared it, who it went to (name and address), the Document ID, the title, the revision, the file, the link on the Exchange site, and the date it is available until | Checked |
+| REQ-P78 | Each customer's log lives with that customer's work | `02_Customers\<customer>\Shared\DMS-Shared-Log.csv`, and HR's in `01_General\HR\Shared` - whoever may see the customer may read what was sent to them, without being given the whole company's sharing history | Checked |
+| REQ-P79 | The log is appended to by the DMS and by nobody else | Written with the DMS's own account, read-only attribute set, and on Windows its own permissions: Read for users, so it cannot be renamed, deleted or edited even by the person who made the share. Appended only - a row is never changed | Checked |
+| REQ-P80 | The log opens in Excel with Hebrew intact | CSV in UTF-8 with a byte-order mark, so a name in Hebrew is a name in Hebrew when somebody double-clicks it | Checked |
 
 ### Asked for, and not built yet
 
