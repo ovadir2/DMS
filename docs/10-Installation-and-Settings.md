@@ -228,6 +228,7 @@ the workflow and blueprint folders stay out of reach either way.
 | `New-DmsApiKey.ps1` | A key for an application that calls the DMS (`/api/v1/...`), with a name and what it may read (`docs/13-Machine-API.md`) |
 | `New-DmsApiDocs.ps1` | Writes `docs/14-API-Reference.md` from the API itself - run it after adding or changing an endpoint |
 | `Open-DmsSwagger.ps1` | Checks that the DMS answers its OpenAPI document and opens Swagger UI (`-Redoc`, `-NoOpen`) |
+| `Test-DmsProductionReady.ps1` | Every check that says whether this installation is still a pilot: the `.env`, the DMS, the file server, the certificate |
 | `Set-DmsKpiKeyAccess.ps1` | Lets `/api/kpi` answer a page the DMS serves into a sandbox (it has no sign-in to send; the key in its address is what authorizes it) |
 | `Compare-DmsTree.ps1` | What the DMS shows against what is on the disk |
 | `Restart-Dms.ps1` | Reload the service (`-ComputerName` from another machine) |

@@ -7,13 +7,103 @@ file server, and a package that no longer carries the pilot with it.
 This is the checklist. Nothing here is done automatically - each step says what to run and how to see that it
 worked. Do them in order: the names move first, then the data, then the package, then the pilot goes.
 
-The decision, taken: **production replaces the pilot.** They are not run side by side. Production is built
-beside the pilot on the same server, the switch is made in one morning, and the pilot is retired the same
-day once production has passed its checks (section 6).
+The decision, taken: **the pilot becomes production.** Not a second installation beside it, not a second
+set of SharePoint sites - the one that runs is the one that stays, and what makes it a pilot is taken out
+of it. Section A is that path, and it is the one to follow. Sections 0-6 below are the full rebuild, kept
+for the day a clean environment is wanted instead.
+
+What that costs, said once so it is not a surprise:
+
+- The sites keep their URLs, `…/sites/DocumentControl-TEST` and `…/sites/LargeFileExchange-TEST`. A
+  SharePoint site's address cannot be changed afterwards; its **title** can, and that is what people see.
+  Renaming the address means a new site, which is the full rebuild.
+- The register keeps every row the pilot wrote. The test documents have to be taken out by hand - there is
+  no "clear the pilot" button, and there should not be.
+- The Control Audit keeps the pilot's lines. That is not a defect: it is the history of those documents.
 
 ---
 
-## 0. Before the day
+## A. Promoting the pilot in place - the chosen path
+
+One morning, in this order. Each step says how to see that it worked.
+
+**A1. Back up first.** A full copy of `E:\Shares`, and an export of the Document Register, the Control
+Audit and the Approval Decisions. Everything here is reversible only from these.
+
+**A2. Take the pilot out of the installation.** In `webapi\.env` (remember: the **first** occurrence of a
+key wins, so look for a leftover line above):
+
+| Out | Why |
+| --- | --- |
+| `DMS_AUTH_MODE=dev`, `DMS_DEV_USER` | dev mode is a DMS with no authentication at all |
+| `DMS_DEV_USERS` | "Acting as": a super user being somebody else |
+| `DMS_SHAREPOINT=memory` | the playground register |
+
+| In | |
+| --- | --- |
+| `DMS_AUTH_MODE=windows` | |
+| `DMS_FILE_SERVICE_SECONDS=60` | the upkeep pass runs by itself |
+| `DMS_REVIEW_LIBRARY=Approvals`, `DMS_VIEW_LIBRARY=Views` | the bridge: View makes a PDF, approvers edit a copy |
+
+Then `.\scripts\Restart-Dms.ps1` and `.\scripts\Test-DmsProductionReady.ps1` - it reads the `.env`, asks
+the DMS, and looks at the file server, and prints PASS or FAIL per line with what to run.
+
+**A3. Clear the pilot's data from the file server.** Delete every `DMS_ACCESS_CANARY_*`, the test drafts,
+and the pilot's `04_Workflow_System\Recycle\*`. `CheckedOut.json` must be empty - a document still out in
+SharePoint has not come back yet, so bring it back on the page first (Done editing). The readiness check
+covers all three.
+
+**A4. Clear the pilot's rows from the register.** The ones that are tests, not documents. For each: open it
+in the Document Register and delete the item, or - better - take the file out of `Current_ReadOnly` on the
+page (the owner's own command moves it to `Obsolete_ReadOnly` with its Markdown). Keep every row whose file
+is a real document. `.\scripts\Repair-DmsRegister.ps1` lists the rows whose file is not on the server any
+more, which is most of the pilot's.
+
+**A5. Make the repository the real one.** The pilot ran against part of `E:\Shares`; production is all of
+it. Point `DMS_REPOSITORY_ROOT` at the root that is wanted, then:
+
+```powershell
+.\scripts\Sync-DmsFileServer.ps1 -Write      # what is on the disk and not in the DMS
+.\scripts\New-DmsMarkdown.ps1 -Write         # the Markdown the AI reads, for everything released
+.\scripts\Compare-DmsTree.ps1                # the DMS and the disk agree
+```
+
+A file sitting in a `Current_ReadOnly` that nobody registered is **not** an approved document: list them
+first and decide one by one - register it, or move it out.
+
+**A6. The names people see.** The URLs stay; the titles and the address do not have to:
+
+- Rename the IIS site and pool `DMS-Pilot` → `DMS` (or leave them: nobody outside the server sees them).
+- Add the production binding `dms.rh.tech` to the same site with its certificate, and keep
+  `dms-pilot.rh.tech` answering as a redirect to it until the bookmarks have followed. Set
+  `DMS_PAGE_URL=https://dms.rh.tech/dms/dms-page` so notifications point at the new one.
+- In SharePoint, change the **titles** of the two sites and of the lists from "… TEST" to the real ones.
+  The URLs keep `-TEST` and nothing breaks: the DMS reads them from `.env`, and people see the titles.
+- `C:\DMS-Pilot` may stay as the folder. Renaming it means IIS, the application pool, the service and
+  `web.config` all follow - cost with no benefit.
+
+**A7. New keys for the applications.** A key is an identity, and the pilot's were handed out to try things:
+`.\scripts\New-DmsApiKey.ps1` one per caller (the RAG `documents`, the KPI Builder `kpi`), each with its
+own AD account; remove the old lines from `DMS_API_KEYS`, restart, tell each caller its new key.
+
+**A8. The last look, before anyone is told.** `.\scripts\Test-DmsProductionReady.ps1` with nothing left
+failing, then by hand: submit a document and approve it end to end, watch it land read-only in
+`Current_ReadOnly` with its Markdown beside it, View opens a PDF, share one with a customer, and
+`.\scripts\Open-DmsSwagger.ps1` answers on the production address.
+
+**A9. Say it is production.** The address, what changed for people (nothing in how they work), and that the
+pilot is over. `docs/08-Pilot-Process.md` gets a first line saying the pilot ran from <date> to <date>.
+
+What is **not** needed on this path: new SharePoint sites, a new certificate, a new `Sites.Selected` grant,
+a second IIS site, first loading. What is still worth doing, after the move rather than before: the package
+builder (so `git pull` stops installing the playground along with the product) and the operations document.
+
+---
+
+## 0. Before the day - the full rebuild (the other path)
+
+> Sections 0-6 describe building production as a separate environment. They are not the chosen path; they
+> are here for the day a clean environment is wanted, or if A4 shows the register is past cleaning.
 
 - [ ] Decide the production names and write them here once, so every step below reads from one place.
 
