@@ -23,6 +23,8 @@ worked. Do them in order: the names move first, then the data, then the package.
   | Exchange site | `LargeFileExchange-TEST` | `LargeFileExchange` |
   | Review library | `Approvals` | `Approvals` |
   | Reading library | `Views` | `Views` |
+  | API document | `dms-pilot.rh.tech/api/openapi.json` | `dms.rh.tech/api/openapi.json` |
+  | Swagger UI / ReDoc | `dms-pilot.rh.tech/dms/api-docs` | `dms.rh.tech/dms/api-docs` |
 
 - [ ] A full backup of `E:\Shares` and an export of the SharePoint lists (register, Control Audit, approval
       decisions). Everything below is reversible only from these.
@@ -44,6 +46,12 @@ worked. Do them in order: the names move first, then the data, then the package.
       of a key in `.env` wins - a leftover line above is the usual reason a setting "does not take".
 - [ ] IIS site `DMS` with the production certificate and Windows Authentication, and
       `.\scripts\Restart-Dms.ps1` to bring it up. `iisreset` is not the way: it leaves the site stopped.
+- [ ] `.\scripts\Open-DmsSwagger.ps1 -Url https://dms.rh.tech -NoOpen` - it prints the build, how many
+      endpoints answered and the ways in. It is the quickest proof that the API is up on the production
+      address, with the production build, before anybody is sent to it.
+- [ ] Anonymous authentication stays **off** on `/dms/api-docs` and `/api/openapi.json`: the document says
+      what every endpoint takes, and it is for people who have signed in. The one place anonymous is on is
+      `/api/kpi`, for the sandboxed pages (`scripts\Set-DmsKpiKeyAccess.ps1`), and that stays as it is.
 
 ## 2. The pilot's data stays behind
 
@@ -57,6 +65,10 @@ worked. Do them in order: the names move first, then the data, then the package.
       List them before first loading and decide for each: register it, or move it out.
 - [ ] Run `.\scripts\New-DmsMarkdown.ps1 -Write` after first loading, so every released document has its
       Markdown for the AI from day one.
+- [ ] New keys for the applications - the pilot's are not carried over (`scripts\New-DmsApiKey.ps1`, one per
+      caller, each with its own AD account: the RAG reads with `documents`, the KPI Builder publishes with
+      `kpi`). Retire the pilot keys the day the pilot stops answering, and tell each caller the production
+      address and its new key.
 
 ## 3. First loading
 
@@ -85,6 +97,19 @@ installed is the product and the pilot is history rather than part of the build.
 - [ ] **Every document checked for pilot wording**: `-TEST` site names, `dms-pilot.rh.tech`, `C:\DMS-Pilot`,
       "pilot" as a description of how the system works rather than of a stage that ended. `docs/07` and
       `docs/08` were written for the pilot and need saying so in their first line.
+- [ ] **The API document regenerated against production**: `.\scripts\New-DmsApiDocs.ps1` writes
+      `docs\14-API-Reference.md` and `docs\dms-openapi.json` from the API itself. Both carry the pilot's
+      address in their examples today; after the rename, regenerate them and read the result for
+      `dms-pilot`, `-TEST` and `C:\DMS-Pilot`. A test fails if either file is behind the code, so this
+      cannot be forgotten quietly.
+- [ ] **Decide who may read Swagger in production.** It is behind Windows authentication, so everyone who
+      can open the DMS can open it, and it describes every endpoint including what an application key may
+      do. If that is more than you want, put the production `/dms/api-docs` behind an AD group in IIS -
+      the document at `/api/openapi.json` is what the Builder and the RAG actually need, and it can stay
+      open to signed-in callers while the page is not.
+- [ ] **Swagger UI needs the internet** on the PC that opens it (its JavaScript comes from jsdelivr).
+      `/dms/api-redoc` reads the same document without it: say which one the people who will use it should
+      open, so "Swagger is broken" does not become a ticket on a server with no way out.
 - [ ] **One document that does not exist yet**: how the DMS is operated day to day - restart, the logs, the
       certificate's expiry, what the upkeep pass does, what to do when SharePoint refuses. Today that
       knowledge is in this session's history, which is not where it belongs.
@@ -96,6 +121,10 @@ installed is the product and the pilot is history rather than part of the build.
       read-only on the server, its Markdown appears beside it, View opens a PDF.
 - [ ] Watch the first share with a customer end to end, including the guest invitation reaching them.
 - [ ] `DMS_FILE_SERVICE_SECONDS` set (60), and the upkeep pass seen running in the log.
+- [ ] The applications answered from production, not from the pilot: the RAG's
+      `GET /api/v1/approved-documents` and the Builder's `POST /api/v1/kpi/publish`, each with its new key,
+      against `dms.rh.tech`. Try them from `/dms/api-docs` with the key in the Authorize box - that is what
+      the page is for.
 
 ## What the pilot taught, so it is not relearned
 
@@ -106,3 +135,5 @@ installed is the product and the pilot is history rather than part of the build.
 - View is a PDF copy the DMS makes. A link that says "view" does not make a document read-only - a standing
   permission on the library beats it, and Excel ignores it outright.
 - `Current_ReadOnly` is read-only on the file system itself, and nothing in it is deleted.
+- An application is not a super user: a key names an AD account, and the DMS answers that account exactly
+  what it may see. That is why there are three machine endpoints and not thirty.
