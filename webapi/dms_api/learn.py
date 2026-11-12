@@ -23,7 +23,7 @@ from .config import WORKFLOW_FOLDERS, Settings
 SKIP = {*WORKFLOW_FOLDERS, "Recycle"}
 
 
-def _tree(folder: str, depth: int, known: dict | None = None) -> dict:
+def _tree(folder: str, depth: int, known: dict | None = None, inside: tuple[str, ...] = ()) -> dict:
     """Every folder under here, to `depth` levels. A Hebrew name already written for a folder is kept as
     it is: somebody corrected it, and learning again must not undo that."""
     out: dict = {}
@@ -36,10 +36,14 @@ def _tree(folder: str, depth: int, known: dict | None = None) -> dict:
     for e in entries:
         if not e.is_dir() or e.name.startswith(".") or e.name in SKIP:
             continue
+        # A product is a customer's own name, like the customer itself: the blueprint already describes
+        # "any product" and the stages inside it, so the name is not learned and nothing under it either.
+        if inside[-len(blueprint.PRODUCTS):] == blueprint.PRODUCTS:
+            continue
         was = (known or {}).get(e.name) or {}
         out[e.name] = {"en": was.get("en") or e.name.replace("_", " "),
                        "he": was.get("he") or blueprint.hebrew_of(e.name) or "",
-                       "folders": _tree(e.path, depth - 1, was.get("folders"))}
+                       "folders": _tree(e.path, depth - 1, was.get("folders"), inside + (e.name,))}
     return out
 
 
