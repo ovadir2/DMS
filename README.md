@@ -197,6 +197,8 @@ through its paces yet. What was asked for and is not there yet has a table of it
 | REQ-P54 | A super user may answer when nobody else can, and it says so | A super user can decide any stage; the decision is recorded as made by them, marked "super user", with their own account in the Control Audit - an unblocking, not a disguise | Checked |
 | REQ-P55 | Taking back and passing on are the owner's and the approver's own commands | Withdraw belongs to the document's owner (or a super user); Delegate belongs to the approver who owes the answer (or a super user acting for them), is good for this cycle only, and cannot land back on the author | Checked |
 | REQ-P56 | What is waiting, and for whom, is on the screen | The Approvals page lists what waits for this person - stage, who has answered, who is still owed, how many days it has waited, and the remarks so far - and My workflows shows the owner the same from the other side | Checked |
+| REQ-P57 | A file released without workflow is taken out the same way as any other | It is a released document: Delete moves it (and its Markdown) to `Obsolete_ReadOnly`, read only, with the audit line - only its owner, and never an erase. What was published without a workflow is not withdrawn without a trace either | Checked |
+| REQ-P58 | Deleting is one file at a time, and says what it will do | The command takes the one file that is ticked, names it, and says where it is going - to `Obsolete_ReadOnly` for a released document, to the recycle folder for anything else. Nothing on the file server is ever erased by the page | Checked |
 
 ### Asked for, and not built yet
 
