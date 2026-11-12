@@ -15,16 +15,23 @@
 
     By default it only says what it would do. -Write does it.
 
+.PARAMETER Copy
+    When the folder cannot be renamed because something holds it, copy it to the new place instead
+    (robocopy /MIR) and leave the old one to be deleted later. The DMS runs from the new folder either way.
+
 .EXAMPLE
     .\scripts\Move-DmsFolder.ps1
 .EXAMPLE
     .\scripts\Move-DmsFolder.ps1 -To C:\DMS -Write
+.EXAMPLE
+    .\scripts\Move-DmsFolder.ps1 -To C:\DMS -Copy -Write
 #>
 [CmdletBinding()]
 param(
     [string]$From = '',
     [string]$To = 'C:\DMS',
     [string]$Site = '',
+    [switch]$Copy,
     [switch]$Write
 )
 $ErrorActionPreference = 'Stop'
@@ -126,6 +133,17 @@ foreach ($f in $open) {
     try { Close-SmbOpenFile -FileId $f.FileId -Force -ErrorAction Stop; Write-Host "   closed $($f.Path) ($($f.ClientUserName))" }
     catch { Write-Host "   could not close $($f.Path): $($_.Exception.Message)" -ForegroundColor Yellow }
 }
+# The DMS's own scheduled tasks run a python out of this folder: one that fires mid-move holds it open.
+# They are stopped and disabled here, and put back - with their paths followed - at the end.
+foreach ($t in $tasks) {
+    try {
+        Stop-ScheduledTask -TaskName $t.TaskName -ErrorAction SilentlyContinue
+        Disable-ScheduledTask -TaskName $t.TaskName -ErrorAction Stop | Out-Null
+        Write-Host "   scheduled task $($t.TaskName) stopped for the move"
+    } catch { Write-Host "   could not stop $($t.TaskName): $($_.Exception.Message)" -ForegroundColor Yellow }
+}
+Start-Sleep -Seconds 2
+
 # the shares, remembered as they are and taken down: a shared folder cannot be renamed
 $kept = @()
 foreach ($sh in $shares) {
@@ -146,7 +164,17 @@ for ($i = 1; $i -le 5 -and -not $moved; $i++) {
         Write-Host "   $From -> $To" -ForegroundColor Green
     } catch {
         $why = $_.Exception.Message
-        if ($i -lt 5) { Start-Sleep -Seconds 3 } else {
+        if ($i -lt 5) { Start-Sleep -Seconds 3 }
+        elseif ($Copy) {
+            # Something holds the folder and will not let go. The contents can still be copied: the new
+            # folder becomes the installation, and the old one is deleted later, when whatever holds it has.
+            Write-Host "   the folder will not be renamed - copying instead (-Copy)" -ForegroundColor Yellow
+            $log = robocopy $From $To /MIR /R:1 /W:1 /NFL /NDL /NJH /NJS /NP
+            if ($LASTEXITCODE -ge 8) { Start-TheSite; throw "robocopy failed ($LASTEXITCODE): $log" }
+            $moved = $true
+            Write-Host "   copied $From -> $To (the old folder stays until you remove it)" -ForegroundColor Green
+        }
+        else {
             foreach ($k in $kept) {       # put the shares back where they were: nothing was moved
                 New-SmbShare -Name $k.Name -Path $k.Path -Description $k.Description -ErrorAction SilentlyContinue | Out-Null
                 foreach ($a in $k.Full) { Grant-SmbShareAccess -Name $k.Name -AccountName $a -AccessRight Full -Force | Out-Null }
@@ -192,9 +220,20 @@ Start-TheSite
 $state = (Get-WebAppPoolState -Name $pool -ErrorAction SilentlyContinue).Value
 Write-Host "   pool '$pool' is $state" -ForegroundColor $(if ($state -eq 'Started') { 'Green' } else { 'Yellow' })
 Write-Host "`n== Afterwards"
-if ($tasks.Count) {
-    Write-Host "   These scheduled tasks still name the old folder - change them by hand:" -ForegroundColor Yellow
-    foreach ($t in $tasks) { Write-Host "     $($t.TaskName)" }
+foreach ($t in $tasks) {
+    try {
+        $task = Get-ScheduledTask -TaskName $t.TaskName
+        $actions = foreach ($a in $task.Actions) {
+            New-ScheduledTaskAction -Execute ($a.Execute -replace [regex]::Escape($From), $To) `
+                -Argument ("$($a.Arguments)" -replace [regex]::Escape($From), $To) `
+                -WorkingDirectory ("$($a.WorkingDirectory)" -replace [regex]::Escape($From), $To)
+        }
+        Set-ScheduledTask -TaskName $t.TaskName -Action $actions | Out-Null
+        Enable-ScheduledTask -TaskName $t.TaskName | Out-Null
+        Write-Host "   scheduled task $($t.TaskName) now runs from $To" -ForegroundColor Green
+    } catch {
+        Write-Host "   $($t.TaskName) still names the old folder and is disabled - change it by hand: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
 }
 Write-Host "   Open the new folder in VS Code: $To"
 Write-Host "   Then: cd $To\app ; .\scripts\Restart-Dms.ps1 ; .\scripts\Test-DmsProductionReady.ps1"
