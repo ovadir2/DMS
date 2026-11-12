@@ -5,7 +5,11 @@ Going live is not a rename: it is a clean environment, a repository registered f
 file server, and a package that no longer carries the pilot with it.
 
 This is the checklist. Nothing here is done automatically - each step says what to run and how to see that it
-worked. Do them in order: the names move first, then the data, then the package.
+worked. Do them in order: the names move first, then the data, then the package, then the pilot goes.
+
+The decision, taken: **production replaces the pilot.** They are not run side by side. Production is built
+beside the pilot on the same server, the switch is made in one morning, and the pilot is retired the same
+day once production has passed its checks (section 6).
 
 ---
 
@@ -28,8 +32,15 @@ worked. Do them in order: the names move first, then the data, then the package.
 
 - [ ] A full backup of `E:\Shares` and an export of the SharePoint lists (register, Control Audit, approval
       decisions). Everything below is reversible only from these.
-- [ ] Decide what happens to the pilot: kept read-only for a month beside production, or removed. Keeping it
-      means two IIS sites and two certificates, and users will find both - say which address is the real one.
+- [ ] **Decided: the pilot is not kept.** Production is built beside it on the same server, the switch is
+      made in one morning, and the pilot is retired the same day (section 6). It is not left running
+      read-only: two addresses means people find the wrong one, and two DMSs writing to `E:\Shares` means
+      two file services moving the same files.
+
+      Built beside it, not renamed into it, for one reason: the production register is built by first
+      loading from the file server, and a register full of pilot rows cannot be cleaned into one. The pilot
+      keeps answering until production has passed its checks - that is the rollback - and is removed when
+      it has.
 
 ## 1. The production environment
 
@@ -121,10 +132,35 @@ installed is the product and the pilot is history rather than part of the build.
       read-only on the server, its Markdown appears beside it, View opens a PDF.
 - [ ] Watch the first share with a customer end to end, including the guest invitation reaching them.
 - [ ] `DMS_FILE_SERVICE_SECONDS` set (60), and the upkeep pass seen running in the log.
+- [ ] Nothing below is done until every check in this section has passed - the pilot is the way back, and
+      the way back ends in section 6.
 - [ ] The applications answered from production, not from the pilot: the RAG's
       `GET /api/v1/approved-documents` and the Builder's `POST /api/v1/kpi/publish`, each with its new key,
       against `dms.rh.tech`. Try them from `/dms/api-docs` with the key in the Authorize box - that is what
       the page is for.
+
+## 6. Retiring the pilot, the same day
+
+Only once production has passed section 5. Until then the pilot is the rollback: leave it alone.
+
+- [ ] Stop the pilot so nobody is in it while the last checks run:
+      `Stop-Website DMS-Pilot; Stop-WebAppPool DMS-Pilot`
+- [ ] `dms-pilot.rh.tech` answers with a redirect to `dms.rh.tech`, not an error: an IIS site of that name
+      with a single HTTP redirect rule, and the certificate kept until the DNS entry goes. Everyone has the
+      old address in a mail, a bookmark and a Teams card.
+- [ ] The pilot's keys stop working: remove their lines from the pilot's `.env`, and tell each caller (the
+      RAG, the KPI Builder) the production address and its new key. A key is an identity - it is retired,
+      not moved.
+- [ ] Nothing of the pilot writes to `E:\Shares` any more: the pilot's file service is off with its pool,
+      and `04_Workflow_System\CheckedOut.json` has nothing left out for editing. Check it before removing
+      anything - a copy still out in SharePoint has not come back yet.
+- [ ] Keep, do not delete: the `-TEST` sites and their lists, read-only, for three months. They are the
+      audit of the pilot. Take the export of the register, the Control Audit and the approval decisions
+      first, and keep it with the backup of the day.
+- [ ] After a week with no surprises: remove the IIS site `DMS-Pilot` and its pool, the folder
+      `C:\DMS-Pilot`, and the pilot's certificate. Leave the folder's last backup.
+- [ ] `docs/08-Pilot-Process.md` gets a first line saying the pilot ran from <date> to <date> and that it is
+      history, not how the system works.
 
 ## What the pilot taught, so it is not relearned
 
