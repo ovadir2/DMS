@@ -80,12 +80,14 @@ def _with_ad(user: User, account: str) -> None:
 
 def _acting(request: Request, real: User) -> User:
     """ "Acting as" (super users only, the ⋮ menu): see and act as another user, with that user's AD rights.
-    DMS_DEV_USERS limits who can be chosen; empty = anyone. Any other request keeps the real user."""
+    DMS_DEV_USERS says who may be chosen, and nobody outside it can be: a super user acting as an approver
+    can answer in that approver's name, so the people this is used on are named rather than assumed.
+    Without the list there is nobody to act as, and DMS_ACTING_AS=0 turns it off even with one."""
     s: Settings = request.app.state.settings
     target = (request.headers.get("X-DMS-Dev-User") or "").strip().lower()
     if not target or target == real.email or not _super(s, real.email):
         return real
-    if s.dev_users and target not in s.dev_users:
+    if not s.acting_as or target not in s.dev_users:
         return real
     email = target
     if "@" not in target:                                      # a domain account (RH\name): its email (UPN) from AD,

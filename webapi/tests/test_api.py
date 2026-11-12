@@ -3366,13 +3366,21 @@ def test_acting_as_only_for_super_users_with_windows_sign_in(tmp_path, monkeypat
     real = {"who": "boss@rh.co.il"}
     monkeypatch.setattr(auth, "_resolve", lambda request: User(email=real["who"]))
     monkeypatch.setattr(auth, "_with_ad", lambda user, account: None)
-    c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="windows", sharepoint="memory",
-                                       admins=["boss@rh.co.il"])))
+    s = Settings(repository_root=str(tmp_path), auth_mode="windows", sharepoint="memory",
+                 admins=["boss@rh.co.il"], dev_users=["dana@rh.co.il"])
+    c = TestClient(create_app(s))
     h = {"X-DMS-Dev-User": "dana@rh.co.il"}
-    assert c.get("/api/me", headers=h).json()["email"] == "dana@rh.co.il"                 # a super user: any user (no list)
+    assert c.get("/api/me", headers=h).json()["email"] == "dana@rh.co.il"                 # a super user, and listed
+    assert c.get("/api/me", headers={"X-DMS-Dev-User": "mike@rh.co.il"}).json()["email"] == "boss@rh.co.il"
     real["who"] = "eli@rh.co.il"
     me = c.get("/api/me", headers=h).json()
     assert me["email"] == "eli@rh.co.il" and "actingUsers" not in me                       # a normal user: never
+
+    # ...and DMS_ACTING_AS=0 takes it away from the super user too
+    real["who"] = "boss@rh.co.il"
+    s.acting_as = False
+    me = c.get("/api/me", headers=h).json()
+    assert me["email"] == "boss@rh.co.il" and "actingUsers" not in me
 
 
 def test_dev_ad_check_for_acting_users_not_for_admins(tmp_path, monkeypatch):
@@ -3787,7 +3795,7 @@ def test_a_file_someone_else_has_out_is_not_edited_twice(tmp_path):
     f = q / "Quote.docx"
     f.write_bytes(b"draft")
     s = Settings(repository_root=str(root), auth_mode="dev", dev_user="other@rh.co.il", sharepoint="memory",
-                 approvals="page", admins=[USER], review_library="Approvals")
+                 approvals="page", admins=[USER], review_library="Approvals", dev_users=[USER])
     store: dict = {}
     c = TestClient(create_app(s, _review_sp(s, store)))
     assert c.post("/api/files/checkout", json={"path": str(f), "edit": True}).status_code == 200
@@ -3808,7 +3816,8 @@ def test_a_file_forgotten_in_sharepoint_comes_back_by_itself(tmp_path):
     f = q / "Quote.docx"
     f.write_bytes(b"draft")
     s = Settings(repository_root=str(root), auth_mode="dev", dev_user="other@rh.co.il", sharepoint="memory",
-                 approvals="page", admins=[USER], review_library="Approvals", checkout_hours=0)
+                 approvals="page", admins=[USER], review_library="Approvals", checkout_hours=0,
+                 dev_users=[USER])
     store: dict = {}
     c = TestClient(create_app(s, _review_sp(s, store)))
     c.post("/api/files/checkout", json={"path": str(f), "edit": True})

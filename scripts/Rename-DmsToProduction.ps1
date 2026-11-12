@@ -15,13 +15,20 @@
       3. webapi\.env:
              DMS_AUTH_MODE      -> windows
              DMS_DEV_USER       removed      (it fixes who everybody is)
-             DMS_DEV_USERS      removed      ("Acting as": a super user being somebody else)
+             DMS_DEV_USERS      kept            ("Acting as" is a command of the DMS, not a pilot
+                                              leftover: it names who a super user may answer as, and
+                                              -DropActingAs removes it)
              DMS_SITE_URL       -TEST dropped
              DMS_EX_SITE_URL    -TEST dropped
              DMS_REVIEW_SITE_URL -TEST dropped
              DMS_PAGE_URL       the new host
       4. the IIS site and pool renamed                       (-RenameSite)
       5. the DMS restarted, and the readiness check run
+
+.PARAMETER DropActingAs
+    Also remove DMS_DEV_USERS, so no super user may answer as anybody else. Left out, the list is kept:
+    "Acting as" is a command of the DMS, limited to the accounts it names, and every action is logged
+    under the real account.
 
 .PARAMETER NewHost
     The production address, e.g. dms.rh.tech. Left out, the address is not changed - the SharePoint rename
@@ -43,6 +50,7 @@ param(
     [string]$NewSite = 'DMS',
     [string]$Site = '',
     [string]$EnvFile = '',
+    [switch]$DropActingAs,
     [switch]$RenameSite,
     [switch]$EnableWindowsAuth,
     [switch]$Write,
@@ -147,7 +155,7 @@ foreach ($line in $lines) {
         'DMS_REVIEW_SITE_URL' { $new = $value -replace '-TEST', '' }
         'DMS_PAGE_URL' { if ($NewHost) { $new = $value -replace '://[^/]+', "://$NewHost" } }
     }
-    if ($k -eq 'DMS_DEV_USER' -or $k -eq 'DMS_DEV_USERS') {
+    if ($k -eq 'DMS_DEV_USER' -or ($k -eq 'DMS_DEV_USERS' -and $DropActingAs)) {
         $changes.Add("  - $k=$value   (removed)")
         continue
     }

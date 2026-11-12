@@ -143,7 +143,9 @@ the workflow and blueprint folders stay out of reach either way.
 | Key | Default | What it does |
 | --- | --- | --- |
 | `DMS_AUTH_MODE` | `windows` | `windows` (IIS signs people in), `entra` (from outside), `dev` (a named user - never in production) |
-| `DMS_DEV_USER`, `DMS_DEV_USERS` | - | Testing only: who you are, and the "Acting as" list |
+| `DMS_DEV_USER` | - | Testing only: who you are (never in production - it fixes who everybody is) |
+| `DMS_DEV_USERS` | - | Who a super user may act as (the ⋮ menu, "Acting as"): a list of accounts, and nobody outside it. Empty means nobody. It works under Windows sign-in too - it is a command of the DMS, not a testing switch |
+| `DMS_ACTING_AS` | `1` | `0` takes "Acting as" away from everyone, whatever `DMS_DEV_USERS` says |
 | `DMS_DEV_AD_CHECK` | - | Check AD rights as that user, for testing permissions |
 | `DMS_REMOTE_SIGNIN` | `ntlm` | How another PC on the network signs in |
 | `DMS_API_AUDIENCE`, `DMS_SPA_CLIENT_ID`, `DMS_USER_HEADER`, `DMS_ALLOWED_ORIGINS` | - | For `entra` mode |

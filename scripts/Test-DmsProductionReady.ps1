@@ -54,7 +54,13 @@ function Get-Cfg([string]$k, [string]$d = '') { if ($cfg.ContainsKey($k) -and $c
 Say ((Get-Cfg 'DMS_AUTH_MODE' 'windows') -eq 'windows') "DMS_AUTH_MODE is windows" `
     "a production DMS with DMS_AUTH_MODE=dev has no authentication at all"
 Say (-not (Get-Cfg 'DMS_DEV_USER')) "no DMS_DEV_USER" "remove the line: it fixes who everybody is"
-Say (-not (Get-Cfg 'DMS_DEV_USERS')) "no DMS_DEV_USERS (Acting as)" "remove the line: it lets a super user be somebody else"
+# "Acting as" is a super user seeing and answering as somebody else. It is not a pilot leftover - it is a
+# real command of the DMS - but it is only as narrow as the list of people it names.
+$acting = (Get-Cfg 'DMS_ACTING_AS' '1') -notin @('0', 'false', 'no', 'off')
+$actors = Get-Cfg 'DMS_DEV_USERS'
+if (-not $acting) { Say $true 'Acting as is off (DMS_ACTING_AS=0)' }
+elseif ($actors) { Say $true "Acting as is limited to: $actors"; Note 'super users only, and every action is logged under the real account' }
+else { Say $true 'Acting as names nobody, so nobody can be acted as' }
 Say ((Get-Cfg 'DMS_SHAREPOINT' 'online') -ne 'memory') "the register is SharePoint, not the playground" "DMS_SHAREPOINT=online"
 $seconds = 0; [void][int]::TryParse((Get-Cfg 'DMS_FILE_SERVICE_SECONDS' '0'), [ref]$seconds)
 Say ($seconds -gt 0) "the upkeep pass runs (DMS_FILE_SERVICE_SECONDS=$seconds)" "set it to 60"

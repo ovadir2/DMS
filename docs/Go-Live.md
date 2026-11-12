@@ -187,7 +187,7 @@ installed is the product and the pilot is history rather than part of the build.
 
 - [ ] **Out of the shipped package**: everything that exists to try the system rather than to run it -
       `Start-DmsPlayground.ps1` and the playground register (`dms_api/memory.py`), `DMS_SHAREPOINT=memory`,
-      the "Acting as" list (`DMS_DEV_USERS`), `DMS_AUTH_MODE=dev` and `DMS_DEV_USER`,
+      `DMS_AUTH_MODE=dev` and `DMS_DEV_USER`,
       `scripts/New-DmsPilotFlowPackage.ps1`, and `docs/08-Pilot-Process.md`. They stay in the repository (the
       tests use them), but they must not be installed, and the production `.env` must not mention them.
       A production `.env` that carries `DMS_AUTH_MODE=dev` is a system with no authentication at all.

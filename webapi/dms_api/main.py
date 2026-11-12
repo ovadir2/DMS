@@ -642,7 +642,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         out = {"email": user.email, "name": user.name, "admin": is_admin(user), "actingFrom": user.acting_from}
         if is_admin(user):
             out["certDaysLeft"] = cert_days_left(app.state.sp)  # the page warns before SharePoint stops working
-        if is_admin(user) or user.acting_from:                  # super users: "Acting as" in the ⋮ menu
+        if (is_admin(user) or user.acting_from) and s.acting_as:   # super users: "Acting as" in the ⋮ menu
             real = user.acting_from or user.email
             out["actingUsers"] = [real, *[u for u in s.dev_users if u != real]]
         return out

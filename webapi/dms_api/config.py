@@ -67,6 +67,7 @@ class Settings:
     spa_client_id: str = ""                 # entra: app id the built-in page signs in with
     user_header: str = "X-MS-CLIENT-PRINCIPAL-NAME"   # header: set by the trusted reverse proxy
     dev_user: str = ""                      # dev: fixed user email, never in production
+    acting_as: bool = True                  # DMS_ACTING_AS=0: nobody may be acted as, whatever the list says
     dev_users: list[str] = field(default_factory=list)  # dev: other users to act as (page: "Acting as"), testing only
     dev_ad_check: bool = False              # dev: check AD / NTFS for each user (not the DMS_ADMINS), domain PC only
     remote_signin: str = ""                 # dev: ntlm = other PCs sign in with their own Windows account (ntlm.py); off
@@ -173,6 +174,7 @@ class Settings:
             spa_client_id=e("DMS_SPA_CLIENT_ID", ""),
             user_header=e("DMS_USER_HEADER", "X-MS-CLIENT-PRINCIPAL-NAME"),
             dev_user=e("DMS_DEV_USER", ""),
+            acting_as=e("DMS_ACTING_AS", "1") not in ("0", "false", "no", "off"),
             dev_users=[a.strip().lower() for a in e("DMS_DEV_USERS", "").split(",") if a.strip()],
             dev_ad_check=e("DMS_DEV_AD_CHECK", "").strip().lower() in ("1", "true", "yes", "on"),
             remote_signin=e("DMS_REMOTE_SIGNIN", "ntlm" if os.name == "nt" else "off").strip().lower(),
