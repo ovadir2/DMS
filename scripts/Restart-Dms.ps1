@@ -50,8 +50,12 @@ $work = {
     $state = (Get-WebAppPoolState -Name $Pool).Value
     Write-Host "Application pool '$Pool' is $state"
     if ($state -ne 'Started') {
-        Start-WebAppPool -Name $Pool                 # Restart-WebAppPool refuses a stopped pool
-        Write-Host "  started"
+        # "The service cannot accept control messages at this time" means the pool is still changing
+        # state, not that it refused: ask again rather than leaving the DMS stopped.
+        for ($i = 0; $i -lt 10; $i++) {
+            try { Start-WebAppPool -Name $Pool -ErrorAction Stop; break } catch { Start-Sleep -Seconds 2 }
+        }
+        Write-Host "  started ($((Get-WebAppPoolState -Name $Pool).Value))"
     } else {
         Restart-WebAppPool -Name $Pool               # the uvicorn child is started again by HttpPlatformHandler
         Write-Host "  recycled"

@@ -62,19 +62,50 @@ if (-not $Write) {
     return
 }
 
+# IIS answers "the service cannot accept control messages at this time" while a pool is still changing
+# state, so every start and stop waits for the state it asked for rather than assuming it.
+function Set-PoolState([string]$Name, [string]$Want) {
+    for ($i = 0; $i -lt 20; $i++) {
+        $state = (Get-WebAppPoolState -Name $Name -ErrorAction SilentlyContinue).Value
+        if ($state -eq $Want) { return $true }
+        try {
+            if ($Want -eq 'Started') { Start-WebAppPool -Name $Name -ErrorAction Stop }
+            else { Stop-WebAppPool -Name $Name -ErrorAction Stop }
+        } catch { }                                       # mid-transition: wait and ask again
+        Start-Sleep -Seconds 2
+    }
+    return ((Get-WebAppPoolState -Name $Name -ErrorAction SilentlyContinue).Value -eq $Want)
+}
+
+function Start-TheSite {
+    [void](Set-PoolState $pool 'Started')
+    Start-Website -Name $Site -ErrorAction SilentlyContinue
+}
+
 Write-Host "`n== Moving"
 Stop-Website -Name $Site -ErrorAction SilentlyContinue
-Stop-WebAppPool -Name $pool -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 3                                   # let the uvicorn child go with its pool
+if (-not (Set-PoolState $pool 'Stopped')) { Start-TheSite; throw "The pool '$pool' would not stop." }
+# the uvicorn child usually goes with its pool; a leftover one holds the folder open
+foreach ($p in (Get-Process -Name python, python3, pythonw -ErrorAction SilentlyContinue)) {
+    try { if ("$($p.Path)" -like "$From*") { Stop-Process -Id $p.Id -Force; Write-Host "   stopped a python left in the folder (pid $($p.Id))" } } catch { }
+}
 Set-Location $env:SystemDrive\                            # never rename the folder you are standing in
-try {
-    Rename-Item -LiteralPath $From -NewName (Split-Path -Leaf $To) -ErrorAction Stop
-    Write-Host "   $From -> $To" -ForegroundColor Green
-} catch {
-    Start-WebAppPool -Name $pool -ErrorAction SilentlyContinue
-    Start-Website -Name $Site -ErrorAction SilentlyContinue
-    throw "The folder could not be renamed ($($_.Exception.Message)). Close it in VS Code and in every " +
-          "Explorer window, then run this again - the site has been started again."
+$moved = $false
+for ($i = 1; $i -le 5 -and -not $moved; $i++) {
+    try {
+        Rename-Item -LiteralPath $From -NewName (Split-Path -Leaf $To) -ErrorAction Stop
+        $moved = $true
+        Write-Host "   $From -> $To" -ForegroundColor Green
+    } catch {
+        $why = $_.Exception.Message
+        if ($i -lt 5) { Start-Sleep -Seconds 3 } else {
+            Start-TheSite
+            throw "The folder could not be renamed after $i tries ($why).`n" +
+                  "Something is holding it open - the usual suspects are VS Code, an Explorer window, a " +
+                  "PowerShell standing in it, or a file open from the share. Close them and run this " +
+                  "again. The site has been started again, so the DMS is up."
+        }
+    }
 }
 
 $newPhysical = $physical -replace [regex]::Escape($From), $To
@@ -93,8 +124,9 @@ if (Test-Path $newWeb) {
     Write-Host "   $newWeb rewritten" -ForegroundColor Green
 }
 
-Start-WebAppPool -Name $pool
-Start-Website -Name $Site
+Start-TheSite
+$state = (Get-WebAppPoolState -Name $pool -ErrorAction SilentlyContinue).Value
+Write-Host "   pool '$pool' is $state" -ForegroundColor $(if ($state -eq 'Started') { 'Green' } else { 'Yellow' })
 Write-Host "`n== Afterwards"
 if ($tasks.Count) {
     Write-Host "   These scheduled tasks still name the old folder - change them by hand:" -ForegroundColor Yellow
