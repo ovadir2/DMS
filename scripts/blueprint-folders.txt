@@ -38,6 +38,26 @@
 01_General\DB_Management\KPIs
 01_General\Archive
 01_General\Archive\KPIs
+01_General\Management
+01_General\Management\KPIs
+01_General\Develop
+01_General\Develop\KPIs
+01_General\Operations
+01_General\Operations\Production
+01_General\Operations\Program Management
+01_General\Operations\Project_Management
+01_General\Operations\KPIs
+01_General\Production_Engineering
+01_General\Production_Engineering\Process_Engineering
+01_General\Production_Engineering\Configuration
+01_General\Production_Engineering\Opex
+01_General\Production_Engineering\KPIs
+01_General\Quality
+01_General\Quality\KPIs
+01_General\Supply_Chain
+01_General\Supply_Chain\Purchasing
+01_General\Supply_Chain\Planning_logistic
+01_General\Supply_Chain\KPIs
 02_Customers
 02_Customers\<Customer>
 02_Customers\<Customer>\Customer_Profile

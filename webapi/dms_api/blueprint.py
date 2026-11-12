@@ -92,6 +92,27 @@ MANAGEMENT = N({k: (en, he, {}) for k, en, he in (
     ("HR", "HR", "משאבי אנוש"), ("Training", "Training", "הדרכה"), ("Finance", "Finance", "כספים"), ("Legal", "Legal", "משפטי"),
     ("IT", "IT", "מערכות מידע"), ("DB_Management", "DB_Management", "DB_Management"),
     ("Archive", "Archive", "ארכיון"))})
+# What this company really has under General, beside the areas every company has. The folders are here
+# rather than learned from the file server so that a new installation - and every customer cut from the
+# skeleton - starts with the same structure, named in both languages.
+MANAGEMENT["Management"] = ("Management", "הנהלה", {}, "Management's own documents", "מסמכי ההנהלה")
+MANAGEMENT["Develop"] = ("Develop", "פיתוח", {}, "Development across the company's products", "פיתוח החוצה את מוצרי החברה")
+MANAGEMENT["Operations"] = ("Operations", "תפעול", N({
+    "Production": ("Production", "ייצור", {}, "The production floor", "רצפת הייצור"),
+    "Program Management": ("Program management", "ניהול תוכניות", {}, "Programs across customers", "תוכניות החוצות לקוחות"),
+    "Project_Management": ("Project management", "ניהול פרויקטים", {}, "Projects, schedules, follow-up", "פרויקטים, לוחות זמנים ומעקב")}),
+    "Production, programs and projects", "ייצור, תוכניות ופרויקטים")
+MANAGEMENT["Production_Engineering"] = ("Production engineering", "הנדסת ייצור", N({
+    "Process_Engineering": ("Process engineering", "הנדסת תהליך", {}, "Process flow, work instructions, machine programs", "תהליך ייצור, הוראות עבודה, תוכניות מכונה"),
+    "Configuration": ("Configuration", "ניהול תצורה", {}, "What is in force, and what changed", "מה בתוקף ומה השתנה"),
+    "Opex": ("Opex", "הוצאות תפעול", {}, "Operating cost and continuous improvement", "עלות תפעול ושיפור מתמיד")}),
+    "Process engineering, configuration, operating cost", "הנדסת תהליך, ניהול תצורה, עלות תפעול")
+MANAGEMENT["Quality"] = ("Quality", "איכות", {}, "The quality of what is made", "האיכות של מה שמיוצר")
+MANAGEMENT["Supply_Chain"] = ("Supply chain", "שרשרת אספקה", N({
+    "Purchasing": ("Purchasing", "רכש", {}, "Suppliers, orders, prices", "ספקים, הזמנות, מחירים"),
+    "Planning_logistic": ("Planning and logistics", "תכנון ולוגיסטיקה", {}, "Planning, forecasts, shipping", "תכנון, תחזיות, משלוחים")}),
+    "Purchasing, planning and logistics", "רכש, תכנון ולוגיסטיקה")
+
 MANAGEMENT["HR"] = ("HR", "משאבי אנוש", N({"Shared": ("Shared", "משותף", {}, "Files shared with potential employees and the share log",
                                                      "קבצים ששותפו עם מועמדים לעבודה ויומן השיתופים")}))
 MANAGEMENT["Commercial"] = ("Commercial", "מסחרי", N({"Pricing": ("Pricing", "תמחור", {})}))

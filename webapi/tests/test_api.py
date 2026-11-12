@@ -4499,22 +4499,23 @@ def test_a_super_user_learns_the_structure_from_the_page(tmp_path):
     import dms_api.blueprint as bp
     importlib.reload(bp)
     root = tmp_path / "Root"
-    for d in (("01_General", "Operations"), ("01_General", "Quality"), ("02_Customers", "Customer_Skeleton")):
+    # two folders the shipped blueprint does not know: a department of this company's own
+    for d in (("01_General", "Lab"), ("01_General", "Tooling"), ("02_Customers", "Customer_Skeleton")):
         (root.joinpath(*d)).mkdir(parents=True)
     s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory", admins=[USER])
     c = TestClient(create_app(s))
 
     row = lambda name: next(f for f in c.get("/api/browse", params={"path": str(root / "01_General")}
                                              ).json()["folders"] if f["name"] == name)
-    assert row("Operations")["label"] is None                      # somebody's own folder, until now
+    assert row("Lab")["label"] is None                             # somebody's own folder, until now
 
     seen = c.post("/api/blueprint/learn", params={"write": False}).json()
-    assert set(seen["new"]) == {"01_General\\Operations", "01_General\\Quality"} and not seen["written"]
-    assert row("Operations")["label"] is None                      # asking changes nothing
+    assert set(seen["new"]) == {"01_General\\Lab", "01_General\\Tooling"} and not seen["written"]
+    assert row("Lab")["label"] is None                             # asking changes nothing
 
     done = c.post("/api/blueprint/learn").json()
     assert done["written"] and done["added"] == 2
-    assert (row("Operations")["label"] or {})["en"] == "Operations"  # ...and at once, without a restart
+    assert (row("Lab")["label"] or {})["en"] == "Lab"               # ...and at once, without a restart
     assert (root / "04_Workflow_System" / "Blueprint.json").is_file()
 
     s.admins = []                                                   # not a super user: not their call
