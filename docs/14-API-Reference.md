@@ -4,7 +4,7 @@ Every endpoint of the DMS, written from the API itself (`python -m dms_api.apido
 
 **Swagger**: the same thing to try and to generate a client from - `https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository as `dms-openapi.json`, for a client generated without reaching the server.
 
-Written from DMS d66d92b.
+Written from DMS 240bbb1.
 
 ## How a caller is known
 
@@ -77,6 +77,21 @@ Project folders of one customer that the user may open.
 ## The repository: folders and files
 
 Everything the file list does. The user's own AD rights decide every one of them; the DMS writes with its own account but never in place of a right the person does not have.
+
+### POST /api/blueprint/learn
+
+Super users: learn the structure this company really has.
+
+The blueprint the DMS ships with is a starting shape. The departments somebody really made under
+General, and the folders inside them, are the structure too - they should be grey in the page, kept
+from being renamed or deleted from a row, and each department should have its KPIs folder. This
+reads the file server, writes what it finds beside the repository, and takes it into account at
+once: no restart, and nothing to run on the server.
+
+| Parameter | In | Required | Type | |
+| --- | --- | --- | --- | --- |
+| `write` | query | no | boolean | false: only say what it would learn |
+| `depth` | query | no | integer |  |
 
 ### GET /api/browse
 

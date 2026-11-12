@@ -571,6 +571,29 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 "checkedOutFile": os.path.join(s.repository_root, checkout.FILE),
                 "lastSharePointError": last_sp_error()}
 
+    @app.post("/api/blueprint/learn")
+    def learn_blueprint(write: bool = Query(True, description="false: only say what it would learn"),
+                        depth: int = Query(2, ge=1, le=5), user: User = Depends(current_user)):
+        """Super users: learn the structure this company really has.
+
+        The blueprint the DMS ships with is a starting shape. The departments somebody really made under
+        General, and the folders inside them, are the structure too - they should be grey in the page, kept
+        from being renamed or deleted from a row, and each department should have its KPIs folder. This
+        reads the file server, writes what it finds beside the repository, and takes it into account at
+        once: no restart, and nothing to run on the server."""
+        only_admin(user, "learn the structure of the repository")
+        from . import learn as _learn
+        found = _learn.read(s.repository_root, depth=depth, skeleton=s.customer_skeleton)
+        new = _learn.what_is_new(found)
+        added = 0
+        if write and new:
+            _learn.write(s.repository_root, found)
+            added = blueprint.learn(s.repository_root)
+            log(user, "blueprint", f"learned {added} folder(s) of this company's structure")
+        return {"new": new, "added": added, "written": bool(write and new),
+                "departments": len(found.get("general") or {}),
+                "customerFolders": len(found.get("customer") or {})}
+
     @app.get("/api/diagnostics/dashboard")
     def dashboard_check(name: str = "dashboard_DB.html"):
         """Does this DMS know what a dashboard page is, and does it see this name as one? A name that comes

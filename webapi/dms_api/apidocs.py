@@ -14,7 +14,7 @@ GROUPS: list[tuple[str, str, str]] = [
     ("Signing in and what this person is", r"^/api/(me|client-config|health|options|areas|levels|customers|projects|people)",
      "The page asks these as soon as it opens. Windows authentication: the DMS answers as the person at the "
      "keyboard, and AD decides what they see."),
-    ("The repository: folders and files", r"^/api/(browse|search|pathfinder|guide|classify|folders|items|files)",
+    ("The repository: folders and files", r"^/api/(browse|search|pathfinder|guide|classify|folders|items|files|blueprint)",
      "Everything the file list does. The user's own AD rights decide every one of them; the DMS writes with "
      "its own account but never in place of a right the person does not have."),
     ("Documents and the workflow", r"^/api/(documents|approvals|approver-rule|my-workflows|first-load|file-service|playground|exchange)",

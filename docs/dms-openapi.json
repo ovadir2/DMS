@@ -1149,6 +1149,67 @@
     ]
    }
   },
+  "/api/blueprint/learn": {
+   "post": {
+    "description": "Super users: learn the structure this company really has.\n\nThe blueprint the DMS ships with is a starting shape. The departments somebody really made under\nGeneral, and the folders inside them, are the structure too - they should be grey in the page, kept\nfrom being renamed or deleted from a row, and each department should have its KPIs folder. This\nreads the file server, writes what it finds beside the repository, and takes it into account at\nonce: no restart, and nothing to run on the server.",
+    "operationId": "post__api_blueprint_learn",
+    "parameters": [
+     {
+      "description": "false: only say what it would learn",
+      "in": "query",
+      "name": "write",
+      "required": false,
+      "schema": {
+       "default": true,
+       "description": "false: only say what it would learn",
+       "title": "Write",
+       "type": "boolean"
+      }
+     },
+     {
+      "in": "query",
+      "name": "depth",
+      "required": false,
+      "schema": {
+       "default": 2,
+       "maximum": 5,
+       "minimum": 1,
+       "title": "Depth",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "windows": []
+     }
+    ],
+    "summary": "Learn Blueprint",
+    "tags": [
+     "The repository: folders and files"
+    ]
+   }
+  },
   "/api/browse": {
    "get": {
     "description": "One folder of the repository: its folders and its files, with what may be done to each.\n\nOnly what AD lets this person see is in the answer, and every row says how it opens (in Office, in\nSharePoint, as a PDF), whether it may be edited and - when it may not - why.",
