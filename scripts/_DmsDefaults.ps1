@@ -42,6 +42,23 @@ function Get-DmsDefault([ValidateSet('Url', 'Site', 'App')][string]$What) {
         }
         'Site' {
             if ($env:DMS_IIS_SITE) { return $env:DMS_IIS_SITE }
+            # Ask IIS rather than guess: the site whose folder is this installation is the one these
+            # scripts belong to, whatever it is called - DMS, DMS-Pilot or anything else. Only when IIS
+            # cannot be read (a PC that just maps the drive) is a name assumed.
+            $app = Split-Path -Parent $PSScriptRoot
+            if (Get-Module -ListAvailable -Name WebAdministration) {
+                try {
+                    Import-Module WebAdministration -ErrorAction Stop
+                    $sites = @(Get-ChildItem IIS:\Sites -ErrorAction Stop)
+                    $mine = $sites | Where-Object {
+                        $p = $_.physicalPath
+                        $p -and ((Join-Path $p '') -like (Join-Path $app '*') -or $app -like ((Join-Path $p '') + '*'))
+                    }
+                    if ($mine) { return $mine[0].Name }
+                    $named = $sites | Where-Object { $_.Name -in @('DMS', 'DMS-Pilot') }
+                    if ($named) { return $named[0].Name }
+                } catch { }
+            }
             return 'DMS'
         }
         'App' {

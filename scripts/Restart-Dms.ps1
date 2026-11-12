@@ -32,6 +32,11 @@ $work = {
     }
     Import-Module WebAdministration -ErrorAction Stop
 
+    if (-not (Test-Path "IIS:\Sites\$Site")) {
+        $there = (Get-ChildItem IIS:\Sites | ForEach-Object { $_.Name }) -join ', '
+        throw "There is no IIS site called '$Site' on $env:COMPUTERNAME. The sites here are: $there. " +
+              "Give -Site <name>, or set DMS_IIS_SITE in webapi\.env."
+    }
     if (-not $Pool) {
         $Pool = (Get-Item "IIS:\Sites\$Site" -ErrorAction Stop).applicationPool
     }
