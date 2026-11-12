@@ -48,6 +48,12 @@ if (-not (Test-Path $web)) { $web = Join-Path $From 'webapi\web.config' }
 
 Write-Host "`n== What names $From"
 Write-Host "   IIS site '$Site' (pool '$pool') physical path: $physical"
+if ("$physical" -notlike "$From*") {
+    Write-Host "   that path is not inside $From - IIS already points somewhere else" -ForegroundColor Yellow
+    if (-not (Test-Path $physical)) {
+        Write-Host "   ...and nothing is there: the DMS cannot be serving from it" -ForegroundColor Red
+    }
+}
 $inWeb = @()
 if (Test-Path $web) {
     $inWeb = @(Select-String -Path $web -SimpleMatch $From -ErrorAction SilentlyContinue)
@@ -65,6 +71,10 @@ foreach ($sh in $shares) { Write-Host "   share \\$env:COMPUTERNAME\$($sh.Name) 
 $open = @()
 try { $open = @(Get-SmbOpenFile -ErrorAction Stop | Where-Object { $_.Path -like "$From*" }) } catch { }
 foreach ($f in $open) { Write-Host "   open over the network: $($f.Path) ($($f.ClientUserName))" -ForegroundColor Yellow }
+if ($open.Count) {
+    Write-Host "   (these are handles over a share - C`$ counts, so a mapped drive or an Explorer window on " +
+               "another PC is one. They are closed before the rename.)" -ForegroundColor DarkGray
+}
 
 $tasks = @()
 try {
@@ -109,6 +119,13 @@ foreach ($p in (Get-Process -Name python, python3, pythonw -ErrorAction Silently
     try { if ("$($p.Path)" -like "$From*") { Stop-Process -Id $p.Id -Force; Write-Host "   stopped a python left in the folder (pid $($p.Id))" } } catch { }
 }
 Set-Location $env:SystemDrive\                            # never rename the folder you are standing in
+# Handles held over a share keep the folder from being renamed, and the usual one is the person doing the
+# move: their own mapped drive, through C$. Closing them here only drops the network handle - nothing is
+# lost, and the mapping works again as soon as the folder is back.
+foreach ($f in $open) {
+    try { Close-SmbOpenFile -FileId $f.FileId -Force -ErrorAction Stop; Write-Host "   closed $($f.Path) ($($f.ClientUserName))" }
+    catch { Write-Host "   could not close $($f.Path): $($_.Exception.Message)" -ForegroundColor Yellow }
+}
 # the shares, remembered as they are and taken down: a shared folder cannot be renamed
 $kept = @()
 foreach ($sh in $shares) {
@@ -154,7 +171,8 @@ foreach ($k in $kept) {                 # the shares, at the new path, with the 
     Write-Host "   share $($k.Name) -> $path" -ForegroundColor Green
 }
 
-$newPhysical = $physical -replace [regex]::Escape($From), $To
+$newPhysical = if ("$physical" -like "$From*") { $physical -replace [regex]::Escape($From), $To }
+               else { Join-Path $To 'app\webapi' }        # it pointed somewhere else: put it where the DMS is
 Set-ItemProperty "IIS:\Sites\$Site" -Name physicalPath -Value $newPhysical
 Write-Host "   IIS physical path: $newPhysical" -ForegroundColor Green
 foreach ($app in (Get-WebApplication -Site $Site)) {
