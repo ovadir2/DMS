@@ -446,8 +446,7 @@ $('#menu').innerHTML = `<button data-m="customers">⌂ ${T.home}</button><button
 $('#menu-b').onclick = e => { e.stopPropagation(); $('#menu').classList.toggle('open'); };
 document.onclick = () => $('#menu').classList.remove('open');
 $('#menu').onclick = e => { const m = e.target.dataset.m; if (m === 'lang') return $('#lang').click();
-  if (m === 'xp') { explorerSet(!explorerOn()); $('#menu').querySelector('[data-m=xp]').textContent = '\u2630 ' + (explorerOn() ? T.explorerOff : T.explorerOn); return render(); } if (m === 'learnbp') return learnBlueprint();
-  if (m === 'actas') return actingAsDialog(); if (m === 'ai') return openAI(null); if (m === 'pf') return pathFinder(state.view === 'browse' ? state.folder : null); if (m === 'fl') { state.flTarget = state.view === 'browse' ? state.folder : state.flTarget; state.view = 'firstLoad'; return render(); } if (m) { state.view = m; render(); } };
+  if (m === 'xp') { explorerSet(!explorerOn()); $('#menu').querySelector('[data-m=xp]').textContent = '\u2630 ' + (explorerOn() ? T.explorerOff : T.explorerOn); return render(); } if (m === 'actas') return actingAsDialog(); if (m === 'ai') return openAI(null); if (m === 'pf') return pathFinder(state.view === 'browse' ? state.folder : null); if (m === 'fl') { state.flTarget = state.view === 'browse' ? state.folder : state.flTarget; state.view = 'firstLoad'; return render(); } if (m) { state.view = m; render(); } };
 $('#ap-t').textContent = T.approvals; $('#ap-b').title = T.approvals; $('#ap-b').onclick = () => { state.view = 'approvalsView'; render(); };
 $('#wf-t').textContent = T.myWf; $('#wf-b').title = T.myWf; $('#wf-b').onclick = () => { state.view = 'mine'; render(); };
 // Search does the same thing every time it is pressed: it searches. Coming back to it with the words still
@@ -1276,22 +1275,6 @@ async function approvalsView(v) {
     finally { setTimeout(() => { state.deciding = false; }, 1200); }
   });
 }
-// The structure this company really has: the departments somebody made on the file server, and the folders
-// in them, counted as the blueprint from now on - grey, kept, each department with its KPIs folder. It is
-// here rather than in a script on the server because the person who makes a folder is the one who knows it
-// belongs to the structure.
-async function learnBlueprint() {
-  try {
-    const seen = await api('/api/blueprint/learn?write=false', { method: 'POST' });
-    if (!seen.new.length) return alert(T.learnBpNone);
-    if (!confirm(`${T.learnBp}?\n\n${seen.new.join('\n')}`)) return;
-    const done = await api('/api/blueprint/learn', { method: 'POST' });
-    treeForget();
-    alert(T.learnBpDone.replace('{n}', done.added));
-    render();
-  } catch (e) { alert(e.message || e); }
-}
-
 // Delegate: someone else approves instead, for this approval cycle
 async function delegateDialog(d) {
   const behalf = !d.mine && d.pending.length ? `<label>${T.dgFrom}<select name="from">${d.pending.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}</select></label>` : '';
@@ -2251,7 +2234,7 @@ async function viewFile(path) {
   if (me.actingUsers) $('#menu').insertAdjacentHTML('beforeend', `<button data-m="actas">👤 ${T.actingAs}${me.actingFrom ? ': ' + esc(me.email.split('@')[0]) : ''}</button>`);
   try { const st = await api('/api/ai/status'); aiApi = st.enabled; aiUrl = st.url || aiUrl; ragTools = st.rag || []; addRagTabs(); } catch { aiApi = false; }
   if (me.admin) state.apAll = true;                // super users see every pending approval
-  if (me.admin) $('#menu').insertAdjacentHTML('beforeend', `<button data-m="fl">⇪ ${T.flTitle}</button><button data-m="spcheck">🩺 ${T.spCheck}</button><button data-m="learnbp">🗺 ${T.learnBp}</button>`);
+  if (me.admin) $('#menu').insertAdjacentHTML('beforeend', `<button data-m="fl">⇪ ${T.flTitle}</button><button data-m="spcheck">🩺 ${T.spCheck}</button>`);
   if (cfg.approvals === 'page') { $('#ap-b').style.display = ''; refreshApprovals(); setInterval(refreshApprovals, 60000); }
   $('#ai-b').style.display = '';
   $('#ai-log').innerHTML = `<div class="muted small">${T.aiOnPrem}</div>`;
