@@ -87,12 +87,12 @@ function Send-File($path, $folder, $extra) {
 # fails (or always, with -Detailed), so a green run reads in five seconds and a red one says exactly what.
 $group = ''
 $lines = @()
-function Group($name) {
-    if ($script:group) { Close-Group }
+function Section($name) {
+    if ($script:group) { Close-Section }
     $script:group = $name
     $script:lines = @()
 }
-function Close-Group {
+function Close-Section {
     if (-not $script:group) { return }
     $failed = @($script:lines | Where-Object { $_.state -eq 'FAIL' })
     $skip = @($script:lines | Where-Object { $_.state -eq 'SKIP' })
@@ -149,7 +149,7 @@ Write-Host "=== The DMS at $Url, walked as $(if ($As) { $As } else { 'you' })" -
 Write-Host ""
 
 # ---------------------------------------------------------------- who, and what this build is
-Group "Signing in: the DMS answers as the person at the keyboard"
+Section "Signing in: the DMS answers as the person at the keyboard"
 $me = Call GET "/api/me" $null $null
 $cfg = Call GET "/api/client-config" $null $null
 Check 'REQ-P03' "the DMS knows who is calling, by AD" { "signed in as $($me.email)$(if ($me.actingFrom) { "  (really $($me.actingFrom))" })" }
@@ -157,7 +157,7 @@ Check 'REQ-P31' "Acting as is a super user seeing as somebody, and the real acco
     if ($As) { [bool]$me.actingFrom } else { $true } }
 
 # ---------------------------------------------------------------- the structure
-Group "The structure: the company's own folders are the blueprint"
+Section "The structure: the company's own folders are the blueprint"
 $general = Call GET "/api/browse?path=$([uri]::EscapeDataString((Join-Path $root '01_General')))" $null $null
 Check 'REQ-P29' "the company's structure is the blueprint, in both languages" {
     $named = @($general.folders | Where-Object { $_.label })
@@ -165,7 +165,7 @@ Check 'REQ-P29' "the company's structure is the blueprint, in both languages" {
     "$($named.Count) departments named, e.g. $($named[0].label.en) / $($named[0].label.he)" }
 
 # ---------------------------------------------------------------- a folder of its own
-Group "A place to work: a folder, and a file dropped into it"
+Section "A place to work: a folder, and a file dropped into it"
 $fresh = -not (Test-Path $here)
 Check 'REQ-P02' "a folder can be made where AD allows it" {
     if ($fresh) { Call POST "/api/folders" @{ parent = (Split-Path $here -Parent); name = (Split-Path $here -Leaf) } $null | Out-Null }
@@ -185,7 +185,7 @@ Check 'REQ-P88' "a file is dropped into the folder, with AD asked for Modify" {
     Split-Path -Leaf $up.path }
 
 # ---------------------------------------------------------------- register, submit
-Group "A document, end to end: registered, sent, approved, released"
+Section "A document, end to end: registered, sent, approved, released"
 $doc = $null
 Check 'REQ-P42/P43' "it is registered and sent to an approver" {
     $script:doc = Call POST "/api/documents" @{ path = $up.path; documentType = 'נוהל'; documentArea = 'מערכות מידע';
@@ -224,7 +224,7 @@ Check 'REQ-P38' "its Markdown is beside it, with the revision it is" {
     $md.Name }
 
 # ---------------------------------------------------------------- what the page offers on that row
-Group "A released document: read only, and the page says why"
+Section "A released document: read only, and the page says why"
 Check 'REQ-P63/P64' "the released document offers View, not editing" {
     $row = (Call GET "/api/browse?path=$([uri]::EscapeDataString($cur))" $null $null).files |
            Where-Object { $_.name -eq $released.Name }
@@ -243,7 +243,7 @@ Check 'REQ-P87' "it can be found without knowing where it is" {
     [bool](@($found | Where-Object { "$_" -like "*$($doc.documentId)*" }).Count -or $found.Count) }
 
 # ---------------------------------------------------------------- the next revision
-Group "The next revision, without displacing the one in force"
+Section "The next revision, without displacing the one in force"
 Check 'REQ-P48' "the next revision starts from the one in force, which stays current" {
     $rev = Call POST "/api/documents/$($doc.id)/revise" $null @{ submit = 'false' }
     $draft = Split-Path -Leaf $rev.draft
@@ -252,7 +252,7 @@ Check 'REQ-P48' "the next revision starts from the one in force, which stays cur
     $draft }
 
 # ---------------------------------------------------------------- a workbook of the same name
-Group "A workbook and a procedure under one name"
+Section "A workbook and a procedure under one name"
 $stem = [IO.Path]::GetFileNameWithoutExtension($released.Name)
 $book = Join-Path $env:TEMP "$stem.xlsx"
 Copy-Item (Join-Path $samples 'Procedure.xlsx') $book -Force
@@ -272,7 +272,7 @@ Check 'REQ-P08' "each Markdown names the file it was written for" {
     "the workbook's own sheets, and the procedure's own text, each in their own file" }
 
 # ---------------------------------------------------------------- without a workflow
-Group "Published without a workflow, and taken out again"
+Section "Published without a workflow, and taken out again"
 $doc2 = Join-Path $env:TEMP "DMS walk published $stamp.txt"
 @("Published as it is, no workflow.") | Set-Content $doc2 -Encoding UTF8
 $pub = $null
@@ -286,7 +286,7 @@ Check 'REQ-P57/P41' "a released file is taken out to Obsolete_ReadOnly, not eras
     Split-Path -Leaf $gone.movedTo }
 
 # ---------------------------------------------------------------- KPIs
-Group "KPIs, pages and the skeleton"
+Section "KPIs, pages and the skeleton"
 Check 'REQ-P15' "the department's KPIs folder is known as one" {
     $kpis = Join-Path (Split-Path $here -Parent) 'KPIs'
     if (-not (Test-Path $kpis)) { throw "there is no KPIs folder beside $Folder" }
@@ -302,7 +302,7 @@ Check 'REQ-P93' "nothing is filed in the customer skeleton" {
     [bool]$s.skeletonNote }
 
 # ---------------------------------------------------------------- taking back, passing on, remarks
-Group "Taking back, passing on, and remarks"
+Section "Taking back, passing on, and remarks"
 $doc4 = Join-Path $env:TEMP "DMS walk withdrawn $stamp.txt"
 @("Submitted, then taken back.") | Set-Content $doc4 -Encoding UTF8
 $w1 = $null
@@ -337,7 +337,7 @@ Check 'REQ-P68/P69' "an approver attaches a marked-up document as their remarks"
     "$(@($kept).Count) attached" }
 
 # ---------------------------------------------------------------- links, text, the page itself
-Group "Links, text files, and the page"
+Section "Links, text files, and the page"
 Check 'REQ-P11' "a link can be shared without naming the file server" {
     $link = Call GET "/api/files/link?path=$([uri]::EscapeDataString($released.FullName))" $null $null
     if ($link.url -like "*$root*") { throw "the link names the file server: $($link.url)" }
@@ -354,7 +354,7 @@ Check 'REQ-P28' "the API describes itself" {
     "$(@($doc.paths.PSObject.Properties).Count) endpoints, $($doc.info.version)" }
 
 # ---------------------------------------------------------------- the upkeep pass
-Group "The DMS keeps itself in order"
+Section "The DMS keeps itself in order"
 Check 'REQ-P14' "the upkeep pass runs and reports" {
     $r = Call POST "/api/file-service/run" @{} $null
     "moved $($r.moved), failed $($r.failed)" }
@@ -366,7 +366,7 @@ Check 'REQ-P23' "a released file that lost its read-only flag gets it back" {
     "put back on $($again.Name)" }
 
 # ---------------------------------------------------------------- something waiting for this person
-Group "Left waiting, so every side of the page has something in it"
+Section "Left waiting, so every side of the page has something in it"
 # So that signing in as them shows every side of the page: a document released, one in work, and one that
 # is waiting for their answer. This last one is submitted by the real account, to them.
 $doc3 = Join-Path $env:TEMP "DMS walk waiting $stamp.txt"
@@ -383,12 +383,12 @@ Check 'REQ-P56' "a document is left waiting for the person the walk runs as" {
     } finally { $script:headers = $keep } }
 
 # ---------------------------------------------------------------- the machine API
-Group "The machine API"
+Section "The machine API"
 $keys = Get-DmsEnvValue 'DMS_API_KEYS'
 if ($keys) { Skip 'REQ-P39' "the RAG's list" "needs an application key, which is not read from here - try it in Swagger" }
 else { Skip 'REQ-P39' "the RAG's list" "no application key is configured (DMS_API_KEYS)" }
 
-Close-Group
+Close-Section
 Write-Host ""
 Write-Host ("{0} checks passed, {1} failed, {2} skipped." -f $ok, $bad, $skipped) -ForegroundColor $(if ($bad) { 'Yellow' } else { 'Green' })
 Write-Host ""

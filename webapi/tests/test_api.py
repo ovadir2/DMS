@@ -4459,6 +4459,25 @@ def test_a_script_line_that_continues_a_string_is_wrapped():
     assert not bad, "a continued string needs parentheses:\n" + "\n".join(bad)
 
 
+def test_no_script_names_a_function_after_a_powershell_alias():
+    """PowerShell looks for an alias before a function, so `function Group` is never called: every
+    `Group "..."` runs Group-Object instead, quietly, with no output and no error. That is how the walk
+    printed its counts and none of its lines. A function is named after nothing PowerShell already means."""
+    import glob
+    import re as _re
+    aliases = {"group", "select", "where", "foreach", "sort", "measure", "compare", "format", "move",
+               "copy", "set", "get", "new", "tee", "echo", "write", "clear", "start", "stop", "test",
+               "add", "remove", "rename", "split", "join", "type", "cat", "ls", "dir", "ps", "pwd", "cd"}
+    bad = []
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for path in sorted(glob.glob(os.path.join(here, "..", "scripts", "*.ps1"))):
+        for i, line in enumerate(open(path, encoding="utf-8-sig").read().splitlines()):
+            m = _re.match(r"\s*function\s+([A-Za-z0-9_\-]+)", line)
+            if m and m.group(1).lower() in aliases:
+                bad.append(f"{os.path.basename(path)}:{i + 1}: function {m.group(1)}")
+    assert not bad, "PowerShell means something else by these already:\n" + "\n".join(bad)
+
+
 def test_the_company_s_own_departments_become_part_of_the_blueprint(tmp_path):
     """The blueprint the DMS ships with is a starting shape. A department somebody really made, and the
     folders in it, are the structure too: grey in the page, kept, and with a KPIs folder of their own. The
