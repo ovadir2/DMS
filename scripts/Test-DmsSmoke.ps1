@@ -19,6 +19,16 @@
     runs as, who owns the document - the DMS refuses an approval delegated to the person who wrote it. Left
     out, that one step is skipped.
 
+.PARAMETER ShareWith
+    Share the released document with this address, as the page's Share does: the file is copied to the
+    customer's folder on the Large File Exchange site and SharePoint invites the person to it, view only.
+    It really goes out, so nothing is shared unless this is given - and then -ShareCustomer says whose
+    folder it lands in.
+
+.PARAMETER ShareCustomer
+    The customer folder a share lands in (a folder under the customers folder). Needed with -ShareWith,
+    because the walk's own document lives under General and belongs to no customer.
+
 .PARAMETER Report
     Where to write the whole walk, line by line. Left out, it goes to %TEMP%\DMS-Smoke <date>.txt - and the
     path is printed, so the file can be sent on as it is.
@@ -41,6 +51,8 @@ param(
     [string]$Approver = '',
     [string]$Folder = '01_General\IT\DMS-Selftest',
     [string]$Delegate = '',
+    [string]$ShareWith = '',
+    [string]$ShareCustomer = '',
     [string]$Report = '',
     [switch]$Detailed,
     [switch]$Clean
@@ -381,6 +393,49 @@ Check 'REQ-P12' "the page knows what this person may do here" {
 Check 'REQ-P28' "the API describes itself" {
     $doc = Call GET "/api/openapi.json" $null $null
     "$(@($doc.paths.PSObject.Properties).Count) endpoints, $($doc.info.version)" }
+
+# ---------------------------------------------------------------- sharing outside the company
+Section "Shared outside the company, and written down"
+Check 'REQ-P70/P72' "the Share dialog offers only what may be shared, and says who to" {
+    $info = Call GET "/api/documents/$($doc.id)/share-info" $null $null
+    if (-not $info.revision) { throw "it offers no revision to share" }
+    "revision $($info.revision), $(@($info.customers).Count) customer folders, HR=$($info.hr)" }
+if (-not $ShareWith) {
+    Skip 'REQ-P72/P73' "a released revision is shared with somebody outside the company" `
+         "give -ShareWith <address> and -ShareCustomer <folder>: a share really goes out, so it is not done unasked"
+} elseif (-not $ShareCustomer) {
+    Skip 'REQ-P72/P73' "a released revision is shared with somebody outside the company" `
+         "give -ShareCustomer <folder> too: this document is under General and belongs to no customer"
+} else {
+$log = Join-Path $root "02_Customers\$ShareCustomer\Shared\DMS-Shared-Log.csv"
+$before = if (Test-Path -LiteralPath $log) { @(Get-Content -LiteralPath $log).Count } else { 0 }
+Check 'REQ-P72' "a released revision is shared with somebody outside the company" {
+    $sh = Call POST "/api/documents/$($doc.id)/share" @{ email = $ShareWith; customer = $ShareCustomer
+                                                         message = 'DMS walk-through' } $null
+    if (-not $sh.urls) { throw "nothing came back from the share" }
+    "Rev $($sh.revision) to $($sh.email) in $($sh.customer), until $($sh.days) days from now" }
+Check 'REQ-P73/P77' "the share is written in the customer's own log, where the work is" {
+    if (-not (Test-Path -LiteralPath $log)) { throw "there is no share log at $log" }
+    $now = @(Get-Content -LiteralPath $log)
+    if ($now.Count -le $before) { throw "the log did not grow" }
+    $last = $now[-1]
+    foreach ($want in @($ShareWith, $doc.documentId)) {
+        if ($last -notmatch [regex]::Escape($want)) { throw "the last row does not name $want" } }
+    "one row more: $($last.Substring(0, [Math]::Min(90, $last.Length)))" }
+Check 'REQ-P76' "the share log is the DMS's own: it is not edited from the page" {
+    $b = Call GET "/api/browse?path=$([uri]::EscapeDataString((Split-Path $log -Parent)))" $null $null
+    $row = @($b.files | Where-Object { $_.name -eq 'DMS-Shared-Log.csv' })[0]
+    if (-not $row) { throw "the page does not show the log" }
+    if ($row.canEdit) { throw "the page offers to edit the record of what left the company" }
+    "read only on the page: $($row.editWhy)" }
+Check 'REQ-P59/P60' "the share is in the document's own history, written as it happened" {
+    $mine = Call GET "/api/my-workflows" $null $null
+    $row = @($mine.items | Where-Object { $_.documentId -eq $doc.documentId })[0]
+    if (-not $row) { throw "the document is not in My workflows" }
+    $shared = @($row.history | Where-Object { "$($_.details)" -match 'Shared revision' })
+    if (-not $shared) { throw "the history says nothing about the share" }
+    $shared[-1].details.Substring(0, [Math]::Min(90, $shared[-1].details.Length)) }
+}
 
 # ---------------------------------------------------------------- the upkeep pass
 Section "The DMS keeps itself in order"
