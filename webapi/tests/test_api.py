@@ -4521,3 +4521,26 @@ def test_a_super_user_learns_the_structure_from_the_page(tmp_path):
     s.admins = []                                                   # not a super user: not their call
     assert c.post("/api/blueprint/learn").status_code == 403
     importlib.reload(bp)
+
+
+def test_the_markdown_of_a_new_revision_says_which_revision_it_is(tmp_path):
+    """The Markdown is the document as the AI reads it, and its head is what an answer is cited by. It was
+    written from the register row as it stood before the promotion, so revision 02 carried "Revision: 01"."""
+    from dms_api import file_service, markdown
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    q = root / "01_General" / "Commercial" / "Quotations"
+    q.mkdir(parents=True)
+    (q / "Quote_Rev02_DRAFT.docx").write_text("the second revision")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory")
+    sp = MemorySharePoint(s)
+    d = sp.create_document(title="Quote", path=str(q / "Quote_Rev02_DRAFT.docx"), document_type="הצעת מחיר",
+                           document_area="מסחרי", owner_email=USER, control_mode="", document_id="DMS-00044")
+    sp.update(d["id"], {"LifecycleStatus": s.choices["Approved_ReadOnly"], "CurrentRevision": "01",
+                        "DraftRevision": "02", "CurrentUncPath": "", "WorkingUncPath": str(q / "Quote_Rev02_DRAFT.docx")})
+    file_service.run_once(sp, s)
+
+    md = q / "Current_ReadOnly" / "Quote_Rev02.md"
+    assert md.is_file(), sorted(p.name for p in (q / "Current_ReadOnly").iterdir())
+    assert markdown.heading_of(str(md))["Revision"] == "02"
+    assert sp.document(d["id"])["currentRevision"] == "02"      # and the register agrees with the file

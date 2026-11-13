@@ -342,7 +342,10 @@ def run_once(sp, s: Settings, only: str = "") -> dict:
                 _set_read_only(target, True)
                 try:        # beside it, the same document as Markdown: what the company's AI reads
                     from . import markdown
-                    wrote = markdown.write_beside(target, d)
+                    # the record still says the revision this one replaces - the Markdown is about the
+                    # revision being released, and the AI quotes what the head of that file says
+                    now = {**d, "currentRevision": d.get("draftRevision") or d.get("currentRevision")}
+                    wrote = markdown.write_beside(target, now)
                     log.info("%s: Markdown %s", doc_id, wrote or "was not written (nothing to read in the file)")
                 except Exception as e:  # noqa: BLE001 - a release is not held up by its Markdown
                     log.info("%s has no Markdown beside it: %s", target, e)
