@@ -155,8 +155,11 @@ answer is the only place that says what is current.
 ## GET /api/v1/approved-documents - the list the RAG indexes
 
 Everything released, read from the `Current_ReadOnly` folders themselves - every department, every
-customer, every project. Per released document: its id, its name, its revision, **the Markdown the RAG
-reads**, and the released file itself beside it.
+customer, every project. **One entry per released file**: its id, its name, its revision, **the Markdown the
+RAG reads**, and the released file itself beside it. Two documents that share a folder and a base name
+(`Procedure.docx` and `Procedure.xlsx`) are two entries, each with the Markdown written for that file - the
+second one's is `Procedure.xlsx.md`. A Markdown with no file beside it is listed on its own, with
+`DocFileName` empty.
 
 ```json
 {
@@ -184,6 +187,10 @@ It is taken from the folders, not only from the register: a document released by
 `Current_ReadOnly` too, and the AI should read that as well. Where the register knows the file, the id, the
 name and the revision come from it; where it does not, they are read from the head the DMS wrote at the top
 of the Markdown itself.
+
+The Markdown of a document is `<document>.md` - `QP-16.1 Rev03.docx` -> `QP-16.1 Rev03.md`. Where that name
+is already another document's, the file carries its extension too (`Procedure.xlsx.md`), so a procedure and
+its workbook under one base name each keep their own. Never derive the name yourself: read `DocDMSpath`.
 
 **How a RAG should use it:** ask this endpoint, index `DocDMSpath`, and carry `DocID`, `DocName` and `DocRev`
 as the chunk's metadata, so an answer can say which document and which revision it came from. Ask again

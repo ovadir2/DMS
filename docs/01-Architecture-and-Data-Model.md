@@ -22,7 +22,7 @@ What the file server carries beside each released document:
 | Beside `Current_ReadOnly\<document>` | What it is |
 | --- | --- |
 | the document itself | read only on the file system; the revision in force |
-| `<document>.md` | the same document as Markdown, written as it is released: what the company AI reads. Removed when the revision is replaced |
+| `<document>.md` | the same document as Markdown, written as it is released: what the company AI reads. Removed when the revision is replaced. Where two documents of one folder share a base name, the second carries its extension too (`Procedure.xlsx.md`) |
 
 The workflow folders are unchanged from the design (`Working`, `Submitted`, `Current_ReadOnly`,
 `Obsolete_ReadOnly`), and the upkeep pass (`file_service.py`, `DMS_FILE_SERVICE_SECONDS`) moves files to match
