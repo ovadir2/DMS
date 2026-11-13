@@ -197,16 +197,24 @@ Check 'REQ-P36' "the file moved to Submitted" {
     (Test-Path $sub) -and @(Get-ChildItem $sub -File).Count -ge 1 }
 Check 'REQ-P56' "the owner sees it in My workflows" {
     $mine = Call GET "/api/my-workflows" $null $null
-    [bool](@($mine.documents | Where-Object { $_.documentId -eq $doc.documentId }).Count) }
+    [bool](@($mine.items | Where-Object { $_.documentId -eq $doc.documentId }).Count) }
 
 # ---------------------------------------------------------------- the approver's side
 Check 'REQ-P52' "an approver who may not see the document cannot be chosen" {
     try { Call POST "/api/documents" @{ path = $up.path; submit = $true; approvers = @('nobody@rh.co.il') } $null | Out-Null; $false }
     catch { $true } }
 
-# ---------------------------------------------------------------- approve it (as a super user: the unblocking path)
-Check 'REQ-P44/P54' "it is approved, and the decision is recorded" {
-    $after = Call POST "/api/approvals/$($doc.id)" @{ approve = $true; comment = 'walk-through: approved' } $null
+# ---------------------------------------------------------------- the approver answers, and nobody else
+Check 'REQ-P54' "somebody who is not the approver cannot answer for them" {
+    try { Call POST "/api/approvals/$($doc.id)" @{ approve = $true; comment = 'not mine to answer' } $null | Out-Null
+          throw "the DMS let $(if ($As) { $As } else { $me.email }) answer an approval that is not theirs" }
+    catch {
+        if ("$($_.Exception.Message)" -notmatch '403|Forbidden') { throw $_ }
+        "refused, as it should be" } }
+Check 'REQ-P44' "the approver answers, and the decision is recorded" {
+    $keep = $script:headers; $script:headers = @{}        # as the approver themselves, not as the walk's user
+    try { $after = Call POST "/api/approvals/$($doc.id)" @{ approve = $true; comment = 'walk-through: approved' } $null }
+    finally { $script:headers = $keep }
     "status now: $($after.statusKey)" }
 Start-Sleep -Seconds 4
 $cur = Join-Path $here 'Current_ReadOnly'
@@ -315,7 +323,7 @@ Check 'REQ-P47' "a submission can be taken back by its owner" {
     "$($w1.documentId) came back to its owner" }
 Check 'REQ-P50' "an approval can be passed to somebody else for this cycle" {
     Call POST "/api/documents/$($w1.id)/submit" @{ approvers = @($Approver) } $null | Out-Null
-    $who = if ($As) { $As } else { $me.email }
+    $who = $me.email              # the DMS knows people by email: RH\name is not an approver
     $keep = $script:headers; $script:headers = @{}        # the approver passes their own answer on
     try { $d = Call POST "/api/approvals/$($w1.id)/delegate" @{ to = $who; comment = 'walk-through' } $null }
     finally { $script:headers = $keep }
@@ -356,7 +364,8 @@ Check 'REQ-P28' "the API describes itself" {
 # ---------------------------------------------------------------- the upkeep pass
 Section "The DMS keeps itself in order"
 Check 'REQ-P14' "the upkeep pass runs and reports" {
-    $r = Call POST "/api/file-service/run" @{} $null
+    $keep = $script:headers; $script:headers = @{}        # a super user's command, not an ordinary user's
+    try { $r = Call POST "/api/file-service/run" @{} $null } finally { $script:headers = $keep }
     "moved $($r.moved), failed $($r.failed)" }
 Check 'REQ-P23' "a released file that lost its read-only flag gets it back" {
     $released.IsReadOnly = $false
@@ -376,7 +385,7 @@ Check 'REQ-P56' "a document is left waiting for the person the walk runs as" {
     $script:headers = @{}                      # as the real account: nobody approves their own document
     try {
         $put = Send-File $doc3 $here @{}
-        $who = if ($As) { $As } else { $me.email }
+        $who = $me.email              # the DMS knows people by email: RH\name is not an approver
         $w = Call POST "/api/documents" @{ path = $put.path; documentType = 'נוהל'; documentArea = 'מערכות מידע';
                                            submit = $true; approvers = @($who) } $null
         "$($w.documentId) is waiting for $who"
