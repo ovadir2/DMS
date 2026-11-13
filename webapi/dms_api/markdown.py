@@ -351,6 +351,40 @@ def heading_of(path: str) -> dict:
     return out
 
 
+def _written_for(md: str) -> str:
+    """The document a Markdown file was written for, from the "- File:" line the DMS puts at its top."""
+    try:
+        with open(md, encoding="utf-8", errors="ignore") as f:
+            for line in f.read(4096).splitlines():
+                if line.startswith("- File: "):
+                    return line[len("- File: "):].strip()
+    except OSError:
+        return ""
+    return ""
+
+
+def path_for(path: str, *, existing: bool = False) -> str | None:
+    """Where the Markdown of this document file belongs.
+
+    Normally it is the document's name with .md instead of its extension - Procedure.docx -> Procedure.md.
+    But two documents can share a folder and a base name (a procedure and its workbook, Procedure.docx and
+    Procedure.xlsx): one Procedure.md cannot serve both, and whichever was approved second used to overwrite
+    the other's Markdown. So the first one there keeps the short name and the next carries its extension
+    too - Procedure.xlsx.md. With existing=True this returns the Markdown that is already beside the
+    document, or None when it has none.
+    """
+    stem, _ext = os.path.splitext(path)
+    plain, full = stem + ".md", path + ".md"
+    if os.path.isfile(full):
+        return full
+    if os.path.isfile(plain):
+        owner = _written_for(plain)
+        if owner and os.path.normcase(owner) != os.path.normcase(path) and os.path.isfile(owner):
+            return full if not existing else (full if os.path.isfile(full) else None)
+        return plain
+    return None if existing else plain
+
+
 def write_beside(path: str, doc: dict | None = None) -> str | None:
     """Write <document>.md beside the approved document. It opens with what the document is - the DMS id, the
     revision, when it was approved and where it lives - so an answer can say which document it came from and
@@ -367,7 +401,7 @@ def write_beside(path: str, doc: dict | None = None) -> str | None:
             head.append(f"- {label}: {value}")
     head += [f"- File: {path}",
              f"- Written by the DMS: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC", "", "---", ""]
-    target = os.path.splitext(path)[0] + ".md"
+    target = path_for(path)
     try:
         if os.path.exists(target):
             os.chmod(target, os.stat(target).st_mode | 0o200)

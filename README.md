@@ -236,6 +236,8 @@ through its paces yet. What was asked for and is not there yet has a table of it
 | REQ-P93 | The customer skeleton is a shape, and stays one | Folders may be added to it - that is how the shape changes - but no document is ever filed in it, and a new customer is cut from it with its AD permissions copied, so the structure and the rights arrive together | Checked |
 | REQ-P94 | One file says how this installation is set up | `webapi\.env`: the repository, the sites, the sign-in, the upkeep pass, the keys - with the first occurrence of a key winning, which is said out loud because a leftover line above is how a setting silently does not take | Checked |
 
+| REQ-P95 | Two documents may share a name | A procedure and its workbook can sit in one folder under one base name (`Procedure.docx` and `Procedure.xlsx`): each keeps a Markdown of its own (the second is `Procedure.xlsx.md`), and the AI's list names every released file rather than one per base name | Built |
+
 ### Asked for, and not built yet
 
 | | What it would be | Why it is not done |

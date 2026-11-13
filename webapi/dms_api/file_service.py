@@ -96,8 +96,9 @@ def _drop_markdown(source: str) -> None:
     """The Markdown exists for the company's AI to read, and the AI is to read the revision in force and no
     other. So when a document leaves Current_ReadOnly its Markdown is not carried into Obsolete_ReadOnly -
     it is removed. The document itself is kept there, as the record of what that revision said."""
-    old_md = os.path.splitext(source)[0] + ".md"
-    if not is_file(old_md):
+    from . import markdown
+    old_md = markdown.path_for(source, existing=True)
+    if not old_md or not is_file(old_md):
         return
     try:
         _set_read_only(old_md, False)
@@ -270,9 +271,9 @@ def run_once(sp, s: Settings, only: str = "") -> dict:
                         log.info("%s: %s was writable and is read only again", doc_id, held)
                     except OSError as e:
                         log.warning("%s stayed writable: %s", held, e)
-                if not is_file(os.path.splitext(held)[0] + ".md"):
+                from . import markdown
+                if not markdown.path_for(held, existing=True):
                     try:        # the revision in force always has its Markdown, whoever released it
-                        from . import markdown
                         if markdown.write_beside(held, d):
                             log.info("%s: Markdown written beside %s", doc_id, held)
                     except Exception as e:  # noqa: BLE001

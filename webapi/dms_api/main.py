@@ -2276,8 +2276,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     "path": path, "sha256": d.get("currentSHA256") or "",
                     "folder": os.path.dirname(path)}
             if with_markdown:
-                md = os.path.splitext(path)[0] + ".md"
-                item["markdown"] = md if files.is_file(md) else ""
+                md = markdown.path_for(path, existing=True)
+                item["markdown"] = md if md and files.is_file(md) else ""
             out.append(item)
         out.sort(key=lambda x: (x["customer"].lower(), x["title"].lower()))
         logger.info("api %s GET /api/v1/documents -> %d, %d with no file", who["name"], len(out), missing)
@@ -2302,7 +2302,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             for key in ("currentUncPath", "workingUncPath"):
                 p = d.get(key)
                 if p:
-                    known[os.path.normcase(os.path.splitext(os.path.normpath(p))[0])] = d
+                    known[os.path.normcase(os.path.normpath(p))] = d
         out, seen = [], set()
         for folder, dirs, names in os.walk(s.repository_root):
             if os.path.basename(folder).lower() != "current_readonly":
@@ -2310,37 +2310,46 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 continue
             if not api_may_see(who, folder):              # the account the application acts as, folder first
                 continue
-            # One entry per released document, by its name without the extension: the Markdown the AI
-            # reads and the document itself are two files of the same thing, and a released file that has
-            # no Markdown (a drawing, a picture, a page) is still in Current_ReadOnly and still the RAG's
-            # to know about - it says there is no Markdown rather than leaving the document out.
-            by_stem: dict[str, list[str]] = {}
-            for name in sorted(names):
-                if not api_may_see(who, os.path.join(folder, name)):
+            # One entry per released file, each with the Markdown that was written for it. Two documents
+            # can share a folder and a base name (Procedure.docx and Procedure.xlsx), so they are listed by
+            # the file and not by the name without the extension - otherwise one of them is left out. A
+            # released file that has no Markdown (a drawing, a picture, a page) is still in Current_ReadOnly
+            # and still the RAG's to know about: it says there is no Markdown rather than leaving it out.
+            pairs = []            # (the released file, its Markdown) - either one can be missing
+            taken = set()
+            for name in sorted(n for n in names if not n.lower().endswith(".md")):
+                its_md = markdown.path_for(os.path.join(folder, name), existing=True) or ""
+                if its_md:
+                    taken.add(os.path.normcase(its_md))
+                pairs.append((name, its_md))
+            # a Markdown with no document beside it: one written by hand, or whose file was removed
+            pairs += [("", os.path.join(folder, n)) for n in sorted(n for n in names
+                                                                    if n.lower().endswith(".md")
+                                                                    and os.path.normcase(os.path.join(folder, n))
+                                                                    not in taken)]
+            for name, md in pairs:
+                full = os.path.join(folder, name) if name else ""
+                if not api_may_see(who, full or md):
                     continue
-                by_stem.setdefault(os.path.splitext(name)[0], []).append(name)
-            for base_name, group in sorted(by_stem.items()):
-                here = os.path.join(folder, base_name)
-                stem = os.path.normcase(os.path.normpath(here))
-                if stem in seen:
+                key = os.path.normcase(os.path.normpath(full or md))
+                if key in seen:
                     continue
-                seen.add(stem)
-                md_name = next((n for n in group if n.lower().endswith(".md")), "")
-                md = os.path.join(folder, md_name) if md_name else ""
-                doc_names = [n for n in group if not n.lower().endswith(".md")]
-                d = known.get(stem) or {}
+                seen.add(key)
+                base_name = os.path.splitext(name or os.path.basename(md))[0]
+                d = known.get(key) or {}
                 head = markdown.heading_of(md) if md else {}   # what the DMS wrote at the top of the file
-                parts = rel_parts(md or os.path.join(folder, doc_names[0] if doc_names else base_name))
+                parts = rel_parts(md or full)
                 of_customer = parts[1] if len(parts) > 2 and parts[0].lower() == s.customers_folder.lower() else ""
                 if customer and of_customer.lower() != customer.lower():
                     continue
+                group = ([name] if name else []) + ([os.path.basename(md)] if md else [])
                 item = {"DocID": d.get("documentId") or head.get("Document ID") or "",
                         "DocName": d.get("title") or head.get("title") or base_name,
                         "DocRev": d.get("currentRevision") or head.get("Revision") or "",
                         "DocDMSpath": md,
                         # the released file itself, beside its Markdown: its name, where it is, how big
-                        "DocFile": os.path.join(folder, doc_names[0]) if doc_names else "",
-                        "DocFileName": doc_names[0] if doc_names else "",
+                        "DocFile": full,
+                        "DocFileName": name,
                         "files": [{"name": n, "path": os.path.join(folder, n),
                                    "size": os.path.getsize(os.path.join(folder, n))
                                    if os.path.isfile(os.path.join(folder, n)) else 0} for n in group],

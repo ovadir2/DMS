@@ -4544,3 +4544,34 @@ def test_the_markdown_of_a_new_revision_says_which_revision_it_is(tmp_path):
     assert md.is_file(), sorted(p.name for p in (q / "Current_ReadOnly").iterdir())
     assert markdown.heading_of(str(md))["Revision"] == "02"
     assert sp.document(d["id"])["currentRevision"] == "02"      # and the register agrees with the file
+
+
+def test_markdown_of_two_documents_with_the_same_name(tmp_path):
+    """A procedure and its workbook can sit in one folder under one base name - Procedure.docx and
+    Procedure.xlsx. Each gets a Markdown of its own: the second one used to overwrite the first's, so the
+    AI read one document twice and never saw the other."""
+    from openpyxl import Workbook
+    from docx import Document as Docx
+    import dms_api.markdown as md
+    folder = tmp_path / "Current_ReadOnly"
+    folder.mkdir()
+    doc = Docx()
+    doc.add_heading("Procedure", 1)
+    doc.add_paragraph("what the procedure says")
+    doc.save(folder / "Procedure.docx")
+    wb = Workbook()
+    wb.active.append(["measure", "target"])
+    wb.active.append(["yield", "99"])
+    wb.save(folder / "Procedure.xlsx")
+
+    first = md.write_beside(str(folder / "Procedure.docx"), {"documentId": "DMS-00001", "currentRevision": "02"})
+    second = md.write_beside(str(folder / "Procedure.xlsx"), {"documentId": "DMS-00002", "currentRevision": "01"})
+    assert os.path.basename(first) == "Procedure.md"
+    assert os.path.basename(second) == "Procedure.xlsx.md"
+    assert "what the procedure says" in open(first, encoding="utf-8").read()
+    assert "target" in open(second, encoding="utf-8").read()
+
+    # found again, each beside its own document, and not confused with the other
+    assert md.path_for(str(folder / "Procedure.docx"), existing=True) == first
+    assert md.path_for(str(folder / "Procedure.xlsx"), existing=True) == second
+    assert md.path_for(str(folder / "Drawing.pdf"), existing=True) is None
