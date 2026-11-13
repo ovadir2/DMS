@@ -166,8 +166,11 @@ if ($fresh) { Start-Sleep -Seconds 5 }    # AD has to pass the folder's permissi
 
 # ---------------------------------------------------------------- a real file arrives
 $stamp = Get-Date -Format 'yyyy-MM-dd HHmm'
-$doc1 = Join-Path $env:TEMP "DMS walk $stamp.txt"
-@("DMS walk-through $stamp", "", "Register, submit, remark, approve, release, revise.") | Set-Content $doc1 -Encoding UTF8
+# A real Word document, not a text file: a procedure with headings, a numbered section and a table, so what
+# the approver opens, what View turns into a PDF and what the Markdown is written from are the real thing.
+$samples = Join-Path $PSScriptRoot 'samples'
+$doc1 = Join-Path $env:TEMP "DMS walk $stamp.docx"
+Copy-Item (Join-Path $samples 'Procedure.docx') $doc1 -Force
 $up = $null
 Check 'REQ-P88' "a file is dropped into the folder, with AD asked for Modify" {
     $script:up = Send-File $doc1 $here @{ dropped = 'true' }
@@ -239,6 +242,26 @@ Check 'REQ-P48' "the next revision starts from the one in force, which stays cur
     if (-not (Test-Path $rev.draft)) { throw "the draft is not on the file server" }
     if (-not $released.IsReadOnly) { throw "the approved revision stopped being read only" }
     $draft }
+
+# ---------------------------------------------------------------- a workbook of the same name
+Group "A workbook and a procedure under one name"
+$stem = [IO.Path]::GetFileNameWithoutExtension($released.Name)
+$book = Join-Path $env:TEMP "$stem.xlsx"
+Copy-Item (Join-Path $samples 'Procedure.xlsx') $book -Force
+Check 'REQ-P95' "a workbook released under the document's own name keeps a Markdown of its own" {
+    Send-File $book $here @{ noWorkflow = 'true' } | Out-Null
+    Start-Sleep -Seconds 4
+    $md = @(Get-ChildItem $cur -Filter *.md | Select-Object -ExpandProperty Name)
+    $want = @("$stem.md", "$stem.xlsx.md")
+    $missing = @($want | Where-Object { $md -notcontains $_ })
+    if ($missing) { throw "missing $($missing -join ', ') - there is only $($md -join ', ')" }
+    $want -join ' + ' }
+Check 'REQ-P08' "each Markdown names the file it was written for" {
+    $head = (Get-Content (Join-Path $cur "$stem.xlsx.md") -TotalCount 14) -join ' '
+    if ($head -notmatch [regex]::Escape("$stem.xlsx")) { throw "the workbook's Markdown names another file" }
+    $body = (Get-Content (Join-Path $cur "$stem.xlsx.md") -Raw)
+    if ($body -notmatch 'Measures') { throw "the workbook's sheets are not in it" }
+    "the workbook's own sheets, and the procedure's own text, each in their own file" }
 
 # ---------------------------------------------------------------- without a workflow
 Group "Published without a workflow, and taken out again"

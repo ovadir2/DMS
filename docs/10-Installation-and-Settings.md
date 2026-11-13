@@ -231,7 +231,7 @@ the workflow and blueprint folders stay out of reach either way.
 | `New-DmsApiKey.ps1` | A key for an application that calls the DMS (`/api/v1/...`), with a name and what it may read (`docs/13-Machine-API.md`) |
 | `New-DmsApiDocs.ps1` | Writes `docs/14-API-Reference.md` from the API itself - run it after adding or changing an endpoint |
 | `Open-DmsSwagger.ps1` | Checks that the DMS answers its OpenAPI document and opens Swagger UI (`-Redoc`, `-NoOpen`) |
-| `Test-DmsSmoke.ps1` | The whole walk against the installation that is really running, as the person it is told to run as, saying which requirement each step proves; `-Clean` removes it |
+| `Test-DmsSmoke.ps1` | The whole walk against the installation that is really running, as the person it is told to run as, saying which requirement each step proves. It works with real files - `scripts\samples\Procedure.docx` and `Procedure.xlsx`, released under one name - so Word, Excel, View and the Markdown are all exercised; `-Clean` removes it |
 | `Reset-DmsPilotData.ps1` | Clears what the pilot was played with - the SharePoint lists and libraries, and the file server back to the blueprint. Says what it would do; `-Write` does it |
 | `Rename-DmsToProduction.ps1` | The rename in one command: the `.env` lines, the IIS names, the restart and the readiness check. Says what it would do; `-Write` does it |
 | `Move-DmsFolder.ps1` | Renames the installation folder (`C:\DMS-Pilot` → `C:\DMS`) and repoints IIS, `web.config` and what else names it |
