@@ -31,6 +31,7 @@ param(
     [string]$As = '',
     [string]$Approver = '',
     [string]$Folder = '01_General\IT\DMS-Selftest',
+    [switch]$Detailed,
     [switch]$Clean
 )
 $ErrorActionPreference = 'Stop'
@@ -76,22 +77,44 @@ function Send-File($path, $folder, $extra) {
                -Headers $headers -TimeoutSec 300 -ContentType "multipart/form-data; boundary=$b" -Body $body.ToArray()
 }
 
+# One line per thing the DMS does, not per rule inside it: the detail is kept and printed when a step
+# fails (or always, with -Detailed), so a green run reads in five seconds and a red one says exactly what.
+$group = ''
+$lines = @()
+function Group($name) {
+    if ($script:group) { Close-Group }
+    $script:group = $name
+    $script:lines = @()
+}
+function Close-Group {
+    if (-not $script:group) { return }
+    $failed = @($script:lines | Where-Object { $_.state -eq 'FAIL' })
+    $skip = @($script:lines | Where-Object { $_.state -eq 'SKIP' })
+    $mark = if ($failed.Count) { 'FAIL' } elseif ($skip.Count -eq $script:lines.Count) { 'SKIP' } else { 'PASS' }
+    $colour = if ($failed.Count) { 'Red' } elseif ($mark -eq 'SKIP') { 'DarkYellow' } else { 'Green' }
+    Write-Host ("{0}  {1}" -f $mark, $script:group) -ForegroundColor $colour
+    foreach ($l in $script:lines) {
+        if ($l.state -ne 'PASS' -or $Detailed) {
+            $c = if ($l.state -eq 'FAIL') { 'Yellow' } else { 'DarkGray' }
+            Write-Host ("        {0,-11} {1}" -f $l.req, $l.what) -ForegroundColor $c
+            if ($l.detail) { Write-Host ("                    " + $l.detail) -ForegroundColor DarkGray }
+        }
+    }
+    $script:group = ''
+}
 function Check($req, $what, $test) {
     try {
         $result = & $test
-        if ($result -is [string] -and $result) { Write-Host ("PASS  {0,-9} {1}" -f $req, $what) -ForegroundColor Green; Write-Host "          $result" -ForegroundColor DarkGray }
-        elseif ($result) { Write-Host ("PASS  {0,-9} {1}" -f $req, $what) -ForegroundColor Green }
-        else { throw "it answered no" }
+        if (-not $result) { throw "it answered no" }
+        $script:lines += @{ req = $req; what = $what; state = 'PASS'; detail = "$result" }
         $script:ok++
     } catch {
-        Write-Host ("FAIL  {0,-9} {1}" -f $req, $what) -ForegroundColor Red
-        Write-Host ("          " + $_.Exception.Message) -ForegroundColor Yellow
+        $script:lines += @{ req = $req; what = $what; state = 'FAIL'; detail = $_.Exception.Message }
         $script:bad++
     }
 }
 function Skip($req, $what, $why) {
-    Write-Host ("SKIP  {0,-9} {1}" -f $req, $what) -ForegroundColor DarkYellow
-    Write-Host "          $why" -ForegroundColor DarkGray
+    $script:lines += @{ req = $req; what = $what; state = 'SKIP'; detail = $why }
     $script:skipped++
 }
 
@@ -118,6 +141,7 @@ Write-Host "=== The DMS at $Url, walked as $(if ($As) { $As } else { 'you' })" -
 Write-Host ""
 
 # ---------------------------------------------------------------- who, and what this build is
+Group "Signing in: the DMS answers as the person at the keyboard"
 $me = Call GET "/api/me" $null $null
 $cfg = Call GET "/api/client-config" $null $null
 Check 'REQ-P03' "the DMS knows who is calling, by AD" { "signed in as $($me.email)$(if ($me.actingFrom) { "  (really $($me.actingFrom))" })" }
@@ -125,6 +149,7 @@ Check 'REQ-P31' "Acting as is a super user seeing as somebody, and the real acco
     if ($As) { [bool]$me.actingFrom } else { $true } }
 
 # ---------------------------------------------------------------- the structure
+Group "The structure: the company's own folders are the blueprint"
 $general = Call GET "/api/browse?path=$([uri]::EscapeDataString((Join-Path $root '01_General')))" $null $null
 Check 'REQ-P29' "the company's structure is the blueprint, in both languages" {
     $named = @($general.folders | Where-Object { $_.label })
@@ -132,6 +157,7 @@ Check 'REQ-P29' "the company's structure is the blueprint, in both languages" {
     "$($named.Count) departments named, e.g. $($named[0].label.en) / $($named[0].label.he)" }
 
 # ---------------------------------------------------------------- a folder of its own
+Group "A place to work: a folder, and a file dropped into it"
 $fresh = -not (Test-Path $here)
 Check 'REQ-P02' "a folder can be made where AD allows it" {
     if ($fresh) { Call POST "/api/folders" @{ parent = (Split-Path $here -Parent); name = (Split-Path $here -Leaf) } $null | Out-Null }
@@ -148,6 +174,7 @@ Check 'REQ-P88' "a file is dropped into the folder, with AD asked for Modify" {
     Split-Path -Leaf $up.path }
 
 # ---------------------------------------------------------------- register, submit
+Group "A document, end to end: registered, sent, approved, released"
 $doc = $null
 Check 'REQ-P42/P43' "it is registered and sent to an approver" {
     $script:doc = Call POST "/api/documents" @{ path = $up.path; documentType = 'נוהל'; documentArea = 'מערכות מידע';
@@ -186,6 +213,7 @@ Check 'REQ-P38' "its Markdown is beside it, with the revision it is" {
     $md.Name }
 
 # ---------------------------------------------------------------- what the page offers on that row
+Group "A released document: read only, and the page says why"
 Check 'REQ-P63/P64' "the released document offers View, not editing" {
     $row = (Call GET "/api/browse?path=$([uri]::EscapeDataString($cur))" $null $null).files |
            Where-Object { $_.name -eq $released.Name }
@@ -204,6 +232,7 @@ Check 'REQ-P87' "it can be found without knowing where it is" {
     [bool](@($found | Where-Object { "$_" -like "*$($doc.documentId)*" }).Count -or $found.Count) }
 
 # ---------------------------------------------------------------- the next revision
+Group "The next revision, without displacing the one in force"
 Check 'REQ-P48' "the next revision starts from the one in force, which stays current" {
     $rev = Call POST "/api/documents/$($doc.id)/revise" $null @{ submit = 'false' }
     $draft = Split-Path -Leaf $rev.draft
@@ -212,6 +241,7 @@ Check 'REQ-P48' "the next revision starts from the one in force, which stays cur
     $draft }
 
 # ---------------------------------------------------------------- without a workflow
+Group "Published without a workflow, and taken out again"
 $doc2 = Join-Path $env:TEMP "DMS walk published $stamp.txt"
 @("Published as it is, no workflow.") | Set-Content $doc2 -Encoding UTF8
 $pub = $null
@@ -225,6 +255,7 @@ Check 'REQ-P57/P41' "a released file is taken out to Obsolete_ReadOnly, not eras
     Split-Path -Leaf $gone.movedTo }
 
 # ---------------------------------------------------------------- KPIs
+Group "KPIs, pages and the skeleton"
 Check 'REQ-P15' "the department's KPIs folder is known as one" {
     $kpis = Join-Path (Split-Path $here -Parent) 'KPIs'
     if (-not (Test-Path $kpis)) { throw "there is no KPIs folder beside $Folder" }
@@ -239,7 +270,72 @@ Check 'REQ-P93' "nothing is filed in the customer skeleton" {
     $s = Call GET "/api/browse?path=$([uri]::EscapeDataString($sk))" $null $null
     [bool]$s.skeletonNote }
 
+# ---------------------------------------------------------------- taking back, passing on, remarks
+Group "Taking back, passing on, and remarks"
+$doc4 = Join-Path $env:TEMP "DMS walk withdrawn $stamp.txt"
+@("Submitted, then taken back.") | Set-Content $doc4 -Encoding UTF8
+$w1 = $null
+Check 'REQ-P47' "a submission can be taken back by its owner" {
+    $put = Send-File $doc4 $here @{}
+    $script:w1 = Call POST "/api/documents" @{ path = $put.path; documentType = 'נוהל'; documentArea = 'מערכות מידע';
+                                               submit = $true; approvers = @($Approver) } $null
+    $back = Call POST "/api/documents/$($w1.id)/withdraw" @{} $null
+    if ($back.statusKey -ne 'Working') { throw "it is $($back.statusKey), not Working" }
+    "$($w1.documentId) came back to its owner" }
+Check 'REQ-P50' "an approval can be passed to somebody else for this cycle" {
+    Call POST "/api/documents/$($w1.id)/submit" @{ approvers = @($Approver) } $null | Out-Null
+    $who = if ($As) { $As } else { $me.email }
+    $keep = $script:headers; $script:headers = @{}        # the approver passes their own answer on
+    try { $d = Call POST "/api/approvals/$($w1.id)/delegate" @{ to = $who; comment = 'walk-through' } $null }
+    finally { $script:headers = $keep }
+    "now waiting for $who" }
+Check 'REQ-P68/P69' "an approver attaches a marked-up document as their remarks" {
+    $note = Join-Path $env:TEMP "remarks $stamp.txt"
+    @("Please add the lead time.") | Set-Content $note -Encoding UTF8
+    $b = [guid]::NewGuid().ToString(); $nl = "`r`n"
+    $head = ("--$b$nl" + "Content-Disposition: form-data; name=`"file`"; filename=`"remarks.txt`"$nl" +
+             "Content-Type: text/plain$nl$nl")
+    $enc = [Text.Encoding]::UTF8
+    $ms = New-Object System.IO.MemoryStream
+    $pre = $enc.GetBytes($head); $ms.Write($pre, 0, $pre.Length)
+    $bytes = [IO.File]::ReadAllBytes($note); $ms.Write($bytes, 0, $bytes.Length)
+    $post = $enc.GetBytes("$nl--$b--$nl"); $ms.Write($post, 0, $post.Length)
+    Invoke-RestMethod -Uri "$($Url.TrimEnd('/'))/api/documents/$($w1.id)/remarks" -Method POST -UseDefaultCredentials `
+        -Headers $headers -ContentType "multipart/form-data; boundary=$b" -Body $ms.ToArray() -TimeoutSec 120 | Out-Null
+    $kept = Call GET "/api/documents/$($w1.id)/remarks" $null $null
+    "$(@($kept).Count) attached" }
+
+# ---------------------------------------------------------------- links, text, the page itself
+Group "Links, text files, and the page"
+Check 'REQ-P11' "a link can be shared without naming the file server" {
+    $link = Call GET "/api/files/link?path=$([uri]::EscapeDataString($released.FullName))" $null $null
+    if ($link.url -like "*$root*") { throw "the link names the file server: $($link.url)" }
+    $link.url }
+Check 'REQ-P09' "a text file is read on the page itself" {
+    $t = Call GET "/api/files/text?path=$([uri]::EscapeDataString($released.FullName))" $null $null
+    if (-not $t.text) { throw "nothing came back" }
+    "$($t.text.Length) characters, canWrite=$($t.canWrite)" }
+Check 'REQ-P12' "the page knows what this person may do here" {
+    $b = Call GET "/api/browse?path=$([uri]::EscapeDataString($here))" $null $null
+    "canWrite=$($b.canWrite)  canDrop=$($b.canDrop)" }
+Check 'REQ-P28' "the API describes itself" {
+    $doc = Call GET "/api/openapi.json" $null $null
+    "$(@($doc.paths.PSObject.Properties).Count) endpoints, $($doc.info.version)" }
+
+# ---------------------------------------------------------------- the upkeep pass
+Group "The DMS keeps itself in order"
+Check 'REQ-P14' "the upkeep pass runs and reports" {
+    $r = Call POST "/api/file-service/run" @{} $null
+    "moved $($r.moved), failed $($r.failed)" }
+Check 'REQ-P23' "a released file that lost its read-only flag gets it back" {
+    $released.IsReadOnly = $false
+    Call GET "/api/browse?path=$([uri]::EscapeDataString($cur))" $null $null | Out-Null
+    $again = Get-Item $released.FullName
+    if (-not $again.IsReadOnly) { throw "it is still writable" }
+    "put back on $($again.Name)" }
+
 # ---------------------------------------------------------------- something waiting for this person
+Group "Left waiting, so every side of the page has something in it"
 # So that signing in as them shows every side of the page: a document released, one in work, and one that
 # is waiting for their answer. This last one is submitted by the real account, to them.
 $doc3 = Join-Path $env:TEMP "DMS walk waiting $stamp.txt"
@@ -256,12 +352,14 @@ Check 'REQ-P56' "a document is left waiting for the person the walk runs as" {
     } finally { $script:headers = $keep } }
 
 # ---------------------------------------------------------------- the machine API
+Group "The machine API"
 $keys = Get-DmsEnvValue 'DMS_API_KEYS'
 if ($keys) { Skip 'REQ-P39' "the RAG's list" "needs an application key, which is not read from here - try it in Swagger" }
 else { Skip 'REQ-P39' "the RAG's list" "no application key is configured (DMS_API_KEYS)" }
 
+Close-Group
 Write-Host ""
-Write-Host ("{0} passed, {1} failed, {2} skipped." -f $ok, $bad, $skipped) -ForegroundColor $(if ($bad) { 'Yellow' } else { 'Green' })
+Write-Host ("{0} checks passed, {1} failed, {2} skipped." -f $ok, $bad, $skipped) -ForegroundColor $(if ($bad) { 'Yellow' } else { 'Green' })
 Write-Host ""
 Write-Host "Left in place for tracing:" -ForegroundColor Cyan
 Write-Host "  $here"
