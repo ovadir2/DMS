@@ -14,6 +14,11 @@
     Nothing is cleaned up: -Clean removes what it made, when you say so. The Control Audit keeps its lines
     either way, which is the point of an audit.
 
+.PARAMETER Delegate
+    A third person, for passing an approval on. It cannot be the approver and cannot be the person the walk
+    runs as, who owns the document - the DMS refuses an approval delegated to the person who wrote it. Left
+    out, that one step is skipped.
+
 .PARAMETER Report
     Where to write the whole walk, line by line. Left out, it goes to %TEMP%\DMS-Smoke <date>.txt - and the
     path is printed, so the file can be sent on as it is.
@@ -25,7 +30,7 @@
     Who the document is sent to. It cannot be the person the walk runs as.
 
 .EXAMPLE
-    .\scripts\Test-DmsSmoke.ps1 -As RH\dms-lab -Approver roneno@rh.co.il
+    .\scripts\Test-DmsSmoke.ps1 -As RH\dms-lab -Approver roneno@rh.co.il -Delegate someone.else@rh.co.il
 .EXAMPLE
     .\scripts\Test-DmsSmoke.ps1 -Clean
 #>
@@ -35,6 +40,7 @@ param(
     [string]$As = '',
     [string]$Approver = '',
     [string]$Folder = '01_General\IT\DMS-Selftest',
+    [string]$Delegate = '',
     [string]$Report = '',
     [switch]$Detailed,
     [switch]$Clean
@@ -220,16 +226,23 @@ Start-Sleep -Seconds 4
 $cur = Join-Path $here 'Current_ReadOnly'
 $released = $null
 Check 'REQ-P04/P23' "it is released, and read only on the file server" {
-    $script:released = Get-ChildItem $cur -File | Where-Object { $_.Extension -ne '.md' } | Select-Object -First 1
+    $row = Call GET "/api/documents/$($doc.id)" $null $null       # this run's file, not an earlier run's
+    if (-not $row.currentUncPath) { throw "the register names no released file" }
+    $script:released = Get-Item -LiteralPath $row.currentUncPath
     if (-not $released) { throw "nothing in $cur" }
     if (-not $released.IsReadOnly) { throw "$($released.Name) is not read only" }
     $released.Name }
 Check 'REQ-P38' "its Markdown is beside it, with the revision it is" {
-    $md = Get-ChildItem $cur -Filter *.md | Select-Object -First 1
-    if (-not $md) { throw "no Markdown beside it" }
-    $head = (Get-Content $md.FullName -TotalCount 12) -join ' '
-    if ($head -notmatch 'Revision') { throw "the head says no revision" }
-    $md.Name }
+    # the Markdown of this document: its own name with .md, or its whole name plus .md where another
+    # document of the folder already has the short one
+    $stem = [IO.Path]::GetFileNameWithoutExtension($released.Name)
+    $md = @("$stem.md", "$($released.Name).md") | ForEach-Object { Join-Path $cur $_ } |
+          Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if (-not $md) { throw "no Markdown beside $($released.Name)" }
+    $head = (Get-Content -LiteralPath $md -TotalCount 14) -join ' '
+    if ($head -notmatch 'Revision') { throw "the head of $(Split-Path -Leaf $md) says no revision" }
+    if ($head -notmatch [regex]::Escape($released.Name)) { throw "$(Split-Path -Leaf $md) was written for another file" }
+    Split-Path -Leaf $md }
 
 # ---------------------------------------------------------------- what the page offers on that row
 Section "A released document: read only, and the page says why"
@@ -321,13 +334,17 @@ Check 'REQ-P47' "a submission can be taken back by its owner" {
     $back = Call POST "/api/documents/$($w1.id)/withdraw" @{} $null
     if ($back.statusKey -ne 'Working') { throw "it is $($back.statusKey), not Working" }
     "$($w1.documentId) came back to its owner" }
+if (-not $Delegate) {
+    Skip 'REQ-P50' "an approval is passed to somebody else for this cycle" `
+         "give -Delegate <someone@rh.co.il>: it cannot be $Approver, and it cannot be the person the walk runs as, who owns the document"
+} else {
 Check 'REQ-P50' "an approval can be passed to somebody else for this cycle" {
     Call POST "/api/documents/$($w1.id)/submit" @{ approvers = @($Approver) } $null | Out-Null
-    $who = $me.email              # the DMS knows people by email: RH\name is not an approver
     $keep = $script:headers; $script:headers = @{}        # the approver passes their own answer on
-    try { $d = Call POST "/api/approvals/$($w1.id)/delegate" @{ to = $who; comment = 'walk-through' } $null }
+    try { Call POST "/api/approvals/$($w1.id)/delegate" @{ to = $Delegate; comment = 'walk-through' } $null | Out-Null }
     finally { $script:headers = $keep }
-    "now waiting for $who" }
+    "now waiting for $Delegate" }
+}
 Check 'REQ-P68/P69' "an approver attaches a marked-up document as their remarks" {
     $note = Join-Path $env:TEMP "remarks $stamp.txt"
     @("Please add the lead time.") | Set-Content $note -Encoding UTF8
