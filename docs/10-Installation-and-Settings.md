@@ -170,6 +170,7 @@ the workflow and blueprint folders stay out of reach either way.
 | `DMS_APPROVALS` | `flow` | `page`: approvals happen in the DMS, and nothing outside it is needed. `flow`: Power Automate / Teams, for a site that has them |
 | `DMS_REVIEW_SITE_URL`, `DMS_REVIEW_LIBRARY` | `Approvals` | Where the editing copy lives |
 | `DMS_VIEW_LIBRARY` | `Views` | Where a reading copy is made before the DMS fetches it and deletes it. The DMS makes this library read only: it stops inheriting the site's permissions and everyone who could write there is left with Read, so a reader cannot type into the copy made for them. It is set at the first reading copy after a restart, so a library created by hand is corrected on its own |
+| `DMS_KPI_BUILDER_URL` | - | WidgetBuilder's address, e.g. `https://widgetbuilder.rh.tech`. Empty: the page offers no **＋ New KPI** or **Edit KPI** (there is nowhere to open), and the Builder can still publish through `/api/v1/kpi/publish` |
 | `DMS_CHECKOUT_HOURS` | `8` | A document left open for editing comes back by itself after this |
 | `DMS_VIEW_MINUTES` | `30` | How long an old-style reading copy may linger |
 | `DMS_SUBMITTED_EDITABLE` | `true` | Approvers may edit the submitted copy |

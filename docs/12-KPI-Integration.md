@@ -128,7 +128,7 @@ POST /api/kpi/open      {"folder": "<a KPIs folder, or one KPI's folder>", "kpi"
   400 this is not a KPIs folder | 403 not allowed to add here | 503 the Builder is not set up here
 ```
 
-The address handed back is `DMS_KPI_BUILDER_URL` plus, as the **interim** launch contract (to be replaced by
+The address handed back is `DMS_KPI_BUILDER_URL` (WidgetBuilder - `https://widgetbuilder.rh.tech`) plus, as the **interim** launch contract (to be replaced by
 the versioned one when the Builder team states theirs):
 
 | Parameter | Meaning |
