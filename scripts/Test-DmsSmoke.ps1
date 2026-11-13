@@ -368,7 +368,11 @@ Check 'REQ-P11' "a link can be shared without naming the file server" {
     if ($link.url -like "*$root*") { throw "the link names the file server: $($link.url)" }
     $link.url }
 Check 'REQ-P09' "a text file is read on the page itself" {
-    $t = Call GET "/api/files/text?path=$([uri]::EscapeDataString($released.FullName))" $null $null
+    # the document itself is Word now, and Word is not read as text: a note beside it is
+    $note = Join-Path $env:TEMP "DMS walk note $stamp.txt"
+    @("A note beside the document.", "Read on the page, not downloaded.") | Set-Content $note -Encoding UTF8
+    $put = Send-File $note $here @{}
+    $t = Call GET "/api/files/text?path=$([uri]::EscapeDataString($put.path))" $null $null
     if (-not $t.text) { throw "nothing came back" }
     "$($t.text.Length) characters, canWrite=$($t.canWrite)" }
 Check 'REQ-P12' "the page knows what this person may do here" {
