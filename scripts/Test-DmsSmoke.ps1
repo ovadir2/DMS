@@ -14,6 +14,10 @@
     Nothing is cleaned up: -Clean removes what it made, when you say so. The Control Audit keeps its lines
     either way, which is the point of an audit.
 
+.PARAMETER Report
+    Where to write the whole walk, line by line. Left out, it goes to %TEMP%\DMS-Smoke <date>.txt - and the
+    path is printed, so the file can be sent on as it is.
+
 .PARAMETER As
     Run as this person (a super user only; the DMS checks). Left out, it runs as you.
 
@@ -31,6 +35,7 @@ param(
     [string]$As = '',
     [string]$Approver = '',
     [string]$Folder = '01_General\IT\DMS-Selftest',
+    [string]$Report = '',
     [switch]$Detailed,
     [switch]$Clean
 )
@@ -41,6 +46,7 @@ $root = Get-DmsEnvValue 'DMS_REPOSITORY_ROOT'
 if (-not $root) { throw "DMS_REPOSITORY_ROOT is not in webapi\.env - run this on the DMS server." }
 $here = Join-Path $root $Folder
 $ok = 0; $bad = 0; $skipped = 0
+$all = @()                     # every line of every group, for the report and the list of failures at the end
 $headers = @{}
 if ($As) { $headers['X-DMS-Dev-User'] = $As }
 
@@ -93,6 +99,8 @@ function Close-Group {
     $mark = if ($failed.Count) { 'FAIL' } elseif ($skip.Count -eq $script:lines.Count) { 'SKIP' } else { 'PASS' }
     $colour = if ($failed.Count) { 'Red' } elseif ($mark -eq 'SKIP') { 'DarkYellow' } else { 'Green' }
     Write-Host ("{0}  {1}" -f $mark, $script:group) -ForegroundColor $colour
+    foreach ($l in $script:lines) { $script:all += @{ group = $script:group; req = $l.req; what = $l.what
+                                                      state = $l.state; detail = $l.detail } }
     foreach ($l in $script:lines) {
         if ($l.state -ne 'PASS' -or $Detailed) {
             $c = if ($l.state -eq 'FAIL') { 'Yellow' } else { 'DarkGray' }
@@ -383,6 +391,31 @@ else { Skip 'REQ-P39' "the RAG's list" "no application key is configured (DMS_AP
 Close-Group
 Write-Host ""
 Write-Host ("{0} checks passed, {1} failed, {2} skipped." -f $ok, $bad, $skipped) -ForegroundColor $(if ($bad) { 'Yellow' } else { 'Green' })
+Write-Host ""
+
+# What failed, in one list. The groups above are coloured for reading on screen; this is the part worth
+# sending on, and the report file carries the whole walk whether anybody was watching the screen or not.
+if ($bad) {
+    Write-Host "What failed:" -ForegroundColor Yellow
+    foreach ($l in @($all | Where-Object { $_.state -eq 'FAIL' })) {
+        Write-Host ("  {0,-11} {1}" -f $l.req, $l.what) -ForegroundColor Yellow
+        Write-Host ("              in: {0}" -f $l.group) -ForegroundColor DarkGray
+        Write-Host ("              {0}" -f $l.detail) -ForegroundColor DarkGray
+    }
+    Write-Host ""
+}
+if (-not $Report) { $Report = Join-Path $env:TEMP ("DMS-Smoke {0}.txt" -f $stamp) }
+$out = @("=== The DMS at $Url, walked as $(if ($As) { $As } else { $me.email })",
+         "    $(Get-Date -Format 'yyyy-MM-dd HH:mm')   build $($cfg.version)   folder $Folder", "")
+$seen = ''
+foreach ($l in $all) {
+    if ($l.group -ne $seen) { $seen = $l.group; $out += @("", $l.group) }
+    $out += ("  {0,-4} {1,-11} {2}" -f $l.state, $l.req, $l.what)
+    if ($l.detail) { $out += ("           " + ($l.detail -replace "`r?`n", ' ')) }
+}
+$out += @("", ("{0} checks passed, {1} failed, {2} skipped." -f $ok, $bad, $skipped))
+$out | Set-Content -Path $Report -Encoding UTF8
+Write-Host "The whole walk, line by line: $Report" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Left in place for tracing:" -ForegroundColor Cyan
 Write-Host "  $here"
