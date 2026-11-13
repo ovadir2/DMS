@@ -33,9 +33,14 @@ $root = Get-DmsEnvValue 'DMS_REPOSITORY_ROOT'
 if (-not $root) { throw "DMS_REPOSITORY_ROOT is not in webapi\.env - run this on the DMS server." }
 $here = Join-Path $root $Folder
 $step = 0
-function Call($method, $path, $body, $form) {
+function Call($method, $path, $body, $fields) {
+    # Windows PowerShell 5.1 has no -Form, so a form is written out by hand; it is two fields at most here.
     $u = "$($Url.TrimEnd('/'))$path"
-    if ($form) { return Invoke-RestMethod -Uri $u -Method $method -UseDefaultCredentials -Form $form -TimeoutSec 120 }
+    if ($fields) {
+        $pairs = ($fields.GetEnumerator() | ForEach-Object { "$($_.Key)=$([uri]::EscapeDataString("$($_.Value)"))" }) -join '&'
+        return Invoke-RestMethod -Uri $u -Method $method -UseDefaultCredentials -TimeoutSec 120 `
+                   -ContentType 'application/x-www-form-urlencoded' -Body $pairs
+    }
     if ($body) { return Invoke-RestMethod -Uri $u -Method $method -UseDefaultCredentials -TimeoutSec 120 `
                      -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes(($body | ConvertTo-Json -Depth 5))) }
     return Invoke-RestMethod -Uri $u -Method $method -UseDefaultCredentials -TimeoutSec 120
@@ -58,9 +63,18 @@ if ($Clean) {
     return
 }
 if (-not $Approver) { throw "Give -Approver <someone@rh.co.il> - it cannot be you." }
+# The approver has to be able to read the folder before the document can be sent to them. A folder made a
+# moment ago may not have reached them yet, and the DMS then refuses the submission - which is the rule
+# working, not a fault: the folder is made first, and the walk waits for AD to catch up.
+
 
 # ---- a folder of its own, and a real file in it
+$fresh = -not (Test-Path $here)
 New-Item -ItemType Directory -Path $here -Force | Out-Null
+if ($fresh) {
+    Write-Host "    (the folder was just made: giving AD a moment to pass its permissions down)" -ForegroundColor DarkGray
+    Start-Sleep -Seconds 5
+}
 $name = "DMS self-test $(Get-Date -Format 'yyyy-MM-dd HHmm').txt"
 $file = Join-Path $here $name
 @("DMS self-test", "", "Written by scripts\Invoke-DmsSmokeTest.ps1 on $(Get-Date -Format u).",
@@ -82,7 +96,7 @@ $cur = Join-Path $here 'Current_ReadOnly'
 Say "released" ((Get-ChildItem $cur -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }) -join ', ')
 
 # ---- the next revision, left in work so it can be seen in My workflows
-$rev = Call POST "/api/documents/$($doc.id)/revise" $null @{ submit = 'false' }
+$rev = Call POST "/api/documents/$($doc.id)/revise" $null @{ submit = 'false' }   # a form, as the endpoint takes
 Say "a second revision was started and left in work" (Split-Path -Leaf $rev.draft)
 
 Write-Host ""
