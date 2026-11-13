@@ -90,6 +90,6 @@ Write-Host ""
 if ($Write) {
     Write-Host 'Done. The DMS keeps the register for a minute, so restart it before looking at the page:'
     Write-Host '  .\scripts\Restart-Dms.ps1'
-    Write-Host '  .\scripts\Test-DmsProductionReady.ps1' -ForegroundColor Green
+    Write-Host '  .\scripts\Test-DmsSmoke.ps1' -ForegroundColor Green
 }
 else { Write-Host 'Nothing was changed. Add -Write to do it.' -ForegroundColor Yellow }

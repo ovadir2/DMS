@@ -194,8 +194,8 @@ Step 'Restart and check'
 $where = if ($NewHost) { "https://$NewHost" } else { Get-DmsDefault Url }
 if ($Write) {
     & (Join-Path $PSScriptRoot 'Restart-Dms.ps1') -Site $Site -Url $where
-    & (Join-Path $PSScriptRoot 'Test-DmsProductionReady.ps1') -Url $where
+    Write-Host "   Now walk the installation: .\scripts\Test-DmsSmoke.ps1" -ForegroundColor Green
 } else {
-    Write-Host "   would run Restart-Dms.ps1 and Test-DmsProductionReady.ps1"
+    Write-Host "   would run Restart-Dms.ps1, then Test-DmsSmoke.ps1 walks it"
     Write-Host "`nNothing was changed. Add -Write to do it." -ForegroundColor Yellow
 }

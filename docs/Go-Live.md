@@ -45,8 +45,8 @@ In `webapi\.env` - and remember the **first** occurrence of a key wins, so look 
 | `DMS_REVIEW_SITE_URL` | (if set) the `-TEST` one | the new one |
 | `DMS_PAGE_URL` | `https://dms-pilot.rh.tech/...` | `https://dms.rh.tech/...` |
 
-Then `.\scripts\Restart-Dms.ps1`, and `.\scripts\Test-DmsProductionReady.ps1` - it reads the `.env` the
-way the DMS does, asks the DMS, and says which line still carries a pilot name.
+Then `.\scripts\Restart-Dms.ps1`, and read the `.env` back (`Select-String -Path webapi\.env -Pattern
+'SITE_URL|PAGE_URL|DEV_'`): no line should still carry a pilot name.
 
 ### A3. The address: drop the `pilot`
 
@@ -91,7 +91,7 @@ way the DMS does, asks the DMS, and says which line still carries a pilot name.
 
 ### A6. Then look at it
 
-`.\scripts\Test-DmsProductionReady.ps1` with nothing failing, and by hand: submit and approve a document
+`.\scripts\Test-DmsSmoke.ps1` with nothing failing, and by hand: submit and approve a document
 end to end, see it land read-only in `Current_ReadOnly` with its Markdown beside it, View opens a PDF,
 share one with a customer, and `.\scripts\Open-DmsSwagger.ps1` answers on `dms.rh.tech`.
 

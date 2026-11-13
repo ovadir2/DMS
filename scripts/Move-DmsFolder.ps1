@@ -247,4 +247,4 @@ foreach ($t in $tasks) {
     }
 }
 Write-Host "   Open the new folder in VS Code: $To"
-Write-Host "   Then: cd $To\app ; .\scripts\Restart-Dms.ps1 ; .\scripts\Test-DmsProductionReady.ps1"
+Write-Host "   Then: cd $To\app ; .\scripts\Restart-Dms.ps1 ; .\scripts\Test-DmsSmoke.ps1"
