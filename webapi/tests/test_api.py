@@ -4689,3 +4689,24 @@ def test_view_follows_a_file_that_was_renamed_by_its_approval(tmp_path, monkeypa
     assert r3.status_code == 200, r3.text
     gone = c.get("/api/files/view-pdf", params={"path": str(cur / "nothing-like-it.docx")})
     assert gone.status_code == 404 and "not there any more" in gone.json()["detail"]
+
+
+def test_view_needs_sharepoint_only_for_what_must_be_converted(tmp_path):
+    """A drawing, a scan, a note or a picture is already something to look at. View used to ask SharePoint
+    to make a PDF of every one of them, and failed for all of them where the reading copy is not set up."""
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    cur = q / "Current_ReadOnly"
+    (cur / "Drawing.pdf").write_bytes(b"%PDF-1.4 drawing")
+    (cur / "Note.txt").write_text("a note beside the document", encoding="utf-8")
+    assert not hasattr(sp, "review_put")                      # the reading copy is not set up here
+
+    pdf = c.get("/api/files/view-pdf", params={"path": str(cur / "Drawing.pdf")})
+    assert pdf.status_code == 200 and pdf.headers["content-type"] == "application/pdf"
+    assert pdf.content.startswith(b"%PDF")
+    note = c.get("/api/files/view-pdf", params={"path": str(cur / "Note.txt")})
+    assert note.status_code == 200 and note.headers["content-type"].startswith("text/plain")
+    assert "a note beside the document" in note.text
+
+    office = c.get("/api/files/view-pdf", params={"path": str(next(p for p in cur.iterdir()
+                                                                   if p.suffix == ".xlsx"))})
+    assert office.status_code == 503 and "DMS_REVIEW_LIBRARY" in office.json()["detail"]

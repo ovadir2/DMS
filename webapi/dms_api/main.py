@@ -2637,8 +2637,6 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         installed on the server for that - but the copy is fetched and removed at once, so there is no copy
         left anywhere for a reader to annotate and save. Reading leaves nothing behind."""
         from fastapi.responses import Response
-        if not review_on():
-            raise HTTPException(503, "Reading a document as a PDF is not set up here")
         full = files.resolve(s.repository_root, path)
         if not files.is_file(full):
             # The file moved since the row was drawn: an approval renames it (the draft mark goes, the
@@ -2662,6 +2660,30 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             full = moved
         if not may_read(user, full):
             raise HTTPException(403, "You do not have access to this file")
+        from urllib.parse import quote as _q
+        ext = os.path.splitext(full)[1].lower()
+        if ext in (".pdf", ".txt", ".csv", ".md", ".log", ".json", ".xml", ".htm", ".html",
+                   ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg"):
+            # Nothing to convert: a drawing, a scan, a note or a picture is already something to look at.
+            # Asking SharePoint to make a PDF of it was how View failed on an installation where the
+            # reading copy is not set up - for files that never needed it.
+            kinds = {".pdf": "application/pdf", ".csv": "text/csv", ".json": "application/json",
+                     ".xml": "application/xml", ".htm": "text/html", ".html": "text/html",
+                     ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+                     ".bmp": "image/bmp", ".svg": "image/svg+xml"}
+            kind = kinds.get(ext, "text/plain; charset=utf-8")
+            if ext in (".htm", ".html", ".svg"):        # somebody else's markup is never run in our origin
+                kind = "text/plain; charset=utf-8"
+            log(user, "view", full)
+            with open(full, "rb") as fh:
+                body = fh.read()
+            return Response(body, media_type=kind, headers={
+                "Content-Disposition": f"inline; filename*=UTF-8''{_q(os.path.basename(full))}",
+                "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"})
+        if not review_on():
+            raise HTTPException(503, "Reading an Office document as a PDF needs the reading copy: name the "
+                                     "library in DMS_REVIEW_LIBRARY (and DMS_REVIEW_SITE_URL where it is "
+                                     "its own site). A PDF, a picture or a text file is read without it.")
         try:
             data = pdf_of(full, user.email)
         except Exception as e:  # noqa: BLE001
@@ -2669,7 +2691,6 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(502, f"The document could not be prepared for reading: {e}") from None
         if not data:
             raise HTTPException(502, "The document came back empty")
-        from urllib.parse import quote as _q
         log(user, "view", full)
         name = os.path.splitext(os.path.basename(full))[0] + ".pdf"
         return Response(data, media_type="application/pdf",
