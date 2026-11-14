@@ -1,0 +1,4 @@
+RH - DMS sample note
+
+A plain text file: read on the page itself, not downloaded.
+It is here so the walk reads text, a procedure, a workbook and a drawing - the four kinds people really keep.

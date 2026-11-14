@@ -8,6 +8,10 @@
     proves the installation: AD, IIS, SharePoint, the file server and the page's own API, with real files,
     in a folder of its own (`01_General\IT\DMS-Selftest`).
 
+    It works with the four kinds of file people really keep, from scripts\samples: a procedure in Word
+    (registered, approved, revised), a workbook under the document's own name, a drawing as a PDF released
+    as it is, and a plain text note read on the page.
+
     It runs as the person it is told to run as. A super user may run it as somebody else ("Acting as"), so
     the walk is seen through that person's rights - which is the only honest way to test what a user can do.
 
@@ -301,7 +305,7 @@ Check 'REQ-P48' "the next revision starts from the one in force, which stays cur
     $draft }
 
 # ---------------------------------------------------------------- a workbook of the same name
-Section "A workbook and a procedure under one name"
+Section "A workbook and a drawing beside the procedure"
 $stem = [IO.Path]::GetFileNameWithoutExtension($released.Name)
 $book = Join-Path $env:TEMP "$stem.xlsx"
 Copy-Item (Join-Path $samples 'Procedure.xlsx') $book -Force
@@ -405,7 +409,7 @@ Check 'REQ-P11' "a link can be shared without naming the file server" {
 Check 'REQ-P09' "a text file is read on the page itself" {
     # the document itself is Word now, and Word is not read as text: a note beside it is
     $note = Join-Path $env:TEMP "DMS walk note $stamp.txt"
-    @("A note beside the document.", "Read on the page, not downloaded.") | Set-Content $note -Encoding UTF8
+    Copy-Item (Join-Path $samples 'Note.txt') $note -Force
     $put = Send-File $note $here @{}
     $t = Call GET "/api/files/text?path=$([uri]::EscapeDataString($put.path))" $null $null
     if (-not $t.text) { throw "nothing came back" }
@@ -416,6 +420,26 @@ Check 'REQ-P12' "the page knows what this person may do here" {
 Check 'REQ-P28' "the API describes itself" {
     $doc = Call GET "/api/openapi.json" $null $null
     "$(@($doc.paths.PSObject.Properties).Count) endpoints, $($doc.info.version)" }
+
+Check 'REQ-P49/P04' "a drawing is released as it is, read only, and is not a document to read" {
+    $pdf = Join-Path $env:TEMP "$stem drawing.pdf"
+    Copy-Item (Join-Path $samples 'Drawing.pdf') $pdf -Force
+    $put = Send-File $pdf $here @{ noWorkflow = 'true' }
+    if ($put.path -notlike "*Current_ReadOnly*") { throw "it did not land in Current_ReadOnly: $($put.path)" }
+    Start-Sleep -Seconds 2
+    $f = Get-Item -LiteralPath $put.path
+    if (-not $f.IsReadOnly) { throw "$($f.Name) is not read only" }
+    $md = @("$([IO.Path]::GetFileNameWithoutExtension($f.Name)).md", "$($f.Name).md") |
+          ForEach-Object { Join-Path $cur $_ } | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($md -and ((Get-Content -LiteralPath $md -TotalCount 14) -join ' ') -notmatch [regex]::Escape($f.Name)) {
+        throw "$(Split-Path -Leaf $md) was written for another file" }
+    "$($f.Name), read only$(if ($md) { ", with $(Split-Path -Leaf $md)" } else { ', no Markdown of its own' })" }
+Check 'REQ-P63/P64' "the drawing opens to be looked at, not edited" {
+    $row = (Call GET "/api/browse?path=$([uri]::EscapeDataString($cur))" $null $null).files |
+           Where-Object { $_.name -like "*drawing.pdf" } | Select-Object -First 1
+    if (-not $row) { throw "the page does not show the drawing" }
+    if ($row.canEdit) { throw "it offers editing of a released file" }
+    "View only: $($row.editWhy)" }
 
 # ---------------------------------------------------------------- sharing outside the company
 Section "Shared outside the company, and written down"

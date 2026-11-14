@@ -1,0 +1,37 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 425 >>
+stream
+q 0.6 w BT /F1 18 Tf 60 760 Td (RH - DMS sample drawing) Tj ET
+BT /F1 11 Tf 60 735 Td (A released file that is not a document to read: a drawing, a picture, a scan.) Tj ET
+BT /F1 11 Tf 60 718 Td (It has no Markdown of its own - the RAG asks for it with all=true.) Tj ET
+60 700 m 480 700 l S
+60 300 m 60 680 l 480 680 l 480 300 l 60 300 l S
+BT /F1 10 Tf 70 310 Td (Drawing no. DMS-SAMPLE-01   Scale 1:1   Sheet 1 of 1) Tj ET Q
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000717 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+787
+%%EOF
