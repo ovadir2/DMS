@@ -4661,3 +4661,31 @@ def test_a_domain_account_names_the_same_person_as_their_address(tmp_path, monke
     bad = c.post("/api/documents", json={"path": str(f), "documentType": "x", "documentArea": "y",
                                          "approvers": ["RH\\nobody-at-all"]})
     assert bad.status_code == 400 and "Not an email address" in bad.json()["detail"]
+
+
+def test_view_follows_a_file_that_was_renamed_by_its_approval(tmp_path, monkeypatch):
+    """An approval renames the file - the draft mark goes, the revision arrives - and a row drawn before
+    that names the old one. View used to answer "file not found" for a document that is right there."""
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    # the reading copy: a library named, and a SharePoint that can make one
+    s.review_library = s.review_library or "Views"
+    sp.review_put = lambda local_path, document_id, edit=False, as_pdf=False: {"name": "x.pdf", "url": "https://x/x.pdf"}
+    sp.review_get = lambda document_id, name: b"%PDF-1.4 x"
+    sp.review_delete = lambda document_id, name=None: None
+    cur = q / "Current_ReadOnly"
+    released = next(p for p in cur.iterdir() if p.suffix != ".md")
+
+    r = c.get("/api/files/view-pdf", params={"path": str(released)})
+    assert r.status_code == 200 and r.content.startswith(b"%PDF"), r.text
+    # the row was drawn when the file was a draft with another name, in another folder
+    old_name = q / (released.stem + "_DRAFT" + released.suffix)
+    sp.update(d["id"], {"WorkingUncPath": str(old_name)})
+    r2 = c.get("/api/files/view-pdf", params={"path": str(old_name)})
+    assert r2.status_code == 200, r2.text               # followed to the approved file, not 404
+
+    # and the same file in the folder it was in before the approval moved it
+    moved_folder = q / "Submitted" / released.name
+    r3 = c.get("/api/files/view-pdf", params={"path": str(moved_folder)})
+    assert r3.status_code == 200, r3.text
+    gone = c.get("/api/files/view-pdf", params={"path": str(cur / "nothing-like-it.docx")})
+    assert gone.status_code == 404 and "not there any more" in gone.json()["detail"]

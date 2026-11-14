@@ -2641,7 +2641,25 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(503, "Reading a document as a PDF is not set up here")
         full = files.resolve(s.repository_root, path)
         if not files.is_file(full):
-            raise HTTPException(404, "File not found")
+            # The file moved since the row was drawn: an approval renames it (the draft mark goes, the
+            # revision arrives) and takes it to Current_ReadOnly. Every other command follows it; View used
+            # to answer "file not found" for a document that is right there under its approved name.
+            from .file_service import find_file, to_root
+            moved = find_file(s.repository_root, full)
+            if not moved:
+                # the name changed too (the draft mark goes, the revision arrives): the register knows the
+                # file under the path the row was drawn from, and says where that document is now
+                known = find_registered(full, register_index()) or {}
+                for where in (known.get("currentUncPath"), known.get("workingUncPath")):
+                    here = to_root(s.repository_root, where) if where else ""
+                    if here and files.is_file(here):
+                        moved = here
+                        break
+            if not moved:
+                raise HTTPException(404, f"{os.path.basename(full)} is not there any more. Refresh the page "
+                                         f"(the logo): the row was drawn before the file moved.")
+            logger.info("view: %s was asked for, %s was read", full, moved)
+            full = moved
         if not may_read(user, full):
             raise HTTPException(403, "You do not have access to this file")
         try:
