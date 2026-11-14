@@ -26,7 +26,8 @@
     folder it lands in.
 
 .PARAMETER ShareCustomer
-    The customer folder a share lands in (a folder under the customers folder). Needed with -ShareWith,
+    The customer folder a share lands in: one of the folders under the customers folder, and nothing else -
+    "Other" is the one that takes anybody who is not a customer of their own. Needed with -ShareWith,
     because the walk's own document lives under General and belongs to no customer.
 
 .PARAMETER Report
@@ -405,7 +406,7 @@ if (-not $ShareWith) {
          "give -ShareWith <address> and -ShareCustomer <folder>: a share really goes out, so it is not done unasked"
 } elseif (-not $ShareCustomer) {
     Skip 'REQ-P72/P73' "a released revision is shared with somebody outside the company" `
-         "give -ShareCustomer <folder> too: this document is under General and belongs to no customer"
+         "give -ShareCustomer <folder> too - a folder under the customers folder, or Other, which takes anybody: this document is under General and belongs to no customer"
 } else {
 $log = Join-Path $root "02_Customers\$ShareCustomer\Shared\DMS-Shared-Log.csv"
 $before = if (Test-Path -LiteralPath $log) { @(Get-Content -LiteralPath $log).Count } else { 0 }

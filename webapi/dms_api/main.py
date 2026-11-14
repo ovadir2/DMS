@@ -3340,6 +3340,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         except (FileNotFoundError, PermissionError):
             return []
 
+    OTHER = "Other"          # the customer folder anybody who is not a customer of their own is sent in
+
     def is_hr(path: str) -> bool:
         """A file of HR (01_General\\HR and its subfolders): shared with a potential employee, not a customer."""
         parts = [p.lower() for p in rel_parts(path)]
@@ -3377,7 +3379,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 and os.path.normcase(os.path.dirname(to_root(s.repository_root, x.get("currentUncPath")) or "")) == here]
         others = [{"id": x["id"], "documentId": x.get("documentId"), "title": x.get("title"), "revision": x.get("currentRevision"),
                    "customer": customer_of_path(x.get("currentUncPath") or "")} for x in mine]
-        return {"customer": customer_of_path(current), "customers": customer_names(user), "revision": rev, "hr": is_hr(current),
+        here_customers = customer_names(user)
+        return {"customer": customer_of_path(current), "customers": here_customers, "revision": rev, "hr": is_hr(current),
+                "other": next((n for n in here_customers if n.lower() == OTHER.lower()), ""),
                 "folder": s.ex_folder, "shortcut": s.ex_shortcut, "days": s.ex_days, "others": others}
 
     @app.post("/api/documents/{item_id}/share")
@@ -3393,9 +3397,20 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         docs = [shareable(i, user) for i in dict.fromkeys([item_id, *req.documentIds])]
         names = {n.lower(): n for n in customer_names(user)}
         hr = is_hr(docs[0][1])
-        if (req.customer or "").strip():                       # chosen in the dialog (a customer folder, another customer,
-            typed = recipient_name(req.customer)               # or for HR files a potential employee)
-            customer = names.get(typed.lower(), typed)
+        if (req.customer or "").strip():                       # chosen in the dialog: a customer folder, or for
+            typed = recipient_name(req.customer)               # an HR file the potential employee's own name
+            if typed.lower() in names:
+                customer = names[typed.lower()]
+            elif hr:
+                customer = typed
+            else:
+                # A share goes to a customer the company has, so that everything sent sits in that customer's
+                # own folder and in that customer's own log. Somebody who is not a customer of their own is
+                # sent in OTHER: that folder takes anybody, and is still one place to look afterwards.
+                raise HTTPException(400, f"{typed} is not a customer. Choose one of the folders under "
+                                         f"{s.customers_folder}" + (f", or {names[OTHER.lower()]}, which takes "
+                                         f"anybody who is not a customer of their own." if OTHER.lower() in names
+                                         else "."))
         else:
             customer = None if hr else customer_of_path(docs[0][1])
         if not customer:

@@ -135,7 +135,14 @@ CUSTOMER["KPIs"] = ("KPIs", "מדדים", {}, "The measures of this customer and
 ROOT = N({
     "01_General": ("General", "כללי", MANAGEMENT, "Company-wide areas: procedures, standards, HR, finance",
                    "תחומי החברה: נהלים, תקנים, משאבי אנוש, כספים"),
-    "02_Customers": ("Customers", "לקוחות", {"*": ("", "", CUSTOMER, "Customer", "לקוח")},
+    "02_Customers": ("Customers", "לקוחות",
+                     # Other is not a customer: it is where anybody who is not a customer of their own is
+                     # sent - a one-off recipient, a supplier, somebody asking for a document once. A share
+                     # goes to a folder of this list and to that folder's own log, so there is one place to
+                     # look afterwards instead of a folder invented from a name somebody typed.
+                     N({"Other": ("Other", "אחר", {}, "Anybody who is not a customer of their own",
+                                  "כל מי שאינו לקוח בפני עצמו"),
+                        "*": ("", "", CUSTOMER, "Customer", "לקוח")}),
                      "One folder per customer, with its commercial files and products", "תיקייה לכל לקוח, עם המסמכים המסחריים והמוצרים"),
 })
 # 03_Operations_Staging, 04_Workflow_System and 05_Exchange_Quarantine are system folders, not shown to users.

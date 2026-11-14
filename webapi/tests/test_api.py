@@ -1316,17 +1316,21 @@ def test_share_several_files_outside_customers(tmp_path):
     assert c.get(f"/api/documents/{e['id']}/share-info").json()["customer"] is None
     assert c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com"}).status_code == 400   # customer needed
     assert c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "a/b"}).status_code == 400   # not a folder name
-    assert c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "New Customer"}).status_code == 200   # out of the list
-    assert [f["name"] for f in c.get("/api/exchange/files", params={"name": "new customer"}).json()]                 # what is there now
-    log = tmp_path / "Root" / "02_Customers" / "Shared" / "DMS-Shared-Log.csv"
+    # out of the list: refused. Everything sent sits in a customer's folder, so the customer is one of them
+    bad = c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "New Customer"})
+    assert bad.status_code == 400 and "not a customer" in bad.json()["detail"]
     assert not (tmp_path / "Root" / "02_Customers" / "New Customer").exists()   # no folder is invented for them
+    (tmp_path / "Root" / "02_Customers" / "Other").mkdir()                      # the folder that takes anybody
+    assert c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "Other"}).status_code == 200
+    assert [f["name"] for f in c.get("/api/exchange/files", params={"name": "Other"}).json()]        # what is there now
+    log = tmp_path / "Root" / "02_Customers" / "Other" / "Shared" / "DMS-Shared-Log.csv"
     import stat as _stat
     assert not log.stat().st_mode & _stat.S_IWRITE                              # read only, like every share log
-    assert "New Customer: x@cust.com" in log.read_text(encoding="utf-8-sig")    # the one log says who it went to
+    assert "x@cust.com" in log.read_text(encoding="utf-8-sig")                  # the log says who it went to
     r = c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "customer_a", "documentIds": [d["id"]]})
     assert r.status_code == 200, r.text
     assert r.json()["customer"] == "Customer_A" and len(r.json()["documents"]) == 2
-    assert {u["url"].rsplit("/", 2)[-2] for u in sp.shares} == {"Customer_A", "New Customer"}
+    assert {u["url"].rsplit("/", 2)[-2] for u in sp.shares} == {"Customer_A", "Other"}
     (tmp_path / "Root" / "02_Customers" / "Elbit").mkdir()
     r = c.post(f"/api/documents/{d['id']}/share", json={"email": "y@elbit.com", "customer": "Elbit"})  # another customer
     assert r.status_code == 200 and r.json()["customer"] == "Elbit" and "Outbound/Elbit/" in sp.shares[-1]["url"]
@@ -4594,3 +4598,37 @@ def test_markdown_of_two_documents_with_the_same_name(tmp_path):
     assert md.path_for(str(folder / "Procedure.docx"), existing=True) == first
     assert md.path_for(str(folder / "Procedure.xlsx"), existing=True) == second
     assert md.path_for(str(folder / "Drawing.pdf"), existing=True) is None
+
+
+def test_a_share_goes_to_a_customer_of_the_company_and_other_takes_anybody(tmp_path):
+    """Everything sent out sits in a customer's own folder and in that customer's own log, so the customer
+    is one of the folders under the customers folder - not a name somebody typed. Whoever is not a customer
+    of their own (a one-off recipient, a supplier, a person) is sent in Other, which takes anybody."""
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    customers = tmp_path / "Root" / "02_Customers"
+
+    r = c.post(f"/api/documents/{d['id']}/share", json={"email": "someone@gmail.com", "customer": "Nobody Ltd"})
+    assert r.status_code == 400 and "not a customer" in r.json()["detail"]
+    assert not any(x for x in getattr(sp, "shares", []) if "Nobody" in x.get("url", ""))
+
+    (customers / "Other").mkdir(parents=True, exist_ok=True)
+    info = c.get(f"/api/documents/{d['id']}/share-info").json()
+    assert info["other"] == "Other" and "Other" in info["customers"]
+    r = c.post(f"/api/documents/{d['id']}/share", json={"email": "edssron@gmail.com", "customer": "other"})
+    assert r.status_code == 200, r.text
+    assert r.json()["customer"] == "Other" and "Outbound/Other/" in sp.shares[-1]["url"]
+    log = customers / "Other" / "Shared" / "DMS-Shared-Log.csv"
+    assert "edssron@gmail.com" in log.read_text(encoding="utf-8-sig")
+
+    # an HR file is still shared with a person by name: that is not a customer and never was
+    hr = tmp_path / "Root" / "01_General" / "HR" / "Current_ReadOnly"
+    hr.mkdir(parents=True, exist_ok=True)
+    f = hr / "Offer.docx"
+    f.write_bytes(b"x")
+    doc = sp.create_document(title="Offer", path=str(f), document_type="נוהל", document_area="כוח אדם",
+                             owner_email=USER, control_mode="", document_id="DMS-00009")
+    sp.update(doc["id"], {"LifecycleStatus": s.choices["Approved_ReadOnly"], "CurrentUncPath": str(f),
+                          "CurrentRevision": "01"})
+    r = c.post(f"/api/documents/{doc['id']}/share", json={"email": "candidate@gmail.com", "customer": "Dana Levi"})
+    assert r.status_code == 200, r.text
+    assert r.json()["customer"] == "Dana Levi"
