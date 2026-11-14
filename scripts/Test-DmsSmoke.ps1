@@ -419,7 +419,10 @@ if (-not $candidates) {
          "there is nobody to pass it to: the approver and the owner are the only accounts here - give -Delegate <someone>"
 } else {
 Check 'REQ-P50' "an approval can be passed to somebody else for this cycle" {
-    Call POST "/api/documents/$($w1.id)/submit" @{ approvers = @($Approver) } $null | Out-Null
+    # it was taken back a moment ago: send it again, and say which step refused rather than its number
+    try { Call POST "/api/documents/$($w1.id)/submit" @{ approvers = @($Approver) } $null | Out-Null }
+    catch { $st = try { (Call GET "/api/documents/$($w1.id)" $null $null).statusKey } catch { '?' }
+            throw "sending $($w1.documentId) to $Approver was refused ($st): $(Why $_)" }
     $keep = $script:headers; $script:headers = @{}        # the approver passes their own answer on
     $refused = @()
     try {
@@ -530,9 +533,11 @@ Check 'REQ-P76' "the share log is the DMS's own: it is not edited from the page"
     if ($row.canEdit) { throw "the page offers to edit the record of what left the company" }
     "read only on the page: $($row.editWhy)" }
 Check 'REQ-P59/P60' "the share is in the document's own history, written as it happened" {
-    $mine = Call GET "/api/my-workflows" $null $null       # the owner's own list: the document is theirs
+    # as the real account, who is a super user: every workflow, not only their own documents
+    $keep = $script:headers; $script:headers = @{}
+    try { $mine = Call GET "/api/my-workflows?everyone=true" $null $null } finally { $script:headers = $keep }
     $row = @($mine.items | Where-Object { $_.documentId -eq $doc.documentId })[0]
-    if (-not $row) { throw "the document is not in My workflows" }
+    if (-not $row) { throw "$($doc.documentId) is in none of the $(@($mine.items).Count) workflows" }
     $shared = @($row.history | Where-Object { "$($_.details)" -match 'Shared revision' })
     if (-not $shared) { throw "the history says nothing about the share" }
     $shared[-1].details.Substring(0, [Math]::Min(90, $shared[-1].details.Length)) }
