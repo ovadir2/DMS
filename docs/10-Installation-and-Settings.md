@@ -154,6 +154,7 @@ the workflow and blueprint folders stay out of reach either way.
 
 | Key | Default | What it does |
 | --- | --- | --- |
+| `DMS_OTHER_CUSTOMER` | `Other_Share` | The folder of the customers list that takes anybody who is not a customer of their own: one-off recipients, suppliers, a person. A share goes to a folder of that list and nowhere else |
 | `DMS_CUSTOMERS_FOLDER` | `02_Customers` | The customers root |
 | `DMS_PROTECTED_DEPTH` | `2` | How deep the company structure is protected from rename and delete |
 | `DMS_SHORT_PATHS`, `DMS_CLIENT_ROOT`, `DMS_CLIENT_SHORT_PATHS` | - | The drive letters and UNC paths people see, so a path opens on their PC |

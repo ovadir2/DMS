@@ -75,6 +75,7 @@ class Settings:
     document_id_prefix: str = "DMS"
     register_cache_seconds: int = 30
     customers_folder: str = "02_Customers"  # under the root: one folder per customer
+    other_customer: str = "Other_Share"     # the customer folder anybody who is not a customer is shared in
     client_root: str = ""                            # the root as other PCs open it (\\server\Shares, not e$)
     short_paths: dict = field(default_factory=dict)
     client_short_paths: dict = field(default_factory=dict)   # DMS_CLIENT_SHORT_PATHS: a share of its own for a folder
@@ -182,6 +183,7 @@ class Settings:
             document_id_prefix=e("DMS_DOCUMENT_ID_PREFIX", "DMS"),
             register_cache_seconds=int(e("DMS_REGISTER_CACHE_SECONDS", "30")),
             customers_folder=e("DMS_CUSTOMERS_FOLDER", "02_Customers"),
+            other_customer=e("DMS_OTHER_CUSTOMER", "Other_Share"),
             client_root=e("DMS_CLIENT_ROOT", ""),
             client_short_paths=_short_paths(e("DMS_CLIENT_SHORT_PATHS", "")),
             short_paths=_short_paths(e("DMS_SHORT_PATHS", "")),

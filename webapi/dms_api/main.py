@@ -3340,7 +3340,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         except (FileNotFoundError, PermissionError):
             return []
 
-    OTHER = "Other"          # the customer folder anybody who is not a customer of their own is sent in
+    # The customer folder anybody who is not a customer of their own is shared in (DMS_OTHER_CUSTOMER).
+    # It is a folder of the customers list like any other, so a share is always in a place to look again.
+    OTHER = s.other_customer
 
     def is_hr(path: str) -> bool:
         """A file of HR (01_General\\HR and its subfolders): shared with a potential employee, not a customer."""

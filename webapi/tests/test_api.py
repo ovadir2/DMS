@@ -1320,17 +1320,17 @@ def test_share_several_files_outside_customers(tmp_path):
     bad = c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "New Customer"})
     assert bad.status_code == 400 and "not a customer" in bad.json()["detail"]
     assert not (tmp_path / "Root" / "02_Customers" / "New Customer").exists()   # no folder is invented for them
-    (tmp_path / "Root" / "02_Customers" / "Other").mkdir()                      # the folder that takes anybody
-    assert c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "Other"}).status_code == 200
-    assert [f["name"] for f in c.get("/api/exchange/files", params={"name": "Other"}).json()]        # what is there now
-    log = tmp_path / "Root" / "02_Customers" / "Other" / "Shared" / "DMS-Shared-Log.csv"
+    (tmp_path / "Root" / "02_Customers" / "Other_Share").mkdir()                # the folder that takes anybody
+    assert c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "Other_Share"}).status_code == 200
+    assert [f["name"] for f in c.get("/api/exchange/files", params={"name": "Other_Share"}).json()]  # what is there now
+    log = tmp_path / "Root" / "02_Customers" / "Other_Share" / "Shared" / "DMS-Shared-Log.csv"
     import stat as _stat
     assert not log.stat().st_mode & _stat.S_IWRITE                              # read only, like every share log
     assert "x@cust.com" in log.read_text(encoding="utf-8-sig")                  # the log says who it went to
     r = c.post(f"/api/documents/{e['id']}/share", json={"email": "x@cust.com", "customer": "customer_a", "documentIds": [d["id"]]})
     assert r.status_code == 200, r.text
     assert r.json()["customer"] == "Customer_A" and len(r.json()["documents"]) == 2
-    assert {u["url"].rsplit("/", 2)[-2] for u in sp.shares} == {"Customer_A", "Other"}
+    assert {u["url"].rsplit("/", 2)[-2] for u in sp.shares} == {"Customer_A", "Other_Share"}
     (tmp_path / "Root" / "02_Customers" / "Elbit").mkdir()
     r = c.post(f"/api/documents/{d['id']}/share", json={"email": "y@elbit.com", "customer": "Elbit"})  # another customer
     assert r.status_code == 200 and r.json()["customer"] == "Elbit" and "Outbound/Elbit/" in sp.shares[-1]["url"]
@@ -4611,13 +4611,13 @@ def test_a_share_goes_to_a_customer_of_the_company_and_other_takes_anybody(tmp_p
     assert r.status_code == 400 and "not a customer" in r.json()["detail"]
     assert not any(x for x in getattr(sp, "shares", []) if "Nobody" in x.get("url", ""))
 
-    (customers / "Other").mkdir(parents=True, exist_ok=True)
+    (customers / "Other_Share").mkdir(parents=True, exist_ok=True)
     info = c.get(f"/api/documents/{d['id']}/share-info").json()
-    assert info["other"] == "Other" and "Other" in info["customers"]
-    r = c.post(f"/api/documents/{d['id']}/share", json={"email": "edssron@gmail.com", "customer": "other"})
+    assert info["other"] == "Other_Share" and "Other_Share" in info["customers"]
+    r = c.post(f"/api/documents/{d['id']}/share", json={"email": "edssron@gmail.com", "customer": "other_share"})
     assert r.status_code == 200, r.text
-    assert r.json()["customer"] == "Other" and "Outbound/Other/" in sp.shares[-1]["url"]
-    log = customers / "Other" / "Shared" / "DMS-Shared-Log.csv"
+    assert r.json()["customer"] == "Other_Share" and "Outbound/Other_Share/" in sp.shares[-1]["url"]
+    log = customers / "Other_Share" / "Shared" / "DMS-Shared-Log.csv"
     assert "edssron@gmail.com" in log.read_text(encoding="utf-8-sig")
 
     # an HR file is still shared with a person by name: that is not a customer and never was

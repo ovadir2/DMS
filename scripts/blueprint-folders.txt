@@ -59,7 +59,7 @@
 01_General\Supply_Chain\Planning_logistic
 01_General\Supply_Chain\KPIs
 02_Customers
-02_Customers\Other
+02_Customers\Other_Share
 02_Customers\<Customer>
 02_Customers\<Customer>\Customer_Profile
 02_Customers\<Customer>\Commercial

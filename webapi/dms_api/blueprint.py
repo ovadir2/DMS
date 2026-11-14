@@ -140,8 +140,9 @@ ROOT = N({
                      # sent - a one-off recipient, a supplier, somebody asking for a document once. A share
                      # goes to a folder of this list and to that folder's own log, so there is one place to
                      # look afterwards instead of a folder invented from a name somebody typed.
-                     N({"Other": ("Other", "אחר", {}, "Anybody who is not a customer of their own",
-                                  "כל מי שאינו לקוח בפני עצמו"),
+                     N({"Other_Share": ("Other (shares)", "אחר (שיתופים)", {},
+                                        "Anybody who is not a customer of their own: the files shared with them and the log",
+                                        "כל מי שאינו לקוח בפני עצמו: הקבצים ששותפו איתו והיומן"),
                         "*": ("", "", CUSTOMER, "Customer", "לקוח")}),
                      "One folder per customer, with its commercial files and products", "תיקייה לכל לקוח, עם המסמכים המסחריים והמוצרים"),
 })
