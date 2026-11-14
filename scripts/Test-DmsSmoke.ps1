@@ -69,6 +69,21 @@ $all = @()                     # every line of every group, for the report and t
 $headers = @{}
 if ($As) { $headers['X-DMS-Dev-User'] = $As }
 
+function Why($err) {
+    # "(400) Bad Request" says nothing: the DMS writes the reason in the body, and that is the whole point
+    # of a walk that is read by somebody who was not watching it run.
+    try {
+        $r = $err.Exception.Response
+        if (-not $r) { return "$($err.Exception.Message)" }
+        $reader = New-Object IO.StreamReader($r.GetResponseStream())
+        $text = $reader.ReadToEnd(); $reader.Close()
+        $detail = try { ($text | ConvertFrom-Json).detail } catch { $text }
+        if ($detail -is [array]) { $detail = ($detail | ForEach-Object { "$($_.msg)" }) -join '; ' }
+        if (-not "$detail".Trim()) { return "$($err.Exception.Message)" }
+        return "$([int]$r.StatusCode): $detail"
+    } catch { return "$($err.Exception.Message)" }
+}
+
 function Call($method, $path, $body, $fields) {
     $u = "$($Url.TrimEnd('/'))$path"
     if ($fields) {
@@ -136,7 +151,7 @@ function Check($req, $what, $test) {
         $script:lines += @{ req = $req; what = $what; state = 'PASS'; detail = "$result" }
         $script:ok++
     } catch {
-        $script:lines += @{ req = $req; what = $what; state = 'FAIL'; detail = $_.Exception.Message }
+        $script:lines += @{ req = $req; what = $what; state = 'FAIL'; detail = (Why $_) }
         $script:bad++
     }
 }
@@ -398,7 +413,8 @@ Check 'REQ-P28' "the API describes itself" {
 # ---------------------------------------------------------------- sharing outside the company
 Section "Shared outside the company, and written down"
 Check 'REQ-P70/P72' "the Share dialog offers only what may be shared, and says who to" {
-    $info = Call GET "/api/documents/$($doc.id)/share-info" $null $null
+    $keep = $script:headers; $script:headers = @{}        # read as whoever will share it
+    try { $info = Call GET "/api/documents/$($doc.id)/share-info" $null $null } finally { $script:headers = $keep }
     if (-not $info.revision) { throw "it offers no revision to share" }
     "revision $($info.revision), $(@($info.customers).Count) customer folders, HR=$($info.hr)" }
 if (-not $ShareWith) {
@@ -411,8 +427,12 @@ if (-not $ShareWith) {
 $log = Join-Path $root "02_Customers\$ShareCustomer\Shared\DMS-Shared-Log.csv"
 $before = if (Test-Path -LiteralPath $log) { @(Get-Content -LiteralPath $log).Count } else { 0 }
 Check 'REQ-P72' "a released revision is shared with somebody outside the company" {
-    $sh = Call POST "/api/documents/$($doc.id)/share" @{ email = $ShareWith; customer = $ShareCustomer
-                                                         message = 'DMS walk-through' } $null
+    # as the real account: a share names a customer folder, and the walk's user may not see the customers
+    # at all (dms-lab has IT and nothing else) - which is the DMS being right, not a fault to work around
+    $keep = $script:headers; $script:headers = @{}
+    try { $sh = Call POST "/api/documents/$($doc.id)/share" @{ email = $ShareWith; customer = $ShareCustomer
+                                                               message = 'DMS walk-through' } $null }
+    finally { $script:headers = $keep }
     if (-not $sh.urls) { throw "nothing came back from the share" }
     "Rev $($sh.revision) to $($sh.email) in $($sh.customer), until $($sh.days) days from now" }
 Check 'REQ-P73/P77' "the share is written in the customer's own log, where the work is" {
@@ -424,13 +444,16 @@ Check 'REQ-P73/P77' "the share is written in the customer's own log, where the w
         if ($last -notmatch [regex]::Escape($want)) { throw "the last row does not name $want" } }
     "one row more: $($last.Substring(0, [Math]::Min(90, $last.Length)))" }
 Check 'REQ-P76' "the share log is the DMS's own: it is not edited from the page" {
-    $b = Call GET "/api/browse?path=$([uri]::EscapeDataString((Split-Path $log -Parent)))" $null $null
+    $keep = $script:headers; $script:headers = @{}        # the customer's folder, seen by somebody who may
+    try { $b = Call GET "/api/browse?path=$([uri]::EscapeDataString((Split-Path $log -Parent)))" $null $null }
+    finally { $script:headers = $keep }
     $row = @($b.files | Where-Object { $_.name -eq 'DMS-Shared-Log.csv' })[0]
     if (-not $row) { throw "the page does not show the log" }
     if ($row.canEdit) { throw "the page offers to edit the record of what left the company" }
     "read only on the page: $($row.editWhy)" }
 Check 'REQ-P59/P60' "the share is in the document's own history, written as it happened" {
-    $mine = Call GET "/api/my-workflows" $null $null
+    $keep = $script:headers; $script:headers = @{}
+    try { $mine = Call GET "/api/my-workflows" $null $null } finally { $script:headers = $keep }
     $row = @($mine.items | Where-Object { $_.documentId -eq $doc.documentId })[0]
     if (-not $row) { throw "the document is not in My workflows" }
     $shared = @($row.history | Where-Object { "$($_.details)" -match 'Shared revision' })
