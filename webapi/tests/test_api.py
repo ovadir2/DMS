@@ -4642,3 +4642,22 @@ def test_the_page_and_its_answers_are_never_kept_by_the_browser(env):
         r = c.get(path, params=params)
         assert r.status_code in (200, 307), (path, r.status_code)
         assert "no-store" in r.headers.get("cache-control", ""), f"{path} may be cached: {r.headers}"
+
+
+def test_a_domain_account_names_the_same_person_as_their_address(tmp_path, monkeypatch):
+    """Scripts, and the server itself, name people as RH\\name; the DMS knows them by email. One is turned
+    into the other rather than refused, so an approver, a delegate or a share may be named either way."""
+    import dms_api.security as security
+    monkeypatch.setattr(security, "upn_of", lambda a: "dms-lab@rh.co.il" if a.lower() == "rh\\dms-lab" else "")
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    f = q / "QP-9.docx"
+    f.write_text("x")
+    r = c.post("/api/documents", json={"path": str(f), "documentType": "נוהל", "documentArea": "איכות",
+                                       "submit": True, "approvers": ["RH\\dms-lab"]})
+    assert r.status_code == 201, r.text
+    submitted = [e for e in sp.audit_events() if "dms-lab@rh.co.il" in (e.get("details") or "")]
+    assert submitted, "the approver was not recorded by their address"
+
+    bad = c.post("/api/documents", json={"path": str(f), "documentType": "x", "documentArea": "y",
+                                         "approvers": ["RH\\nobody-at-all"]})
+    assert bad.status_code == 400 and "Not an email address" in bad.json()["detail"]

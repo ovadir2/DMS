@@ -15,9 +15,9 @@
     either way, which is the point of an audit.
 
 .PARAMETER Delegate
-    A third person, for passing an approval on. It cannot be the approver and cannot be the person the walk
-    runs as, who owns the document - the DMS refuses an approval delegated to the person who wrote it. Left
-    out, that one step is skipped.
+    A third person, for passing an approval on: it cannot be the approver, and cannot be the person the walk
+    runs as, who owns the document. Left out, the walk takes one of the accounts the DMS offers for
+    "Acting as" that is neither, so nothing has to be named; with none to be had, that one step is skipped.
 
 .PARAMETER ShareWith
     Share the released document with this address, as the page's Share does: the file is copied to the
@@ -363,8 +363,15 @@ Check 'REQ-P47' "a submission can be taken back by its owner" {
     if ($back.statusKey -ne 'Working') { throw "it is $($back.statusKey), not Working" }
     "$($w1.documentId) came back to its owner" }
 if (-not $Delegate) {
+    # Nobody has to be named: the accounts the DMS offers for "Acting as" are people it already knows, and
+    # an approval cannot be passed to the approver or to the owner - so the walk takes the first of them
+    # that is neither. A domain account (RH\name) is given as it is; the DMS reads it as that person.
+    $Delegate = @($me.actingUsers | Where-Object {
+        $_ -and $_ -ne $me.email -and $_ -ne $Approver -and ($As -eq '' -or $_ -ne $As) }) | Select-Object -First 1
+}
+if (-not $Delegate) {
     Skip 'REQ-P50' "an approval is passed to somebody else for this cycle" `
-         "give -Delegate <someone@rh.co.il>: it cannot be $Approver, and it cannot be the person the walk runs as, who owns the document"
+         "there is nobody to pass it to: the approver and the owner are the only accounts here - give -Delegate <someone>"
 } else {
 Check 'REQ-P50' "an approval can be passed to somebody else for this cycle" {
     Call POST "/api/documents/$($w1.id)/submit" @{ approvers = @($Approver) } $null | Out-Null

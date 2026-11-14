@@ -1495,6 +1495,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         out = []
         for e in emails or []:
             e = (e or "").strip().lower()
+            if "@" not in e and "\\" in e:
+                # A domain account (RH\name) is the same person as their address: the DMS knows people by
+                # email, and asking the caller to know which spelling is wanted is how a script is refused
+                # for naming the account that signs in everywhere else.
+                from .security import upn_of
+                e = (upn_of(e) or e).strip().lower()
             if not re.fullmatch(r"[^@\s;]+@[^@\s;]+\.[^@\s;]+", e):
                 raise HTTPException(400, f"Not an email address: {e!r}")
             if e not in out:
