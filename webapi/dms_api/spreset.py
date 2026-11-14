@@ -7,6 +7,10 @@ Matrix (which holds the rules, not the pilot's data) stay as they are.
     cd webapi
     .\\.venv\\Scripts\\python -m dms_api.spreset             # says what it would empty
     .\\.venv\\Scripts\\python -m dms_api.spreset --write     # does it
+
+Or the register rows of one folder only - what a self-test leaves behind, with everything else untouched:
+
+    .\\.venv\\Scripts\\python -m dms_api.spreset --documents-under=DMS-Selftest --write
 """
 from __future__ import annotations
 
@@ -113,9 +117,42 @@ def run(sp: SharePoint, *, write: bool = False, libraries: tuple[str, ...] = ("A
     return out
 
 
+def clear_documents(sp: SharePoint, where: str, *, write: bool = False, say=lambda _m: None) -> dict:
+    """The register rows of the documents of one folder - the walk's own, and nothing else.
+
+    A self-test leaves records behind that the page cannot remove: a document that was approved keeps its
+    row, which is right for a real document and only clutter for a test one. This takes the rows whose
+    file is under the folder named, by their paths, so a real document elsewhere cannot be caught by it."""
+    from .sharepoint import REGISTER
+    key = (where or "").strip().lower()
+    if len(key) < 4:
+        raise ValueError("Name the folder whose documents are to be removed")
+    url = sp._list(REGISTER)                                                       # noqa: SLF001
+    rows, page = [], f"{url}/items?$select=Id,DocumentID,WorkingUncPath,CurrentUncPath&$top=500"
+    while page:
+        got = sp._call("GET", page)                                                # noqa: SLF001
+        rows.extend(got.get("value", []))
+        page = got.get("odata.nextLink")
+    mine = [r for r in rows if key in f"{r.get('WorkingUncPath') or ''}{r.get('CurrentUncPath') or ''}".lower()]
+    say(f"  {REGISTER:<28} {len(mine)} of {len(rows)} row(s) under {where}")
+    removed, failed = 0, ""
+    for r in mine:
+        say(f"    {r.get('DocumentID') or r['Id']}" + ("" if write else " (would be removed)"))
+        if not write:
+            continue
+        try:
+            _delete(sp, f"{url}/items({r['Id']})")
+            removed += 1
+        except SharePointError as e:
+            failed = str(e)
+            say(f"    {r.get('DocumentID') or r['Id']}: {str(e)[:160]}")
+    return {"list": REGISTER, "found": len(mine), "removed": removed, "error": failed}
+
+
 def main(argv: list[str]) -> int:   # pragma: no cover - the command
     from .config import Settings
     write = "--write" in argv
+    only = next((a.split("=", 1)[1] for a in argv if a.startswith("--documents-under=")), "")
     s = Settings.from_env()
     if not s.site_url:
         print("DMS_SITE_URL is not set: run this from webapi, where the .env is.")
@@ -126,7 +163,10 @@ def main(argv: list[str]) -> int:   # pragma: no cover - the command
     def say(message: str) -> None:
         print(message, flush=True)              # it takes minutes: say where it is while it runs
 
-    rows = run(sp, write=write, libraries=(s.review_library, s.view_library), say=say)
+    if only:                      # one folder's documents (the self-test), not the whole pilot
+        rows = [clear_documents(sp, only, write=write, say=say)]
+    else:
+        rows = run(sp, write=write, libraries=(s.review_library, s.view_library), say=say)
     total = sum(r["found"] for r in rows)
     if not write:
         print(f"\n{total} item(s) would be removed. Nothing was changed. Add --write to do it.")

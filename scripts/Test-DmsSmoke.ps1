@@ -78,13 +78,19 @@ function Why($err) {
     # of a walk that is read by somebody who was not watching it run.
     try {
         $r = $err.Exception.Response
-        if (-not $r) { return "$($err.Exception.Message)" }
-        $reader = New-Object IO.StreamReader($r.GetResponseStream())
-        $text = $reader.ReadToEnd(); $reader.Close()
+        # Windows PowerShell has already read the body into ErrorDetails; the stream is spent by then, so
+        # that is where the DMS's own words are. The stream is the fallback, for whoever runs this on 7.
+        $text = "$($err.ErrorDetails.Message)"
+        if (-not $text.Trim()) {
+            if (-not $r) { return "$($err.Exception.Message)" }
+            $reader = New-Object IO.StreamReader($r.GetResponseStream())
+            $text = $reader.ReadToEnd(); $reader.Close()
+        }
         $detail = try { ($text | ConvertFrom-Json).detail } catch { $text }
         if ($detail -is [array]) { $detail = ($detail | ForEach-Object { "$($_.msg)" }) -join '; ' }
         if (-not "$detail".Trim()) { return "$($err.Exception.Message)" }
-        return "$([int]$r.StatusCode): $detail"
+        $code = if ($r) { [int]$r.StatusCode } else { 0 }
+        return "$code`: $detail"
     } catch { return "$($err.Exception.Message)" }
 }
 
@@ -166,20 +172,51 @@ function Skip($req, $what, $why) {
 
 # ---------------------------------------------------------------- clean
 if ($Clean) {
+    # The walk leaves documents at every stage on purpose, and the page will not delete a document that is
+    # waiting for an approver or already approved - rightly, for a real one. So each is taken back to where
+    # it may be removed: withdrawn if it is submitted, its released file taken out if it is approved, and
+    # then the record itself. What the page cannot remove (the row of a document that was approved) is
+    # removed from the register with the DMS's own certificate, for this folder and nothing else.
+    $leaf = Split-Path $Folder -Leaf
     Write-Host "Removing what the walk made in $here" -ForegroundColor Yellow
+    $left = @()
     foreach ($d in (Call GET "/api/documents" $null $null)) {
-        if ("$($d.workingUncPath)$($d.currentUncPath)" -like "*DMS-Selftest*") {
-            try { Call POST "/api/documents/$($d.id)/delete" @{} $null | Out-Null; Write-Host "    $($d.documentId) removed" }
-            catch { Write-Host "    $($d.documentId): $($_.Exception.Message)" -ForegroundColor Yellow }
+        if ("$($d.workingUncPath)$($d.currentUncPath)" -notlike "*$leaf*") { continue }
+        $id = $d.documentId
+        if ($d.statusKey -eq 'Submitted') {
+            try { Call POST "/api/documents/$($d.id)/withdraw" @{} $null | Out-Null; Write-Host "    $id taken back" }
+            catch { Write-Host "    $id could not be taken back: $(Why $_)" -ForegroundColor Yellow }
+        }
+        if ($d.currentUncPath -and (Test-Path -LiteralPath $d.currentUncPath)) {
+            try { Call POST "/api/items/delete" @{ path = $d.currentUncPath } $null | Out-Null }
+            catch { Write-Host "    $id released file: $(Why $_)" -ForegroundColor Yellow }
+        }
+        try { Call POST "/api/documents/$($d.id)/delete" @{} $null | Out-Null; Write-Host "    $id removed" }
+        catch { $left += $id; Write-Host "    $id record stays: $(Why $_)" -ForegroundColor DarkGray }
+    }
+    foreach ($folder in @($here, (Join-Path $root "01_General\IT\$leaf"))) {
+        if (Test-Path $folder) {
+            Get-ChildItem $folder -Recurse -File | ForEach-Object { $_.IsReadOnly = $false }
+            Remove-Item $folder -Recurse -Force
         }
     }
-    if (Test-Path $here) {
-        Get-ChildItem $here -Recurse -File | ForEach-Object { $_.IsReadOnly = $false }
-        Remove-Item $here -Recurse -Force
+    if ($left) {
+        # a document that was approved keeps its row, which is right for a real one and clutter for a test
+        $py = Join-Path (Split-Path $PSScriptRoot -Parent) 'webapi\.venv\Scripts\python.exe'
+        if (Test-Path $py) {
+            Write-Host "  $($left.Count) record(s) the page cannot remove - clearing them from the register" -ForegroundColor Yellow
+            Push-Location (Join-Path (Split-Path $PSScriptRoot -Parent) 'webapi')
+            try { & $py -m dms_api.spreset "--documents-under=$leaf" --write }
+            finally { Pop-Location }
+        } else {
+            Write-Host "  $($left -join ', ') stay in the register. To clear them:" -ForegroundColor Yellow
+            Write-Host "    cd webapi; .\.venv\Scripts\python -m dms_api.spreset --documents-under=$leaf --write"
+        }
     }
     Write-Host "Done. The Control Audit keeps its lines." -ForegroundColor Green
     return
 }
+
 if (-not $Approver) { throw "Give -Approver <someone@rh.co.il>; it cannot be the person the walk runs as." }
 
 Write-Host ""
@@ -230,9 +267,13 @@ Check 'REQ-P42/P43' "it is registered and sent to an approver" {
                                                 submit = $true; approvers = @($Approver) } $null
     "$($doc.documentId) waiting for $Approver" }
 Check 'REQ-P36' "the file moved to Submitted" {
-    Start-Sleep -Seconds 3
     $sub = Join-Path $here 'Submitted'
-    (Test-Path $sub) -and @(Get-ChildItem $sub -File).Count -ge 1 }
+    foreach ($try in 1..10) {                 # the DMS service moves it; it runs on its own clock
+        if ((Test-Path $sub) -and @(Get-ChildItem $sub -File -ErrorAction SilentlyContinue).Count -ge 1) {
+            return "$(@(Get-ChildItem $sub -File).Count) in Submitted after $($try * 3)s" }
+        Start-Sleep -Seconds 3
+    }
+    throw "nothing arrived in $sub in 30 seconds" }
 Check 'REQ-P56' "the owner sees it in My workflows" {
     $mine = Call GET "/api/my-workflows" $null $null
     [bool](@($mine.items | Where-Object { $_.documentId -eq $doc.documentId }).Count) }
@@ -366,23 +407,29 @@ Check 'REQ-P47' "a submission can be taken back by its owner" {
     $back = Call POST "/api/documents/$($w1.id)/withdraw" @{} $null
     if ($back.statusKey -ne 'Working') { throw "it is $($back.statusKey), not Working" }
     "$($w1.documentId) came back to its owner" }
-if (-not $Delegate) {
-    # Nobody has to be named: the accounts the DMS offers for "Acting as" are people it already knows, and
-    # an approval cannot be passed to the approver or to the owner - so the walk takes the first of them
-    # that is neither. A domain account (RH\name) is given as it is; the DMS reads it as that person.
-    $Delegate = @($me.actingUsers | Where-Object {
-        $_ -and $_ -ne $me.email -and $_ -ne $Approver -and ($As -eq '' -or $_ -ne $As) }) | Select-Object -First 1
+# Nobody has to be named: the accounts the DMS offers for "Acting as" are people it already knows, and an
+# approval cannot be passed to the approver, to the owner, or to somebody AD does not let see the document.
+# So the walk tries them in turn and keeps the first the DMS accepts. A domain account (RH\name) is given
+# as it is; the DMS reads it as that person.
+$candidates = if ($Delegate) { @($Delegate) } else {
+    @($me.actingUsers | Where-Object { $_ -and $_ -ne $me.email -and $_ -ne $Approver -and ($As -eq '' -or $_ -ne $As) })
 }
-if (-not $Delegate) {
+if (-not $candidates) {
     Skip 'REQ-P50' "an approval is passed to somebody else for this cycle" `
          "there is nobody to pass it to: the approver and the owner are the only accounts here - give -Delegate <someone>"
 } else {
 Check 'REQ-P50' "an approval can be passed to somebody else for this cycle" {
     Call POST "/api/documents/$($w1.id)/submit" @{ approvers = @($Approver) } $null | Out-Null
     $keep = $script:headers; $script:headers = @{}        # the approver passes their own answer on
-    try { Call POST "/api/approvals/$($w1.id)/delegate" @{ to = $Delegate; comment = 'walk-through' } $null | Out-Null }
-    finally { $script:headers = $keep }
-    "now waiting for $Delegate" }
+    $refused = @()
+    try {
+        foreach ($who in $candidates) {
+            try { Call POST "/api/approvals/$($w1.id)/delegate" @{ to = $who; comment = 'walk-through' } $null | Out-Null
+                  return "now waiting for $who" }
+            catch { $refused += "$who - $(Why $_)" }
+        }
+    } finally { $script:headers = $keep }
+    throw "nobody could take it: $($refused -join ' | ')" }
 }
 Check 'REQ-P68/P69' "an approver attaches a marked-up document as their remarks" {
     $note = Join-Path $env:TEMP "remarks $stamp.txt"
@@ -483,8 +530,7 @@ Check 'REQ-P76' "the share log is the DMS's own: it is not edited from the page"
     if ($row.canEdit) { throw "the page offers to edit the record of what left the company" }
     "read only on the page: $($row.editWhy)" }
 Check 'REQ-P59/P60' "the share is in the document's own history, written as it happened" {
-    $keep = $script:headers; $script:headers = @{}
-    try { $mine = Call GET "/api/my-workflows" $null $null } finally { $script:headers = $keep }
+    $mine = Call GET "/api/my-workflows" $null $null       # the owner's own list: the document is theirs
     $row = @($mine.items | Where-Object { $_.documentId -eq $doc.documentId })[0]
     if (-not $row) { throw "the document is not in My workflows" }
     $shared = @($row.history | Where-Object { "$($_.details)" -match 'Shared revision' })
