@@ -4632,3 +4632,13 @@ def test_a_share_goes_to_a_customer_of_the_company_and_other_takes_anybody(tmp_p
     r = c.post(f"/api/documents/{doc['id']}/share", json={"email": "candidate@gmail.com", "customer": "Dana Levi"})
     assert r.status_code == 200, r.text
     assert r.json()["customer"] == "Dana Levi"
+
+
+def test_the_page_and_its_answers_are_never_kept_by_the_browser(env):
+    """A folder listing kept by the browser is the repository as it was. On a second address for the same
+    DMS the caches are separate, so the same installation appeared to hold different customers in each."""
+    c = env[0] if isinstance(env, tuple) else env
+    for path, params in (("/api/browse", {}), ("/api/me", {}), ("/dms/dms-page", {"lang": "EN"})):
+        r = c.get(path, params=params)
+        assert r.status_code in (200, 307), (path, r.status_code)
+        assert "no-store" in r.headers.get("cache-control", ""), f"{path} may be cached: {r.headers}"

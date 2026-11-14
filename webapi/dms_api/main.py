@@ -244,6 +244,17 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return await call_next(request)
 
     @app.middleware("http")
+    async def never_cached(request: Request, call_next):
+        """The page and everything it asks for are answered fresh. A folder listing kept by the browser is a
+        repository as it was an hour ago - and on a new address (dms.rh.tech beside dms-pilot.rh.tech) the two
+        caches are separate, so the same DMS appeared to hold different customers in each."""
+        response = await call_next(request)
+        if request.url.path.startswith(("/api/", "/dms/")) and "cache-control" not in response.headers:
+            response.headers["Cache-Control"] = "no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+        return response
+
+    @app.middleware("http")
     async def page_language(request: Request, call_next):
         """The page sends its language (X-DMS-Lang); notifications are written in it."""
         token = PAGE_LANG.set("HE" if (request.headers.get("x-dms-lang") or "").upper() == "HE" else "EN")
