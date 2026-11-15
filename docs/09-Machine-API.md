@@ -247,6 +247,14 @@ With a ticket (`?ticket=` or the header) these answer as that person:
 | `GET /api/v1/customers`, `GET /api/v1/departments` | the structure, as that person sees it |
 | `GET /api/v1/file` | the file itself - **the content, not a path** |
 
+### Where the file goes
+
+Nowhere, unless the caller puts it somewhere. `/api/v1/file` answers with the bytes themselves
+(`Content-Disposition: inline`); the DMS writes no copy and keeps nothing. Where it lands is the caller's
+own doing: `curl -o`, PowerShell's `-OutFile`, or - for a RAG - straight into the index without ever
+touching a disk. The Markdown is text and is normally kept in the index; the document itself is fetched
+only when somebody asks to see it.
+
 ### The paths in the answer are handles, not something to open
 
 `DocFile` and `DocDMSpath` are the file server's own paths (`E:\Shares\...`). They are there so a person

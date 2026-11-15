@@ -135,6 +135,18 @@ async function run(id) {
     const r = await fetch(url, { credentials: 'include' });
     const ms = Math.round(performance.now() - t0);
     const kind = r.headers.get('content-type') || '';
+    if (!kind.includes('json') && !kind.startsWith('text/')) {
+      // a document, not something to read here: the DMS keeps no copy, so the browser decides where it
+      // goes - exactly as curl -o or -OutFile would in whatever calls this for real
+      const blob = await r.blob();
+      const name = (r.headers.get('content-disposition') || '').split("''").pop() || 'file';
+      const href = URL.createObjectURL(blob);
+      $('st').textContent = `${r.status} ${r.statusText} - ${ms} ms, ${blob.size.toLocaleString()} bytes, ${kind}`;
+      $('body').innerHTML = 'The document itself came back. Nothing was written on the server - the DMS ' +
+        'keeps no copy.<br><br><a download="' + esc(decodeURIComponent(name)) + '" href="' + href + '">Save ' +
+        esc(decodeURIComponent(name)) + '</a>';
+      return;
+    }
     const text = await r.text();
     const size = new Blob([text]).size;
     let shown = text;
@@ -151,6 +163,7 @@ async function run(id) {
     }
     $('st').textContent = `${r.status} ${r.statusText} - ${ms} ms, ${size.toLocaleString()} bytes`;
     $('body').textContent = shown.slice(0, 20000);
+    $('body').removeAttribute('style');
   } catch (e) { $('st').textContent = 'failed'; $('body').textContent = e.message; }
 }
 
