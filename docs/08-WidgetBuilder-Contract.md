@@ -1,10 +1,10 @@
 # 15 - What WidgetBuilder sends the DMS
 
-WidgetBuilder (`https://widgetbuilder.rh.tech`) is the KPI Builder: its own repository, its own VS Code,
-its own address. The DMS opens it from a KPIs folder (`DMS_KPI_BUILDER_URL`) and it publishes back through
+WidgetBuilder (`https://widgetbuilder.rh.tech`) is the WidgetBuilder: its own repository, its own VS Code,
+its own address. The DMS opens it from a KPIs folder (`DMS_WIDGET_BUILDER_URL`) and it publishes back through
 the machine API.
 
-The contract between the KPI Builder (its own repository, its own VS Code) and the DMS. Everything the
+The contract between the WidgetBuilder (its own repository, its own VS Code) and the DMS. Everything the
 Builder needs is here; the full reference is `09-Machine-API.md` and `10-Swagger.md`.
 
 ## What the Builder produces

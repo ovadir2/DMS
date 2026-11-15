@@ -76,8 +76,8 @@ def markdown(app, version: str = "") -> str:
     lines = ["# 10 - Swagger: every endpoint of the DMS", "",
              "Every endpoint of the DMS, written from the API itself "
              "(`python -m dms_api.apidocs`, or `scripts\\New-DmsApiDocs.ps1`), so it cannot drift from the "
-             "code. The machine API has a guide of its own in `09-Machine-API.md`, the KPI Builder in "
-             "`08-KPI-Builder-Contract.md`, and the page key in `07-KPI-Integration.md`.", "",
+             "code. The machine API has a guide of its own in `09-Machine-API.md`, the WidgetBuilder in "
+             "`08-WidgetBuilder-Contract.md`, and the page key in `07-KPI-Integration.md`.", "",
              "**Swagger** shows the short list - what another system talks to: the machine API, the "
              "indexing ticket and the page key. This file is every endpoint, the page's own included. "
              "To try a call or generate a client - "

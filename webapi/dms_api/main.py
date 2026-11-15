@@ -2158,7 +2158,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if not may_add(user, kpis):
             raise HTTPException(403, "You do not have permission to add a KPI here")
         if not s.kpi_builder_url:
-            raise HTTPException(503, "The KPI Builder is not set up here (DMS_KPI_BUILDER_URL)")
+            raise HTTPException(503, "WidgetBuilder is not set up here (DMS_WIDGET_BUILDER_URL)")
         from urllib.parse import quote as _q, urlencode
         here = os.path.normcase(os.path.normpath(full))
         kpi = req.kpi or ("" if here == os.path.normcase(os.path.normpath(kpis)) else os.path.basename(full))
@@ -2580,7 +2580,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                         kpi: str = Form("", description="The KPI's name; taken from the file names when it is not given"),
                         folder: str = Form("", description="A path instead of a name, from /api/v1/departments"),
                         files_in: list[UploadFile] = File(..., alias="files")):
-        """The KPI Builder publishes one KPI of one department: its page and the data behind it, together.
+        """The WidgetBuilder publishes one KPI of one department: its page and the data behind it, together.
 
             POST /api/v1/kpi/publish   department=Production  kpi=Yield
                                        files=@Yield.html  files=@Yield.json

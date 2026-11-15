@@ -1,6 +1,6 @@
 # KPI integration - what the DMS already does, and what is still to build
 
-The KPI Builder lives in its own repository (`kpi-builder`), with its own VS Code workspace, built, tested and deployed on its own. Nothing of it is in this repository: what the two applications agree on is this document, and nothing else: how the Builder is built and deployed is written in its own repository (`DEPLOY.md` there). This document is the DMS side of the contract the SRS
+The WidgetBuilder lives in its own repository (`kpi-builder`), with its own VS Code workspace, built, tested and deployed on its own. Nothing of it is in this repository: what the two applications agree on is this document, and nothing else: how the Builder is built and deployed is written in its own repository (`DEPLOY.md` there). This document is the DMS side of the contract the SRS
 (`DMS_KPI_INTEGRATION_SRS`, v1.2) asks each team to write: the integration points **as they exist in this
 code**, the semantics the Builder may rely on, and the requirements that are not built yet. Where the SRS
 says the DMS "SHALL" do something that is already true, the endpoint or rule is named; where it is not, it
@@ -116,7 +116,7 @@ would rather call the endpoints itself. Everything else the page does is untouch
 
 Right-clicking a departmental or customer `KPIs` folder offers **＋ New KPI**; right-clicking one KPI's folder
 inside it offers **Edit KPI**. Both appear only where the person may add to that folder, and only where the
-Builder is configured (`DMS_KPI_BUILDER_URL`); otherwise the line is there in grey like any command that does
+Builder is configured (`DMS_WIDGET_BUILDER_URL`); otherwise the line is there in grey like any command that does
 not apply (**DMS-003**, **DMS-004**, **DMS-006**, **DMS-008**).
 
 The page does not build the address. It asks the DMS, which checks the folder against the blueprint and the
@@ -128,7 +128,7 @@ POST /api/kpi/open      {"folder": "<a KPIs folder, or one KPI's folder>", "kpi"
   400 this is not a KPIs folder | 403 not allowed to add here | 503 the Builder is not set up here
 ```
 
-The address handed back is `DMS_KPI_BUILDER_URL` (WidgetBuilder - `https://widgetbuilder.rh.tech`) plus, as the **interim** launch contract (to be replaced by
+The address handed back is `DMS_WIDGET_BUILDER_URL` (WidgetBuilder - `https://widgetbuilder.rh.tech`) plus, as the **interim** launch contract (to be replaced by
 the versioned one when the Builder team states theirs):
 
 | Parameter | Meaning |

@@ -59,7 +59,7 @@ about it, exactly as a person is not.
 | `GET /api/v1/approved-documents` | everything released: `Current_ReadOnly` everywhere, with the document id, the name, the revision, the Markdown the AI reads and the file itself |
 | `GET /api/v1/departments` | the departments under General, with the KPIs folder of each |
 | `GET /api/v1/customers` | the customers, with the KPIs folder of each |
-| `POST /api/v1/kpi/publish` | the KPI Builder's page and data (the only thing a key may write) |
+| `POST /api/v1/kpi/publish` | the WidgetBuilder's page and data (the only thing a key may write) |
 
 `GET /api/v1/documents` answers the same released documents from the register rather than from the folders;
 it is kept for callers that already ask it.

@@ -101,8 +101,8 @@ class Settings:
     # How long the key a sandboxed page is given stays good (it reads one folder, in the name of the
     # person who opened the page, and their AD rights are checked again on every call).
     page_key_hours: int = 8
-    # Where the KPI Builder lives. Empty: Add New KPI is offered greyed, with the reason.
-    kpi_builder_url: str = ""
+    # Where the WidgetBuilder lives. Empty: Add New KPI is offered greyed, with the reason.
+    kpi_builder_url: str = ""      # WidgetBuilder: where it lives (DMS_WIDGET_BUILDER_URL)
     # The customer folder a new customer is cut from: its folders and, on the file server, the AD
     # permissions on them. Empty or missing: the blueprint folders are made and nothing is copied.
     customer_skeleton: str = "Customer_Skeleton"
@@ -206,7 +206,8 @@ class Settings:
             first_load_approver=e("DMS_FIRST_LOAD_APPROVER", "dms_approval@rh.co.il").strip().lower(),
             add_with_dms_rights=e("DMS_ADD_WITH_DMS_RIGHTS", "").strip().lower() in ("1", "true", "yes", "on"),
             page_key_hours=int(e("DMS_PAGE_KEY_HOURS", "8") or 8),
-            kpi_builder_url=e("DMS_KPI_BUILDER_URL", "").strip(),
+            # It was called the KPI Builder; an .env that still says so is read all the same
+            kpi_builder_url=(e("DMS_WIDGET_BUILDER_URL", "") or e("DMS_KPI_BUILDER_URL", "")).strip(),
             customer_skeleton=e("DMS_CUSTOMER_SKELETON", "Customer_Skeleton").strip(),
             api_keys=_api_keys(e("DMS_API_KEYS", "")),
             page_sandbox=e("DMS_PAGE_SANDBOX", "1").strip().lower() not in ("0", "false", "no", "off"),

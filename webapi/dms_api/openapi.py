@@ -32,7 +32,7 @@ What another system needs from the DMS, and nothing else. Three ways in:
 Nothing here stands in for a right the person or the account does not have. One endpoint writes (the KPI
 Builder's); the rest read.
 
-Guides: `docs/09-Machine-API.md` (applications and the AI), `docs/08-KPI-Builder-Contract.md` (the KPI
+Guides: `docs/09-Machine-API.md` (applications and the AI), `docs/08-WidgetBuilder-Contract.md` (the KPI
 Builder), `docs/07-KPI-Integration.md` (the page key). The DMS page's own endpoints are not here: they are
 in `docs/10-Swagger.md`, and in `/api/openapi-all.json` for a client that really wants them.
 """.strip()
