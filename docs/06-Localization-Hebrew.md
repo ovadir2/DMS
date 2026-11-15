@@ -1,4 +1,4 @@
-# 05 - Localization (English / Hebrew)
+# 06 - Localization (English / Hebrew)
 
 ## 1. Rules
 

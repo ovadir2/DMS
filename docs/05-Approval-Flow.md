@@ -1,4 +1,4 @@
-# 07 - Approval Flow (pilot)
+# 05 - The approval flow
 
 How a document moves from submission to an approved, read-only record in the pilot flow **DC-P1 Pilot Approval** (`scripts/New-DmsPilotFlowPackage.ps1`).
 

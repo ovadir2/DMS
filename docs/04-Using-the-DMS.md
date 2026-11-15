@@ -1,4 +1,4 @@
-# 08 - Pilot Process (end to end)
+# 04 - Using the DMS, end to end
 
 How a document goes from a file on the file server to an approved, read-only version, through the **RH - Documents Management System** page (`webapi/`), the approval flow **DC-P1** and the Workflow Service. It also covers the pilot test with one super user.
 

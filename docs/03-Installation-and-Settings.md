@@ -1,4 +1,4 @@
-# Installation and settings
+# 03 - Installation and settings
 
 Everything needed to put the DMS on a server, and every setting it reads. The pilot was installed this way;
 The same steps install it again elsewhere; nothing here is particular to one server.

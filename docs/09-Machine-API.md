@@ -1,4 +1,4 @@
-# 13 - The machine API: an application that calls the DMS
+# 09 - The machine API: an application, and the company's AI
 
 A browser signs in with Windows, and the DMS answers what AD lets that person see. An application has
 neither: Priority, a report, a script on another server. It is given a **key**, and the key is an identity -
