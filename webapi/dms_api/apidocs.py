@@ -43,11 +43,9 @@ HIDE = ("/api/kpi/{rest:path}", "/api/kpi/{rest}",     # the browser's own prefl
 VERBS = ("GET", "POST", "PUT", "DELETE", "PROPFIND", "LOCK", "UNLOCK")
 
 
-def _schema(app) -> dict:
-    """Every endpoint, for the reference in docs\\. Swagger itself shows only what another system talks to;
-    this file is the whole list, which is what somebody working on the DMS wants."""
+def _schema(app, full: bool = False) -> dict:
     from .openapi import spec
-    return spec(app, "", full=True)
+    return spec(app, "", full=full)
 
 
 def _params(op: dict) -> list[str]:
@@ -69,29 +67,32 @@ def _params(op: dict) -> list[str]:
     return out
 
 
-def markdown(app, version: str = "") -> str:
-    """The whole reference, as the file in docs\\ holds it."""
-    api = _schema(app)
+def markdown(app, version: str = "", full: bool = False) -> str:
+    """The reference in docs\\10-Swagger.md: the four calls another system makes. full=True writes every
+    endpoint of the DMS instead, which is what somebody working on the DMS itself wants."""
+    api = _schema(app, full=full)
     seen: set[str] = set()
-    lines = ["# 10 - Swagger: every endpoint of the DMS", "",
-             "Every endpoint of the DMS, written from the API itself "
-             "(`python -m dms_api.apidocs`, or `scripts\\New-DmsApiDocs.ps1`), so it cannot drift from the "
-             "code. The machine API has a guide of its own in `09-Machine-API.md`, the WidgetBuilder in "
-             "`08-WidgetBuilder-Contract.md`, and the page key in `07-KPI-Integration.md`.", "",
-             "**Swagger** shows the short list - what another system talks to: the machine API, the "
-             "indexing ticket and the page key. This file is every endpoint, the page's own included. "
-             "To try a call or generate a client - "
-             "`https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the "
-             "OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository "
-             "as `dms-swagger.json`, for a client generated without reaching the server.", ""]
+    lines = ["# 10 - Swagger: the API other systems use", "",
+             "Four calls, and nothing else: ask for a ticket, read what is released, fetch what you need, "
+             "and look up where things live. Written from the API itself "
+             "(`python -m dms_api.apidocs`, or `scripts\\New-DmsApiDocs.ps1`), so it cannot drift.", "",
+             "| | |", "| --- | --- |",
+             "| **Try it** | `https://dms.rh.tech/dms/api-try` - the four calls from a page, as you, with "
+             "your own AD rights. Nothing to install |",
+             "| **Swagger UI** | `https://dms.rh.tech/dms/api-docs` (ReDoc: `/dms/api-redoc`) |",
+             "| **The document** | `https://dms.rh.tech/api/openapi.json`, and `dms-swagger.json` beside "
+             "this file, to generate a client without reaching the server |",
+             "| **The rest of it** | WidgetBuilder's publish call: `08-WidgetBuilder-Contract.md`. The "
+             "search, the page key and the AI's guide: `09-Machine-API.md`. The DMS page's own ~80 "
+             "endpoints: `/api/openapi-all.json` |", ""]
     if version:
         lines += [f"Written from DMS {version}.", ""]
     lines += ["## How a caller is known", "",
               "| | How it signs in | What it may do |",
               "| --- | --- | --- |",
-              "| A person on the page | Windows authentication (IIS), the browser's own sign-in | whatever AD gives that person, and nothing else |",
-              "| A page of the repository | `?t=<page key>`, minted when the page is opened | read the folder it was opened from |",
-              "| An application | `X-DMS-Api-Key: <key>` or `Authorization: Bearer <key>` | the key's scopes, as the AD account the key acts as |", ""]
+              "| An application | `X-DMS-Api-Key: <key>` or `Authorization: Bearer <key>` | the key's scopes, as the AD account the key acts as |",
+              "| The company's AI | `?ticket=` or `X-DMS-Index-Ticket` (from `/api/ai/index-ticket`) | what the person who asked may read, file by file |",
+              "| A person | Windows authentication, to ask for a ticket | their own rights |", ""]
     for title, pattern, blurb in GROUPS:
         rows = []
         for path, ops in sorted(api["paths"].items()):
@@ -119,7 +120,7 @@ def markdown(app, version: str = "") -> str:
                     lines += rows_p
                     lines += [""]
     # Routes the schema does not carry (an image, a file answer): they are endpoints all the same.
-    for route in app.routes:
+    for route in app.routes if full else []:
         path, end = getattr(route, "path", ""), getattr(route, "endpoint", None)
         if not path.startswith(("/api", "/dms")) or end is None or path in HIDE or path in api["paths"]:
             continue
@@ -159,4 +160,4 @@ if __name__ == "__main__":   # pragma: no cover - the writer, run by the script
     if "--openapi" in sys.argv:
         sys.stdout.write(openapi_json(app))
     else:
-        sys.stdout.write(markdown(app, where))
+        sys.stdout.write(markdown(app, where, full="--all" in sys.argv))

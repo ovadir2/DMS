@@ -4290,15 +4290,20 @@ def test_the_kpi_builder_publishes_a_page_and_its_data_in_one_call(tmp_path):
                   files=[("files", ("x.json", b"{}", "application/json"))]).status_code == 400
 
 
-def test_the_api_reference_holds_every_endpoint(tmp_path):
-    """The reference is written from the API itself, so it cannot drift - and this says so: every endpoint
-    of the DMS is in docs\\10-Swagger.md, with a line of its own saying what it does."""
+def test_the_reference_is_the_four_calls_and_still_cannot_drift(tmp_path):
+    """docs\\10-Swagger.md is what another system reads: the four calls, written from the API itself. The
+    whole list is still one switch away (--all), and every endpoint of the DMS has to say what it does,
+    because that is where both documents come from."""
     from dms_api import apidocs
     app = create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", sharepoint="memory"))
-    written = apidocs.markdown(app)
-    here = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "docs",
-                        "10-Swagger.md")
-    for route in app.routes:
+    short, every = apidocs.markdown(app), apidocs.markdown(app, full=True)
+    for call in ("GET /api/ai/index-ticket", "GET /api/v1/approved-documents", "GET /api/v1/file",
+                 "GET /api/v1/structure"):
+        assert f"### {call}\n" in short, f"{call} is what an OEM calls: it belongs in the reference"
+    assert "### GET /api/browse\n" not in short and "/dms/api-try" in short
+    assert short.count("\n### ") == 4 and len(short) < len(every) / 5
+
+    for route in app.routes:          # the whole list: every endpoint says what it does
         path = getattr(route, "path", "")
         end = getattr(route, "endpoint", None)
         if not path.startswith(("/api", "/dms")) or end is None or path in apidocs.HIDE:
@@ -4308,13 +4313,16 @@ def test_the_api_reference_holds_every_endpoint(tmp_path):
         assert (end.__doc__ or "").strip(), f"{path} has nothing to say about itself"
         for verb in sorted(getattr(route, "methods", []) or []):
             if verb in apidocs.VERBS:
-                assert f"### {verb} {path}\n" in written, f"{verb} {path} is not in the reference"
+                assert f"### {verb} {path}\n" in every, f"{verb} {path} is in neither document"
+
+    here = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "docs",
+                        "10-Swagger.md")
     if os.path.isfile(here):          # the file in docs is the same reference, without the build line
         on_disk = open(here, encoding="utf-8").read()
         import re as _re
         strip = lambda t: _re.sub(r"\n{3,}", "\n\n", "\n".join(
             l for l in t.splitlines() if not l.startswith("Written from DMS ")))
-        assert strip(on_disk) == strip(written), "docs\\10-Swagger.md is behind: run scripts\\New-DmsApiDocs.ps1"
+        assert strip(on_disk) == strip(short), "docs\\10-Swagger.md is behind: run scripts\\New-DmsApiDocs.ps1"
 
 
 def test_swagger_is_four_calls_and_nothing_else(tmp_path):

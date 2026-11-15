@@ -11,7 +11,9 @@
     .\scripts\New-DmsApiDocs.ps1
 #>
 [CmdletBinding()]
-param()
+param(
+    [switch]$All
+)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $py = Join-Path $root 'webapi\.venv\Scripts\python.exe'
@@ -21,6 +23,8 @@ try {
     $env:PYTHONPATH = '.'
     $out = Join-Path $root 'docs\10-Swagger.md'
     & $py -m dms_api.apidocs | Set-Content -Path $out -Encoding UTF8
+    # the whole list, for whoever is working on the DMS itself: not kept in the repository, written on ask
+    if ($All) { & $py -m dms_api.apidocs --all | Set-Content -Path (Join-Path $root 'docs\10-Swagger-all.md') -Encoding UTF8 }
     Write-Host "Written: $out"
     $json = Join-Path $root 'docs\dms-swagger.json'
     & $py -m dms_api.apidocs --openapi | Set-Content -Path $json -Encoding UTF8

@@ -27,7 +27,7 @@ Implementation of **IT-DOC-BP-001 "Enterprise Document Control and Large-File Ex
 | [`docs/07-KPI-Integration.md`](docs/07-KPI-Integration.md) | KPIs and dashboards: where a KPI package lives, how a page of the repository runs and reads its data, and how the WidgetBuilder publishes |
 | [`docs/08-WidgetBuilder-Contract.md`](docs/08-WidgetBuilder-Contract.md) | What the WidgetBuilder sends the DMS and gets back: its key, the departments, publishing a KPI, and what its page may do at runtime |
 | [`docs/09-Machine-API.md`](docs/09-Machine-API.md) | The machine API: a key for an application, what each endpoint answers, and the AD account a key acts as |
-| [`docs/10-Swagger.md`](docs/10-Swagger.md) | Every endpoint of the DMS with its parameters, written from the API itself (`scripts/New-DmsApiDocs.ps1`) |
+| [`docs/10-Swagger.md`](docs/10-Swagger.md) | The four calls another system makes, written from the API itself (`scripts/New-DmsApiDocs.ps1`). Try them at `/dms/api-try`; the DMS page's own endpoints are at `/api/openapi-all.json` |
 | [`docs/11-Project-Context.md`](docs/11-Project-Context.md) | The brief as it was actually given: the standing rules, the decisions and what each was a reaction to, and what is still open - enough to carry the work on without the conversation it came from |
 | [`docs/dms-swagger.json`](docs/dms-swagger.json) | The OpenAPI (Swagger) document of the whole API - served live at `/api/openapi.json`, shown at `/dms/api-docs` |
 
