@@ -4852,6 +4852,9 @@ def test_the_try_page_asks_the_four_calls_as_the_person_at_the_keyboard(tmp_path
     assert "/dms/api-try" not in c.get("/api/openapi.json").json()["paths"]    # it is a page, not an endpoint
     for shown in ("curl -s", "Invoke-RestMethod", "X-DMS-Index-Ticket", "X-DMS-Api-Key"):
         assert shown in r.text, f"the page does not show {shown}: the call cannot be copied anywhere"
+    # every parameter the API takes is a box on the page, so the address is built in front of the reader
+    for name in ("ticket", "q", "customer", "since", "all", "inline", "budget", "path", "markdown"):
+        assert f"name: '{name}'" in r.text, f"{name} is a parameter of the API and is not offered"
 
 
 def test_swagger_says_where_this_dms_is_and_what_an_answer_looks_like(tmp_path):

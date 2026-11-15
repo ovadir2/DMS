@@ -21,6 +21,8 @@
  pre{margin:0;padding:12px;background:#0f172a;color:#e2e8f0;border-radius:8px;overflow:auto;max-height:70vh;
      font:12.5px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
  .ticket{font:12px ui-monospace,Consolas,monospace;color:#1f7a4d;word-break:break-all}
+ label.check{display:flex;align-items:center;gap:6px;margin:8px 0 0;color:#24303c;font-size:12.5px}
+ label.check input{width:auto}
  .cmds{margin-bottom:12px}
  .cmdhead{display:flex;align-items:center;gap:10px;font-size:12px;color:#5b6b7c;margin-bottom:4px}
  .copy{margin:0;padding:3px 8px;font-size:12px;background:#fff;color:var(--accent);border:1px solid var(--accent)}
@@ -28,36 +30,10 @@
 </style></head><body>
 <header><b>DMS - try the API</b><span>the four calls another system makes, as you, with your AD rights</span></header>
 <main>
-<section class="calls">
-  <div class="call">
-    <h3><span class="verb">GET</span> /api/ai/index-ticket</h3>
-    <p>A ticket in your name. Every call below uses it; it never says whose it is.</p>
-    <button onclick="ticketGet()">Get a ticket</button>
-    <div class="ticket" id="tk">no ticket yet</div>
-  </div>
-  <div class="call">
-    <h3><span class="verb">GET</span> /api/v1/approved-documents</h3>
-    <p>What is released, as you may see it. With the Markdown carried in the answer, nothing is downloaded.</p>
-    <label>q (optional)</label><input id="q" placeholder="part of an id, a name or a file name">
-    <button onclick="docs(true)">With the Markdown</button>
-    <button class="ghost" onclick="docs(false)">List only</button>
-  </div>
-  <div class="call">
-    <h3><span class="verb">GET</span> /api/v1/structure</h3>
-    <p>The departments and the customers, each with its KPIs folder.</p>
-    <button onclick="call('/api/v1/structure')">Ask</button>
-  </div>
-  <div class="call">
-    <h3><span class="verb">GET</span> /api/v1/file</h3>
-    <p>The file itself, served by the DMS. Paste a path from the answer above.</p>
-    <label>path</label><input id="path" placeholder="E:\\Shares\\01_General\\...\\Current_ReadOnly\\QP.docx">
-    <button onclick="file(true)">Its Markdown</button>
-    <button class="ghost" onclick="file(false)">The document</button>
-  </div>
-</section>
+<section class="calls" id="calls"></section>
 <section class="out">
   <div class="status" id="st">Nothing asked yet. Start with a ticket.</div>
-  <div class="cmds" id="cmds" hidden>
+  <div class="cmds" id="cmds">
     <div class="cmdhead">The call, with every parameter <button class="copy" onclick="copyAll()">Copy</button></div>
     <pre id="cmd">&nbsp;</pre>
   </div>
@@ -65,39 +41,95 @@
 </section>
 </main>
 <script>
+// Every call, with every parameter it takes: the page is built from this, so what you see on screen is
+// exactly what the API offers - and the address below is built from the boxes as you fill them in.
+const CALLS = [
+  { id: 'ticket', verb: 'GET', path: '/api/ai/index-ticket', button: 'Get a ticket',
+    what: 'A ticket in your name. Every call below uses it, and it never says whose it is.',
+    params: [] },
+  { id: 'docs', verb: 'GET', path: '/api/v1/approved-documents', button: 'Ask',
+    what: 'What is released, as you may see it.',
+    params: [
+      { name: 'ticket', kind: 'ticket', note: 'in your name (or X-DMS-Index-Ticket, or an application key)' },
+      { name: 'q', kind: 'text', note: 'part of an id, a name or a file name' },
+      { name: 'customer', kind: 'text', note: 'only that customer\'s documents' },
+      { name: 'since', kind: 'text', note: '2026-11-15T08:00:00Z - only what changed after it' },
+      { name: 'all', kind: 'bool', value: true, note: 'also released files with no Markdown (a drawing, a scan)' },
+      { name: 'inline', kind: 'bool', value: true, note: 'carry the Markdown in the answer - nothing is downloaded' },
+      { name: 'budget', kind: 'number', value: 200000, note: 'how much Markdown one answer may carry' } ] },
+  { id: 'structure', verb: 'GET', path: '/api/v1/structure', button: 'Ask',
+    what: 'The departments and the customers, each with its KPIs folder.',
+    params: [
+      { name: 'ticket', kind: 'ticket' },
+      { name: 'q', kind: 'text', note: 'part of a name' } ] },
+  { id: 'file', verb: 'GET', path: '/api/v1/file', button: 'Fetch', raw: true,
+    what: 'The file itself, served by the DMS. Paste a path from an answer above.',
+    params: [
+      { name: 'ticket', kind: 'ticket' },
+      { name: 'path', kind: 'text', wide: true, required: true,
+        note: 'E:\\Shares\\01_General\\...\\Current_ReadOnly\\QP-16.1 Rev03.docx' },
+      { name: 'markdown', kind: 'bool', value: true, note: 'the Markdown beside it, rather than the document' } ] },
+];
+
 let ticket = '';
 const $ = id => document.getElementById(id);
-function show(status, text) { $('st').textContent = status; $('body').textContent = text; }
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function draw() {
+  $('calls').innerHTML = CALLS.map(call => `
+    <div class="call">
+      <h3><span class="verb">${call.verb}</span> ${esc(call.path)}</h3>
+      <p>${esc(call.what)}</p>
+      ${call.params.map(p => p.kind === 'bool' ? `
+        <label class="check"><input type="checkbox" id="${call.id}-${p.name}" ${p.value ? 'checked' : ''}
+          oninput="preview('${call.id}')"> ${esc(p.name)}${p.note ? ' - ' + esc(p.note) : ''}</label>` : `
+        <label>${esc(p.name)}${p.required ? '' : ' (optional)'}${p.kind === 'ticket' ? ' - filled in by Get a ticket' : ''}</label>
+        <input id="${call.id}-${p.name}" value="${p.value !== undefined ? esc(p.value) : ''}"
+               placeholder="${esc(p.note || '')}" oninput="preview('${call.id}')"
+               ${p.kind === 'ticket' ? 'readonly' : ''}>`).join('')}
+      <button onclick="run('${call.id}')">${esc(call.button)}</button>
+      <button class="ghost" onclick="preview('${call.id}')">Show the call</button>
+    </div>`).join('');
+  CALLS.forEach(c => preview(c.id, true));
+}
+
+function urlOf(id) {
+  const call = CALLS.find(c => c.id === id);
+  const q = [];
+  for (const p of call.params) {
+    const el = $(`${id}-${p.name}`);
+    if (!el) continue;
+    const v = p.kind === 'bool' ? (el.checked ? 'true' : '') : el.value.trim();
+    if (v) q.push(encodeURIComponent(p.name) + '=' + encodeURIComponent(v));
+  }
+  return call.path + (q.length ? '?' + q.join('&') : '');
+}
+
 function showCall(url, raw) {
-  // the whole address with every parameter, and the same call from a command line - to paste into a
-  // terminal, a script or whatever the other system is written in
   const full = new URL(url, location.origin).href;
-  const key = 'X-DMS-Index-Ticket: ' + (ticket || '<ticket>');
-  const lines = [
-    'GET ' + full,
-    '',
-    '# curl - the ticket in the address, as above',
-    'curl -s "' + full + '"',
-    '',
-    '# curl - the ticket as a header instead (the address then carries no ticket)',
-    'curl -s -H "' + key + '" "' + full.replace(/([?&])ticket=[^&]*/, '$1').replace(/[?&]$/, '') + '"',
-    '',
-    '# PowerShell, signed in as you (no ticket needed for /api/ai/index-ticket)',
-    'Invoke-RestMethod "' + full + '" -UseDefaultCredentials' + (raw ? ' -OutFile .\\answer.bin' : ''),
-    '',
-    '# an application instead of a person: its own key, and no ticket',
-    'curl -s -H "X-DMS-Api-Key: <key>" "' + full.replace(/([?&])ticket=[^&]*/, '$1').replace(/[?&]$/, '') + '"',
-  ];
-  $('cmd').textContent = lines.join('\n');
-  $('cmds').hidden = false;
+  const noTicket = full.replace(/([?&])ticket=[^&]*/, '$1').replace(/[?&]$/, '').replace(/\?&/, '?');
+  $('cmd').textContent = [
+    'GET ' + full, '',
+    '# curl - the ticket in the address',
+    'curl -s "' + full + '"', '',
+    '# curl - the ticket as a header instead',
+    'curl -s -H "X-DMS-Index-Ticket: ' + (ticket || '<ticket>') + '" "' + noTicket + '"', '',
+    '# PowerShell, signed in as you',
+    'Invoke-RestMethod "' + full + '" -UseDefaultCredentials' + (raw ? ' -OutFile .\\answer.bin' : ''), '',
+    '# an application instead of a person: its own key, no ticket',
+    'curl -s -H "X-DMS-Api-Key: <key>" "' + noTicket + '"',
+  ].join('\n');
 }
-function copyAll() {
-  navigator.clipboard.writeText($('cmd').textContent).then(
-    () => { $('st').textContent = 'copied'; }, () => {});
+
+function preview(id, quiet) {
+  showCall(urlOf(id), CALLS.find(c => c.id === id).raw);
+  if (!quiet) $('st').textContent = 'the call below is ready - press ' + CALLS.find(c => c.id === id).button;
 }
-async function call(path, raw) {
-  const url = path + (path.includes('?') ? '&' : '?') + (ticket ? 'ticket=' + encodeURIComponent(ticket) : '');
-  showCall(url, raw);
+
+async function run(id) {
+  const call = CALLS.find(c => c.id === id);
+  const url = urlOf(id);
+  showCall(url, call.raw);
   const t0 = performance.now();
   try {
     const r = await fetch(url, { credentials: 'include' });
@@ -105,27 +137,25 @@ async function call(path, raw) {
     const kind = r.headers.get('content-type') || '';
     const text = await r.text();
     const size = new Blob([text]).size;
-    show(`${r.status} ${r.statusText} - ${ms} ms, ${size.toLocaleString()} bytes - ${url}`,
-         raw || !kind.includes('json') ? text.slice(0, 20000)
-                                       : JSON.stringify(JSON.parse(text), null, 1).slice(0, 20000));
-  } catch (e) { show('failed', e.message); }
+    let shown = text;
+    if (kind.includes('json')) {
+      try {
+        const j = JSON.parse(text);
+        shown = JSON.stringify(j, null, 1);
+        if (id === 'ticket') {
+          ticket = j.ticket || '';
+          CALLS.forEach(c => { const el = $(`${c.id}-ticket`); if (el) el.value = ticket; });
+          CALLS.forEach(c => preview(c.id, true));
+        }
+      } catch (e) { /* not JSON after all */ }
+    }
+    $('st').textContent = `${r.status} ${r.statusText} - ${ms} ms, ${size.toLocaleString()} bytes`;
+    $('body').textContent = shown.slice(0, 20000);
+  } catch (e) { $('st').textContent = 'failed'; $('body').textContent = e.message; }
 }
-async function ticketGet() {
-  showCall('/api/ai/index-ticket');
-  const r = await fetch('/api/ai/index-ticket', { credentials: 'include' });
-  const j = await r.json();
-  ticket = j.ticket || '';
-  $('tk').textContent = ticket ? 'ticket held for ' + j.hours + ' hours (it does not say whose it is)' : 'refused';
-  show(r.status + ' ' + r.statusText + ' - /api/ai/index-ticket', JSON.stringify(j, null, 1));
+
+function copyAll() {
+  navigator.clipboard.writeText($('cmd').textContent).then(() => { $('st').textContent = 'copied'; }, () => {});
 }
-function docs(inline) {
-  const q = $('q').value.trim();
-  call('/api/v1/approved-documents?all=true' + (inline ? '&inline=true&budget=200000' : '') +
-       (q ? '&q=' + encodeURIComponent(q) : ''));
-}
-function file(md) {
-  const p = $('path').value.trim();
-  if (!p) { show('nothing asked', 'Paste a path from an answer above.'); return; }
-  call('/api/v1/file?path=' + encodeURIComponent(p) + (md ? '&markdown=true' : ''), true);
-}
+draw();
 </script></body></html>
