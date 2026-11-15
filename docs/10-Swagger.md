@@ -4,7 +4,7 @@ Every endpoint of the DMS, written from the API itself (`python -m dms_api.apido
 
 **Swagger** shows the short list - what another system talks to: the machine API, the indexing ticket and the page key. This file is every endpoint, the page's own included. To try a call or generate a client - `https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository as `dms-swagger.json`, for a client generated without reaching the server.
 
-Written from DMS e91f2f4.
+Written from DMS 0dcf8f5.
 
 ## How a caller is known
 
@@ -627,6 +627,8 @@ know is read from the Markdown's own first lines, which the DMS wrote when it ma
 | `q` | query | no | string |  |
 | `ticket` | query | no | string | An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see, not what a service account may |
 | `since` | query | no | string | Only files changed after this moment (2026-11-15T08:00:00Z): what an index needs on a second run |
+| `inline` | query | no | boolean | Carry the Markdown itself in the answer, so an index needs no second call per document (a few KB each, and a budget it stops at) |
+| `budget` | query | no | integer | How many characters of Markdown this answer may carry with inline=true |
 | `all` | query | no | boolean | Also the released files that have no Markdown of their own (a drawing, a picture) |
 
 ### GET /api/v1/customers

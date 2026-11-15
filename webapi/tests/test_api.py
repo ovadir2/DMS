@@ -4801,3 +4801,29 @@ def test_an_index_asks_only_for_what_changed(tmp_path, monkeypatch):
     now = c.get("/api/v1/approved-documents", headers=key,
                 params={"all": True, "since": one["modifiedUtc"]}).json()
     assert any(x["DocFile"] == str(f) for x in now["documents"])   # and what did change is
+
+
+def test_the_ai_reads_markdown_and_never_downloads_the_documents(tmp_path):
+    """A RAG that fetches every Word and Excel file costs the server its morning and the index its disk.
+    The Markdown is a few KB of text per document and is what the AI actually reads, so the list can carry
+    it - one call for a folder's worth - with a budget it stops at."""
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    cur = q / "Current_ReadOnly"
+    md = next(p for p in cur.iterdir() if p.suffix == ".md")
+    s.api_keys = {"k": {"name": "rag", "scopes": ["documents"], "as": USER}}
+    key = {"X-DMS-Api-Key": "k"}
+
+    plain = c.get("/api/v1/approved-documents", headers=key).json()["documents"]
+    assert plain and "markdown" not in plain[0]                 # not carried unless it is asked for
+
+    full = c.get("/api/v1/approved-documents", headers=key, params={"inline": True}).json()["documents"]
+    assert full[0]["markdown"] and not full[0]["markdownTruncated"]
+    assert full[0]["markdown"][:40] in md.read_text(encoding="utf-8")[:200]
+
+    small = c.get("/api/v1/approved-documents", headers=key,
+                  params={"inline": True, "budget": 1000}).json()["documents"]
+    assert len(small[0]["markdown"]) <= 1000 and small[0]["markdown"]
+
+    tiny = c.get("/api/v1/approved-documents", headers=key,
+                 params={"inline": True, "budget": 100}).json()["documents"]
+    assert len(tiny[0]["markdown"]) == 100 and tiny[0]["markdownTruncated"]    # it stops, and says so

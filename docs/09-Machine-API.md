@@ -268,6 +268,20 @@ index built this way holds the revisions in force and nothing in work. The AI ne
 server, no share, no drive - which is the standing rule of this installation, and the reason the rights are
 real rather than copied.
 
+### Read the Markdown, not the documents
+
+A RAG that downloads every Word and Excel file costs the server its morning and the index its disk, for
+nothing: the Markdown beside each document is what it should read - a few KB of text against megabytes of
+binary, with the headings, the lists and the tables kept. So:
+
+- `GET /api/v1/approved-documents?ticket=...` (without `all=true`) lists only documents that **have**
+  Markdown. That is the index's list.
+- `&inline=true` carries the Markdown **in the answer itself**, so a folder's worth of documents is one
+  call and no file is downloaded at all. `&budget=` caps how much text one answer may carry (two million
+  characters by default); anything cut off says `markdownTruncated: true` and can be fetched on its own.
+- the document itself (`url`) is for a person who asks to open it, or for a format with no Markdown - a
+  drawing, a scan - and then only when `all=true` said it is there.
+
 ### Just in time, without re-reading the repository
 
 Every row of the list carries `url`, `markdownUrl`, `size`, `modifiedUtc` and `etag`:

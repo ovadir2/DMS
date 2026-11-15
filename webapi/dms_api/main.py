@@ -2475,6 +2475,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                since: str = Query("", description="Only files changed after this moment "
                                                                   "(2026-11-15T08:00:00Z): what an index "
                                                                   "needs on a second run"),
+                               inline: bool = Query(False, description="Carry the Markdown itself in the "
+                                                                       "answer, so an index needs no second "
+                                                                       "call per document (a few KB each, "
+                                                                       "and a budget it stops at)"),
+                               budget: int = Query(2_000_000, ge=1000, le=20_000_000,
+                                                   description="How many characters of Markdown this answer "
+                                                               "may carry with inline=true"),
                                all: bool = Query(False, description="Also the released files that have no "
                                                                     "Markdown of their own (a drawing, a picture)")):
         """The Markdown of every approved document, as it lies in the Current_ReadOnly folders.
@@ -2557,6 +2564,25 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     continue
                 out.append(item)
         out.sort(key=lambda x: (x["DocID"], x["DocName"].lower()))
+        if inline:
+            # The Markdown is what the AI reads - a few KB of text per document, against megabytes for the
+            # document itself. Carrying it here saves a call per document and means nothing downloads the
+            # binaries at all. It stops at the budget and says so, rather than building an answer nobody
+            # can hold.
+            left = budget
+            for item in out:
+                if not item.get("DocDMSpath") or left <= 0:
+                    item["markdownTruncated"] = bool(item.get("DocDMSpath"))
+                    continue
+                try:
+                    with open(item["DocDMSpath"], encoding="utf-8", errors="replace") as fh:
+                        text = fh.read(left + 1)
+                except OSError as e:
+                    logger.info("inline markdown of %s: %s", item["DocDMSpath"], e)
+                    continue
+                item["markdown"] = text[:left]
+                item["markdownTruncated"] = len(text) > left
+                left -= len(item["markdown"])
         logger.info("api %s GET /api/v1/approved-documents -> %d", who["name"], len(out))
         return JSONResponse({"documents": out, "count": len(out)}, headers={"Cache-Control": "no-store"})
 

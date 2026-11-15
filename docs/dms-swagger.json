@@ -792,6 +792,32 @@
       }
      },
      {
+      "description": "Carry the Markdown itself in the answer, so an index needs no second call per document (a few KB each, and a budget it stops at)",
+      "in": "query",
+      "name": "inline",
+      "required": false,
+      "schema": {
+       "default": false,
+       "description": "Carry the Markdown itself in the answer, so an index needs no second call per document (a few KB each, and a budget it stops at)",
+       "title": "Inline",
+       "type": "boolean"
+      }
+     },
+     {
+      "description": "How many characters of Markdown this answer may carry with inline=true",
+      "in": "query",
+      "name": "budget",
+      "required": false,
+      "schema": {
+       "default": 2000000,
+       "description": "How many characters of Markdown this answer may carry with inline=true",
+       "maximum": 20000000,
+       "minimum": 1000,
+       "title": "Budget",
+       "type": "integer"
+      }
+     },
+     {
       "description": "Also the released files that have no Markdown of their own (a drawing, a picture)",
       "in": "query",
       "name": "all",
