@@ -233,6 +233,8 @@ through its paces yet. What was asked for and is not there yet has a table of it
 
 | REQ-P96 | The company AI answers from what the person asking may read | The page mints an indexing ticket for the person (`/api/ai/index-ticket`); the AI calls `approved-documents`, `search`, `customers`, `departments` and `file` with it, and every folder and file is measured against that person's own AD rights. The ticket does not say whose it is, cannot be set to somebody else and expires with the session. The AI fetches the content from the DMS - no account on the file server - and indexes just in time: `since`, `etag` and `304` mean a second run reads only what changed | Built |
 
+| REQ-P97 | The shape of a customer carries its rights, to the ones already there too | The skeleton is where a customer's folders and their AD groups are decided. `Sync-DmsCustomerAccess.ps1` writes those same rules onto customers made before the groups existed - each folder matched by name, each skeleton group replaced by that customer's own, a folder whose group AD does not have left untouched and reported rather than half set | Built |
+
 ### Asked for, and not built yet
 
 | | What it would be | Why it is not done |
