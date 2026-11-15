@@ -39,6 +39,12 @@ SECURITY = {
                               "acts as (scripts\\New-DmsApiKey.ps1)."},
     "bearer": {"type": "http", "scheme": "bearer",
                "description": "The same application key, sent as Authorization: Bearer."},
+    "indexTicket": {"type": "apiKey", "in": "query", "name": "ticket",
+                    "description": "An indexing ticket the DMS mints for a person (/api/ai/index-ticket). "
+                                   "The answer is then what that person's AD rights allow, file by file - "
+                                   "which is how the company's AI indexes just what the person asking may "
+                                   "read. Good for DMS_PAGE_KEY_HOURS; may also be sent as the header "
+                                   "X-DMS-Index-Ticket."},
     "pageKey": {"type": "apiKey", "in": "query", "name": "t",
                 "description": "The page key the DMS mints when it opens a page of the repository. Reading "
                                "only, inside that page's own folder, for DMS_PAGE_KEY_HOURS."},
@@ -73,7 +79,7 @@ def spec(app, version: str = "") -> dict:
             # it was changed from run to run - a client generated from the document could not be trusted.
             op["operationId"] = (verb + "_" + re.sub(r"[^A-Za-z0-9]+", "_", path)).strip("_").lower()
             if path.startswith("/api/v1/"):
-                op["security"] = [{"apiKey": []}, {"bearer": []}]
+                op["security"] = [{"apiKey": []}, {"bearer": []}, {"indexTicket": []}]
             elif path.startswith("/api/kpi/"):
                 op["security"] = [] if path.endswith("/ping") else [{"pageKey": []}]
             else:

@@ -697,6 +697,12 @@
     "scheme": "bearer",
     "type": "http"
    },
+   "indexTicket": {
+    "description": "An indexing ticket the DMS mints for a person (/api/ai/index-ticket). The answer is then what that person's AD rights allow, file by file - which is how the company's AI indexes just what the person asking may read. Good for DMS_PAGE_KEY_HOURS; may also be sent as the header X-DMS-Index-Ticket.",
+    "in": "query",
+    "name": "ticket",
+    "type": "apiKey"
+   },
    "pageKey": {
     "description": "The page key the DMS mints when it opens a page of the repository. Reading only, inside that page's own folder, for DMS_PAGE_KEY_HOURS.",
     "in": "query",
@@ -842,6 +848,31 @@
      }
     ],
     "summary": "Ai Find",
+    "tags": [
+     "AI Insights"
+    ]
+   }
+  },
+  "/api/ai/index-ticket": {
+   "get": {
+    "description": "A ticket the company's AI uses to index what this person may read, just before it answers them.\n\nThe RAG is given it by the page when the person asks AI Insights, and calls\n/api/v1/approved-documents with it. Everything it gets back is filtered by that person's own AD\nrights, file by file - an application key names a service account and would answer the same list to\neverybody, which is exactly what must not happen here.",
+    "operationId": "get__api_ai_index_ticket",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "security": [
+     {
+      "windows": []
+     }
+    ],
+    "summary": "Ai Index Ticket",
     "tags": [
      "AI Insights"
     ]
@@ -4594,6 +4625,30 @@
       }
      },
      {
+      "description": "An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see, not what a service account may",
+      "in": "query",
+      "name": "ticket",
+      "required": false,
+      "schema": {
+       "default": "",
+       "description": "An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see, not what a service account may",
+       "title": "Ticket",
+       "type": "string"
+      }
+     },
+     {
+      "description": "Only files changed after this moment (2026-11-15T08:00:00Z): what an index needs on a second run",
+      "in": "query",
+      "name": "since",
+      "required": false,
+      "schema": {
+       "default": "",
+       "description": "Only files changed after this moment (2026-11-15T08:00:00Z): what an index needs on a second run",
+       "title": "Since",
+       "type": "string"
+      }
+     },
+     {
       "description": "Also the released files that have no Markdown of their own (a drawing, a picture)",
       "in": "query",
       "name": "all",
@@ -4632,6 +4687,9 @@
      },
      {
       "bearer": []
+     },
+     {
+      "indexTicket": []
      }
     ],
     "summary": "Api Approved Documents",
@@ -4664,54 +4722,16 @@
        "title": "With Projects",
        "type": "boolean"
       }
-     }
-    ],
-    "responses": {
-     "200": {
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      },
-      "description": "Successful Response"
-     },
-     "422": {
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      },
-      "description": "Validation Error"
-     }
-    },
-    "security": [
-     {
-      "apiKey": []
      },
      {
-      "bearer": []
-     }
-    ],
-    "summary": "Api Customers",
-    "tags": [
-     "The machine API"
-    ]
-   }
-  },
-  "/api/v1/departments": {
-   "get": {
-    "description": "The departments of the company: the folders under General, with the name the page shows and the\nKPIs folder of each.\n\nFor an application, not for a person. AD decides here as everywhere: a department the key's account\nmay not see is not in the answer.",
-    "operationId": "get__api_v1_departments",
-    "parameters": [
-     {
+      "description": "An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see",
       "in": "query",
-      "name": "q",
+      "name": "ticket",
       "required": false,
       "schema": {
        "default": "",
-       "title": "Q",
+       "description": "An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see",
+       "title": "Ticket",
        "type": "string"
       }
      }
@@ -4742,6 +4762,74 @@
      },
      {
       "bearer": []
+     },
+     {
+      "indexTicket": []
+     }
+    ],
+    "summary": "Api Customers",
+    "tags": [
+     "The machine API"
+    ]
+   }
+  },
+  "/api/v1/departments": {
+   "get": {
+    "description": "The departments of the company: the folders under General, with the name the page shows and the\nKPIs folder of each.\n\nFor an application, not for a person. AD decides here as everywhere: a department the key's account\nmay not see is not in the answer.",
+    "operationId": "get__api_v1_departments",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "q",
+      "required": false,
+      "schema": {
+       "default": "",
+       "title": "Q",
+       "type": "string"
+      }
+     },
+     {
+      "description": "An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see",
+      "in": "query",
+      "name": "ticket",
+      "required": false,
+      "schema": {
+       "default": "",
+       "description": "An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see",
+       "title": "Ticket",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "apiKey": []
+     },
+     {
+      "bearer": []
+     },
+     {
+      "indexTicket": []
      }
     ],
     "summary": "Api Departments",
@@ -4822,9 +4910,88 @@
      },
      {
       "bearer": []
+     },
+     {
+      "indexTicket": []
      }
     ],
     "summary": "Api Documents",
+    "tags": [
+     "The machine API"
+    ]
+   }
+  },
+  "/api/v1/file": {
+   "get": {
+    "description": "One released file, served by the DMS itself - the content, not a path on the file server.\n\nThis is how the company's AI reads a document without an account on the file server: it asks for the\nfile, and the DMS answers only if the AD account behind the call may see it - the key's own account,\nor, with a ticket, the person who asked. Only what is released (Current_ReadOnly) is served, so an\nindex built from this holds the revisions in force and nothing in work.",
+    "operationId": "get__api_v1_file",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "path",
+      "required": true,
+      "schema": {
+       "title": "Path",
+       "type": "string"
+      }
+     },
+     {
+      "description": "The Markdown written beside the document, rather than the document itself",
+      "in": "query",
+      "name": "markdown",
+      "required": false,
+      "schema": {
+       "default": false,
+       "description": "The Markdown written beside the document, rather than the document itself",
+       "title": "Markdown",
+       "type": "boolean"
+      }
+     },
+     {
+      "description": "An indexing ticket (/api/ai/index-ticket)",
+      "in": "query",
+      "name": "ticket",
+      "required": false,
+      "schema": {
+       "default": "",
+       "description": "An indexing ticket (/api/ai/index-ticket)",
+       "title": "Ticket",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "apiKey": []
+     },
+     {
+      "bearer": []
+     },
+     {
+      "indexTicket": []
+     }
+    ],
+    "summary": "Api File",
     "tags": [
      "The machine API"
     ]
@@ -4870,9 +5037,125 @@
      },
      {
       "bearer": []
+     },
+     {
+      "indexTicket": []
      }
     ],
     "summary": "Api Kpi Publish",
+    "tags": [
+     "The machine API"
+    ]
+   }
+  },
+  "/api/v1/search": {
+   "get": {
+    "description": "Search the repository for an application, or for the company's AI in the name of a person.\n\nThe same search the page does - customers, folders, registered documents and file names - answered\nfor the AD account behind the call: the key's own account, or, with a ticket, the person who asked.\nNothing is in the answer that that account may not see.",
+    "operationId": "get__api_v1_search",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "q",
+      "required": true,
+      "schema": {
+       "minLength": 2,
+       "title": "Q",
+       "type": "string"
+      }
+     },
+     {
+      "description": "all | customer | project | document | file | quick",
+      "in": "query",
+      "name": "scope",
+      "required": false,
+      "schema": {
+       "default": "all",
+       "description": "all | customer | project | document | file | quick",
+       "title": "Scope",
+       "type": "string"
+      }
+     },
+     {
+      "description": "Search inside one customer's folder",
+      "in": "query",
+      "name": "customer",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "Search inside one customer's folder",
+       "title": "Customer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maximum": 500,
+         "minimum": 1,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Limit"
+      }
+     },
+     {
+      "description": "An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see",
+      "in": "query",
+      "name": "ticket",
+      "required": false,
+      "schema": {
+       "default": "",
+       "description": "An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see",
+       "title": "Ticket",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "security": [
+     {
+      "apiKey": []
+     },
+     {
+      "bearer": []
+     },
+     {
+      "indexTicket": []
+     }
+    ],
+    "summary": "Api Search",
     "tags": [
      "The machine API"
     ]

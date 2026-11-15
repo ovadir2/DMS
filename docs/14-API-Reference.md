@@ -4,7 +4,7 @@ Every endpoint of the DMS, written from the API itself (`python -m dms_api.apido
 
 **Swagger**: the same thing to try and to generate a client from - `https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository as `dms-openapi.json`, for a client generated without reaching the server.
 
-Written from DMS 59d89a3.
+Written from DMS 7ed7df4.
 
 ## How a caller is known
 
@@ -503,6 +503,15 @@ Find files from a free-text request, only among what the user may see. With AI I
 | --- | --- | --- | --- | --- |
 | _body_ | application/json | yes | object |  |
 
+### GET /api/ai/index-ticket
+
+A ticket the company's AI uses to index what this person may read, just before it answers them.
+
+The RAG is given it by the page when the person asks AI Insights, and calls
+/api/v1/approved-documents with it. Everything it gets back is filtered by that person's own AD
+rights, file by file - an application key names a service account and would answer the same list to
+everybody, which is exactly what must not happen here.
+
 ### POST /api/ai/rag
 
 AI Insights: a question to an RH RAG tool on the AI portal (e.g. QMS).
@@ -616,6 +625,8 @@ know is read from the Markdown's own first lines, which the DMS wrote when it ma
 | --- | --- | --- | --- | --- |
 | `customer` | query | no | string |  |
 | `q` | query | no | string |  |
+| `ticket` | query | no | string | An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see, not what a service account may |
+| `since` | query | no | string | Only files changed after this moment (2026-11-15T08:00:00Z): what an index needs on a second run |
 | `all` | query | no | boolean | Also the released files that have no Markdown of their own (a drawing, a picture) |
 
 ### GET /api/v1/customers
@@ -629,6 +640,7 @@ new customers are cut from is not one of them.
 | --- | --- | --- | --- | --- |
 | `q` | query | no | string |  |
 | `with_projects` | query | no | boolean |  |
+| `ticket` | query | no | string | An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see |
 
 ### GET /api/v1/departments
 
@@ -640,6 +652,7 @@ may not see is not in the answer.
 | Parameter | In | Required | Type | |
 | --- | --- | --- | --- | --- |
 | `q` | query | no | string |  |
+| `ticket` | query | no | string | An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see |
 
 ### GET /api/v1/documents
 
@@ -655,6 +668,21 @@ revision that has been replaced is not here; nor is anything still in work.
 | `q` | query | no | string |  |
 | `since` | query | no | string |  |
 | `with_markdown` | query | no | boolean |  |
+
+### GET /api/v1/file
+
+One released file, served by the DMS itself - the content, not a path on the file server.
+
+This is how the company's AI reads a document without an account on the file server: it asks for the
+file, and the DMS answers only if the AD account behind the call may see it - the key's own account,
+or, with a ticket, the person who asked. Only what is released (Current_ReadOnly) is served, so an
+index built from this holds the revisions in force and nothing in work.
+
+| Parameter | In | Required | Type | |
+| --- | --- | --- | --- | --- |
+| `path` | query | yes | string |  |
+| `markdown` | query | no | boolean | The Markdown written beside the document, rather than the document itself |
+| `ticket` | query | no | string | An indexing ticket (/api/ai/index-ticket) |
 
 ### POST /api/v1/kpi/publish
 
@@ -678,6 +706,22 @@ The application acts as its AD account: that account needs Modify there, as a pe
 | Parameter | In | Required | Type | |
 | --- | --- | --- | --- | --- |
 | _body_ | multipart/form-data | yes | object |  |
+
+### GET /api/v1/search
+
+Search the repository for an application, or for the company's AI in the name of a person.
+
+The same search the page does - customers, folders, registered documents and file names - answered
+for the AD account behind the call: the key's own account, or, with a ticket, the person who asked.
+Nothing is in the answer that that account may not see.
+
+| Parameter | In | Required | Type | |
+| --- | --- | --- | --- | --- |
+| `q` | query | yes | string |  |
+| `scope` | query | no | string | all / customer / project / document / file / quick |
+| `customer` | query | no | string | Search inside one customer's folder |
+| `limit` | query | no | string |  |
+| `ticket` | query | no | string | An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see |
 
 ## Office and links
 

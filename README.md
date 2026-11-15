@@ -238,6 +238,8 @@ through its paces yet. What was asked for and is not there yet has a table of it
 
 | REQ-P95 | Two documents may share a name | A procedure and its workbook can sit in one folder under one base name (`Procedure.docx` and `Procedure.xlsx`): each keeps a Markdown of its own (the second is `Procedure.xlsx.md`), and the AI's list names every released file rather than one per base name | Built |
 
+| REQ-P96 | The company AI answers from what the person asking may read | The page mints an indexing ticket for the person (`/api/ai/index-ticket`); the AI calls `approved-documents`, `search`, `customers`, `departments` and `file` with it, and every folder and file is measured against that person's own AD rights. The ticket does not say whose it is, cannot be set to somebody else and expires with the session. The AI fetches the content from the DMS - no account on the file server - and indexes just in time: `since`, `etag` and `304` mean a second run reads only what changed | Built |
+
 ### Asked for, and not built yet
 
 | | What it would be | Why it is not done |

@@ -4327,7 +4327,8 @@ def test_swagger_describes_every_endpoint_and_how_each_is_called(tmp_path):
     c = TestClient(app)
     doc = c.get("/api/openapi.json").json()
     assert doc["info"]["title"] == "RH DMS Web API" and doc["info"]["description"]
-    assert sorted(doc["components"]["securitySchemes"]) == ["apiKey", "bearer", "pageKey", "windows"]
+    assert sorted(doc["components"]["securitySchemes"]) == ["apiKey", "bearer", "indexTicket", "pageKey",
+                                                            "windows"]
 
     inside = {"/api/openapi.json", "/dms/api-docs", "/dms/api-redoc", "/api/kpi/{rest:path}"}
     for route in app.routes:
@@ -4340,7 +4341,8 @@ def test_swagger_describes_every_endpoint_and_how_each_is_called(tmp_path):
             assert op.get("summary") or op.get("description"), f"{verb} {path} says nothing about itself"
 
     # how each kind of caller signs in, by where the endpoint lives
-    assert doc["paths"]["/api/v1/customers"]["get"]["security"] == [{"apiKey": []}, {"bearer": []}]
+    assert doc["paths"]["/api/v1/customers"]["get"]["security"] == [{"apiKey": []}, {"bearer": []},
+                                                                    {"indexTicket": []}]
     assert doc["paths"]["/api/kpi/data"]["get"]["security"] == [{"pageKey": []}]
     assert doc["paths"]["/api/kpi/ping"]["get"]["security"] == []            # the one that answers anyone
     assert doc["paths"]["/api/browse"]["get"]["security"] == [{"windows": []}]
@@ -4710,3 +4712,79 @@ def test_view_needs_sharepoint_only_for_what_must_be_converted(tmp_path):
     office = c.get("/api/files/view-pdf", params={"path": str(next(p for p in cur.iterdir()
                                                                    if p.suffix == ".xlsx"))})
     assert office.status_code == 503 and "DMS_REVIEW_LIBRARY" in office.json()["detail"]
+
+
+def test_the_ai_indexes_what_the_person_asking_may_read(tmp_path, monkeypatch):
+    """Just-in-time indexing: the page hands the company's AI a ticket in the name of the person who asked,
+    and every answer - the list, the search, the file itself - is measured against that person's own AD
+    rights. An application key would name one service account and answer everybody the same, which is the
+    thing that must not happen with documents."""
+    from dms_api import security
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    cur = q / "Current_ReadOnly"
+    released = next(p for p in cur.iterdir() if p.suffix != ".md")
+    (cur / "Secret.docx").write_bytes(b"x")
+
+    allowed = {str(released).lower(), str(cur / (released.stem + ".md")).lower()}
+    monkeypatch.setattr(security, "may_see",
+                        lambda who, path, access="read": True if who != USER else str(path).lower() in allowed
+                        or os.path.isdir(path))
+
+    t = c.get("/api/ai/index-ticket").json()
+    assert t["ticket"] and t["documents"].endswith(t["ticket"])
+    assert "user" not in t and USER not in str(t)       # whose ticket it is never leaves the DMS
+    assert c.get("/api/v1/approved-documents", params={"ticket": t["ticket"], "as": "someone@rh.co.il"}
+                 ).status_code == 200                   # and naming somebody else changes nothing
+
+    got = c.get("/api/v1/approved-documents", params={"ticket": t["ticket"], "all": True}).json()
+    names = {x["DocFileName"] for x in got["documents"]}
+    assert released.name in names and "Secret.docx" not in names    # their rights, file by file
+
+    body = c.get("/api/v1/file", params={"path": str(released), "ticket": t["ticket"]})
+    assert body.status_code == 200 and body.content
+    md = c.get("/api/v1/file", params={"path": str(released), "markdown": True, "ticket": t["ticket"]})
+    assert md.status_code in (200, 404)
+    refused = c.get("/api/v1/file", params={"path": str(cur / "Secret.docx"), "ticket": t["ticket"]})
+    assert refused.status_code == 403
+    working = c.get("/api/v1/file", params={"path": str(q / released.name), "ticket": t["ticket"]})
+    assert working.status_code in (403, 404)                        # only what is released is served
+
+    found = c.get("/api/v1/search", params={"q": "quote", "ticket": t["ticket"]})
+    assert found.status_code == 200
+
+    stale = c.get("/api/v1/approved-documents", params={"ticket": "not-a-ticket"})
+    assert stale.status_code == 403 and "ticket" in stale.json()["detail"].lower()
+    assert c.get("/api/v1/approved-documents").status_code == 401   # no key, no ticket: nothing
+
+
+def test_an_index_asks_only_for_what_changed(tmp_path, monkeypatch):
+    """Just in time means asking again, often. The list carries a stamp and a ready URL per file, answers
+    "what changed since" and the file itself answers 304 to an index that already has it - so a second run
+    reads almost nothing."""
+    import time as _t
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    s.api_keys = {"k": {"name": "rag", "scopes": ["documents"], "as": USER}}
+    key = {"X-DMS-Api-Key": "k"}
+    first = c.get("/api/v1/approved-documents", headers=key, params={"all": True}).json()["documents"]
+    one = first[0]
+    assert one["url"].startswith("/api/v1/file?path=") or "/api/v1/file?path=" in one["url"]
+    assert one["etag"] and one["modifiedUtc"].endswith("Z") and one["size"] >= 0
+
+    body = c.get("/api/v1/file", headers=key, params={"path": one["DocFile"] or one["DocDMSpath"]})
+    assert body.status_code == 200 and body.headers["etag"] == one["etag"]
+    again = c.get("/api/v1/file", headers={**key, "If-None-Match": one["etag"]},
+                  params={"path": one["DocFile"] or one["DocDMSpath"]})
+    assert again.status_code == 304 and not again.content
+
+    nothing = c.get("/api/v1/approved-documents", headers=key,
+                    params={"all": True, "since": one["modifiedUtc"]}).json()
+    assert nothing["count"] < len(first)                      # what it has already read is not sent again
+
+    _t.sleep(1.1)
+    changed = tmp_path / "Root" / "02_Customers" / "Customer_A" / "Commercial" / "Quotations" / "Current_ReadOnly"
+    f = next(p for p in changed.iterdir() if p.suffix != ".md")
+    os.chmod(f, 0o666)
+    f.write_bytes(b"new content")
+    now = c.get("/api/v1/approved-documents", headers=key,
+                params={"all": True, "since": one["modifiedUtc"]}).json()
+    assert any(x["DocFile"] == str(f) for x in now["documents"])   # and what did change is

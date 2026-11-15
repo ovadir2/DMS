@@ -199,6 +199,55 @@ and the answer to this call is the only place that says what is current. The lis
 AD account the key acts as, so an index built from it contains nothing that account may not read; give the
 AI's account the groups it should see and nothing else.
 
+## Indexing in the name of the person asking (AI Insights, JIT)
+
+A RAG that indexes with a service account answers everybody the same, which is exactly what must not
+happen with documents: two people asking the same question must get answers from different documents,
+because AD gives them different rights. So the DMS mints a **ticket** for the person at the keyboard, and
+the AI uses that.
+
+```
+GET /api/ai/index-ticket                     (Windows sign-in: the person, from the DMS page)
+-> { "ticket": "x7...", "hours": 8,
+     "documents": "https://dms.rh.tech/api/v1/approved-documents?ticket=x7...",
+     "search":    "https://dms.rh.tech/api/v1/search?ticket=x7...&q=",
+     "header":    "X-DMS-Index-Ticket" }
+```
+
+The ticket **does not say whose it is**. The DMS keeps that; the AI cannot read the person out of it, name
+another one, or build a list of who asked what. It is good for `DMS_PAGE_KEY_HOURS`, reads only, and the
+rights of that person are asked again on every folder and every file, on every call.
+
+With a ticket (`?ticket=` or the header) these answer as that person:
+
+| | |
+| --- | --- |
+| `GET /api/v1/approved-documents` | what is released, with a URL to fetch each file from |
+| `GET /api/v1/search` | the same search the page does |
+| `GET /api/v1/customers`, `GET /api/v1/departments` | the structure, as that person sees it |
+| `GET /api/v1/file` | the file itself - **the content, not a path** |
+
+### The AI never touches the file server
+
+`GET /api/v1/file?path=<the path from the list>&ticket=...` returns the bytes, and
+`&markdown=true` returns the Markdown written beside the document. Only `Current_ReadOnly` is served, so an
+index built this way holds the revisions in force and nothing in work. The AI needs no account on the file
+server, no share, no drive - which is the standing rule of this installation, and the reason the rights are
+real rather than copied.
+
+### Just in time, without re-reading the repository
+
+Every row of the list carries `url`, `markdownUrl`, `size`, `modifiedUtc` and `etag`:
+
+- **first run**: fetch what the list names.
+- **every run after**: ask `?since=<the newest modifiedUtc you kept>` - only what changed is listed; and
+  fetch with `If-None-Match: <etag>`, which answers `304` with no body for a file you already hold. A
+  repository of ten thousand documents then costs one list call and the few files that moved.
+- a revision that was replaced disappears from the list by itself: the Markdown of a retired revision is
+  removed when it leaves `Current_ReadOnly`, so an index that follows the list cannot quote an old one.
+
+The ticket expires with the person's session; ask for a new one from the page rather than storing it.
+
 ## POST /api/v1/kpi/publish
 
 Scope `kpi`. One call, one KPI of one department: the built page and the data behind it, together.

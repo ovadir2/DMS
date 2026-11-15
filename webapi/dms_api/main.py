@@ -12,6 +12,7 @@ import mimetypes
 import os
 import re
 import time
+import hashlib
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -2088,6 +2089,30 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     # checked again on every call. The page reads it from its own address (?t=...).
     KPI_KEYS: dict[str, tuple[str, str, float]] = {}
 
+    # The same idea for the company's AI: a ticket in the name of the person who asked. The RAG indexes
+    # what it is about to answer from (just in time), and it must see exactly what that person may see -
+    # not what a service account may. The ticket says who asked, is good for a few hours, reads only, and
+    # the AD rights of that person are asked again on every file, every call.
+    AI_TICKETS: dict[str, tuple[str, float]] = {}
+
+    def ai_ticket(email: str) -> str:
+        import secrets
+        now = time.time()
+        for k, (_e, until) in list(AI_TICKETS.items()):
+            if until < now:
+                AI_TICKETS.pop(k, None)
+        token = secrets.token_urlsafe(24)
+        AI_TICKETS[token] = (email, now + s.page_key_hours * 3600)
+        return token
+
+    def ai_ticket_user(token: str) -> str:
+        """Whose ticket this is. Expired or unknown: nothing, and the caller is told to ask for a new one."""
+        email, until = AI_TICKETS.get((token or "").strip(), ("", 0.0))
+        if not email or until < time.time():
+            raise HTTPException(403, "This indexing ticket has expired or is not known. Ask the DMS for a "
+                                     "new one (/api/ai/index-ticket), from the person who is asking.")
+        return email
+
     def kpi_key(folder: str, email: str) -> str:
         import secrets
         now = time.time()
@@ -2178,6 +2203,38 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                      f"key without one is told nothing. Add it to the key's line in .env.")
         return who
 
+    def api_reader(request: Request, scope: str | tuple[str, ...], ticket: str = "") -> dict:
+        """Who is asking: an application with its own key and its own AD account, or the company's AI with
+        a ticket in the name of the person it is about to answer. A ticket carries that person, and every
+        folder and every file is then measured against their AD rights - which is the whole point of it."""
+        sent = (ticket or request.headers.get("X-DMS-Index-Ticket") or "").strip()
+        if not sent:
+            return api_caller(request, scope)
+        email = ai_ticket_user(sent)
+        logger.info("indexing ticket of %s: %s %s", email, request.method, request.url.path)
+        from . import apikeys
+        return {"name": f"the AI for {email}", "scopes": list(apikeys.SCOPES), "as": email, "for": email}
+
+    def stamp(path: str) -> dict:
+        """When a file last changed, how big it is, and a tag that changes only when it does. An index that
+        keeps these skips what it has already read, which is most of a repository on most runs."""
+        try:
+            st = os.stat(path)
+        except OSError:
+            return {"size": 0, "modifiedUtc": "", "etag": ""}
+        when = datetime.fromtimestamp(st.st_mtime, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        tag = hashlib.sha1(f"{os.path.normcase(path)}|{st.st_mtime_ns}|{st.st_size}".encode()).hexdigest()[:16]
+        return {"size": st.st_size, "modifiedUtc": when, "etag": f'"{tag}"'}
+
+    def fetch_url(path: str, ticket: str = "") -> str:
+        """Where the AI fetches that file from: the DMS itself. It never needs an account on the file
+        server, and the rights of whoever the ticket names are asked again when it calls."""
+        from urllib.parse import quote as _q
+        if not path:
+            return ""
+        base = (s.page_url.split("/dms/")[0] if s.page_url else "").rstrip("/")
+        return (f"{base}/api/v1/file?path={_q(path)}" + (f"&ticket={_q(ticket)}" if ticket else ""))
+
     def api_may_see(who: dict, path: str) -> bool:
         """What this caller's AD account may see - the same question the DMS asks of a person, asked of the
         account the application acts as. None means the question cannot be answered here (not a domain
@@ -2185,13 +2242,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return security.may_see(who.get("as") or "", path) is not False
 
     @app.get("/api/v1/customers")
-    def api_customers(request: Request, q: str = "", with_projects: bool = False):
+    def api_customers(request: Request, q: str = "", with_projects: bool = False,
+                      ticket: str = Query("", description="An indexing ticket (/api/ai/index-ticket): the "
+                                                          "answer is then what that person may see")):
         """The customers the DMS knows: what is under the customers folder of the repository, by name.
 
         For an application, not for a person - see /api/customers for the signed-in page. The skeleton that
         new customers are cut from is not one of them."""
         from fastapi.responses import JSONResponse
-        who = api_caller(request, ("customers", "kpi"))
+        who = api_reader(request, ("customers", "kpi"), ticket)
         base = customers_root()
         out = []
         try:
@@ -2219,14 +2278,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                             headers={"Cache-Control": "no-store"})
 
     @app.get("/api/v1/departments")
-    def api_departments(request: Request, q: str = ""):
+    def api_departments(request: Request, q: str = "",
+                        ticket: str = Query("", description="An indexing ticket (/api/ai/index-ticket): the "
+                                                            "answer is then what that person may see")):
         """The departments of the company: the folders under General, with the name the page shows and the
         KPIs folder of each.
 
         For an application, not for a person. AD decides here as everywhere: a department the key's account
         may not see is not in the answer."""
         from fastapi.responses import JSONResponse
-        who = api_caller(request, ("customers", "kpi"))
+        who = api_reader(request, ("customers", "kpi"), ticket)
         out = []
         base = os.path.join(s.repository_root, "01_General")
         try:
@@ -2301,8 +2362,90 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return JSONResponse({"documents": out, "count": len(out), "withoutFile": missing},
                             headers={"Cache-Control": "no-store"})
 
+    @app.get("/api/v1/search")
+    def api_search(request: Request, q: str = Query(..., min_length=2),
+                   scope: str = Query("all", description="all | customer | project | document | file | quick"),
+                   customer: str | None = Query(None, description="Search inside one customer's folder"),
+                   limit: int | None = Query(None, ge=1, le=500),
+                   ticket: str = Query("", description="An indexing ticket (/api/ai/index-ticket): the answer "
+                                                       "is then what that person may see")):
+        """Search the repository for an application, or for the company's AI in the name of a person.
+
+        The same search the page does - customers, folders, registered documents and file names - answered
+        for the AD account behind the call: the key's own account, or, with a ticket, the person who asked.
+        Nothing is in the answer that that account may not see."""
+        from fastapi.responses import JSONResponse
+        who = api_reader(request, "documents", ticket)
+        found = search(q=q, scope=scope, customer=customer, limit=limit, user=api_user(who))
+        logger.info("api %s GET /api/v1/search %r -> %d", who["name"], q, len(found))
+        return JSONResponse(found, headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/v1/file")
+    def api_file(request: Request, path: str,
+                 markdown_only: bool = Query(False, alias="markdown",
+                                             description="The Markdown written beside the document, rather "
+                                                         "than the document itself"),
+                 ticket: str = Query("", description="An indexing ticket (/api/ai/index-ticket)")):
+        """One released file, served by the DMS itself - the content, not a path on the file server.
+
+        This is how the company's AI reads a document without an account on the file server: it asks for the
+        file, and the DMS answers only if the AD account behind the call may see it - the key's own account,
+        or, with a ticket, the person who asked. Only what is released (Current_ReadOnly) is served, so an
+        index built from this holds the revisions in force and nothing in work.
+        """
+        from fastapi.responses import Response
+        who = api_reader(request, "documents", ticket)
+        full = files.resolve(s.repository_root, path)
+        if not files.is_file(full):
+            raise HTTPException(404, "There is no such file")
+        if os.path.basename(os.path.dirname(full)).lower() != "current_readonly":
+            raise HTTPException(403, "Only released files are served here (Current_ReadOnly)")
+        if not api_may_see(who, full):
+            raise HTTPException(403, "That account may not see this file")
+        if markdown_only:
+            md = markdown.path_for(full, existing=True)
+            if not md:
+                raise HTTPException(404, "There is no Markdown beside this file")
+            full = md
+        from urllib.parse import quote as _q
+        mark = stamp(full)
+        if (request.headers.get("if-none-match") or "").strip() == mark["etag"]:
+            return Response(status_code=304)      # the index has this one already: nothing is read or sent
+        logger.info("api %s GET /api/v1/file %s", who["name"], full)
+        with open(full, "rb") as fh:
+            body = fh.read()
+        kind = "text/markdown; charset=utf-8" if full.lower().endswith(".md") else "application/octet-stream"
+        return Response(body, media_type=kind, headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{_q(os.path.basename(full))}",
+            "ETag": mark["etag"], "Last-Modified": mark["modifiedUtc"],
+            "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"})
+
+    @app.get("/api/ai/index-ticket")
+    def ai_index_ticket(request: Request, user: User = Depends(current_user)):
+        """A ticket the company's AI uses to index what this person may read, just before it answers them.
+
+        The RAG is given it by the page when the person asks AI Insights, and calls
+        /api/v1/approved-documents with it. Everything it gets back is filtered by that person's own AD
+        rights, file by file - an application key names a service account and would answer the same list to
+        everybody, which is exactly what must not happen here."""
+        token = ai_ticket(user.email)
+        base = str(request.base_url).rstrip("/")
+        log(user, "ai-ticket", f"indexing ticket for {user.email}")
+        # Whose ticket it is stays here, in the DMS. The AI is given a ticket and nothing else: it cannot
+        # read the person out of it, cannot name another one, and cannot keep a list of who asked what.
+        return {"ticket": token, "hours": s.page_key_hours,
+                "documents": f"{base}/api/v1/approved-documents?ticket={token}",
+                "search": f"{base}/api/v1/search?ticket={token}&q=",
+                "header": "X-DMS-Index-Ticket"}
+
     @app.get("/api/v1/approved-documents")
     def api_approved_documents(request: Request, customer: str = "", q: str = "",
+                               ticket: str = Query("", description="An indexing ticket (/api/ai/index-ticket): "
+                                                                   "the answer is then what that person may "
+                                                                   "see, not what a service account may"),
+                               since: str = Query("", description="Only files changed after this moment "
+                                                                  "(2026-11-15T08:00:00Z): what an index "
+                                                                  "needs on a second run"),
                                all: bool = Query(False, description="Also the released files that have no "
                                                                     "Markdown of their own (a drawing, a picture)")):
         """The Markdown of every approved document, as it lies in the Current_ReadOnly folders.
@@ -2313,7 +2456,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         AI should read that too. What the register knows fills in the id and the revision; what it does not
         know is read from the Markdown's own first lines, which the DMS wrote when it made the file."""
         from fastapi.responses import JSONResponse
-        who = api_caller(request, "documents")
+        who = api_reader(request, "documents", ticket)
         known = {}
         for d in sp().documents():
             for key in ("currentUncPath", "workingUncPath"):
@@ -2372,6 +2515,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                    if os.path.isfile(os.path.join(folder, n)) else 0} for n in group],
                         "folder": folder, "customer": of_customer,
                         "hasMarkdown": bool(md)}
+                # What an index needs to do its work without a second call: where to fetch each file from
+                # (the DMS, with the same ticket), when it last changed, and a stamp that changes only when
+                # the file does - so a run that has seen it already can skip it.
+                item.update(stamp(full if name else md), url=fetch_url(full if name else md, ticket),
+                            markdownUrl=fetch_url(md, ticket) if md else "")
+                if since and item["modifiedUtc"] and item["modifiedUtc"] <= since:
+                    continue          # an index asks for what changed since its last run, not for everything
                 if not md and not all:
                     continue          # the RAG reads the Markdown: a file without one is asked for by all=true
                 if q and q.lower() not in f"{item['DocID']} {item['DocName']} {item['DocFileName']}".lower():
