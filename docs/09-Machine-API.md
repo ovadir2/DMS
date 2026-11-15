@@ -70,6 +70,14 @@ it is kept for callers that already ask it.
 exactly as an application would, and shows the answer, how long it took and how many bytes it was. Nothing
 to install, and it runs with your own AD rights, so what you see is what that application would get.
 
+Beside every answer it writes **the call itself**: the whole address with every parameter, and the same
+call as `curl` (ticket in the address, or as the `X-DMS-Index-Ticket` header), as PowerShell with your
+Windows sign-in, and as an application would make it with `X-DMS-Api-Key` and no ticket - with a Copy
+button, so it goes straight into a terminal or into whatever the other system is written in.
+
+The page is not part of the DMS page: its own address, its own file, and nothing in the DMS links to it.
+It uses only what the published API gives anybody else.
+
 `https://dms.rh.tech/dms/api-docs` shows exactly what is on this page and nothing more: the machine API, the
 indexing ticket and the page key. The document itself is `/api/openapi.json`, and a copy travels with the
 repository as `docs/dms-swagger.json` - enough to generate a client without reaching the server. The DMS has

@@ -413,108 +413,18 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     app.openapi = _openapi
 
 
-    TRY_PAGE = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DMS - try the API</title>
-<style>
- :root{--ink:#1f2933;--line:#d7dee6;--bg:#f6f8fa;--accent:#0b6bcb}
- body{margin:0;font:15px/1.5 Segoe UI,system-ui,sans-serif;color:var(--ink);background:#fff}
- header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line)}
- header b{font-size:17px} header span{color:#5b6b7c}
- main{display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:0;min-height:calc(100vh - 56px)}
- @media(max-width:860px){main{grid-template-columns:1fr}}
- .calls{padding:18px 20px;border-right:1px solid var(--line);background:var(--bg)}
- .call{border:1px solid var(--line);background:#fff;border-radius:8px;padding:12px;margin-bottom:12px}
- .call h3{margin:0 0 4px;font-size:14px} .call p{margin:0 0 8px;color:#5b6b7c;font-size:13px}
- .verb{font:12px/1 ui-monospace,Consolas,monospace;background:#eef3f8;color:var(--accent);padding:3px 6px;border-radius:4px}
- label{display:block;font-size:12px;color:#5b6b7c;margin:6px 0 2px}
- input{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font:13px ui-monospace,Consolas,monospace}
- button{margin-top:8px;padding:7px 12px;border:0;border-radius:6px;background:var(--accent);color:#fff;font-size:13px;cursor:pointer}
- button.ghost{background:#fff;color:var(--accent);border:1px solid var(--accent)}
- .out{padding:18px 20px;overflow:auto}
- .status{font-size:13px;color:#5b6b7c;margin-bottom:8px}
- pre{margin:0;padding:12px;background:#0f172a;color:#e2e8f0;border-radius:8px;overflow:auto;max-height:70vh;
-     font:12.5px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
- .ticket{font:12px ui-monospace,Consolas,monospace;color:#1f7a4d;word-break:break-all}
-</style></head><body>
-<header><b>DMS - try the API</b><span>the four calls another system makes, as you, with your AD rights</span></header>
-<main>
-<section class="calls">
-  <div class="call">
-    <h3><span class="verb">GET</span> /api/ai/index-ticket</h3>
-    <p>A ticket in your name. Every call below uses it; it never says whose it is.</p>
-    <button onclick="ticketGet()">Get a ticket</button>
-    <div class="ticket" id="tk">no ticket yet</div>
-  </div>
-  <div class="call">
-    <h3><span class="verb">GET</span> /api/v1/approved-documents</h3>
-    <p>What is released, as you may see it. With the Markdown carried in the answer, nothing is downloaded.</p>
-    <label>q (optional)</label><input id="q" placeholder="part of an id, a name or a file name">
-    <button onclick="docs(true)">With the Markdown</button>
-    <button class="ghost" onclick="docs(false)">List only</button>
-  </div>
-  <div class="call">
-    <h3><span class="verb">GET</span> /api/v1/structure</h3>
-    <p>The departments and the customers, each with its KPIs folder.</p>
-    <button onclick="call('/api/v1/structure')">Ask</button>
-  </div>
-  <div class="call">
-    <h3><span class="verb">GET</span> /api/v1/file</h3>
-    <p>The file itself, served by the DMS. Paste a path from the answer above.</p>
-    <label>path</label><input id="path" placeholder="E:\\Shares\\01_General\\...\\Current_ReadOnly\\QP.docx">
-    <button onclick="file(true)">Its Markdown</button>
-    <button class="ghost" onclick="file(false)">The document</button>
-  </div>
-</section>
-<section class="out">
-  <div class="status" id="st">Nothing asked yet. Start with a ticket.</div>
-  <pre id="body">&nbsp;</pre>
-</section>
-</main>
-<script>
-let ticket = '';
-const $ = id => document.getElementById(id);
-function show(status, text) { $('st').textContent = status; $('body').textContent = text; }
-async function call(path, raw) {
-  const url = path + (path.includes('?') ? '&' : '?') + (ticket ? 'ticket=' + encodeURIComponent(ticket) : '');
-  const t0 = performance.now();
-  try {
-    const r = await fetch(url, { credentials: 'include' });
-    const ms = Math.round(performance.now() - t0);
-    const kind = r.headers.get('content-type') || '';
-    const text = await r.text();
-    const size = new Blob([text]).size;
-    show(`${r.status} ${r.statusText} - ${ms} ms, ${size.toLocaleString()} bytes - ${url}`,
-         raw || !kind.includes('json') ? text.slice(0, 20000)
-                                       : JSON.stringify(JSON.parse(text), null, 1).slice(0, 20000));
-  } catch (e) { show('failed', e.message); }
-}
-async function ticketGet() {
-  const r = await fetch('/api/ai/index-ticket', { credentials: 'include' });
-  const j = await r.json();
-  ticket = j.ticket || '';
-  $('tk').textContent = ticket ? 'ticket held for ' + j.hours + ' hours (it does not say whose it is)' : 'refused';
-  show(r.status + ' ' + r.statusText + ' - /api/ai/index-ticket', JSON.stringify(j, null, 1));
-}
-function docs(inline) {
-  const q = $('q').value.trim();
-  call('/api/v1/approved-documents?all=true' + (inline ? '&inline=true&budget=200000' : '') +
-       (q ? '&q=' + encodeURIComponent(q) : ''));
-}
-function file(md) {
-  const p = $('path').value.trim();
-  if (!p) { show('nothing asked', 'Paste a path from an answer above.'); return; }
-  call('/api/v1/file?path=' + encodeURIComponent(p) + (md ? '&markdown=true' : ''), true);
-}
-</script></body></html>"""
-
     @app.get("/dms/api-try", include_in_schema=False)
     def api_try():
-        """A page to try the four calls another system makes - as you, with your own AD rights. Nothing is
-        installed and nothing is stored: it asks the DMS for a ticket and uses it, exactly as an application
-        would, and shows what came back, how long it took and how many bytes it was."""
+        """A page to try the four calls another system makes - as you, with your own AD rights.
+
+        It is not part of the DMS page and nothing in the DMS links to it: its own address, its own file
+        (static/api-try.html), and it uses nothing the published API does not give anybody else. It asks
+        the DMS for a ticket and uses it exactly as an application would, so what it shows is what that
+        application will get."""
         from fastapi.responses import HTMLResponse
-        return HTMLResponse(TRY_PAGE, headers={"Cache-Control": "no-store"})
+        here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "api-try.html")
+        with open(here, encoding="utf-8") as fh:
+            return HTMLResponse(fh.read(), headers={"Cache-Control": "no-store"})
 
     @app.get("/api/openapi-all.json", include_in_schema=False)
     def openapi_all():
