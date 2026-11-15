@@ -4,7 +4,7 @@ Every endpoint of the DMS, written from the API itself (`python -m dms_api.apido
 
 **Swagger** shows the short list - what another system talks to: the machine API, the indexing ticket and the page key. This file is every endpoint, the page's own included. To try a call or generate a client - `https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository as `dms-swagger.json`, for a client generated without reaching the server.
 
-Written from DMS 0dcf8f5.
+Written from DMS e662fd6.
 
 ## How a caller is known
 
@@ -831,6 +831,10 @@ A page of the DMS's own, served exactly as any HTML in the repository is: into t
 ## The rest
 
 Answers that are not JSON - an image, a file, a page - and so are not in the machine-readable schema.
+
+### GET /dms/api-try
+
+A page to try the four calls another system makes - as you, with your own AD rights. Nothing is installed and nothing is stored: it asks the DMS for a ticket and uses it, exactly as an application would, and shows what came back, how long it took and how many bytes it was.
 
 ### GET /api/openapi-all.json
 

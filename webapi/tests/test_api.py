@@ -4828,3 +4828,17 @@ def test_the_ai_reads_markdown_and_never_downloads_the_documents(tmp_path):
                  params={"inline": True, "budget": 1000, "all": True}).json()["documents"]
     spent = sum(len(x.get("markdown") or "") for x in tiny)
     assert spent <= 1000 and any(x.get("markdownTruncated") for x in tiny) or spent <= 1000
+
+
+def test_the_try_page_asks_the_four_calls_as_the_person_at_the_keyboard(tmp_path):
+    """Swagger describes the calls; this page makes them. It asks the DMS for a ticket and uses it, exactly
+    as an application would, so somebody integrating sees real answers with their own AD rights."""
+    app = create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER,
+                              sharepoint="memory", admins=[USER]))
+    c = TestClient(app)
+    r = c.get("/dms/api-try")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
+    for call in ("/api/ai/index-ticket", "/api/v1/approved-documents", "/api/v1/structure", "/api/v1/file"):
+        assert call in r.text, f"{call} is not offered on the try page"
+    assert "no-store" in r.headers.get("cache-control", "")
+    assert "/dms/api-try" not in c.get("/api/openapi.json").json()["paths"]    # it is a page, not an endpoint

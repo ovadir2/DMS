@@ -64,7 +64,11 @@ about it, exactly as a person is not.
 `GET /api/v1/documents` answers the same released documents from the register rather than from the folders;
 it is kept for callers that already ask it.
 
-## Swagger
+## Swagger, and a page to try it
+
+`https://dms.rh.tech/dms/api-try` makes the four calls for you - it asks the DMS for a ticket and uses it
+exactly as an application would, and shows the answer, how long it took and how many bytes it was. Nothing
+to install, and it runs with your own AD rights, so what you see is what that application would get.
 
 `https://dms.rh.tech/dms/api-docs` shows exactly what is on this page and nothing more: the machine API, the
 indexing ticket and the page key. The document itself is `/api/openapi.json`, and a copy travels with the
