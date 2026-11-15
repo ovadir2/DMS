@@ -26,8 +26,8 @@ The DMS answers three kinds of caller, and never more than the caller's own righ
   endpoint writes (the KPI Builder's), the rest read.
 
 The DMS writes on the file server with its own account, so an approver needs no rights there at all - but it
-never stands in for a right the person does not have. See `docs/13-Machine-API.md` for applications,
-`docs/15-KPI-Builder-Contract.md` for the KPI Builder and `docs/14-API-Reference.md` for the whole list.
+never stands in for a right the person does not have. See `docs/09-Machine-API.md` for applications,
+`docs/08-KPI-Builder-Contract.md` for the KPI Builder and `docs/10-API-Reference.md` for the whole list.
 """.strip()
 
 SECURITY = {

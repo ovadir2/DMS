@@ -6,7 +6,7 @@ How a document goes from a file on the file server to an approved, read-only ver
 > and approving now work as [11 - Project Context](11-Project-Context.md) describes - a PDF the DMS serves
 > and deletes, one editing copy in SharePoint, and a document that comes back when it is closed.
 
-Related: [07 - Approval Flow](07-Approval-Flow.md) (the flow inside Power Automate), [`webapi/README.md`](../webapi/README.md) (the page: install, AD checks, AI Insights), [01 §4](01-Architecture-and-Data-Model.md) (the repository tree).
+Related: [07 - Approval Flow](05-Approval-Flow.md) (the flow inside Power Automate), [`webapi/README.md`](../webapi/README.md) (the page: install, AD checks, AI Insights), [01 §4](01-Architecture-and-Data-Model.md) (the repository tree).
 
 ## 1. The parts
 

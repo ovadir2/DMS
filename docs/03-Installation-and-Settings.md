@@ -1,7 +1,7 @@
 # Installation and settings
 
 Everything needed to put the DMS on a server, and every setting it reads. The pilot was installed this way;
-`docs/Go-Live.md` is the checklist for doing it again for production.
+The same steps install it again elsewhere; nothing here is particular to one server.
 
 ---
 
@@ -96,7 +96,7 @@ it for a PDF of the document, reads the pages (pypdf) and removes the copy at on
 (section 7) and `DMS_REVIEW_LIBRARY` set; without them such a file is reported as "nothing to read".
 
 Then **First loading** (super users, ⋮ menu) registers what is already on the server, and
-`docs/Go-Live.md` covers the rest.
+`docs/11-Project-Context.md` says why each of these is as it is.
 
 Later, whenever somebody has been working on the file server directly:
 
@@ -229,8 +229,9 @@ the workflow and blueprint folders stay out of reach either way.
 | `Repair-DmsRegister.ps1` | After files or folders were removed on the file server itself: a record whose file moved is pointed at it, a record whose file is gone is archived and says so in Control Audit, Markdown beside nothing and stale check-outs go, missing blueprint folders are listed |
 | `Sync-DmsFileServer.ps1` | **After files were added or deleted by hand on the file server**: one pass over everything - records against files, files nobody registered, read-only flags, dashboards, Markdown, missing blueprint folders |
 | `New-DmsCustomer.ps1` | A new customer cut from `Customer_Skeleton`: its folders and the NTFS permissions on them. `-MakeSkeletonFrom Customer_A` does the one-time rename |
-| `New-DmsApiKey.ps1` | A key for an application that calls the DMS (`/api/v1/...`), with a name and what it may read (`docs/13-Machine-API.md`) |
-| `New-DmsApiDocs.ps1` | Writes `docs/14-API-Reference.md` from the API itself - run it after adding or changing an endpoint |
+| `New-DmsApiKey.ps1` | A key for an application that calls the DMS (`/api/v1/...`), with a name and what it may read (`docs/09-Machine-API.md`) |
+| `New-DmsNotifyFlowPackage.ps1` | The Power Automate flow that sends the notifications (DC-P2): the DMS writes a row to the DMS Notifications list at every step and the flow sends it as mail and to Teams. The approvals themselves stay on the DMS page |
+| `New-DmsApiDocs.ps1` | Writes `docs/10-API-Reference.md` from the API itself - run it after adding or changing an endpoint |
 | `Open-DmsSwagger.ps1` | Checks that the DMS answers its OpenAPI document and opens Swagger UI (`-Redoc`, `-NoOpen`) |
 | `Test-DmsSmoke.ps1` | The whole walk against the installation that is really running, as the person it is told to run as, saying which requirement each step proves. It works with real files from `scripts\samples` - a Word procedure, a workbook under the same name, a PDF drawing and a text note - so Word, Excel, PDF, text, View and the Markdown are all exercised; `-Clean` removes it. `-Delegate <someone@rh.co.il>` adds the step that passes an approval on (it needs a third person); `-ShareWith <address> -ShareCustomer <folder>` adds the share outside the company, which really goes out. Every run writes the whole walk, line by line, to `%TEMP%\DMS-Smoke <date>.txt` (`-Report` puts it elsewhere) |
 | `Reset-DmsPilotData.ps1` | Clears what the pilot was played with - the SharePoint lists and libraries, and the file server back to the blueprint. Says what it would do; `-Write` does it |

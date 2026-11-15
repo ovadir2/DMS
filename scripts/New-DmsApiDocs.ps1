@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Write docs\14-API-Reference.md from the API itself.
+    Write docs\10-API-Reference.md from the API itself.
 
 .DESCRIPTION
     Every endpoint of the DMS, its parameters and what it answers, taken from the routes as they are, so the
@@ -19,7 +19,7 @@ if (-not (Test-Path $py)) { $py = 'py' }
 Push-Location (Join-Path $root 'webapi')
 try {
     $env:PYTHONPATH = '.'
-    $out = Join-Path $root 'docs\14-API-Reference.md'
+    $out = Join-Path $root 'docs\10-API-Reference.md'
     & $py -m dms_api.apidocs | Set-Content -Path $out -Encoding UTF8
     Write-Host "Written: $out"
     $json = Join-Path $root 'docs\dms-openapi.json'

@@ -10,7 +10,7 @@ what each one was a reaction to, and what is still open.
 
 ## How to use this file to resume
 
-> **Prompt.** You are continuing work on the RH DMS. Read `README.md`, `docs/10-Installation-and-Settings.md`
+> **Prompt.** You are continuing work on the RH DMS. Read `README.md`, `docs/03-Installation-and-Settings.md`
 > and this file first. The standing rules in section 1 are not negotiable and were each learned the hard way.
 > The repository is `ovadir2/dms`, work on `main`, run `webapi` tests before pushing, and never push to the
 > pilot server yourself - the user pulls. The pilot is the IIS site `DMS-Pilot` on RHFS02 (`C:\DMS-Pilot\app`,
@@ -124,6 +124,6 @@ anywhere appears there by itself.
    permission prompt per drag and only works in Chromium browsers.
 4. **A stray `QP-1.0E REV 30 Quality Manual.pdf`** sits unregistered in a `Current_ReadOnly`, sharing a name
    with the Word document beside it. Decide which one is the document.
-5. **Go-live** - `docs/Go-Live.md`: the names, the pilot's data, first loading, and separating the package
+5. **Go-live** - done: the sites and the site renamed, the pilot's data cleared, the package separated
    from what exists only to try it (the playground, the "Acting as" list, `DMS_AUTH_MODE=dev`).
 6. **`docs/01`-`docs/08`** still describe the blueprint and the pilot as designed, not as built.

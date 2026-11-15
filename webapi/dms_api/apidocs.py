@@ -1,7 +1,7 @@
 """The API reference, written from the API itself.
 
 Every endpoint of the DMS, its parameters and what it answers, taken from the routes as they are - so the
-document cannot drift from the code the way a hand-written list does. It is written to docs\\14-API-Reference.md
+document cannot drift from the code the way a hand-written list does. It is written to docs\\10-API-Reference.md
 by scripts\\New-DmsApiDocs.ps1 (python -m dms_api.apidocs), and the test keeps it in step.
 """
 from __future__ import annotations
@@ -73,8 +73,8 @@ def markdown(app, version: str = "") -> str:
     lines = ["# 14 - API reference", "",
              "Every endpoint of the DMS, written from the API itself "
              "(`python -m dms_api.apidocs`, or `scripts\\New-DmsApiDocs.ps1`), so it cannot drift from the "
-             "code. The machine API has a guide of its own in `13-Machine-API.md`, the KPI Builder in "
-             "`15-KPI-Builder-Contract.md`, and the page key in `12-KPI-Integration.md`.", "",
+             "code. The machine API has a guide of its own in `09-Machine-API.md`, the KPI Builder in "
+             "`08-KPI-Builder-Contract.md`, and the page key in `07-KPI-Integration.md`.", "",
              "**Swagger**: the same thing to try and to generate a client from - "
              "`https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the "
              "OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository "

@@ -163,7 +163,7 @@ All tables below are generated from `scripts/Provision-DMS.ps1`, which is the si
 
 - Site columns are in group **DMS Columns** and have deterministic GUIDs, so DEV/TEST/PROD share IDs.
 - Content types are in group **DMS Content Types**. The default *Item* / *Document* content type is removed from each list.
-- Every internal name is English. Display names follow `-Language` (see [05-Localization-Hebrew.md](05-Localization-Hebrew.md)).
+- Every internal name is English. Display names follow `-Language` (see [06-Localization-Hebrew.md](06-Localization-Hebrew.md)).
 - `Req` = required, `Idx` = indexed (needed to keep filters delegable above 5,000 items).
 
 <!-- BEGIN GENERATED DATA MODEL -->

@@ -230,5 +230,5 @@ The Builder sends the two files of a KPI to the DMS itself, with a key of its ow
 The page lands writable at the root of the KPI's own folder, so the next build replaces it; the JSON is
 released into `Current_ReadOnly` beside it, read only and traced in the Document Register and the Control
 Audit. It is the same rule as dropping the two files onto the folder in the page - see
-`docs/13-Machine-API.md` for the exact fields and answers. The account the key acts as needs **Modify** on
+`docs/09-Machine-API.md` for the exact fields and answers. The account the key acts as needs **Modify** on
 the folder, like a person.
