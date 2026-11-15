@@ -68,9 +68,9 @@ it is kept for callers that already ask it.
 
 `https://dms.rh.tech/dms/api-docs` shows exactly what is on this page and nothing more: the machine API, the
 indexing ticket and the page key. The document itself is `/api/openapi.json`, and a copy travels with the
-repository as `docs/dms-openapi.json` - enough to generate a client without reaching the server. The DMS has
+repository as `docs/dms-swagger.json` - enough to generate a client without reaching the server. The DMS has
 many more endpoints for its own page; they are not part of what an outside system talks to, and live in
-`/api/openapi-all.json` and `docs/10-API-Reference.md`.
+`/api/openapi-all.json` and `docs/10-Swagger.md`.
 
 ## GET /api/v1/customers
 
@@ -311,7 +311,7 @@ would, and a key that names no account is refused. Publishing is the only thing 
 `https://dms-pilot.rh.tech/dms/api-docs` is the whole API to read and to try, grouped by who calls it, with
 the three ways in (Windows, the page key, an application key) in its Authorize box. `/dms/api-redoc` reads
 the same document, and `/api/openapi.json` is the document itself - generate a client from it, or from the
-copy in the repository, `docs/dms-openapi.json`. Swagger UI's own files come from jsdelivr, so the browser
+copy in the repository, `docs/dms-swagger.json`. Swagger UI's own files come from jsdelivr, so the browser
 showing it needs the internet; the document and ReDoc do not.
 
 ## Why so few

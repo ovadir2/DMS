@@ -2,7 +2,7 @@
 
 FastAPI knows the routes; this says what they are - who may call each one, in which group it belongs, and
 how a caller signs in. Swagger UI is served at /dms/api-docs, ReDoc at /dms/api-redoc, and the document
-itself at /api/openapi.json (and in the repository, as docs\\dms-openapi.json, so the Builder and the RAG
+itself at /api/openapi.json (and in the repository, as docs\\dms-swagger.json, so the Builder and the RAG
 can generate a client without reaching the server).
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ Builder's); the rest read.
 
 Guides: `docs/09-Machine-API.md` (applications and the AI), `docs/08-KPI-Builder-Contract.md` (the KPI
 Builder), `docs/07-KPI-Integration.md` (the page key). The DMS page's own endpoints are not here: they are
-in `docs/10-API-Reference.md`, and in `/api/openapi-all.json` for a client that really wants them.
+in `docs/10-Swagger.md`, and in `/api/openapi-all.json` for a client that really wants them.
 """.strip()
 
 SECURITY = {

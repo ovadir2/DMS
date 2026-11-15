@@ -1,7 +1,7 @@
 """The API reference, written from the API itself.
 
 Every endpoint of the DMS, its parameters and what it answers, taken from the routes as they are - so the
-document cannot drift from the code the way a hand-written list does. It is written to docs\\10-API-Reference.md
+document cannot drift from the code the way a hand-written list does. It is written to docs\\10-Swagger.md
 by scripts\\New-DmsApiDocs.ps1 (python -m dms_api.apidocs), and the test keeps it in step.
 """
 from __future__ import annotations
@@ -73,7 +73,7 @@ def markdown(app, version: str = "") -> str:
     """The whole reference, as the file in docs\\ holds it."""
     api = _schema(app)
     seen: set[str] = set()
-    lines = ["# 14 - API reference", "",
+    lines = ["# 10 - Swagger: every endpoint of the DMS", "",
              "Every endpoint of the DMS, written from the API itself "
              "(`python -m dms_api.apidocs`, or `scripts\\New-DmsApiDocs.ps1`), so it cannot drift from the "
              "code. The machine API has a guide of its own in `09-Machine-API.md`, the KPI Builder in "
@@ -83,7 +83,7 @@ def markdown(app, version: str = "") -> str:
              "To try a call or generate a client - "
              "`https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the "
              "OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository "
-             "as `dms-openapi.json`, for a client generated without reaching the server.", ""]
+             "as `dms-swagger.json`, for a client generated without reaching the server.", ""]
     if version:
         lines += [f"Written from DMS {version}.", ""]
     lines += ["## How a caller is known", "",
@@ -136,7 +136,7 @@ def markdown(app, version: str = "") -> str:
 
 
 def openapi_json(app) -> str:
-    """The OpenAPI document as the repository keeps it (docs\\dms-openapi.json): the version without the
+    """The OpenAPI document as the repository keeps it (docs\\dms-swagger.json): the version without the
     build, so the file changes when the API does and not at every commit."""
     import json
     from .openapi import spec

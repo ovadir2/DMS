@@ -5,7 +5,7 @@ its own address. The DMS opens it from a KPIs folder (`DMS_KPI_BUILDER_URL`) and
 the machine API.
 
 The contract between the KPI Builder (its own repository, its own VS Code) and the DMS. Everything the
-Builder needs is here; the full reference is `09-Machine-API.md` and `10-API-Reference.md`.
+Builder needs is here; the full reference is `09-Machine-API.md` and `10-Swagger.md`.
 
 ## What the Builder produces
 
@@ -126,7 +126,7 @@ approved copy - and never assume a path outside its own folder.
 ## Generating a client
 
 `https://dms-pilot.rh.tech/api/openapi.json` is the OpenAPI document of the whole DMS, and
-`docs/dms-openapi.json` in the DMS repository is the same thing offline. `/dms/api-docs` shows it in Swagger
+`docs/dms-swagger.json` in the DMS repository is the same thing offline. `/dms/api-docs` shows it in Swagger
 UI - put the key in the Authorize box (`X-DMS-Api-Key`) and the publish call can be tried from the page.
 
 ## Rules that do not move

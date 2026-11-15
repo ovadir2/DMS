@@ -1,10 +1,10 @@
-# 14 - API reference
+# 10 - Swagger: every endpoint of the DMS
 
 Every endpoint of the DMS, written from the API itself (`python -m dms_api.apidocs`, or `scripts\New-DmsApiDocs.ps1`), so it cannot drift from the code. The machine API has a guide of its own in `09-Machine-API.md`, the KPI Builder in `08-KPI-Builder-Contract.md`, and the page key in `07-KPI-Integration.md`.
 
-**Swagger** shows the short list - what another system talks to: the machine API, the indexing ticket and the page key. This file is every endpoint, the page's own included. To try a call or generate a client - `https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository as `dms-openapi.json`, for a client generated without reaching the server.
+**Swagger** shows the short list - what another system talks to: the machine API, the indexing ticket and the page key. This file is every endpoint, the page's own included. To try a call or generate a client - `https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository as `dms-swagger.json`, for a client generated without reaching the server.
 
-Written from DMS 2a064cc.
+Written from DMS f428829.
 
 ## How a caller is known
 

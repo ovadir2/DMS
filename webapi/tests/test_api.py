@@ -4292,12 +4292,12 @@ def test_the_kpi_builder_publishes_a_page_and_its_data_in_one_call(tmp_path):
 
 def test_the_api_reference_holds_every_endpoint(tmp_path):
     """The reference is written from the API itself, so it cannot drift - and this says so: every endpoint
-    of the DMS is in docs\\10-API-Reference.md, with a line of its own saying what it does."""
+    of the DMS is in docs\\10-Swagger.md, with a line of its own saying what it does."""
     from dms_api import apidocs
     app = create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", sharepoint="memory"))
     written = apidocs.markdown(app)
     here = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "docs",
-                        "10-API-Reference.md")
+                        "10-Swagger.md")
     for route in app.routes:
         path = getattr(route, "path", "")
         end = getattr(route, "endpoint", None)
@@ -4314,14 +4314,14 @@ def test_the_api_reference_holds_every_endpoint(tmp_path):
         import re as _re
         strip = lambda t: _re.sub(r"\n{3,}", "\n\n", "\n".join(
             l for l in t.splitlines() if not l.startswith("Written from DMS ")))
-        assert strip(on_disk) == strip(written), "docs\\10-API-Reference.md is behind: run scripts\\New-DmsApiDocs.ps1"
+        assert strip(on_disk) == strip(written), "docs\\10-Swagger.md is behind: run scripts\\New-DmsApiDocs.ps1"
 
 
 def test_swagger_is_what_another_system_talks_to(tmp_path):
     """Swagger is read by whoever has to call the DMS from outside, so it holds the machine API, the
     indexing ticket and the page key - and not the ninety endpoints the page uses on itself, which are
     nobody's business but the DMS's. The whole list stays one call away (/api/openapi-all.json) and in
-    docs\\10-API-Reference.md."""
+    docs\\10-Swagger.md."""
     import json
     import re
     from dms_api import apidocs
@@ -4359,10 +4359,10 @@ def test_swagger_is_what_another_system_talks_to(tmp_path):
     assert c.get("/dms/api-redoc").status_code == 200
 
     here = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "docs",
-                        "dms-openapi.json")
+                        "dms-swagger.json")
     if os.path.isfile(here):          # the copy in docs is the same document
         assert json.load(open(here, encoding="utf-8")) == json.loads(apidocs.openapi_json(app)), \
-            "docs\\dms-openapi.json is behind: run scripts\\New-DmsApiDocs.ps1"
+            "docs\\dms-swagger.json is behind: run scripts\\New-DmsApiDocs.ps1"
 
 
 def test_back_to_the_blueprint_leaves_the_shape_and_nothing_else(tmp_path):
