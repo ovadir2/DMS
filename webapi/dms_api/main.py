@@ -407,7 +407,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """The OpenAPI document: the routes as they are, with what each caller signs in with."""
         if not app.openapi_schema:
             from .openapi import spec
-            app.openapi_schema = spec(app, f"1.1 ({version})")
+            app.openapi_schema = spec(app, f"1.1 ({version})", base=s.page_url.split("/dms/")[0] if s.page_url else "")
         return app.openapi_schema
 
     app.openapi = _openapi
@@ -521,7 +521,8 @@ function file(md) {
         """Every endpoint, the page's own included: for whoever is working on the DMS itself. What another
         system talks to is the short document at /api/openapi.json."""
         from .openapi import spec
-        return spec(app, f"1.1 ({version})", full=True)
+        return spec(app, f"1.1 ({version})", full=True,
+                    base=s.page_url.split("/dms/")[0] if s.page_url else "")
 
     @app.get("/api/health")
     def health():

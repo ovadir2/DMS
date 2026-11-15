@@ -4850,3 +4850,19 @@ def test_the_try_page_asks_the_four_calls_as_the_person_at_the_keyboard(tmp_path
         assert call in r.text, f"{call} is not offered on the try page"
     assert "no-store" in r.headers.get("cache-control", "")
     assert "/dms/api-try" not in c.get("/api/openapi.json").json()["paths"]    # it is a page, not an endpoint
+
+
+def test_swagger_says_where_this_dms_is_and_what_an_answer_looks_like(tmp_path):
+    """A reader should not have to guess the address or the shape of an answer: the document carries this
+    installation's own base URL, and every call shows a real example beside its parameters."""
+    app = create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", sharepoint="memory",
+                              page_url="https://dms.rh.tech/dms/dms-page"))
+    doc = TestClient(app).get("/api/openapi.json").json()
+    assert doc["servers"] == [{"url": "https://dms.rh.tech", "description": "This DMS"}]
+    for path in ("/api/ai/index-ticket", "/api/v1/approved-documents", "/api/v1/structure"):
+        example = doc["paths"][path]["get"]["responses"]["200"]["content"]["application/json"]["example"]
+        assert example and isinstance(example, dict), f"{path} shows no example answer"
+    assert "If-None-Match" in doc["paths"]["/api/v1/file"]["get"]["responses"]["200"]["description"]
+
+    plain = create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", sharepoint="memory"))
+    assert "servers" not in TestClient(plain).get("/api/openapi.json").json()   # no address, none invented

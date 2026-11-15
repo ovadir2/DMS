@@ -725,6 +725,13 @@
      "200": {
       "content": {
        "application/json": {
+        "example": {
+         "documents": "https://dms.rh.tech/api/v1/approved-documents?ticket=Qm9iLXRpY2tldC0yMDI2",
+         "header": "X-DMS-Index-Ticket",
+         "hours": 8,
+         "search": "https://dms.rh.tech/api/v1/search?ticket=Qm9iLXRpY2tldC0yMDI2&q=",
+         "ticket": "Qm9iLXRpY2tldC0yMDI2"
+        },
         "schema": {}
        }
       },
@@ -834,6 +841,40 @@
      "200": {
       "content": {
        "application/json": {
+        "example": {
+         "count": 1,
+         "documents": [
+          {
+           "DocDMSpath": "E:\\Shares\\01_General\\Quality\\Current_ReadOnly\\QP-16.1 Rev03.md",
+           "DocFile": "E:\\Shares\\01_General\\Quality\\Current_ReadOnly\\QP-16.1 Rev03.docx",
+           "DocFileName": "QP-16.1 Rev03.docx",
+           "DocID": "QP-16.1",
+           "DocName": "Control of documents",
+           "DocRev": "03",
+           "customer": "",
+           "etag": "\"9f2c41a7be03d5f1\"",
+           "files": [
+            {
+             "name": "QP-16.1 Rev03.docx",
+             "path": "E:\\Shares\\...",
+             "size": 182144
+            },
+            {
+             "name": "QP-16.1 Rev03.md",
+             "path": "E:\\Shares\\...",
+             "size": 7431
+            }
+           ],
+           "folder": "E:\\Shares\\01_General\\Quality\\Current_ReadOnly",
+           "hasMarkdown": true,
+           "markdown": "# Control of documents\n\n- Document ID: QP-16.1\n- Revision: 03\n\n---\n\n## 1. Purpose ...",
+           "markdownUrl": "https://dms.rh.tech/api/v1/file?path=E%3A%5CShares%5C...%5CQP-16.1%20Rev03.md&ticket=Qm9i",
+           "modifiedUtc": "2026-11-15T07:12:04Z",
+           "size": 7431,
+           "url": "https://dms.rh.tech/api/v1/file?path=E%3A%5CShares%5C...%5CQP-16.1%20Rev03.docx&ticket=Qm9i"
+          }
+         ]
+        },
         "schema": {}
        }
       },
@@ -913,7 +954,7 @@
         "schema": {}
        }
       },
-      "description": "Successful Response"
+      "description": "The file itself - the Markdown as text/markdown, the document as bytes. With If-None-Match the answer is 304 and nothing is sent."
      },
      "422": {
       "content": {
@@ -975,6 +1016,29 @@
      "200": {
       "content": {
        "application/json": {
+        "example": {
+         "counts": {
+          "customers": 23,
+          "departments": 14
+         },
+         "customers": [
+          {
+           "kpis": "E:\\Shares\\02_Customers\\Elbit\\KPIs",
+           "kpisExists": false,
+           "name": "Elbit",
+           "path": "E:\\Shares\\02_Customers\\Elbit"
+          }
+         ],
+         "departments": [
+          {
+           "kpis": "E:\\Shares\\01_General\\Quality\\KPIs",
+           "kpisExists": true,
+           "label": "Quality",
+           "name": "Quality",
+           "path": "E:\\Shares\\01_General\\Quality"
+          }
+         ]
+        },
         "schema": {}
        }
       },

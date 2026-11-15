@@ -80,6 +80,8 @@ def markdown(app, version: str = "", full: bool = False) -> str:
              "| **Try it** | `https://dms.rh.tech/dms/api-try` - the four calls from a page, as you, with "
              "your own AD rights. Nothing to install |",
              "| **Swagger UI** | `https://dms.rh.tech/dms/api-docs` (ReDoc: `/dms/api-redoc`) |",
+             "| **The address** | the document carries this DMS's own base URL (`servers`), so a "
+             "generated client needs none written by hand |",
              "| **The document** | `https://dms.rh.tech/api/openapi.json`, and `dms-swagger.json` beside "
              "this file, to generate a client without reaching the server |",
              "| **The rest of it** | WidgetBuilder's publish call: `08-WidgetBuilder-Contract.md`. The "
@@ -114,11 +116,17 @@ def markdown(app, version: str = "", full: bool = False) -> str:
                 lines += [" ".join(head.split()) or "_(no description)_", ""]
                 if rest.strip():
                     lines += ["\n".join(l.rstrip() for l in rest.strip().splitlines()), ""]
+                example = (((op.get("responses") or {}).get("200") or {}).get("content") or {}) \
+                    .get("application/json", {}).get("example")
                 rows_p = _params(op)
                 if rows_p:
                     lines += ["| Parameter | In | Required | Type | |", "| --- | --- | --- | --- | --- |"]
                     lines += rows_p
                     lines += [""]
+                if example is not None:
+                    import json as _json
+                    lines += ["It answers:", "", "```json",
+                              _json.dumps(example, indent=1, ensure_ascii=False), "```", ""]
     # Routes the schema does not carry (an image, a file answer): they are endpoints all the same.
     for route in app.routes if full else []:
         path, end = getattr(route, "path", ""), getattr(route, "endpoint", None)

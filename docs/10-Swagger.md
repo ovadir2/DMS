@@ -6,10 +6,11 @@ Four calls, and nothing else: ask for a ticket, read what is released, fetch wha
 | --- | --- |
 | **Try it** | `https://dms.rh.tech/dms/api-try` - the four calls from a page, as you, with your own AD rights. Nothing to install |
 | **Swagger UI** | `https://dms.rh.tech/dms/api-docs` (ReDoc: `/dms/api-redoc`) |
+| **The address** | the document carries this DMS's own base URL (`servers`), so a generated client needs none written by hand |
 | **The document** | `https://dms.rh.tech/api/openapi.json`, and `dms-swagger.json` beside this file, to generate a client without reaching the server |
 | **The rest of it** | WidgetBuilder's publish call: `08-WidgetBuilder-Contract.md`. The search, the page key and the AI's guide: `09-Machine-API.md`. The DMS page's own ~80 endpoints: `/api/openapi-all.json` |
 
-Written from DMS f2e365a.
+Written from DMS 7084ed3.
 
 ## How a caller is known
 
@@ -31,6 +32,18 @@ The RAG is given it by the page when the person asks AI Insights, and calls
 /api/v1/approved-documents with it. Everything it gets back is filtered by that person's own AD
 rights, file by file - an application key names a service account and would answer the same list to
 everybody, which is exactly what must not happen here.
+
+It answers:
+
+```json
+{
+ "ticket": "Qm9iLXRpY2tldC0yMDI2",
+ "hours": 8,
+ "documents": "https://dms.rh.tech/api/v1/approved-documents?ticket=Qm9iLXRpY2tldC0yMDI2",
+ "search": "https://dms.rh.tech/api/v1/search?ticket=Qm9iLXRpY2tldC0yMDI2&q=",
+ "header": "X-DMS-Index-Ticket"
+}
+```
 
 ## The machine API
 
@@ -55,6 +68,45 @@ know is read from the Markdown's own first lines, which the DMS wrote when it ma
 | `inline` | query | no | boolean | Carry the Markdown itself in the answer, so an index needs no second call per document (a few KB each, and a budget it stops at) |
 | `budget` | query | no | integer | How many characters of Markdown this answer may carry with inline=true |
 | `all` | query | no | boolean | Also the released files that have no Markdown of their own (a drawing, a picture) |
+
+It answers:
+
+```json
+{
+ "documents": [
+  {
+   "DocID": "QP-16.1",
+   "DocName": "Control of documents",
+   "DocRev": "03",
+   "DocFile": "E:\\Shares\\01_General\\Quality\\Current_ReadOnly\\QP-16.1 Rev03.docx",
+   "DocFileName": "QP-16.1 Rev03.docx",
+   "DocDMSpath": "E:\\Shares\\01_General\\Quality\\Current_ReadOnly\\QP-16.1 Rev03.md",
+   "url": "https://dms.rh.tech/api/v1/file?path=E%3A%5CShares%5C...%5CQP-16.1%20Rev03.docx&ticket=Qm9i",
+   "markdownUrl": "https://dms.rh.tech/api/v1/file?path=E%3A%5CShares%5C...%5CQP-16.1%20Rev03.md&ticket=Qm9i",
+   "markdown": "# Control of documents\n\n- Document ID: QP-16.1\n- Revision: 03\n\n---\n\n## 1. Purpose ...",
+   "etag": "\"9f2c41a7be03d5f1\"",
+   "modifiedUtc": "2026-11-15T07:12:04Z",
+   "size": 7431,
+   "folder": "E:\\Shares\\01_General\\Quality\\Current_ReadOnly",
+   "customer": "",
+   "hasMarkdown": true,
+   "files": [
+    {
+     "name": "QP-16.1 Rev03.docx",
+     "path": "E:\\Shares\\...",
+     "size": 182144
+    },
+    {
+     "name": "QP-16.1 Rev03.md",
+     "path": "E:\\Shares\\...",
+     "size": 7431
+    }
+   ]
+  }
+ ],
+ "count": 1
+}
+```
 
 ### GET /api/v1/file
 
@@ -83,3 +135,31 @@ everywhere: what the account behind the call may not see is not in the answer.
 | --- | --- | --- | --- | --- |
 | `q` | query | no | string |  |
 | `ticket` | query | no | string | An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see |
+
+It answers:
+
+```json
+{
+ "departments": [
+  {
+   "name": "Quality",
+   "label": "Quality",
+   "path": "E:\\Shares\\01_General\\Quality",
+   "kpis": "E:\\Shares\\01_General\\Quality\\KPIs",
+   "kpisExists": true
+  }
+ ],
+ "customers": [
+  {
+   "name": "Elbit",
+   "path": "E:\\Shares\\02_Customers\\Elbit",
+   "kpis": "E:\\Shares\\02_Customers\\Elbit\\KPIs",
+   "kpisExists": false
+  }
+ ],
+ "counts": {
+  "departments": 14,
+  "customers": 23
+ }
+}
+```

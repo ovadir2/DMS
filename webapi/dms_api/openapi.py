@@ -60,6 +60,37 @@ SECURITY = {
 }
 
 
+
+# What each call answers, so the page shows a real example beside the parameters instead of "string".
+EXAMPLES: dict[str, dict] = {
+    "/api/ai/index-ticket": {
+        "ticket": "Qm9iLXRpY2tldC0yMDI2", "hours": 8,
+        "documents": "https://dms.rh.tech/api/v1/approved-documents?ticket=Qm9iLXRpY2tldC0yMDI2",
+        "search": "https://dms.rh.tech/api/v1/search?ticket=Qm9iLXRpY2tldC0yMDI2&q=",
+        "header": "X-DMS-Index-Ticket"},
+    "/api/v1/approved-documents": {
+        "documents": [{
+            "DocID": "QP-16.1", "DocName": "Control of documents", "DocRev": "03",
+            "DocFile": "E:\\Shares\\01_General\\Quality\\Current_ReadOnly\\QP-16.1 Rev03.docx",
+            "DocFileName": "QP-16.1 Rev03.docx",
+            "DocDMSpath": "E:\\Shares\\01_General\\Quality\\Current_ReadOnly\\QP-16.1 Rev03.md",
+            "url": "https://dms.rh.tech/api/v1/file?path=E%3A%5CShares%5C...%5CQP-16.1%20Rev03.docx&ticket=Qm9i",
+            "markdownUrl": "https://dms.rh.tech/api/v1/file?path=E%3A%5CShares%5C...%5CQP-16.1%20Rev03.md&ticket=Qm9i",
+            "markdown": "# Control of documents\n\n- Document ID: QP-16.1\n- Revision: 03\n\n---\n\n## 1. Purpose ...",
+            "etag": "\"9f2c41a7be03d5f1\"", "modifiedUtc": "2026-11-15T07:12:04Z", "size": 7431,
+            "folder": "E:\\Shares\\01_General\\Quality\\Current_ReadOnly", "customer": "",
+            "hasMarkdown": True,
+            "files": [{"name": "QP-16.1 Rev03.docx", "path": "E:\\Shares\\...", "size": 182144},
+                      {"name": "QP-16.1 Rev03.md", "path": "E:\\Shares\\...", "size": 7431}]}],
+        "count": 1},
+    "/api/v1/structure": {
+        "departments": [{"name": "Quality", "label": "Quality", "path": "E:\\Shares\\01_General\\Quality",
+                         "kpis": "E:\\Shares\\01_General\\Quality\\KPIs", "kpisExists": True}],
+        "customers": [{"name": "Elbit", "path": "E:\\Shares\\02_Customers\\Elbit",
+                       "kpis": "E:\\Shares\\02_Customers\\Elbit\\KPIs", "kpisExists": False}],
+        "counts": {"departments": 14, "customers": 23}},
+}
+
 def _group_of(path: str) -> str:
     for title, pattern, _blurb in GROUPS:
         if re.search(pattern, path):
@@ -67,12 +98,16 @@ def _group_of(path: str) -> str:
     return "The rest"
 
 
-def spec(app, version: str = "", full: bool = False) -> dict:
+def spec(app, version: str = "", full: bool = False, base: str = "") -> dict:
     """The document /api/openapi.json serves: what another system talks to. full=True keeps every endpoint
     of the page as well (/api/openapi-all.json), for whoever is working on the DMS itself."""
     doc = get_openapi(title="RH DMS Web API", version=version or app.version,
                       description=DESCRIPTION, routes=app.routes)
     doc.setdefault("components", {})["securitySchemes"] = SECURITY
+    if base:
+        # Where this DMS answers, so "Try it out" calls the server the reader is reading from and a
+        # generated client needs no address written by hand.
+        doc["servers"] = [{"url": base.rstrip("/"), "description": "This DMS"}]
     doc["tags"] = [{"name": title, "description": blurb} for title, _p, blurb in GROUPS] + \
                   [{"name": "The rest", "description": "Answers that are not JSON: a page, an image, a file."}]
     if not full:
@@ -96,6 +131,17 @@ def spec(app, version: str = "", full: bool = False) -> dict:
                 op["security"] = [] if path.endswith("/ping") else [{"pageKey": []}]
             else:
                 op["security"] = [{"windows": []}]
+    for path, example in EXAMPLES.items():
+        op = (doc["paths"].get(path) or {}).get("get")
+        if not op:
+            continue
+        ok = op.setdefault("responses", {}).setdefault("200", {"description": "The answer"})
+        ok.setdefault("content", {}).setdefault("application/json", {})["example"] = example
+    body = (doc["paths"].get("/api/v1/file") or {}).get("get")
+    if body:
+        ok = body.setdefault("responses", {}).setdefault("200", {"description": "The file itself"})
+        ok["description"] = ("The file itself - the Markdown as text/markdown, the document as bytes. With "
+                             "If-None-Match the answer is 304 and nothing is sent.")
     used = {op["tags"][0] for ops in doc["paths"].values() for op in ops.values()
             if isinstance(op, dict) and op.get("tags")}
     doc["tags"] = [t for t in doc["tags"] if t["name"] in used]
