@@ -13,21 +13,28 @@ from fastapi.openapi.utils import get_openapi
 
 from .apidocs import GROUPS, HIDE
 
+# What another system talks to: the machine API, the ticket the company's AI indexes with, and the page key
+# a dashboard runs on. Everything else is how the DMS page works with itself - a caller outside has no use
+# for it, and a document that lists 90 endpoints is read by nobody. /api/openapi-all.json has them all.
+INTEGRATION = (r"^/api/v1/", r"^/api/ai/index-ticket$", r"^/api/kpi/")
+
 DESCRIPTION = """
-The DMS answers three kinds of caller, and never more than the caller's own rights allow.
+What another system needs from the DMS, and nothing else. Three ways in:
 
-* **A person on the page** - Windows authentication (IIS). The DMS asks AD what that person may see, folder
-  by folder, and answers nothing else. Most endpoints are these.
-* **A page of the repository** - a dashboard or a KPI page runs sandboxed, with an origin of its own, so it
-  cannot sign in. It is given a page key when it is opened (`?t=`), good for the folder it was opened from
-  and for a few hours. Reading only.
-* **An application** - a key of its own (`X-DMS-Api-Key`, or `Authorization: Bearer`). The key names what it
-  may read and the AD account it acts as: the DMS answers it exactly what that account may see. One
-  endpoint writes (the KPI Builder's), the rest read.
+* **An application** - its own key (`X-DMS-Api-Key`, or `Authorization: Bearer`). The key names what it may
+  read and **the AD account it acts as**: the DMS answers exactly what that account may see.
+* **The company's AI** - a ticket minted for the person who asked (`/api/ai/index-ticket`). The answer is
+  then what *that person* may read, file by file. The ticket does not say whose it is and cannot be pointed
+  at somebody else.
+* **A page of the repository** - a dashboard or a KPI page runs sandboxed and cannot sign in, so it is given
+  a page key when it is opened (`?t=`), good for its own folder and for a few hours. Reading only.
 
-The DMS writes on the file server with its own account, so an approver needs no rights there at all - but it
-never stands in for a right the person does not have. See `docs/09-Machine-API.md` for applications,
-`docs/08-KPI-Builder-Contract.md` for the KPI Builder and `docs/10-API-Reference.md` for the whole list.
+Nothing here stands in for a right the person or the account does not have. One endpoint writes (the KPI
+Builder's); the rest read.
+
+Guides: `docs/09-Machine-API.md` (applications and the AI), `docs/08-KPI-Builder-Contract.md` (the KPI
+Builder), `docs/07-KPI-Integration.md` (the page key). The DMS page's own endpoints are not here: they are
+in `docs/10-API-Reference.md`, and in `/api/openapi-all.json` for a client that really wants them.
 """.strip()
 
 SECURITY = {
@@ -58,15 +65,18 @@ def _group_of(path: str) -> str:
     return "The rest"
 
 
-def spec(app, version: str = "") -> dict:
-    """The whole document, as /api/openapi.json serves it."""
+def spec(app, version: str = "", full: bool = False) -> dict:
+    """The document /api/openapi.json serves: what another system talks to. full=True keeps every endpoint
+    of the page as well (/api/openapi-all.json), for whoever is working on the DMS itself."""
     doc = get_openapi(title="RH DMS Web API", version=version or app.version,
                       description=DESCRIPTION, routes=app.routes)
     doc.setdefault("components", {})["securitySchemes"] = SECURITY
     doc["tags"] = [{"name": title, "description": blurb} for title, _p, blurb in GROUPS] + \
                   [{"name": "The rest", "description": "Answers that are not JSON: a page, an image, a file."}]
+    if not full:
+        doc["info"]["title"] = "RH DMS - the API other systems use"
     for path, ops in list(doc["paths"].items()):
-        if path in HIDE:
+        if path in HIDE or (not full and not any(re.search(p, path) for p in INTEGRATION)):
             doc["paths"].pop(path)
             continue
         group = _group_of(path)
@@ -84,4 +94,7 @@ def spec(app, version: str = "") -> dict:
                 op["security"] = [] if path.endswith("/ping") else [{"pageKey": []}]
             else:
                 op["security"] = [{"windows": []}]
+    used = {op["tags"][0] for ops in doc["paths"].values() for op in ops.values()
+            if isinstance(op, dict) and op.get("tags")}
+    doc["tags"] = [t for t in doc["tags"] if t["name"] in used]
     return doc

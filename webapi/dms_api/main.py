@@ -412,6 +412,13 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     app.openapi = _openapi
 
+    @app.get("/api/openapi-all.json", include_in_schema=False)
+    def openapi_all():
+        """Every endpoint, the page's own included: for whoever is working on the DMS itself. What another
+        system talks to is the short document at /api/openapi.json."""
+        from .openapi import spec
+        return spec(app, f"1.1 ({version})", full=True)
+
     @app.get("/api/health")
     def health():
         """Is the DMS up, and which build is it? Open it in the browser after a pull and a restart."""

@@ -38,13 +38,16 @@ GROUPS: list[tuple[str, str, str]] = [
     ("The page itself", r"^/dms/",
      "The DMS page, its logo and its icon."),
 ]
-HIDE = ("/api/kpi/{rest:path}",                        # the browser's own preflight question
+HIDE = ("/api/kpi/{rest:path}", "/api/kpi/{rest}",     # the browser's own preflight question
         "/api/openapi.json", "/dms/api-docs", "/dms/api-redoc")   # the document and the two readers of it
 VERBS = ("GET", "POST", "PUT", "DELETE", "PROPFIND", "LOCK", "UNLOCK")
 
 
 def _schema(app) -> dict:
-    return app.openapi()
+    """Every endpoint, for the reference in docs\\. Swagger itself shows only what another system talks to;
+    this file is the whole list, which is what somebody working on the DMS wants."""
+    from .openapi import spec
+    return spec(app, "", full=True)
 
 
 def _params(op: dict) -> list[str]:
@@ -75,7 +78,9 @@ def markdown(app, version: str = "") -> str:
              "(`python -m dms_api.apidocs`, or `scripts\\New-DmsApiDocs.ps1`), so it cannot drift from the "
              "code. The machine API has a guide of its own in `09-Machine-API.md`, the KPI Builder in "
              "`08-KPI-Builder-Contract.md`, and the page key in `07-KPI-Integration.md`.", "",
-             "**Swagger**: the same thing to try and to generate a client from - "
+             "**Swagger** shows the short list - what another system talks to: the machine API, the "
+             "indexing ticket and the page key. This file is every endpoint, the page's own included. "
+             "To try a call or generate a client - "
              "`https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the "
              "OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository "
              "as `dms-openapi.json`, for a client generated without reaching the server.", ""]

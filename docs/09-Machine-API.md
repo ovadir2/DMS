@@ -64,6 +64,14 @@ about it, exactly as a person is not.
 `GET /api/v1/documents` answers the same released documents from the register rather than from the folders;
 it is kept for callers that already ask it.
 
+## Swagger
+
+`https://dms.rh.tech/dms/api-docs` shows exactly what is on this page and nothing more: the machine API, the
+indexing ticket and the page key. The document itself is `/api/openapi.json`, and a copy travels with the
+repository as `docs/dms-openapi.json` - enough to generate a client without reaching the server. The DMS has
+many more endpoints for its own page; they are not part of what an outside system talks to, and live in
+`/api/openapi-all.json` and `docs/10-API-Reference.md`.
+
 ## GET /api/v1/customers
 
 The customers the DMS knows - the folders under the customers folder of the repository. The skeleton new

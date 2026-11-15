@@ -4317,35 +4317,43 @@ def test_the_api_reference_holds_every_endpoint(tmp_path):
         assert strip(on_disk) == strip(written), "docs\\10-API-Reference.md is behind: run scripts\\New-DmsApiDocs.ps1"
 
 
-def test_swagger_describes_every_endpoint_and_how_each_is_called(tmp_path):
-    """One document for the whole API: every endpoint the DMS answers, in its group, with what the caller
-    signs in with - Windows for a person, a page key for a page of the repository, a key for an
-    application. Swagger UI reads it at /dms/api-docs, and the repository keeps a copy."""
+def test_swagger_is_what_another_system_talks_to(tmp_path):
+    """Swagger is read by whoever has to call the DMS from outside, so it holds the machine API, the
+    indexing ticket and the page key - and not the ninety endpoints the page uses on itself, which are
+    nobody's business but the DMS's. The whole list stays one call away (/api/openapi-all.json) and in
+    docs\\10-API-Reference.md."""
     import json
+    import re
     from dms_api import apidocs
     app = create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", sharepoint="memory"))
     c = TestClient(app)
     doc = c.get("/api/openapi.json").json()
-    assert doc["info"]["title"] == "RH DMS Web API" and doc["info"]["description"]
+    assert doc["info"]["description"] and "other systems" in doc["info"]["title"]
     assert sorted(doc["components"]["securitySchemes"]) == ["apiKey", "bearer", "indexTicket", "pageKey",
                                                             "windows"]
 
-    inside = {"/api/openapi.json", "/dms/api-docs", "/dms/api-redoc", "/api/kpi/{rest:path}"}
-    for route in app.routes:
-        path = getattr(route, "path", "")
-        if not path.startswith(("/api", "/dms")) or path in inside:
-            continue
-        assert path in doc["paths"], f"{path} is not in the OpenAPI document"
-        for verb, op in doc["paths"][path].items():
+    from dms_api.openapi import INTEGRATION
+    for path, ops in doc["paths"].items():
+        assert any(re.search(p, path) for p in INTEGRATION), f"{path} is nobody's business outside the DMS"
+        for verb, op in ops.items():
             assert op.get("tags"), f"{verb} {path} is in no group"
             assert op.get("summary") or op.get("description"), f"{verb} {path} says nothing about itself"
+    for must in ("/api/v1/approved-documents", "/api/v1/search", "/api/v1/file", "/api/v1/customers",
+                 "/api/v1/departments", "/api/v1/kpi/publish", "/api/ai/index-ticket"):
+        assert must in doc["paths"], f"{must} is what the AI and the Builder call: it belongs in Swagger"
+    assert "/api/browse" not in doc["paths"] and "/api/documents" not in doc["paths"]
+    assert all(t["name"] for t in doc["tags"]) and len(doc["tags"]) <= 4   # no empty section
 
     # how each kind of caller signs in, by where the endpoint lives
     assert doc["paths"]["/api/v1/customers"]["get"]["security"] == [{"apiKey": []}, {"bearer": []},
                                                                     {"indexTicket": []}]
     assert doc["paths"]["/api/kpi/data"]["get"]["security"] == [{"pageKey": []}]
     assert doc["paths"]["/api/kpi/ping"]["get"]["security"] == []            # the one that answers anyone
-    assert doc["paths"]["/api/browse"]["get"]["security"] == [{"windows": []}]
+
+    # the whole thing, for whoever is working on the DMS itself
+    every = c.get("/api/openapi-all.json").json()
+    assert len(every["paths"]) > 3 * len(doc["paths"])
+    assert every["paths"]["/api/browse"]["get"]["security"] == [{"windows": []}]
 
     assert c.get("/dms/api-docs").status_code == 200                          # Swagger UI
     assert c.get("/dms/api-redoc").status_code == 200
