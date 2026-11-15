@@ -2387,6 +2387,28 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         logger.info("api %s GET /api/v1/search %r -> %d", who["name"], q, len(found))
         return JSONResponse(found, headers={"Cache-Control": "no-store"})
 
+    @app.get("/api/v1/structure")
+    def api_structure(request: Request, q: str = "",
+                      ticket: str = Query("", description="An indexing ticket (/api/ai/index-ticket): the "
+                                                          "answer is then what that person may see")):
+        """Where documents live: the departments of the company and the customers, in one answer.
+
+        Each carries its folder and its KPIs folder (and whether that folder has been made yet), so an
+        application knows where it may publish and an index knows what it is walking. AD decides here as
+        everywhere: what the account behind the call may not see is not in the answer."""
+        from fastapi.responses import JSONResponse
+        import json as _json
+        who = api_reader(request, ("customers", "kpi", "documents"), ticket)
+        departments = _json.loads(bytes(api_departments(request, q=q, ticket=ticket).body))
+        customers = _json.loads(bytes(api_customers(request, q=q, ticket=ticket).body))
+        logger.info("api %s GET /api/v1/structure -> %d department(s), %d customer(s)", who["name"],
+                    departments.get("count", 0), customers.get("count", 0))
+        return JSONResponse({"departments": departments.get("departments", []),
+                             "customers": customers.get("customers", []),
+                             "counts": {"departments": departments.get("count", 0),
+                                        "customers": customers.get("count", 0)}},
+                            headers={"Cache-Control": "no-store"})
+
     @app.get("/api/v1/file")
     def api_file(request: Request, path: str,
                  markdown_only: bool = Query(False, alias="markdown",

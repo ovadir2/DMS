@@ -235,6 +235,31 @@ With a ticket (`?ticket=` or the header) these answer as that person:
 | `GET /api/v1/customers`, `GET /api/v1/departments` | the structure, as that person sees it |
 | `GET /api/v1/file` | the file itself - **the content, not a path** |
 
+### The paths in the answer are handles, not something to open
+
+`DocFile` and `DocDMSpath` are the file server's own paths (`E:\Shares\...`). They are there so a person
+can be told where a document lives and so two answers can be compared - **not for the AI to open**. The AI
+has no account there, and it does not need one: every row also carries `url` and `markdownUrl`, which are
+ready to fetch, and the path is simply what goes back in the `path` parameter.
+
+```
+GET /api/v1/approved-documents?ticket=x7...&all=true
+  -> { "DocID": "QP-16.1", "DocRev": "03",
+       "DocFile":      "E:\\Shares\\01_General\\Quality\\Current_ReadOnly\\QP-16.1 Rev03.docx",
+       "DocDMSpath":   "E:\\Shares\\01_General\\Quality\\Current_ReadOnly\\QP-16.1 Rev03.md",
+       "url":          "https://dms.rh.tech/api/v1/file?path=E%3A%5CShares%5C...docx&ticket=x7...",
+       "markdownUrl":  "https://dms.rh.tech/api/v1/file?path=E%3A%5CShares%5C...md&ticket=x7...",
+       "etag": "\"9f2c...\"", "modifiedUtc": "2026-11-15T07:12:04Z", "size": 7431 }
+
+GET <markdownUrl>                      -> the Markdown, text/markdown, which is what the RAG indexes
+GET <url>                              -> the document itself (Word, Excel, a PDF, a picture)
+GET <url> with If-None-Match: <etag>   -> 304, nothing read, nothing sent
+```
+
+Either call can be written by hand as
+`GET /api/v1/file?path=<DocFile>&ticket=...` (add `&markdown=true` for the Markdown of that document),
+and both answer only if the AD account behind the ticket may see that file.
+
 ### The AI never touches the file server
 
 `GET /api/v1/file?path=<the path from the list>&ticket=...` returns the bytes, and

@@ -4317,43 +4317,32 @@ def test_the_api_reference_holds_every_endpoint(tmp_path):
         assert strip(on_disk) == strip(written), "docs\\10-Swagger.md is behind: run scripts\\New-DmsApiDocs.ps1"
 
 
-def test_swagger_is_what_another_system_talks_to(tmp_path):
-    """Swagger is read by whoever has to call the DMS from outside, so it holds the machine API, the
-    indexing ticket and the page key - and not the ninety endpoints the page uses on itself, which are
-    nobody's business but the DMS's. The whole list stays one call away (/api/openapi-all.json) and in
-    docs\\10-Swagger.md."""
+def test_swagger_is_four_calls_and_nothing_else(tmp_path):
+    """Swagger is read by whoever has to call the DMS from outside, and four calls are the whole of what
+    they need: who is asking, what is released, the file itself, and where things live. The DMS keeps its
+    other eighty for its own page - they are at /api/openapi-all.json and in docs\\10-Swagger.md."""
     import json
-    import re
     from dms_api import apidocs
     app = create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", sharepoint="memory"))
     c = TestClient(app)
     doc = c.get("/api/openapi.json").json()
     assert doc["info"]["description"] and "other systems" in doc["info"]["title"]
-    assert sorted(doc["components"]["securitySchemes"]) == ["apiKey", "bearer", "indexTicket", "pageKey",
-                                                            "windows"]
-
-    from dms_api.openapi import INTEGRATION
+    assert sorted(doc["paths"]) == ["/api/ai/index-ticket", "/api/v1/approved-documents", "/api/v1/file",
+                                    "/api/v1/structure"]
     for path, ops in doc["paths"].items():
-        assert any(re.search(p, path) for p in INTEGRATION), f"{path} is nobody's business outside the DMS"
         for verb, op in ops.items():
             assert op.get("tags"), f"{verb} {path} is in no group"
             assert op.get("summary") or op.get("description"), f"{verb} {path} says nothing about itself"
-    for must in ("/api/v1/approved-documents", "/api/v1/search", "/api/v1/file", "/api/v1/customers",
-                 "/api/v1/departments", "/api/v1/kpi/publish", "/api/ai/index-ticket"):
-        assert must in doc["paths"], f"{must} is what the AI and the Builder call: it belongs in Swagger"
-    assert "/api/browse" not in doc["paths"] and "/api/documents" not in doc["paths"]
-    assert all(t["name"] for t in doc["tags"]) and len(doc["tags"]) <= 4   # no empty section
-
-    # how each kind of caller signs in, by where the endpoint lives
-    assert doc["paths"]["/api/v1/customers"]["get"]["security"] == [{"apiKey": []}, {"bearer": []},
-                                                                    {"indexTicket": []}]
-    assert doc["paths"]["/api/kpi/data"]["get"]["security"] == [{"pageKey": []}]
-    assert doc["paths"]["/api/kpi/ping"]["get"]["security"] == []            # the one that answers anyone
+    assert sorted(doc["components"]["securitySchemes"]) == ["apiKey", "bearer", "indexTicket", "windows"]
+    assert doc["paths"]["/api/v1/file"]["get"]["security"] == [{"apiKey": []}, {"bearer": []},
+                                                               {"indexTicket": []}]
+    assert all(t["name"] for t in doc["tags"]) and len(doc["tags"]) <= 3       # no empty section
 
     # the whole thing, for whoever is working on the DMS itself
     every = c.get("/api/openapi-all.json").json()
-    assert len(every["paths"]) > 3 * len(doc["paths"])
+    assert len(every["paths"]) > 20 * len(doc["paths"])
     assert every["paths"]["/api/browse"]["get"]["security"] == [{"windows": []}]
+    assert "/api/v1/kpi/publish" in every["paths"] and "/api/v1/search" in every["paths"]
 
     assert c.get("/dms/api-docs").status_code == 200                          # Swagger UI
     assert c.get("/dms/api-redoc").status_code == 200
@@ -4363,6 +4352,22 @@ def test_swagger_is_what_another_system_talks_to(tmp_path):
     if os.path.isfile(here):          # the copy in docs is the same document
         assert json.load(open(here, encoding="utf-8")) == json.loads(apidocs.openapi_json(app)), \
             "docs\\dms-swagger.json is behind: run scripts\\New-DmsApiDocs.ps1"
+
+
+def test_the_structure_is_one_call(tmp_path):
+    """Where documents live, in one answer: the departments and the customers, each with its KPIs folder.
+    An application asks once instead of twice, and AD decides what is in it."""
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    (tmp_path / "Root" / "01_General" / "IT").mkdir(parents=True, exist_ok=True)
+    s.api_keys = {"k": {"name": "widgetbuilder", "scopes": ["kpi"], "as": USER}}
+    r = c.get("/api/v1/structure", headers={"X-DMS-Api-Key": "k"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert {x["name"] for x in body["departments"]} >= {"IT"}
+    assert {x["name"] for x in body["customers"]} >= {"Customer_A"}
+    assert body["counts"]["departments"] == len(body["departments"])
+    assert all("kpis" in x and "kpisExists" in x for x in body["departments"] + body["customers"])
+    assert c.get("/api/v1/structure").status_code == 401            # no key, no ticket: nothing
 
 
 def test_back_to_the_blueprint_leaves_the_shape_and_nothing_else(tmp_path):

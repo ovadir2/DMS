@@ -13,10 +13,12 @@ from fastapi.openapi.utils import get_openapi
 
 from .apidocs import GROUPS, HIDE
 
-# What another system talks to: the machine API, the ticket the company's AI indexes with, and the page key
-# a dashboard runs on. Everything else is how the DMS page works with itself - a caller outside has no use
-# for it, and a document that lists 90 endpoints is read by nobody. /api/openapi-all.json has them all.
-INTEGRATION = (r"^/api/v1/", r"^/api/ai/index-ticket$", r"^/api/kpi/")
+# What an OEM talks to, and nothing else: who is asking, what there is, the file itself, and where it all
+# lives. Four. The DMS has eighty more for its own page and they are nobody's business outside it:
+# /api/openapi-all.json and docs\\10-Swagger.md have them, and docs\\09-Machine-API.md has the rest of the
+# machine API (search, the KPI Builder's publish call, the page key a dashboard runs on).
+INTEGRATION = (r"^/api/ai/index-ticket$", r"^/api/v1/approved-documents$", r"^/api/v1/file$",
+               r"^/api/v1/structure$")
 
 DESCRIPTION = """
 What another system needs from the DMS, and nothing else. Three ways in:
@@ -97,4 +99,8 @@ def spec(app, version: str = "", full: bool = False) -> dict:
     used = {op["tags"][0] for ops in doc["paths"].values() for op in ops.values()
             if isinstance(op, dict) and op.get("tags")}
     doc["tags"] = [t for t in doc["tags"] if t["name"] in used]
+    if not full:
+        named = {k for ops in doc["paths"].values() for op in ops.values() if isinstance(op, dict)
+                 for one in (op.get("security") or []) for k in one}
+        doc["components"]["securitySchemes"] = {k: v for k, v in SECURITY.items() if k in named}
     return doc

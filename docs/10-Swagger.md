@@ -4,7 +4,7 @@ Every endpoint of the DMS, written from the API itself (`python -m dms_api.apido
 
 **Swagger** shows the short list - what another system talks to: the machine API, the indexing ticket and the page key. This file is every endpoint, the page's own included. To try a call or generate a client - `https://dms-pilot.rh.tech/dms/api-docs` (Swagger UI), `/dms/api-redoc` (ReDoc), and the OpenAPI document itself at `/api/openapi.json`. A copy of the document is in the repository as `dms-swagger.json`, for a client generated without reaching the server.
 
-Written from DMS 49f03d6.
+Written from DMS e91f2f4.
 
 ## How a caller is known
 
@@ -721,6 +721,19 @@ Nothing is in the answer that that account may not see.
 | `scope` | query | no | string | all / customer / project / document / file / quick |
 | `customer` | query | no | string | Search inside one customer's folder |
 | `limit` | query | no | string |  |
+| `ticket` | query | no | string | An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see |
+
+### GET /api/v1/structure
+
+Where documents live: the departments of the company and the customers, in one answer.
+
+Each carries its folder and its KPIs folder (and whether that folder has been made yet), so an
+application knows where it may publish and an index knows what it is walking. AD decides here as
+everywhere: what the account behind the call may not see is not in the answer.
+
+| Parameter | In | Required | Type | |
+| --- | --- | --- | --- | --- |
+| `q` | query | no | string |  |
 | `ticket` | query | no | string | An indexing ticket (/api/ai/index-ticket): the answer is then what that person may see |
 
 ## Office and links
