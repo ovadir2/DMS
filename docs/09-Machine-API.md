@@ -302,6 +302,37 @@ binary, with the headings, the lists and the tables kept. So:
 - the document itself (`url`) is for a person who asks to open it, or for a format with no Markdown - a
   drawing, a scan - and then only when `all=true` said it is there.
 
+### The container the RAG indexes
+
+There is no folder of copies anywhere, and there should not be: copies of 260 people's documents go stale
+the moment a revision is approved, cost the disk twice, and move the AD decision from the DMS into a
+folder's permissions. The container is **the answer itself**, built for the person asking at the moment
+they ask:
+
+```
+GET /api/v1/approved-documents?ticket=...&format=ndjson&inline=true
+```
+
+- **one document per line** (`application/x-ndjson`), written as it is read. The first line reaches the
+  index in milliseconds whether the person may see ten documents or ten thousand, and neither side ever
+  holds the repository in memory.
+- **the Markdown is in the line** (`inline=true`), so nothing is fetched afterwards and no binary is
+  downloaded at all.
+- **what the person may see, and only that** - their AD rights decide the walk, so the container is theirs:
+  two people asking the same question are given different sets, which is the whole point.
+- **a tag for the whole set**: `ETag: "set-…"`. Send it back as `If-None-Match` and an unchanged
+  repository answers `304` with nothing read - which is most runs.
+- **`manifest=true`** answers `{count, bytes, etag, newestUtc}` and nothing else: one cheap call to decide
+  whether to index at all, and to show a person "1,842 documents, 11 MB" before the work starts.
+- **`since=`** narrows it to what changed, for an index that keeps its own high-water mark.
+
+A sensible RAG run is therefore: `manifest` (cheap), compare the tag with the one it kept, and if it moved,
+stream `ndjson&inline=true&since=<its mark>`. A repository of ten thousand documents costs one call and the
+few that changed.
+
+The ticket expires with the person's session, so the container cannot outlive their right to it - and
+nothing was written to disk that would have to be cleaned up afterwards.
+
 ### Just in time, without re-reading the repository
 
 Every row of the list carries `url`, `markdownUrl`, `size`, `modifiedUtc` and `etag`:

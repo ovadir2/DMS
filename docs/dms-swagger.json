@@ -835,6 +835,31 @@
        "title": "All",
        "type": "boolean"
       }
+     },
+     {
+      "description": "ndjson streams one document per line, so a repository of thousands is read as it is built, at a flat memory cost on both sides",
+      "in": "query",
+      "name": "format",
+      "required": false,
+      "schema": {
+       "default": "json",
+       "description": "ndjson streams one document per line, so a repository of thousands is read as it is built, at a flat memory cost on both sides",
+       "pattern": "^(json|ndjson)$",
+       "title": "Format",
+       "type": "string"
+      }
+     },
+     {
+      "description": "Only the shape of the answer - how many documents, how many bytes, and the tag of the whole set - so an index knows in one cheap call whether anything changed",
+      "in": "query",
+      "name": "manifest",
+      "required": false,
+      "schema": {
+       "default": false,
+       "description": "Only the shape of the answer - how many documents, how many bytes, and the tag of the whole set - so an index knows in one cheap call whether anything changed",
+       "title": "Manifest",
+       "type": "boolean"
+      }
      }
     ],
     "responses": {

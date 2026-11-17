@@ -4871,3 +4871,43 @@ def test_swagger_says_where_this_dms_is_and_what_an_answer_looks_like(tmp_path):
 
     plain = create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", sharepoint="memory"))
     assert "servers" not in TestClient(plain).get("/api/openapi.json").json()   # no address, none invented
+
+
+def test_the_ai_container_is_streamed_per_person_and_asked_for_cheaply(tmp_path):
+    """What the RAG indexes is not a folder of copies - it is one answer, built for the person asking at
+    the moment they ask: every Markdown they may read, streamed a document per line, with a tag for the
+    whole set so the next run costs one call and nothing is read."""
+    import json as _json
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    cur = q / "Current_ReadOnly"
+    for i in range(3):                                   # a few more documents to walk
+        (cur / f"Extra{i}.md").write_text(f"# Extra {i}\n\n- Document ID: X-{i}\n\n---\n\nbody {i}",
+                                          encoding="utf-8")
+    s.api_keys = {"k": {"name": "rag", "scopes": ["documents"], "as": USER}}
+    key = {"X-DMS-Api-Key": "k"}
+
+    # one cheap call says how big the job is before any of it is read
+    m = c.get("/api/v1/approved-documents", headers=key, params={"manifest": True, "all": True}).json()
+    assert m["count"] >= 4 and m["bytes"] > 0 and m["etag"].startswith('"set-')
+
+    # the whole set, a document per line, read as it is built
+    r = c.get("/api/v1/approved-documents", headers=key,
+              params={"format": "ndjson", "inline": True, "all": True})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/x-ndjson")
+    rows = [_json.loads(line) for line in r.text.splitlines() if line.strip()]
+    assert len(rows) == m["count"] == int(r.headers["X-DMS-Documents"])
+    assert any(x.get("markdown", "").startswith("# Extra 0") for x in rows)
+    assert all(x["etag"] and x["modifiedUtc"] for x in rows)
+
+    # nothing changed: one call, 304, nothing read
+    again = c.get("/api/v1/approved-documents", headers={**key, "If-None-Match": m["etag"]},
+                  params={"format": "ndjson", "inline": True, "all": True})
+    assert again.status_code == 304 and not again.content
+
+    # one document changes, and the set's tag changes with it
+    (cur / "Extra0.md").write_text("# Extra 0\n\n- Document ID: X-0\n\n---\n\nchanged", encoding="utf-8")
+    m2 = c.get("/api/v1/approved-documents", headers=key, params={"manifest": True, "all": True}).json()
+    assert m2["etag"] != m["etag"]
+    changed = c.get("/api/v1/approved-documents", headers={**key, "If-None-Match": m["etag"]},
+                    params={"format": "ndjson", "all": True})
+    assert changed.status_code == 200

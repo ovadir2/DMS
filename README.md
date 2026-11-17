@@ -235,6 +235,8 @@ through its paces yet. What was asked for and is not there yet has a table of it
 
 | REQ-P97 | The shape of a customer carries its rights, to the ones already there too | The skeleton is where a customer's folders and their AD groups are decided. `Sync-DmsCustomerAccess.ps1` writes those same rules onto customers made before the groups existed - each folder matched by name, each skeleton group replaced by that customer's own, a folder whose group AD does not have left untouched and reported rather than half set | Built |
 
+| REQ-P98 | What the AI indexes is built for the person asking, when they ask | No folder of copies: `approved-documents?ticket=…&format=ndjson&inline=true` streams every Markdown that person may read, a document per line, with the text in the line. `manifest=true` says how many and how big in one cheap call, the whole set carries an `ETag` so an unchanged repository answers `304`, and `since=` narrows it to what moved. Nothing is written to disk, nothing outlives the person's ticket | Built |
+
 ### Asked for, and not built yet
 
 | | What it would be | Why it is not done |

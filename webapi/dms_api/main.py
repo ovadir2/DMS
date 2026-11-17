@@ -19,7 +19,7 @@ from pathlib import Path
 import requests
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import access, blueprint, checkout, files, finder, markdown, security
@@ -2498,7 +2498,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                                    description="How many characters of Markdown this answer "
                                                                "may carry with inline=true"),
                                all: bool = Query(False, description="Also the released files that have no "
-                                                                    "Markdown of their own (a drawing, a picture)")):
+                                                                    "Markdown of their own (a drawing, a picture)"),
+                               format: str = Query("json", pattern="^(json|ndjson)$",
+                                                   description="ndjson streams one document per line, so a "
+                                                               "repository of thousands is read as it is "
+                                                               "built, at a flat memory cost on both sides"),
+                               manifest: bool = Query(False, description="Only the shape of the answer - how "
+                                                                         "many documents, how many bytes, "
+                                                                         "and the tag of the whole set - so "
+                                                                         "an index knows in one cheap call "
+                                                                         "whether anything changed")):
         """The Markdown of every approved document, as it lies in the Current_ReadOnly folders.
 
         Four things per file: the document's id, its name, its revision and where the Markdown is. This is
@@ -2579,6 +2588,45 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     continue
                 out.append(item)
         out.sort(key=lambda x: (x["DocID"], x["DocName"].lower()))
+
+        # The whole set in one tag: an index asks for it, keeps it, and sends it back as If-None-Match.
+        # Nothing has changed means 304 and nothing read - which is most runs, on most days.
+        fingerprint = hashlib.sha1("|".join(f"{x['DocDMSpath'] or x['DocFile']}:{x['etag']}"
+                                            for x in out).encode()).hexdigest()[:20]
+        tag = f'"set-{fingerprint}"'
+        if (request.headers.get("if-none-match") or "").strip() == tag:
+            logger.info("api %s GET /api/v1/approved-documents -> 304 (%d unchanged)", who["name"], len(out))
+            return Response(status_code=304, headers={"ETag": tag})
+        counted = sum(x["size"] for x in out)
+        head = {"ETag": tag, "Cache-Control": "no-store",
+                "X-DMS-Documents": str(len(out)), "X-DMS-Bytes": str(counted)}
+        if manifest:
+            newest = max((x["modifiedUtc"] for x in out), default="")
+            logger.info("api %s GET /api/v1/approved-documents (manifest) -> %d", who["name"], len(out))
+            return JSONResponse({"count": len(out), "bytes": counted, "etag": tag, "newestUtc": newest,
+                                 "since": since}, headers=head)
+
+        def read_markdown(item: dict) -> str:
+            try:
+                with open(item["DocDMSpath"], encoding="utf-8", errors="replace") as fh:
+                    return fh.read(budget)
+            except OSError as e:
+                logger.info("inline markdown of %s: %s", item["DocDMSpath"], e)
+                return ""
+
+        if format == "ndjson":
+            # One document per line, written as it is read: the first line reaches the index in
+            # milliseconds whether there are ten documents or ten thousand, and neither side ever holds
+            # the whole repository in memory.
+            def lines():
+                import json as _json
+                for item in out:
+                    if inline and item.get("DocDMSpath"):
+                        item = {**item, "markdown": read_markdown(item)}
+                    yield _json.dumps(item, ensure_ascii=False) + "\n"
+            logger.info("api %s GET /api/v1/approved-documents (ndjson) -> %d", who["name"], len(out))
+            return StreamingResponse(lines(), media_type="application/x-ndjson", headers=head)
+
         if inline:
             # The Markdown is what the AI reads - a few KB of text per document, against megabytes for the
             # document itself. Carrying it here saves a call per document and means nothing downloads the
@@ -2599,7 +2647,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 item["markdownTruncated"] = len(text) > left
                 left -= len(item["markdown"])
         logger.info("api %s GET /api/v1/approved-documents -> %d", who["name"], len(out))
-        return JSONResponse({"documents": out, "count": len(out)}, headers={"Cache-Control": "no-store"})
+        return JSONResponse({"documents": out, "count": len(out)}, headers=head)
 
     def api_user(who: dict) -> User:
         """The AD account an application acts as, as a user of the DMS. Everything it does is then asked of
