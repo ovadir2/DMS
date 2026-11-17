@@ -302,6 +302,14 @@ binary, with the headings, the lists and the tables kept. So:
 - the document itself (`url`) is for a person who asks to open it, or for a format with no Markdown - a
   drawing, a scan - and then only when `all=true` said it is there.
 
+### A file that cannot be Markdown
+
+A drawing, a scan, a picture, a CAD file - there is nothing to convert. The DMS writes a **card** beside it
+all the same: the document's id, its revision, its type, where it lives, and the line
+`- Content: not readable (no text in this format)`. So the AI can say *"QP-21 Rev02 is a drawing, here it
+is"* and point a person at it, and it never quotes text it does not have. `New-DmsMarkdown.ps1 -Write`
+fills in the cards for files released before this.
+
 ### The container the RAG indexes
 
 There is no folder of copies anywhere, and there should not be: copies of 260 people's documents go stale

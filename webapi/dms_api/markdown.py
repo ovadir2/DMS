@@ -389,16 +389,26 @@ def write_beside(path: str, doc: dict | None = None) -> str | None:
     """Write <document>.md beside the approved document. It opens with what the document is - the DMS id, the
     revision, when it was approved and where it lives - so an answer can say which document it came from and
     not only what it said. Returns where it was written, or None when there was nothing to write."""
-    body = body_of(path)
-    if not body:
-        return None
+    body, readable = body_of(path), True
     d = doc or {}
+    if not body:
+        readable = False
+        # A drawing, a scan, a picture, a CAD file: nothing to read, and until now nothing was written -
+        # so the document was invisible to the AI, which could not even say it exists. A card is written
+        # instead: what it is, which revision, where it lives, and plainly that its content cannot be
+        # read. The AI can then name it and point a person at it, and never quotes from it.
+        kind = (os.path.splitext(path)[1].lstrip(".") or "file").upper()
+        body = (f"No text could be read from this {kind} file: it is a drawing, a scan, a picture or "
+                f"another format the DMS cannot turn into text. It is the revision in force all the same - "
+                f"open the file itself to read it.")
     head = [f"# {d.get('title') or os.path.splitext(os.path.basename(path))[0]}", ""]
     for label, value in (("Document ID", d.get("documentId")), ("Revision", d.get("currentRevision")),
                          ("Type", d.get("documentType")), ("Area", d.get("documentArea")),
                          ("Approved", (d.get("lastApprovedUtc") or "")[:10]), ("Owner", d.get("ownerEmail"))):
         if value:
             head.append(f"- {label}: {value}")
+    if not readable:
+        head.append("- Content: not readable (no text in this format)")
     head += [f"- File: {path}",
              f"- Written by the DMS: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC", "", "---", ""]
     target = path_for(path)

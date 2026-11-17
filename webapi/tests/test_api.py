@@ -4911,3 +4911,29 @@ def test_the_ai_container_is_streamed_per_person_and_asked_for_cheaply(tmp_path)
     changed = c.get("/api/v1/approved-documents", headers={**key, "If-None-Match": m["etag"]},
                     params={"format": "ndjson", "all": True})
     assert changed.status_code == 200
+
+
+def test_a_file_with_no_text_is_still_known_to_the_ai(tmp_path):
+    """A drawing, a scan or a picture has nothing to convert, and used to get no Markdown at all - so the
+    AI could not even say the document exists. A card is written instead: what it is, which revision,
+    where it lives, and plainly that its content cannot be read, so it is named and never quoted."""
+    import dms_api.markdown as md
+    folder = tmp_path / "Current_ReadOnly"
+    folder.mkdir()
+    drawing = folder / "Layout Rev02.png"
+    drawing.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+    where = md.write_beside(str(drawing), {"documentId": "DMS-00042", "currentRevision": "02",
+                                           "title": "Line layout", "documentType": "שרטוט"})
+    assert where and os.path.basename(where) == "Layout Rev02.md"
+    text = open(where, encoding="utf-8").read()
+    assert "- Content: not readable" in text and "DMS-00042" in text and "Revision: 02" in text
+    assert "PNG" in text and "open the file itself" in text
+
+    head = md.heading_of(where)
+    assert head.get("Document ID") == "DMS-00042" and head.get("Content", "").startswith("not readable")
+
+    # a document that does have text says nothing of the sort
+    note = folder / "Note.txt"
+    note.write_text("a real sentence", encoding="utf-8")
+    plain = open(md.write_beside(str(note), {"documentId": "DMS-00043"}), encoding="utf-8").read()
+    assert "not readable" not in plain and "a real sentence" in plain
