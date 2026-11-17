@@ -251,8 +251,14 @@ def _pptx(path: str) -> str:
 
 
 def _plain(path: str) -> str:
+    """The text of a file that holds text (a note, a CSV, a PDF with a text layer). A file that is damaged,
+    truncated or not what its name says reads as nothing: a release is never failed over it."""
     from .doc_text import extract
-    return extract(path)
+    try:
+        return extract(path)
+    except Exception as e:  # noqa: BLE001 - every reader has its own errors; none is worth a failed release
+        log.info("%s could not be read as text: %s", path, e)
+        return ""
 
 
 # Set by the app at startup: a function that turns a document into PDF bytes through SharePoint. It is how
@@ -298,6 +304,12 @@ TEXT_KINDS = (".docx", ".docm", ".doc", ".xlsx", ".xlsm", ".xls", ".pptx", ".ppt
 PICTURE_KINDS = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".svg", ".ico", ".webp")
 
 
+def _was_ocr(path: str, body: str) -> bool:
+    """Was this text read by OCR? A file with no text layer of its own, that has one now."""
+    ext = os.path.splitext(path)[1].lower()
+    return ext in PICTURE_KINDS or (ext == ".pdf" and body.startswith("## Page "))
+
+
 def can_read(path: str) -> dict:
     """Before anything is approved: can this kind of file become text, and what to say if it cannot.
 
@@ -306,15 +318,59 @@ def can_read(path: str) -> dict:
     once it has tried, which is when the card is written instead."""
     ext = os.path.splitext(path)[1].lower()
     if ext in PICTURE_KINDS:
+        if OCR.get("on"):
+            return {"ext": ext, "readable": True, "sure": False,
+                    "why": "a picture: OCR will be tried, and a card written if it reads nothing"}
         return {"ext": ext, "readable": False, "sure": True,
                 "why": "a picture has no text in it: the AI will know the document exists and point at it"}
     if ext in (".pdf", ".doc", ".ppt"):
         return {"ext": ext, "readable": True, "sure": False,
-                "why": "depends on what is inside: a scanned one has no text, and gets a card instead"}
+                "why": ("depends on what is inside: a scanned one has no text of its own, and is read by "
+                        "OCR here" if OCR.get("on") else
+                        "depends on what is inside: a scanned one has no text, and gets a card instead")}
     if ext in TEXT_KINDS:
         return {"ext": ext, "readable": True, "sure": True, "why": "this kind becomes Markdown"}
     return {"ext": ext or "(no extension)", "readable": False, "sure": False,
             "why": "the DMS does not know this kind: it will try, and write a card if nothing comes back"}
+
+
+# Optical character recognition, for the documents that have no text to read: a scan, a drawing with a
+# title block, a photographed form. It is off unless the server has it (DMS_OCR=1) because it needs
+# Tesseract installed beside the DMS - and it is tried only when everything else came back empty, so a
+# document with a text layer is never put through it.
+OCR = {"on": False, "languages": "heb+eng", "max_pages": 20}
+
+
+def _ocr(path: str) -> str:
+    """The text of a scan, read by Tesseract. Empty when OCR is off, not installed, or finds nothing."""
+    if not OCR.get("on"):
+        return ""
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError:
+        log.info("OCR is on but Tesseract (pytesseract, Pillow) is not installed beside the DMS")
+        return ""
+    ext = os.path.splitext(path)[1].lower()
+    langs = OCR.get("languages") or "eng"
+    try:
+        if ext in PICTURE_KINDS:
+            return (pytesseract.image_to_string(Image.open(path), lang=langs) or "").strip()
+        if ext != ".pdf":
+            return ""
+        import io
+        import fitz                                   # PyMuPDF: renders a page without Poppler
+        out = []
+        with fitz.open(path) as book:
+            for page in list(book)[:int(OCR.get("max_pages") or 20)]:
+                png = page.get_pixmap(dpi=200).tobytes("png")
+                text = (pytesseract.image_to_string(Image.open(io.BytesIO(png)), lang=langs) or "").strip()
+                if text:
+                    out.append(f"## Page {page.number + 1}\n\n{text}")
+        return "\n\n".join(out).strip()
+    except Exception as e:  # noqa: BLE001 - a scan that will not read is a card, not a failed release
+        log.info("OCR did not read %s: %s", path, e)
+        return ""
 
 
 def body_of(path: str) -> str:
@@ -353,7 +409,12 @@ def body_of(path: str) -> str:
         log.info("markitdown did not convert %s: %s", path, e)
     # Nothing here could read it, and markitdown had nothing to say either (a legacy .doc gives an empty
     # answer rather than an error): let SharePoint lay it out as pages and read those.
-    return _via_pdf(path)
+    body = _via_pdf(path)
+    if body:
+        return body
+    # Still nothing: a scan, a photographed form, a drawing with a title block. Tesseract, where the
+    # server has it - this is the only way to the content of a document that has no text in it at all.
+    return _ocr(path)
 
 
 def heading_of(path: str) -> dict:
@@ -419,6 +480,7 @@ def write_beside(path: str, doc: dict | None = None) -> str | None:
     not only what it said. Returns where it was written, or None when there was nothing to write."""
     body, readable = body_of(path), True
     d = doc or {}
+    by_ocr = bool(body) and OCR.get("on") and _was_ocr(path, body)
     if not body:
         readable = False
         # A drawing, a scan, a picture, a CAD file: nothing to read, and until now nothing was written -
@@ -437,6 +499,8 @@ def write_beside(path: str, doc: dict | None = None) -> str | None:
             head.append(f"- {label}: {value}")
     if not readable:
         head.append("- Content: not readable (no text in this format)")
+    elif by_ocr:
+        head.append("- Content: read by OCR from a scan (the words may be imperfect)")
     head += [f"- File: {path}",
              f"- Written by the DMS: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC", "", "---", ""]
     target = path_for(path)

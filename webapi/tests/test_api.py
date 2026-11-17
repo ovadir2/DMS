@@ -4961,10 +4961,11 @@ def test_an_index_built_on_text_can_ask_for_text_only(tmp_path):
     assert len(text) < len(everything)
 
 
-def test_the_dms_says_before_the_approval_whether_a_file_becomes_text(tmp_path):
+def test_the_dms_says_before_the_approval_whether_a_file_becomes_text(tmp_path, monkeypatch):
     """Whether the AI will be able to read a document is decided by its kind, and that is known when it is
     uploaded - not after it is approved. The file list says so per row, and diagnostics says why."""
     import dms_api.markdown as md
+    monkeypatch.setitem(md.OCR, "on", False)              # without OCR: the kind alone decides
     assert md.can_read("x.docx")["readable"] and md.can_read("x.docx")["sure"]
     assert md.can_read("x.md")["readable"] and md.can_read("notes.txt")["readable"]
     assert not md.can_read("layout.png")["readable"] and md.can_read("layout.png")["sure"]
@@ -4972,10 +4973,45 @@ def test_the_dms_says_before_the_approval_whether_a_file_becomes_text(tmp_path):
     assert not md.can_read("part.step")["readable"] and not md.can_read("part.step")["sure"]
 
     c, sp, s, q, d, fs = _approved_env(tmp_path)
+    monkeypatch.setitem(md.OCR, "on", False)        # starting the app turned it on: this server has none
     (q / "Drawing.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     rows = c.get("/api/browse", params={"path": str(q)}).json()["files"]
-    by_name = {x["name"]: x for x in rows}
-    assert by_name["Drawing.png"]["willBeIndexed"] is False
+    assert {x["name"]: x for x in rows}["Drawing.png"]["willBeIndexed"] is False
     told = c.get("/api/diagnostics/file", params={"path": str(q / "Drawing.png")}).json()
     assert told["markdown"]["readable"] is False and told["markdown"]["sure"] is True
     assert "picture" in told["markdown"]["why"]
+
+    # with OCR on - what a server that has Tesseract runs - the same picture is worth trying
+    monkeypatch.setitem(md.OCR, "on", True)
+    rows = c.get("/api/browse", params={"path": str(q)}).json()["files"]
+    assert {x["name"]: x for x in rows}["Drawing.png"]["willBeIndexed"] is True
+    told = c.get("/api/diagnostics/file", params={"path": str(q / "Drawing.png")}).json()
+    assert told["markdown"]["sure"] is False and "OCR" in told["markdown"]["why"]
+
+
+def test_a_scan_is_read_by_ocr_when_the_server_has_it(tmp_path, monkeypatch):
+    """A scanned PDF has no text layer, and the RAG still needs what is in it. Where the server has
+    Tesseract (DMS_OCR=1) it is the last resort, after everything else came back empty - and the head says
+    the words were read by OCR, because they are not perfect and a reader should know."""
+    import dms_api.markdown as md
+    folder = tmp_path / "Current_ReadOnly"
+    folder.mkdir()
+    scan = folder / "Form Rev01.pdf"
+    scan.write_bytes(b"%PDF-1.4 a scan with no text layer")
+    import sys
+    monkeypatch.setattr(md, "_plain", lambda path: "")     # a scan: no text layer to read
+    monkeypatch.setattr(md, "_via_pdf", lambda path: "")
+    monkeypatch.setitem(sys.modules, "markitdown", None)   # nor anything else to read it with
+
+    monkeypatch.setitem(md.OCR, "on", False)             # off: the document is named, not quoted
+    card = open(md.write_beside(str(scan), {"documentId": "DMS-00050"}), encoding="utf-8").read()
+    assert "- Content: not readable" in card
+
+    monkeypatch.setitem(md.OCR, "on", True)              # on: Tesseract reads the pages
+    monkeypatch.setattr(md, "_ocr", lambda path: "## Page 1\n\nמספר שרטוט 12345\n\nREV 01")
+    read = open(md.write_beside(str(scan), {"documentId": "DMS-00050"}), encoding="utf-8").read()
+    assert "read by OCR" in read and "12345" in read and "not readable" not in read
+
+    assert md.can_read(str(scan))["readable"] and not md.can_read(str(scan))["sure"]
+    monkeypatch.setitem(md.OCR, "on", False)
+    assert md.can_read("layout.png")["readable"] is False

@@ -154,6 +154,9 @@ the workflow and blueprint folders stay out of reach either way.
 
 | Key | Default | What it does |
 | --- | --- | --- |
+| `DMS_OCR` | `1` | Read a scan with Tesseract when nothing else can: the last resort, after the DMS's own readers, markitdown and SharePoint's PDF all came back empty. It needs Tesseract installed beside the DMS (`pytesseract`, `Pillow`, `PyMuPDF`, and the language data); without them it quietly does nothing and the document gets a card. `0` turns it off |
+| `DMS_OCR_LANGUAGES` | `heb+eng` | The Tesseract language data installed on the server |
+| `DMS_OCR_MAX_PAGES` | `20` | Of one PDF: a three hundred page scan is not worth the wait |
 | `DMS_OTHER_CUSTOMER` | `Other_Share` | The folder of the customers list that takes anybody who is not a customer of their own: one-off recipients, suppliers, a person. A share goes to a folder of that list and nowhere else |
 | `DMS_CUSTOMERS_FOLDER` | `02_Customers` | The customers root |
 | `DMS_PROTECTED_DEPTH` | `2` | How deep the company structure is protected from rename and delete |

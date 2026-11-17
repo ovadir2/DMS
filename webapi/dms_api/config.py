@@ -75,6 +75,9 @@ class Settings:
     document_id_prefix: str = "DMS"
     register_cache_seconds: int = 30
     customers_folder: str = "02_Customers"  # under the root: one folder per customer
+    ocr: bool = True                        # read a scan with Tesseract when nothing else can (DMS_OCR=0 off)
+    ocr_languages: str = "heb+eng"          # the Tesseract language data installed on the server
+    ocr_max_pages: int = 20                 # of one PDF: a 300 page scan is not worth the wait
     other_customer: str = "Other_Share"     # the customer folder anybody who is not a customer is shared in
     client_root: str = ""                            # the root as other PCs open it (\\server\Shares, not e$)
     short_paths: dict = field(default_factory=dict)
@@ -183,6 +186,9 @@ class Settings:
             document_id_prefix=e("DMS_DOCUMENT_ID_PREFIX", "DMS"),
             register_cache_seconds=int(e("DMS_REGISTER_CACHE_SECONDS", "30")),
             customers_folder=e("DMS_CUSTOMERS_FOLDER", "02_Customers"),
+            ocr=e("DMS_OCR", "1").strip().lower() not in ("0", "false", "no", "off"),
+            ocr_languages=e("DMS_OCR_LANGUAGES", "heb+eng").strip() or "heb+eng",
+            ocr_max_pages=int(e("DMS_OCR_MAX_PAGES", "20") or 20),
             other_customer=e("DMS_OTHER_CUSTOMER", "Other_Share"),
             client_root=e("DMS_CLIENT_ROOT", ""),
             client_short_paths=_short_paths(e("DMS_CLIENT_SHORT_PATHS", "")),

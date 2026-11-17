@@ -399,6 +399,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     logger.info("DMS version %s", version)
     # The departments and folders this company really has, learned from the file server
     # (py -m dms_api.learn), are part of the structure too - not somebody's own folders.
+    markdown.OCR.update(on=s.ocr, languages=s.ocr_languages, max_pages=s.ocr_max_pages)
+    if s.ocr:
+        logger.info("OCR is on (%s, up to %d pages): a scan with no text of its own is read by Tesseract",
+                    s.ocr_languages, s.ocr_max_pages)
     learned = blueprint.learn(s.repository_root)
     if learned:
         logger.info("%d folder(s) of this company's own structure were read from %s", learned, blueprint.LEARNED)

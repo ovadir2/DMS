@@ -315,6 +315,16 @@ uploaded - not after it is approved:
   inside, and a scanned one gets a card. That is the only case the DMS cannot answer in advance, and it is
   the reason the card exists at all.
 
+### Everything that can become text, does
+
+The DMS tries, in this order, and stops at the first that answers: its own readers (Word, Excel, old
+`.xls`, PowerPoint, text), **markitdown** where IT installed it, **SharePoint's PDF** of the document (how
+a legacy `.doc` or `.ppt` still reaches the AI), and finally **OCR** (`DMS_OCR`, Tesseract on the server)
+for a scan that has no text in it at all. Only when all of them come back empty is a card written.
+
+A document read by OCR says so in its head - `Content: read by OCR from a scan (the words may be
+imperfect)` - so an answer built on it can be weighed accordingly.
+
 ### A file that cannot be Markdown
 
 A drawing, a scan, a picture, a CAD file - there is nothing to convert. The DMS writes a **card** beside it
