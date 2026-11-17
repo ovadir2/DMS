@@ -310,6 +310,16 @@ all the same: the document's id, its revision, its type, where it lives, and the
 is"* and point a person at it, and it never quotes text it does not have. `New-DmsMarkdown.ps1 -Write`
 fills in the cards for files released before this.
 
+An index of embeddings can do nothing with a card, so every row says `readable`, and **`readable=true`**
+leaves the cards out of the answer altogether:
+
+```
+GET /api/v1/approved-documents?ticket=...&format=ndjson&inline=true&readable=true
+```
+
+That is the call for the on-prem LLM. Ask without it when the answer is for a person, so the AI can still
+say a drawing exists and link to it.
+
 ### The container the RAG indexes
 
 There is no folder of copies anywhere, and there should not be: copies of 260 people's documents go stale

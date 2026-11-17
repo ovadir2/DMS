@@ -2499,6 +2499,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                                                "may carry with inline=true"),
                                all: bool = Query(False, description="Also the released files that have no "
                                                                     "Markdown of their own (a drawing, a picture)"),
+                               readable: bool = Query(False, description="Only documents with text in them - "
+                                                                          "an index built on an LLM has "
+                                                                          "nothing to do with a drawing's "
+                                                                          "card"),
                                format: str = Query("json", pattern="^(json|ndjson)$",
                                                    description="ndjson streams one document per line, so a "
                                                                "repository of thousands is read as it is "
@@ -2574,7 +2578,10 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                    "size": os.path.getsize(os.path.join(folder, n))
                                    if os.path.isfile(os.path.join(folder, n)) else 0} for n in group],
                         "folder": folder, "customer": of_customer,
-                        "hasMarkdown": bool(md)}
+                        "hasMarkdown": bool(md),
+                        # A card stands for a file with no text in it (a drawing, a scan): the AI can name
+                        # the document but there is nothing to read, so an index built on text skips it.
+                        "readable": bool(md) and not str(head.get("Content", "")).startswith("not readable")}
                 # What an index needs to do its work without a second call: where to fetch each file from
                 # (the DMS, with the same ticket), when it last changed, and a stamp that changes only when
                 # the file does - so a run that has seen it already can skip it.
@@ -2584,6 +2591,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                     continue          # an index asks for what changed since its last run, not for everything
                 if not md and not all:
                     continue          # the RAG reads the Markdown: a file without one is asked for by all=true
+                if readable and not item["readable"]:
+                    continue          # text only, for an index that can do nothing with a card
                 if q and q.lower() not in f"{item['DocID']} {item['DocName']} {item['DocFileName']}".lower():
                     continue
                 out.append(item)

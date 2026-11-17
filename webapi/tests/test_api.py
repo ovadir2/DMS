@@ -4937,3 +4937,25 @@ def test_a_file_with_no_text_is_still_known_to_the_ai(tmp_path):
     note.write_text("a real sentence", encoding="utf-8")
     plain = open(md.write_beside(str(note), {"documentId": "DMS-00043"}), encoding="utf-8").read()
     assert "not readable" not in plain and "a real sentence" in plain
+
+
+def test_an_index_built_on_text_can_ask_for_text_only(tmp_path):
+    """The company's AI reads text. A drawing's card says the document exists, which is worth having in an
+    answer to a person - and worth nothing to an index of embeddings, so one parameter leaves them out."""
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    cur = q / "Current_ReadOnly"
+    import dms_api.markdown as md
+    drawing = cur / "Layout Rev02.png"
+    drawing.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+    md.write_beside(str(drawing), {"documentId": "DMS-00042", "currentRevision": "02"})
+    s.api_keys = {"k": {"name": "rag", "scopes": ["documents"], "as": USER}}
+    key = {"X-DMS-Api-Key": "k"}
+
+    everything = c.get("/api/v1/approved-documents", headers=key).json()["documents"]
+    card = next(x for x in everything if x["DocFileName"] == "Layout Rev02.png")
+    assert card["hasMarkdown"] and not card["readable"]          # named, but there is nothing to read
+
+    text = c.get("/api/v1/approved-documents", headers=key, params={"readable": True}).json()["documents"]
+    assert all(x["readable"] for x in text)
+    assert not [x for x in text if x["DocFileName"] == "Layout Rev02.png"]
+    assert len(text) < len(everything)

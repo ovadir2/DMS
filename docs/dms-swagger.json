@@ -837,6 +837,18 @@
       }
      },
      {
+      "description": "Only documents with text in them - an index built on an LLM has nothing to do with a drawing's card",
+      "in": "query",
+      "name": "readable",
+      "required": false,
+      "schema": {
+       "default": false,
+       "description": "Only documents with text in them - an index built on an LLM has nothing to do with a drawing's card",
+       "title": "Readable",
+       "type": "boolean"
+      }
+     },
+     {
       "description": "ndjson streams one document per line, so a repository of thousands is read as it is built, at a flat memory cost on both sides",
       "in": "query",
       "name": "format",

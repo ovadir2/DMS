@@ -10,7 +10,7 @@ Four calls, and nothing else: ask for a ticket, read what is released, fetch wha
 | **The document** | `https://dms.rh.tech/api/openapi.json`, and `dms-swagger.json` beside this file, to generate a client without reaching the server |
 | **The rest of it** | WidgetBuilder's publish call: `08-WidgetBuilder-Contract.md`. The search, the page key and the AI's guide: `09-Machine-API.md`. The DMS page's own ~80 endpoints: `/api/openapi-all.json` |
 
-Written from DMS 228ff00.
+Written from DMS d59103f.
 
 ## How a caller is known
 
@@ -68,6 +68,7 @@ know is read from the Markdown's own first lines, which the DMS wrote when it ma
 | `inline` | query | no | boolean | Carry the Markdown itself in the answer, so an index needs no second call per document (a few KB each, and a budget it stops at) |
 | `budget` | query | no | integer | How many characters of Markdown this answer may carry with inline=true |
 | `all` | query | no | boolean | Also the released files that have no Markdown of their own (a drawing, a picture) |
+| `readable` | query | no | boolean | Only documents with text in them - an index built on an LLM has nothing to do with a drawing's card |
 | `format` | query | no | string | ndjson streams one document per line, so a repository of thousands is read as it is built, at a flat memory cost on both sides |
 | `manifest` | query | no | boolean | Only the shape of the answer - how many documents, how many bytes, and the tag of the whole set - so an index knows in one cheap call whether anything changed |
 
