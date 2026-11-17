@@ -302,6 +302,19 @@ binary, with the headings, the lists and the tables kept. So:
 - the document itself (`url`) is for a person who asks to open it, or for a format with no Markdown - a
   drawing, a scan - and then only when `all=true` said it is there.
 
+### Knowing before the approval
+
+Whether the AI will be able to read a document is decided by its kind, and that is known the moment it is
+uploaded - not after it is approved:
+
+- every row of the file list carries `willBeIndexed`;
+- `/api/diagnostics/file?path=...` answers `markdown: {ext, readable, sure, why, file}` - what will be
+  written beside it when it is released, and why;
+- `markdown.can_read()` is the one rule behind both. A picture is certainly not text; a `.docx`, `.xlsx`,
+  `.txt` or `.md` certainly is; a PDF or an old `.doc` is the uncertain case - it depends on what is
+  inside, and a scanned one gets a card. That is the only case the DMS cannot answer in advance, and it is
+  the reason the card exists at all.
+
 ### A file that cannot be Markdown
 
 A drawing, a scan, a picture, a CAD file - there is nothing to convert. The DMS writes a **card** beside it

@@ -4959,3 +4959,23 @@ def test_an_index_built_on_text_can_ask_for_text_only(tmp_path):
     assert all(x["readable"] for x in text)
     assert not [x for x in text if x["DocFileName"] == "Layout Rev02.png"]
     assert len(text) < len(everything)
+
+
+def test_the_dms_says_before_the_approval_whether_a_file_becomes_text(tmp_path):
+    """Whether the AI will be able to read a document is decided by its kind, and that is known when it is
+    uploaded - not after it is approved. The file list says so per row, and diagnostics says why."""
+    import dms_api.markdown as md
+    assert md.can_read("x.docx")["readable"] and md.can_read("x.docx")["sure"]
+    assert md.can_read("x.md")["readable"] and md.can_read("notes.txt")["readable"]
+    assert not md.can_read("layout.png")["readable"] and md.can_read("layout.png")["sure"]
+    assert md.can_read("scan.pdf")["readable"] and not md.can_read("scan.pdf")["sure"]   # depends on it
+    assert not md.can_read("part.step")["readable"] and not md.can_read("part.step")["sure"]
+
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    (q / "Drawing.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    rows = c.get("/api/browse", params={"path": str(q)}).json()["files"]
+    by_name = {x["name"]: x for x in rows}
+    assert by_name["Drawing.png"]["willBeIndexed"] is False
+    told = c.get("/api/diagnostics/file", params={"path": str(q / "Drawing.png")}).json()
+    assert told["markdown"]["readable"] is False and told["markdown"]["sure"] is True
+    assert "picture" in told["markdown"]["why"]

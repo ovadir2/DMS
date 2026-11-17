@@ -603,6 +603,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 "adWrite": user.can(full, "write"), "mayWrite": may_write(user, full),
                 "bridge": review_on(), "checkedOut": st,
                 "checkedOutFile": os.path.join(s.repository_root, checkout.FILE),
+                # what will happen to it when it is approved: text for the AI, or a card naming it
+                "markdown": {**markdown.can_read(full),
+                             "file": markdown.path_for(full, existing=True) or markdown.path_for(full)},
                 "lastSharePointError": last_sp_error()}
 
     @app.post("/api/blueprint/learn")
@@ -915,6 +918,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             # Why this file cannot be opened for editing, whichever way the DMS opens files here. The page
             # prints it where the pencil would have been: a greyed command with no reason is the slowest
             # thing in this pilot.
+            f["willBeIndexed"] = markdown.can_read(f["path"])["readable"]
             if not f.get("editable"):
                 doc = f.get("document") or {}
                 f["editWhy"] = (

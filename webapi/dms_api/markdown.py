@@ -289,6 +289,34 @@ def _via_pdf(path: str) -> str:
             pass
 
 
+# What the DMS can turn into text, by the file's kind. The answer for one file is only certain once it has
+# been tried - a scanned PDF has a convertible name and no text in it at all - but the kind is known before
+# anything is approved, which is what a person wants to be told when they upload.
+TEXT_KINDS = (".docx", ".docm", ".doc", ".xlsx", ".xlsm", ".xls", ".pptx", ".pptm", ".pdf",
+              ".txt", ".csv", ".md", ".json", ".xml", ".htm", ".html", ".log", ".ini", ".cfg",
+              ".yml", ".yaml", ".rtf")
+PICTURE_KINDS = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".svg", ".ico", ".webp")
+
+
+def can_read(path: str) -> dict:
+    """Before anything is approved: can this kind of file become text, and what to say if it cannot.
+
+    `sure` is true where the kind decides it on its own - a picture has no text, a .txt is nothing but.
+    A PDF or an old Word file is the uncertain case: it depends on what is inside, and the DMS only knows
+    once it has tried, which is when the card is written instead."""
+    ext = os.path.splitext(path)[1].lower()
+    if ext in PICTURE_KINDS:
+        return {"ext": ext, "readable": False, "sure": True,
+                "why": "a picture has no text in it: the AI will know the document exists and point at it"}
+    if ext in (".pdf", ".doc", ".ppt"):
+        return {"ext": ext, "readable": True, "sure": False,
+                "why": "depends on what is inside: a scanned one has no text, and gets a card instead"}
+    if ext in TEXT_KINDS:
+        return {"ext": ext, "readable": True, "sure": True, "why": "this kind becomes Markdown"}
+    return {"ext": ext or "(no extension)", "readable": False, "sure": False,
+            "why": "the DMS does not know this kind: it will try, and write a card if nothing comes back"}
+
+
 def body_of(path: str) -> str:
     """The document as Markdown, or an empty string when this kind of file has nothing to read.
 
