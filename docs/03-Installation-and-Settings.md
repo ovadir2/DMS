@@ -1,6 +1,6 @@
 # 03 - Installation and settings
 
-Everything needed to put the DMS on a server, and every setting it reads. The pilot was installed this way;
+Everything needed to put the DMS on a server, and every setting it reads. The DMS was installed this way;
 The same steps install it again elsewhere; nothing here is particular to one server.
 
 ---
@@ -19,7 +19,7 @@ The web service is the only thing with rights on the file server. Everyone else 
 ## 2. Before you start
 
 - A Windows server that can see the repository, with **IIS**, **HttpPlatformHandler** and **Python 3.11+**.
-- An account for the DMS to run as: a domain account or a gMSA (the pilot runs as `RH\gmsa-dms-pilot$`).
+- An account for the DMS to run as: a domain account or a gMSA (here: `RH\gmsa-dms-pilot$`, which keeps the name it was created with).
   It needs **Modify** on the repository; nobody else needs write access on `Current_ReadOnly`.
 - **PowerShell 7.4+** and `Install-Module PnP.PowerShell` on the machine that provisions SharePoint.
 - An **Entra app registration** for the DMS, with a certificate, and `Sites.Selected` granted on each site -
@@ -41,7 +41,7 @@ answers `403 UnauthorizedAccessException`), so make them by hand on the control 
 - **`Approvals`** - the copy a person edits while a document is being approved.
 - **`Views`** - was the copy people read; since the DMS fetches the PDF and deletes the copy at once, it stays
   empty. Keep it, with **no standing permissions on it at all**: a standing permission beats the "view" in a
-  sharing link, which is how a reading copy became editable in the pilot.
+  sharing link, which is how a reading copy once became editable.
 
 ## 4. The file server
 
@@ -110,7 +110,7 @@ Later, whenever somebody has been working on the file server directly:
 The DMS shows those commands where AD lets that person write. Open, signed in as them:
 
 ```
-https://dms-pilot.rh.tech/api/diagnostics/access?path=02_Customers\Customer_A
+https://dms.rh.tech/api/diagnostics/access?path=02_Customers\Customer_A
 ```
 
 It says what Windows answered for them on that folder, bit by bit, what the DMS asked for, and whether the
@@ -238,9 +238,9 @@ the workflow and blueprint folders stay out of reach either way.
 | `New-DmsApiDocs.ps1` | Writes `docs/10-Swagger.md` from the API itself - run it after adding or changing an endpoint |
 | `Open-DmsSwagger.ps1` | Checks that the DMS answers its OpenAPI document and opens Swagger UI (`-Redoc`, `-NoOpen`) |
 | `Test-DmsSmoke.ps1` | The whole walk against the installation that is really running, as the person it is told to run as, saying which requirement each step proves. It works with real files from `scripts\samples` - a Word procedure, a workbook under the same name, a PDF drawing and a text note - so Word, Excel, PDF, text, View and the Markdown are all exercised; `-Clean` removes it. `-Delegate <someone@rh.co.il>` adds the step that passes an approval on (it needs a third person); `-ShareWith <address> -ShareCustomer <folder>` adds the share outside the company, which really goes out. Every run writes the whole walk, line by line, to `%TEMP%\DMS-Smoke <date>.txt` (`-Report` puts it elsewhere) |
-| `Reset-DmsPilotData.ps1` | Clears what the pilot was played with - the SharePoint lists and libraries, and the file server back to the blueprint. Says what it would do; `-Write` does it |
+| `Reset-DmsPilotData.ps1` | Clears what was played with before go-live - the SharePoint lists and libraries, and the file server back to the blueprint. Says what it would do; `-Write` does it |
 | `Rename-DmsToProduction.ps1` | The rename in one command: the `.env` lines, the IIS names, the restart and the readiness check. Says what it would do; `-Write` does it |
-| `Move-DmsFolder.ps1` | Renames the installation folder (`C:\DMS-Pilot` → `C:\DMS`) and repoints IIS, `web.config` and what else names it |
+| `Move-DmsFolder.ps1` | Renames the installation folder (the DMS runs from `C:\DMS-Pilot`, which kept its name) and repoints IIS, `web.config` and what else names it |
 | `Update-DmsBlueprint.ps1` | Learns the departments and folders this company really has, so they count as the structure (grey, kept, with their KPIs folder) |
 | `Set-DmsKpiKeyAccess.ps1` | Lets `/api/kpi` answer a page the DMS serves into a sandbox (it has no sign-in to send; the key in its address is what authorizes it) |
 | `Compare-DmsTree.ps1` | What the DMS shows against what is on the disk |

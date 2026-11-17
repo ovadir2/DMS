@@ -126,7 +126,7 @@ approved copy - and never assume a path outside its own folder.
 
 ## Generating a client
 
-`https://dms-pilot.rh.tech/api/openapi.json` is the OpenAPI document of the whole DMS, and
+`https://dms.rh.tech/api/openapi.json` is the OpenAPI document of the whole DMS, and
 `docs/dms-swagger.json` in the DMS repository is the same thing offline. `/dms/api-docs` shows it in Swagger
 UI - put the key in the Authorize box (`X-DMS-Api-Key`) and the publish call can be tried from the page.
 

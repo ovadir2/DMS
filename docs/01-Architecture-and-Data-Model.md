@@ -2,7 +2,7 @@
 
 Source: IT-DOC-BP-001 v1.0, sections 3, 4, 6.3, 8 and 9.
 
-> **As built.** This document is the design. What the pilot runs differs in one important way, described
+> **As built.** This document is the design. What the DMS runs differs in one important way, described
 > here and in [11 - Project Context](11-Project-Context.md): approvals, reading and editing happen through the
 > DMS page and a SharePoint bridge, not through Power Apps and the File System connector.
 

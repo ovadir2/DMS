@@ -12,19 +12,19 @@ cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root
 
 It opens `http://localhost:8080/dms/dms-page?lang=EN` on your real folders, with a temporary in-memory register instead of SharePoint and no AD checks (you are the only user). Approve or reject in **My workflows** (the yellow test buttons) instead of Teams. Uploads, renames and deletes are real changes in `-Root`, so use the test share. Add `-Lang HE` for Hebrew. AI Insights uses the RH AI (`chat.ai.rh-global.com`) and the QMS tool by default, when the PC can reach them; otherwise the search works by keywords.
 
-## Live pilot on your PC (real SharePoint, real approvals)
+## Running it live on your PC (real SharePoint, real approvals)
 
 ```powershell
 cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C
 ```
 
-- Your real folders, the real Document Register and Control Audit on `DocumentControl-TEST`, and the real approval flow: submitting from the page sets the status, and DC-P1 sends the approvals to Teams.
+- Your real folders, the real Document Register and Control Audit on `DocumentControl`, and the real approval flow: submitting from the page sets the status, and DC-P1 sends the approvals to Teams.
 - A browser window opens once to sign in to SharePoint, with the Entra app you use for PnP (`$C`). The token is cached in `%LOCALAPPDATA%\DMS`. You are the DMS user (no AD checks on the PC). To test other users and AD: add `-Users user1@rh.co.il,user2@rh.co.il` (an "Acting as" list on the page). In the pilot every user's AD / NTFS access to `$Root` is checked, the `-Admins` are not (`-NoAdCheck` turns it off).
 - The Workflow Service file moves run inside the page service every 60 seconds (Submitted -> `Submitted`, Approved -> `Current_ReadOnly`, Rejected -> back). **My workflows > Move files now** runs them at once.
 - **Approvals on the page** (default `-Approvals page`): the header shows **Approvals** with the number waiting; approvers approve (optional comment) or reject (comment required) by the DC-P1 rules (Approver Matrix: every mandatory approver, then the final approver). Turn **DC-P1 Off** in Power Automate for the pilot. `-Approvals flow` keeps the approvals in Teams.
 - **Notifications:** with page approvals, each step is written to the **DMS Notifications** list and sent by email and Teams by the DC-P2 flow (`scripts/New-DmsNotifyFlowPackage.ps1`). The links open the page on Approvals (`?view=approvals`) or My workflows (`?view=workflows`). `DMS_NOTIFY=0` turns them off.
 - `-Admins` (default `roneno@rh.co.il`) are DMS super users: they may submit any document, decide any approval stage and see **All workflows** and **All pending approvals**.
-- For one person to approve everything during the pilot, use the ⋮ menu's **Acting as** list (`-Users`) and the `-Admins` super users: a super user may decide any approval stage.
+- For one person to approve everything while trying it, use the ⋮ menu's **Acting as** list (`-Users`) and the `-Admins` super users: a super user may decide any approval stage.
 
 
 ### Let the approvers try it (from their PCs)
@@ -120,7 +120,7 @@ The DMS looks and works like the file explorer people already know, so there is 
 | **My workflows** (header): every document the user owns or registered/submitted, with counts per status (Working, Submitted, Approved, Rejected - back to you), days waiting, the last decision with the approver's comment, and the full history | `GET /api/my-workflows` | The user's own workflows only. Built from the Document Register and Control Audit |
 | Submit (or resubmit after a rejection or a withdraw) | `POST /api/documents/{id}/submit` | Owner or super user. The dialog preselects the approvers chosen last time (`GET /api/documents/{id}/approvers`); untick to go back to the Approver Matrix |
 | Withdraw | `POST /api/documents/{id}/withdraw` | The file returns from `Submitted` to its place at once, under its own name |
-| **Approvals** (header, pilot `DMS_APPROVALS=page`): documents waiting for the user's approval, with stage, who approved, days waiting; Approve / Reject with comment | `GET /api/approvals`, `POST /api/approvals/{id}` | Only the pending approvers of the current stage (Approver Matrix or chosen approvers), or a super user, who sees every pending approval by default. A type with no Matrix rule goes to the super users. Each decision is a Control Audit row |
+| **Approvals** (header, `DMS_APPROVALS=page`): documents waiting for the user's approval, with stage, who approved, days waiting; Approve / Reject with comment | `GET /api/approvals`, `POST /api/approvals/{id}` | Only the pending approvers of the current stage (Approver Matrix or chosen approvers), or a super user, who sees every pending approval by default. A type with no Matrix rule goes to the super users. Each decision is a Control Audit row |
 | **⇄ Delegate** (Approvals): someone else approves instead, chosen from the RH users, with a note | `POST /api/approvals/{id}/delegate` | The approver, or a super user for any waiting approver. Valid `DMS_DELEGATION_DAYS` working days (default 3, weekend `DMS_WEEKEND=fri,sat`), then it returns to the approver. Logged in the Delegations list and in Control Audit; the delegate is notified |
 | **AI Insights** (header): **Ask** the RH AI, or **📚 QMS** (the QMS RAG of the AI portal) | `POST /api/ai/ask`, `POST /api/ai/rag` | See below |
 | **🩺 SharePoint check** (super users, ⋮ menu): each DMS list (exists, items, may this account add), notifications status, the last notifications, **Send me a test notification**, the last SharePoint errors | `GET /api/diagnostics/sharepoint`, `POST /api/diagnostics/notify-test` | Read only, except the test row |
@@ -156,7 +156,7 @@ Settings (`.env`, on-prem, no token): `DMS_AI_URL`, `DMS_AI_PATH`, `DMS_AI_UPLOA
 
 ## Installation guide (step by step)
 
-Two ways to run the DMS. **A** is the pilot on one PC (what runs today). **B** is the production install on a Windows server for all users. Do the steps in order; each ends with a check.
+Two ways to run the DMS. **A** is one PC, for trying it or developing on it. **B** is the production install on a Windows server for all users. Do the steps in order; each ends with a check.
 
 ### Before you start (both)
 
@@ -165,10 +165,10 @@ Two ways to run the DMS. **A** is the pilot on one PC (what runs today). **B** i
 | Git and Python 3.11+ (`py` launcher) on the PC or server | IT | `py --version` |
 | PnP PowerShell 2.x and an Entra app for PnP (`$C`, its Client ID) | M365 admin | Used by the scripts in `scripts\` |
 | The repository share `$Root` (e.g. `\\FILE-SERVER\Corporate_Data_TEST`) | IT | The DMS account needs **Modify** on it |
-| SharePoint sites `DocumentControl-TEST` and `LargeFileExchange-TEST` | M365 admin | Created by step 2 below if missing |
+| SharePoint sites `DocumentControl` and `LargeFileExchange` | M365 admin | Created by step 2 below if missing |
 | Power Automate, Standard license | each flow owner | DC-P2 uses Standard connectors only |
 
-### A. Pilot on a PC (live, your own sign-in)
+### A. On a PC (live, your own sign-in)
 
 1. **Get the code**
    ```powershell
@@ -176,7 +176,7 @@ Two ways to run the DMS. **A** is the pilot on one PC (what runs today). **B** i
    cd C:\dms\webapi; py -m venv .venv; .\.venv\Scripts\pip install -r requirements.txt
    ```
    Check: `.\.venv\Scripts\python -c "import dms_api"` prints nothing.
-2. **SharePoint lists** (once per site): `..\scripts\Provision-DMS.ps1 -TenantName rhisrael -ClientId $C -OwnerUpn <you> -Language he` creates Document Register, Control Audit, Approver Matrix, Approval Decisions and Delegations with their views. Then `..\scripts\New-DmsNotifyFlowPackage.ps1 -TenantName rhisrael -ClientId $C -DocControlSiteAlias DocumentControl-TEST` creates **DMS Notifications** and the DC-P2 flow package.
+2. **SharePoint lists** (once per site): `..\scripts\Provision-DMS.ps1 -TenantName rhisrael -ClientId $C -OwnerUpn <you> -Language he` creates Document Register, Control Audit, Approver Matrix, Approval Decisions and Delegations with their views. Then `..\scripts\New-DmsNotifyFlowPackage.ps1 -TenantName rhisrael -ClientId $C -DocControlSiteAlias DocumentControl` creates **DMS Notifications** and the DC-P2 flow package.
    Check: the lists appear in Site contents.
 3. **Notifications flow:** Power Automate › My flows › Import › Import package (legacy) › the zip from step 2 › connect SharePoint, Outlook and Teams › Import. Open **DC-P2 Pilot Notifications** › **Turn on**. Keep only one copy. Turn **DC-P1 Off** (the pilot approves on the page).
    Check: the flow shows *On*.
@@ -193,7 +193,7 @@ Two ways to run the DMS. **A** is the pilot on one PC (what runs today). **B** i
    Check: share an approved test file with your own external address; the invitation arrives and `02_Customers\<Customer>\Shared\DMS-Shared-Log.csv` gets a row.
 8. **Bookmarks for users:** Chrome › Bookmarks › Import › `docs\RH-DMS-Bookmarks.html`.
 
-**Update the pilot:** `cd C:\dms; git pull`, then stop the DMS (Ctrl+C) and start it again (step 5). A change in the page only needs Ctrl+F5 in the browser.
+**Update that PC:** `cd C:\dms; git pull`, then stop the DMS (Ctrl+C) and start it again (step 5). A change in the page only needs Ctrl+F5 in the browser.
 
 ### B. Production on a Windows server (IIS, all users)
 

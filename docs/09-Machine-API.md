@@ -33,7 +33,7 @@ that a wrong key says nothing about how wrong it was.
 
 ```http
 GET /api/v1/customers HTTP/1.1
-Host: dms-pilot.rh.tech
+Host: dms.rh.tech
 X-DMS-Api-Key: kR7...
 ```
 
@@ -401,7 +401,7 @@ Scope `kpi`. One call, one KPI of one department: the built page and the data be
 | `files` | the files themselves, repeated - the page and its data |
 
 ```
-curl -X POST https://dms-pilot.rh.tech/api/v1/kpi/publish ^
+curl -X POST https://dms.rh.tech/api/v1/kpi/publish ^
   -H "X-DMS-Api-Key: <key>" ^
   -F "department=Production" -F "kpi=Yield" ^
   -F "files=@Yield.html" -F "files=@Yield.json"
@@ -439,7 +439,7 @@ would, and a key that names no account is refused. Publishing is the only thing 
 
 ## Swagger
 
-`https://dms-pilot.rh.tech/dms/api-docs` is the whole API to read and to try, grouped by who calls it, with
+`https://dms.rh.tech/dms/api-docs` is the whole API to read and to try, grouped by who calls it, with
 the three ways in (Windows, the page key, an application key) in its Authorize box. `/dms/api-redoc` reads
 the same document, and `/api/openapi.json` is the document itself - generate a client from it, or from the
 copy in the repository, `docs/dms-swagger.json`. Swagger UI's own files come from jsdelivr, so the browser

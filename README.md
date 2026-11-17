@@ -22,7 +22,7 @@ Implementation of **IT-DOC-BP-001 "Enterprise Document Control and Large-File Ex
 | [`docs/02-Security-and-Permissions.md`](docs/02-Security-and-Permissions.md) | AD AGDLP groups, NTFS matrix, SharePoint groups and permission levels, lifecycle permission matrix, tenant hardening, dynamic-approver policy |
 | [`docs/03-Installation-and-Settings.md`](docs/03-Installation-and-Settings.md) | How the DMS is installed on a server, what to run afterwards, and every key in `webapi\.env` with what it does |
 | [`docs/04-Using-the-DMS.md`](docs/04-Using-the-DMS.md) | The process end to end: the page, the approval, how files move, who does what, and a walk through it with one super user |
-| [`docs/05-Approval-Flow.md`](docs/05-Approval-Flow.md) | Pilot approval flow as a diagram, plus the editable Hebrew deck [`docs/presentations/DMS-Approval-Flow.pptx`](docs/presentations/DMS-Approval-Flow.pptx) |
+| [`docs/05-Approval-Flow.md`](docs/05-Approval-Flow.md) | The approval flow as a diagram, plus the editable Hebrew deck [`docs/presentations/DMS-Approval-Flow.pptx`](docs/presentations/DMS-Approval-Flow.pptx) |
 | [`docs/06-Localization-Hebrew.md`](docs/06-Localization-Hebrew.md) | Language rules, EN/HE notification templates, app labels, Hebrew executive summary |
 | [`docs/07-KPI-Integration.md`](docs/07-KPI-Integration.md) | KPIs and dashboards: where a KPI package lives, how a page of the repository runs and reads its data, and how the WidgetBuilder publishes |
 | [`docs/08-WidgetBuilder-Contract.md`](docs/08-WidgetBuilder-Contract.md) | What the WidgetBuilder sends the DMS and gets back: its key, the departments, publishing a KPI, and what its page may do at runtime |
@@ -81,7 +81,7 @@ After `Provision-DMS.ps1`, run `scripts/Connect-DmsGroups.ps1`. It creates the E
 
 The on-premises repository tree (docs/01 §4) is built by `scripts/New-DmsFileServerTree.ps1`: the root folders, the 20 management areas and the full customer/project tree from blueprint Appendix A, and per document the `Working / Submitted / Current_ReadOnly / Obsolete_ReadOnly` folders. `-CreateAdGroups` creates the `DL_FS_*` groups and `-ApplyAcl` sets the NTFS permissions from docs/02 §3.2. `-DocumentParent` places a controlled document inside a project folder (e.g. `Development\02_SOW`). It supports `-WhatIf`.
 
-For the pilot, `scripts/New-DmsPilotFlowPackage.ps1` builds `scripts/out/DC-P1-PilotApproval.zip`, a ready-made approval flow (Document Register status "Submitted" → mandatory approvers → final approver → status + Control Audit row). Import it in Power Automate with **My flows > Import > Import Package (Legacy)**.
+`scripts/New-DmsPilotFlowPackage.ps1` builds `scripts/out/DC-P1-PilotApproval.zip`, a ready-made approval flow (Document Register status "Submitted" → mandatory approvers → final approver → status + Control Audit row). Import it in Power Automate with **My flows > Import > Import Package (Legacy)**.
 
 The on-prem side of the approval runs inside the DMS itself (`webapi/dms_api/file_service.py`, `DMS_FILE_SERVICE_SECONDS`): it moves each document's file to match its status, Submitted → `Submitted` (read-only), Approved → `Current_ReadOnly` (the previous revision → `Obsolete_ReadOnly`, the path and SHA-256 written back to the register), rejected → back to `Working`. Every move writes a Control Audit row.
 
@@ -103,15 +103,15 @@ The on-prem side of the approval runs inside the DMS itself (`webapi/dms_api/fil
 | 6 | Integration server: Transfer Worker + Workflow Service scheduled tasks | 6 | 04 §5 |
 | 7 | Assign people in Approver Matrix / Impact Routing, fill Routing Catalog | - | 01 §7 |
 | 8 | Solution `RH Document Control`: connection references, environment variables, flows | 7 | 04 |
-| 9 | Canvas apps, pilot group share | 8 | 03 |
-| 10 | External onboarding, pilot, production | 9-10 | blueprint 13 |
+| 9 | Canvas apps, first group share | 8 | 03 |
+| 10 | External onboarding, go-live | 9-10 | blueprint 13 |
 
 ## Requirements, and whether they are met
 
 This is the specification of the system as it stands: every requirement the DMS answers, where it came
-from, and how it is met. The blueprint's own requirements came first; the rest were asked for on the pilot,
+from, and how it is met. The blueprint's own requirements came first; the rest were asked for while it was being used,
 by the people using it, and each row is the rule that came out of a real day's work. **Checked** means it
-was tried on the pilot and behaved as written; **built** means it is in the product but nobody has put it
+was tried on the running DMS and behaved as written; **built** means it is in the product but nobody has put it
 through its paces yet. What was asked for and is not there yet has a table of its own, below.
 
 ### From the blueprint
@@ -122,14 +122,14 @@ through its paces yet. What was asked for and is not there yet has a table of it
 | REQ-03, REQ-16 | Access by AD groups | AGDLP groups, SharePoint groups backed by Entra groups (02) | Checked |
 | REQ-04, REQ-05 | Control modes per document | `ControlMode`: Collaboration / Workflow Optional / Workflow Required / Read-Only Record | Checked |
 | REQ-06 | Approvers per document and revision | Approver Matrix + Impact Routing + approvers chosen per submission, validated on the server | Checked |
-| REQ-07 | Approvals without attachments | Approvals on the DMS page (pilot) or Teams Approvals; the file never travels | Checked |
+| REQ-07 | Approvals without attachments | Approvals on the DMS page or Teams Approvals; the file never travels | Checked |
 | REQ-08, REQ-09, REQ-10 | Large-file exchange with customers | A separate site, a folder per customer, guest invitation by the DMS account, share log | Checked |
 | REQ-11, REQ-12, REQ-13 | Malware gate, backup, retention | CrowdStrike gate (EX-06), Veeam scope, `RetentionClass` | Built |
 | REQ-14 | Audit and history | Indexed metadata, append-only Control Audit and Approval Decisions, version history | Checked |
 | REQ-15 | PLM / Priority references | Reference columns and the `ReleaseToPLMQueue` manifest (DC-10) | Built |
 | REQ-17 | No attachments anywhere | Attachments disabled on every list; moves through the file service | Checked |
 
-### What the pilot demanded
+### What using it demanded
 
 | Req | What it asks for | How it is met | Status |
 | --- | --- | --- | --- |

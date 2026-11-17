@@ -2,7 +2,7 @@
 
 How a document goes from a file on the file server to an approved, read-only version, through the **RH - Documents Management System** page (`webapi/`), the approval flow **DC-P1** and the Workflow Service. It also covers the pilot test with one super user.
 
-> **As built.** This describes the pilot as it was designed. The process is the same, but reading, editing
+> **As built.** This describes the DMS as it was designed. The process is the same, but reading, editing
 > and approving now work as [11 - Project Context](11-Project-Context.md) describes - a PDF the DMS serves
 > and deletes, one editing copy in SharePoint, and a document that comes back when it is closed.
 
@@ -18,16 +18,16 @@ Related: [07 - Approval Flow](05-Approval-Flow.md) (the flow inside Power Automa
 | Drive letters and Open | Each PC (`scripts/Set-DmsDrives.ps1`) | G: / R: for short paths, and the `rh-dms:` handler so Open and Edit work from the page |
 | Document Register | SharePoint `DocumentControl` site | One record per controlled document: ID, type, status, owner, paths, SHA-256 |
 | Approver Matrix | SharePoint | Who approves each document type (mandatory approvers, final approver) |
-| Approvals | DMS page (what the pilot runs; no Power Automate needed) or DC-P1 in Power Automate, where a site has it | Stage 1 mandatory approvers, stage 2 final approver from the Approver Matrix; sets the result and writes each decision to Control Audit |
-| Workflow Service | DMS server (inside the page service in the pilot) | Moves the file to match its status, sets read-only, writes the path and SHA-256 back |
+| Approvals | DMS page (what the DMS runs; no Power Automate needed) or DC-P1 in Power Automate, where a site has it | Stage 1 mandatory approvers, stage 2 final approver from the Approver Matrix; sets the result and writes each decision to Control Audit |
+| Workflow Service | DMS server (inside the page service) | Moves the file to match its status, sets read-only, writes the path and SHA-256 back |
 | Control Audit | SharePoint | Every event: registered, submitted, approved/rejected, file moved |
 | AI Insights | RH on-prem LLM (`chat.ai.rh-global.com`) | Answers about a document, finds files the user is allowed to see |
 
 ## 2. The process
 
-![DMS pilot - end to end](presentations/DMS-Pilot-E2E.svg)
+![The DMS - end to end](presentations/DMS-Pilot-E2E.svg)
 
-**Pilot: everything on the DMS page.** In the pilot the approvers approve or reject on the page itself (**Approvals**), by the same rules as DC-P1: the Approver Matrix rule of the document type, stage 1 = every mandatory approver, stage 2 = the final approver. In stage 1 every approver answers (approve, or return with remarks); when all answered and someone returned it, the document goes back to the owner with everyone's remarks. DC-P1 is turned **Off** for the pilot, so nothing is sent to Teams twice. In production the same steps run with DC-P1 and Teams (`DMS_APPROVALS=flow`).
+**Everything on the DMS page.** The approvers approve or reject on the page itself (**Approvals**), by the same rules as DC-P1: the Approver Matrix rule of the document type, stage 1 = every mandatory approver, stage 2 = the final approver. In stage 1 every approver answers (approve, or return with remarks); when all answered and someone returned it, the document goes back to the owner with everyone's remarks. DC-P1 is turned **Off** for the pilot, so nothing is sent to Teams twice. In production the same steps run with DC-P1 and Teams (`DMS_APPROVALS=flow`).
 
 ```mermaid
 flowchart TB
@@ -80,7 +80,7 @@ The DocumentControl site is never shared. Only approved documents can be shared,
 
 **Remarks in the file:** while a document is in approval, the owner and the approvers can open the submitted file for editing (**✎ Open to edit (remarks)** in Approvals and in My workflows) and add comments or tracked changes in Word / Excel. Every approve or reject records the file's SHA-256 in Control Audit, so it is known exactly which content each decision was made on; on approval the file as it is then becomes the current revision. `DMS_SUBMITTED_EDITABLE=false` (and `-SubmittedEditable $false` for the workflow service script) locks the submitted file again.
 
-**Pilot (on the page):** the header shows **Approvals** with the number waiting. The list shows each document, its owner, type, stage, who already approved and how long it waits, with Open, Download and ✦ AI to read it, and **Approve** (optional comment) / **Return with remarks** (remarks required). Stage 1: every mandatory approver answers; each can open the file (✎ Open to edit), add tracked changes and comments, and return it, and the list shows the remarks given so far. The cycle ends when all of them answered: all approved → stage 2 (the final approver); anyone returned it → back to the owner (Returned with remarks) with all the remarks together. The owner reviews and accepts the changes in the file and clicks **Submit** again (the same approvers are preselected). In stage 2 a return goes back to the owner at once. A DMS super user can decide any stage (recorded as "super user") and see **All pending approvals**.
+**On the page:** the header shows **Approvals** with the number waiting. The list shows each document, its owner, type, stage, who already approved and how long it waits, with Open, Download and ✦ AI to read it, and **Approve** (optional comment) / **Return with remarks** (remarks required). Stage 1: every mandatory approver answers; each can open the file (✎ Open to edit), add tracked changes and comments, and return it, and the list shows the remarks given so far. The cycle ends when all of them answered: all approved → stage 2 (the final approver); anyone returned it → back to the owner (Returned with remarks) with all the remarks together. The owner reviews and accepts the changes in the file and clicks **Submit** again (the same approvers are preselected). In stage 2 a return goes back to the owner at once. A DMS super user can decide any stage (recorded as "super user") and see **All pending approvals**.
 
 **Delegate:** in Approvals, **⇄ Delegate** passes the approval to someone else (from the RH users, with a note) for **3 working days** (Sunday to Thursday; `DMS_DELEGATION_DAYS`, `DMS_WEEKEND`). The delegate sees it in Approvals and is notified; after the last day it returns to the original approver. A super user can delegate for any waiting approver (**On behalf of**). Each delegation is a row in the **Delegations** list (delegator, delegate, from, to, reason, who) and a Control Audit row `Delegated: a -> b (until dd/mm/yyyy)`.
 
@@ -88,7 +88,7 @@ A document type with no Approver Matrix rule goes to the DMS super users.
 
 **Production (DC-P1):** the same decisions arrive in **Teams (Approvals)** and by email.
 
-**Notifications (pilot):** at each step the page writes a row to the **DMS Notifications** list and the flow **DC-P2 Pilot Notifications** sends it by **email and Teams** (Flow bot), only to the people in the row (never the whole company), in the **language the user chose on the page** (Hebrew right to left, or English), with a link that opens the page in that language on Approvals or My workflows:
+**Notifications:** at each step the page writes a row to the **DMS Notifications** list and the flow **DC-P2 Pilot Notifications** sends it by **email and Teams** (Flow bot), only to the people in the row (never the whole company), in the **language the user chose on the page** (Hebrew right to left, or English), with a link that opens the page in that language on Approvals or My workflows:
 
 | When | Who is told |
 | --- | --- |
@@ -99,7 +99,7 @@ A document type with no Approver Matrix rule goes to the DMS super users.
 | Withdrawn | The approvers who were waiting |
 | Delegated | The delegate |
 
-Set up once: `.\scripts\New-DmsNotifyFlowPackage.ps1 -TenantName rhisrael -ClientId $C -DocControlSiteAlias DocumentControl-TEST` (creates the list and `scripts\out\DC-P2-PilotNotifications.zip`), then **My flows > Import > Import Package (Legacy)**, pick the SharePoint, Office 365 Outlook and Teams connections (Standard connectors, no Premium license), Import, then **Open flow → Turn on** (imported flows start Off; keep one copy only). Turn **DC-P1 Off** while approvals are on the page. Every notification stays in the list (who was told what and when). Check it from the page: ⋮ → **🩺 SharePoint check** shows whether notifications are on, the last ones with their recipients and result, and **✉ Send me a test notification**; a row written but no email or Teams means the flow (On? run history?).
+Set up once: `.\scripts\New-DmsNotifyFlowPackage.ps1 -TenantName rhisrael -ClientId $C -DocControlSiteAlias DocumentControl` (creates the list and `scripts\out\DC-P2-PilotNotifications.zip`), then **My flows > Import > Import Package (Legacy)**, pick the SharePoint, Office 365 Outlook and Teams connections (Standard connectors, no Premium license), Import, then **Open flow → Turn on** (imported flows start Off; keep one copy only). Turn **DC-P1 Off** while approvals are on the page. Every notification stays in the list (who was told what and when). Check it from the page: ⋮ → **🩺 SharePoint check** shows whether notifications are on, the last ones with their recipients and result, and **✉ Send me a test notification**; a row written but no email or Teams means the flow (On? run history?).
 
 Every decision is a Control Audit row (Approved / Rejected, stage, comment, who, when), and My workflows shows for each submitted document **who it is waiting for**.
 
@@ -126,17 +126,17 @@ The Workflow Service never updates a record while it is Submitted, so the approv
 | Role | Who | Can |
 | --- | --- | --- |
 | User | Every employee (Windows login, no login screen) | See and work only where AD allows; save, rename, delete in folders they may write; register and submit their documents; My workflows |
-| Approver | From the Approver Matrix, per document type | Approve or reject on the page (pilot) or in Teams (production) |
-| DMS super user | `DMS_ADMINS` (pilot: roneno@rh.co.il) | Submit any document, decide any approval stage, delegate for any approver, **All workflows**, **All pending approvals** (the default view), Move files now, DMS First loading, 🩺 SharePoint check |
+| Approver | From the Approver Matrix, per document type | Approve or reject on the page, or in Teams where a site runs the flow |
+| DMS super user | `DMS_ADMINS` (roneno@rh.co.il) | Submit any document, decide any approval stage, delegate for any approver, **All workflows**, **All pending approvals** (the default view), Move files now, DMS First loading, 🩺 SharePoint check |
 | IT / Document Control | `GG_DMS_ITAdmins`, `GG_DMS_DocumentControl` | Approver Matrix, restore from the recycle folder, the service and its logs |
 
 The blueprint is the **skeleton**; everything inside it is **content** (files and folders with their own names, at any depth). Always protected: the skeleton (`$Root`, `02_Customers`, each customer and project folder, and every blueprint folder such as `Commercial`, `Quotations`, `01_General\Quality_System` - they cannot be renamed or deleted from the page, their content can); the DMS workflow folders `Submitted`, `Current_ReadOnly`, `Obsolete_ReadOnly` and `Working` (read only on the page: nothing can be added, renamed or deleted in them, and a folder that holds them cannot be renamed or deleted); and every registered document (cannot be renamed or deleted from the page).
 
-## 5. Pilot test (one super user runs it all)
+## 5. A walk through it (one super user runs it all)
 
 roneno@rh.co.il runs the whole process from the DMS page: saving, submitting, approving both stages, following and finding.
 
-Prerequisites: the tree on `$Root` (`scripts/New-DmsFileServerTree.ps1`), the `DocumentControl-TEST` site, `$Root` and `$C` set in pwsh, `git pull` in `C:\dms`. In Power Automate turn **DC-P1 Pilot Approval Off** for the pilot (approvals are on the page).
+Prerequisites: the tree on `$Root` (`scripts/New-DmsFileServerTree.ps1`), the `DocumentControl` site, `$Root` and `$C` set in pwsh, `git pull` in `C:\dms`. In Power Automate turn **DC-P1 Pilot Approval Off** for the pilot (approvals are on the page).
 
 **Set up** (once):
 
@@ -144,7 +144,7 @@ Prerequisites: the tree on `$Root` (`scripts/New-DmsFileServerTree.ps1`), the `D
 cd C:\dms\webapi; .\Start-DmsPlayground.ps1 -Root $Root -Live -ClientId $C
 ```
 
-Sign in as roneno@rh.co.il when the browser asks. His name shows with ★ (super user). The green banner says **Pilot - live ... Approvals on this page**.
+Sign in as roneno@rh.co.il when the browser asks. His name shows with ★ (super user). The banner says **Pilot - live ... Approvals on this page**.
 
 **Validation scenario** (in this order; tick each line)
 
@@ -187,7 +187,7 @@ Before you start: DC-P1 **Off**, DC-P2 **On** (notifications), roneno is a super
 | 25 | My workflows (counts, history) and **All workflows** | Every step above is in the history, with who and when |
 | 26 | On a file in `Current_ReadOnly`: **View**, and on one in `Working`: **Open** (after `Set-DmsDrives.ps1`) | The approved file opens read-only, the working file opens for editing, both from their short path |
 
-**After the pilot**: stop the page with Ctrl+C.
+**When you are done**: stop the page with Ctrl+C.
 
 ## 5a. DMS First loading (documents approved in the old repository)
 
@@ -216,15 +216,15 @@ All the metadata is in SharePoint (`DocumentControl` site), which Microsoft 365 
   - AI Insights: every question, QMS (RAG) question and file search (CorrelationId `AI`): who, the file asked about, the question, and the answer or the suggested files.
   - Not in SharePoint: the file service run summaries (service log only).
 - **Approver Matrix**: who approves each document type. When starting a workflow the user may instead choose the approvers ("Choose the approvers myself", people from the directory): all of them must approve, in one stage, and the choice is kept in the Control Audit 'submitted' row (`Approvers (chosen): ...`).
-- **DMS Notifications**: every email/Teams notification of the pilot (recipients, subject, message, link).
+- **DMS Notifications**: every email/Teams notification (recipients, subject, message, link).
 - **Delegations**: every delegated approval (Approvals ← Delegate): delegator, delegate, date, reason (document and note), who did it. Control Audit also gets a 'שינוי הרשאות' row `Delegated: a -> b`.
 - **Approval Decisions** (החלטות מאשרים): one row per decision on the page (Approved / Rejected) and per delegation (Delegated): workflow, document, revision, approver, role (Mandatory / Final), stage, comment, time, and Delegated from when a delegate decided. Decisions made before this version are not back-filled.
 
 The files themselves stay on the file server (backed up by the file server backup, Veeam). Deleted items go to `04_Workflow_System\Recycle\<date>\<user>`.
 
-## 7. Known limits of the pilot
+## 7. Known limits
 
-- With approvals in Teams (DC-P1, production) the pending approvers are not recorded until a decision is made; on the page (pilot) My workflows shows who each document waits for. A step in DC-P1 that writes the pending approvers to Control Audit would close this for production.
+- With approvals in Teams (the DC-P1 flow) the pending approvers are not recorded until a decision is made; on the page (pilot) My workflows shows who each document waits for. A step in DC-P1 that writes the pending approvers to Control Audit would close this for production.
 - Do not run DC-P1 and page approvals at the same time: with DC-P1 On, the same document would also be sent to Teams.
 - On a PC the page runs as the signed-in user, without AD checks. The AD checks (Windows sign-in through IIS) apply when it is installed on the server (`webapi/README.md`).
 - The **Delegations** list keeps the status Active after a delegation's last day; the DMS stops applying it on that day.
@@ -233,6 +233,6 @@ The files themselves stay on the file server (backed up by the file server backu
 
 ## 8. Useful links
 
-Import `docs/RH-DMS-Bookmarks.html` into Chrome (Ctrl+Shift+O → ⋮ → Import bookmarks): the DMS page, the DocumentControl-TEST lists (Document Register, Control Audit, Approver Matrix, DMS Notifications), site permissions, Large File Exchange, Power Automate, Entra app registrations, the RH AI and QMS, and this repository.
+Import `docs/RH-DMS-Bookmarks.html` into Chrome (Ctrl+Shift+O → ⋮ → Import bookmarks): the DMS page, the DocumentControl lists (Document Register, Control Audit, Approver Matrix, DMS Notifications), site permissions, Large File Exchange, Power Automate, Entra app registrations, the RH AI and QMS, and this repository.
 
 **First loading modes** (⋮ › DMS First loading, super users): **DMS approval (simulated)** runs, for each file, the same steps and records as a normal approval: registered in Working (Created) → submitted with the approver chosen (Submitted, `Approvers (chosen): dms_approval@rh.co.il`) → MoveToSubmitted (file service row, SHA-256) → approved by the approver (Approved in Control Audit with the file SHA-256, and a row in Approval Decisions) → PromoteToCurrent (`Current_ReadOnly`, read-only; CurrentRevision, CurrentSHA256 and LastApprovedUtc in the Document Register). The approver is `DMS_FIRST_LOAD_APPROVER` (default `dms_approval@rh.co.il`) or the one typed for the run; no notifications are sent. **Save only** acts as a formal approval by the DMS itself: each file goes to `Current_ReadOnly` in its folder (same subfolders), read-only, with a Control Audit row (Approved, actor `DMS`, file SHA-256); it is registered in the Document Register (status Approved, control mode Collaboration - "שיתופי ללא תהליך", owner = who saved it) and has no workflow (save the file again to replace it, which adds another Control Audit row). "New revision" on such a file starts the normal workflow: the record changes to the folder's control mode (Workflow Required) and from then on it is a controlled document. "Save file (no workflow)" on the page does the same for one file. Trace them in SharePoint: Document Register filtered by ControlMode = Collaboration, or Control Audit filtered by Actor = DMS. The owner can share them with a customer like any approved document. Both modes move the File Linker links to the new path; run a dry run first.

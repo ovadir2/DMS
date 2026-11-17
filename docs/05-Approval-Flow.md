@@ -1,14 +1,14 @@
 # 05 - The approval flow
 
-How a document moves from submission to an approved, read-only record in the pilot flow **DC-P1 Pilot Approval** (`scripts/New-DmsPilotFlowPackage.ps1`).
+How a document moves from submission to an approved, read-only record in the flow **DC-P1 Pilot Approval** (`scripts/New-DmsPilotFlowPackage.ps1`).
 
-> **Optional.** The pilot approves on the DMS page; this is the Power Automate pilot flow, for a site
+> **Optional.** The DMS approves on its own page; this is the Power Automate flow, for a site
 > that wants the decision taken there instead. (The notifications flow is a different thing, and is
 > what RH runs.) This is the Power Automate design of the flow. What the DMS actually runs is the approval inside
 > the DMS page (`DMS_APPROVALS=page`): the same stages and the same records, decided on the page. See
 > [11 - Project Context](11-Project-Context.md) and [`webapi/README.md`](../webapi/README.md).
 
-The whole pilot process, from saving the file on the DMS page to the approved version in `Current_ReadOnly`, with the pilot test, is in [08 - Pilot Process](04-Using-the-DMS.md).
+The whole process, from saving the file on the DMS page to the approved version in `Current_ReadOnly`, with the pilot test, is in [04 - Using the DMS](04-Using-the-DMS.md).
 
 Presentation: [`presentations/DMS-Approval-Flow.pptx`](presentations/DMS-Approval-Flow.pptx) (Hebrew, 3 editable slides: title, swimlane flow, principles). The same diagram as a web page: [`presentations/DMS-Approval-Flow.html`](presentations/DMS-Approval-Flow.html) (open it in a browser).
 
@@ -47,4 +47,4 @@ flowchart TB
 
 ## Related
 
-- The process end to end, with the DMS page and the file moves: [08 - Pilot Process](04-Using-the-DMS.md).
+- The process end to end, with the DMS page and the file moves: [04 - Using the DMS](04-Using-the-DMS.md).

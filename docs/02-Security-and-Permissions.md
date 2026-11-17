@@ -2,10 +2,10 @@
 
 Source: IT-DOC-BP-001 sections 5, 7, 8.4 and Phases 2, 4, 5 and 6.
 
-> **As built.** Sections 1-7 are the design. Section 0 is what the pilot enforces today, which went further
+> **As built.** Sections 1-7 are the design. Section 0 is what the DMS enforces today, which went further
 > than the design in several places after it was tried on real documents.
 
-## 0. What the pilot enforces
+## 0. What the DMS enforces
 
 | Rule | How it is enforced | Where |
 | --- | --- | --- |
@@ -26,7 +26,7 @@ Two things this does **not** do, deliberately:
 - A person with write permission on a folder outside `Current_ReadOnly` can still change files there with
   Windows. The DMS controls documents, not the whole file server.
 - Where the AD question cannot be answered (not a domain machine, an account not in AD) nothing is blocked -
-  the pilot must not stall on a check it could not make.
+  the DMS must not stall on a check it could not make.
 
 ## 1. Authorization model
 
@@ -72,7 +72,7 @@ Create these in a dedicated OU (for example `OU=DMS,OU=Groups`). Global groups h
 | `GG_DMS_Auditors` | Quality, InfoSec, internal audit | Yes |
 | `GG_DMS_ITAdmins` | File-server and M365 admins (use separate admin accounts) | Yes |
 | `GG_CFT_<CustomerCode>` | Customer Front Team per customer (isolation between customers) | Yes |
-| `GG_DMS_PilotUsers` | 10-20 pilot employees (Phase 8) | Yes |
+| `GG_DMS_PilotUsers` | the first group of users the DMS was opened to (the group keeps its name) | Yes |
 
 ### 3.2 Domain Local resource groups (NTFS)
 
@@ -92,7 +92,7 @@ Pattern `DL_FS_<Scope>_<R|M>` where R = Read and M = Modify.
 
 Disable inheritance at the controlled folders and apply these ACEs (Phase 2 step 4). Keep `CREATOR OWNER` off controlled folders so that authors do not keep implicit rights after a move.
 
-### 3.2.1 Department folders (pilot): `scripts/Set-DmsAccess.ps1`
+### 3.2.1 Department folders: `scripts/Set-DmsAccess.ps1`
 
 Groups and their members are defined in AD by IT. `scripts/dms-access.csv` names, for each department folder under `01_General` (or one folder by its path, e.g. `02_Customers\Customer_A\Engineering`), the existing AD groups that work there (Modify), its parallel folders in every customer and optional read-only groups. The script only puts those groups on the folders: each department folder and its parallel customer folders keep what they inherit from above (an upper folder never gives less than its subfolders; a row can also name a whole customer, `02_Customers\Customer_A`) and get Full control for SYSTEM, Administrators and the DMS account, Modify for the groups, Read for the read groups, and no rename / delete of the blueprint folders. The folders above get "open this folder only" for those groups. With Access-Based Enumeration on the share, people see only their own folders. Without `-Apply` it only reports. With `DMS_ACCESS_SCRIPT=1` the DMS runs it (`-Customer <name> -Apply`) for every customer it creates.
 

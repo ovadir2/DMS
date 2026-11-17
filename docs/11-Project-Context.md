@@ -1,6 +1,6 @@
 # 11 - Project context - the brief, as it was actually given
 
-This is the record of what was asked for and decided while the DMS was built and piloted, written so that it
+This is the record of what was asked for and decided while the DMS was built, tried and put into production, written so that it
 can be handed to someone - or to Claude - and the work carried on without the conversation it came from.
 
 It is a condensed record, not a transcript: the standing rules, the decisions in the order they were made,
@@ -13,8 +13,9 @@ what each one was a reaction to, and what is still open.
 > **Prompt.** You are continuing work on the RH DMS. Read `README.md`, `docs/03-Installation-and-Settings.md`
 > and this file first. The standing rules in section 1 are not negotiable and were each learned the hard way.
 > The repository is `ovadir2/dms`, work on `main`, run `webapi` tests before pushing, and never push to the
-> pilot server yourself - the user pulls. The pilot is the IIS site `DMS-Pilot` on RHFS02 (`C:\DMS-Pilot\app`,
-> repository `E:\Shares`, page `https://dms-pilot.rh.tech`). Section 5 lists what is open.
+> server yourself - the user pulls. The DMS is in production: the IIS site `DMS` on RHFS02, serving
+> `C:\DMS-Pilot\app` (the folder kept its name), repository `E:\Shares`, page `https://dms.rh.tech`,
+> SharePoint sites `DocumentControl` and `LargeFileExchange`. Section 5 lists what is open.
 
 ## 1. The standing rules
 
@@ -38,7 +39,7 @@ These came from the user, usually sharply, and everything else bends around them
 ## 2. What was built, in the order it was asked for
 
 ### Sharing with customers
-Guest invitation end to end on `LargeFileExchange-TEST`: the app could not invite an unknown address, so the
+Guest invitation end to end on the Exchange site: the app could not invite an unknown address, so the
 DMS creates the B2B guest with Graph `POST /invitations` first and then grants the folder by `objectId`. The
 folder link goes in the invitation message, because a customer who clicked the tenant name could not reach
 anything. A share log is written for unknown customers, and the `RequestId` column is filled after upload.
