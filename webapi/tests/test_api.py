@@ -5015,3 +5015,19 @@ def test_a_scan_is_read_by_ocr_when_the_server_has_it(tmp_path, monkeypatch):
     assert md.can_read(str(scan))["readable"] and not md.can_read(str(scan))["sure"]
     monkeypatch.setitem(md.OCR, "on", False)
     assert md.can_read("layout.png")["readable"] is False
+
+
+def test_a_refusal_to_a_page_of_the_repository_still_carries_the_header(tmp_path):
+    """A page served into a sandbox has a nameless origin, so every answer from the key endpoints needs the
+    CORS header - a refusal most of all. Without it the browser hides "the key has expired" or "there is no
+    data yet" behind "Failed to fetch", and the page cannot say what to do."""
+    app = create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER,
+                              sharepoint="memory", admins=[USER]))
+    c = TestClient(app)
+    ok = c.get("/api/kpi/ping")
+    assert ok.status_code == 200 and ok.headers["access-control-allow-origin"] == "*"
+    for call, expected in (("/api/kpi/files?t=not-a-key", 403), ("/api/kpi/data?t=not-a-key&path=x", 403)):
+        r = c.get(call)
+        assert r.status_code == expected, call
+        assert r.headers.get("access-control-allow-origin") == "*", f"{call} is hidden behind Failed to fetch"
+        assert "detail" in r.json()

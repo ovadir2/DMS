@@ -253,6 +253,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         if request.url.path.startswith(("/api/", "/dms/")) and "cache-control" not in response.headers:
             response.headers["Cache-Control"] = "no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"
+        if request.url.path.startswith("/api/kpi/"):
+            # A page of the repository runs in a sandbox, so its origin is a nameless one and every answer
+            # needs the header - the refusals most of all. Without it the browser hides "the key expired"
+            # or "there is no approved data yet" behind "Failed to fetch", and the page's own message, which
+            # says exactly what to do, is never shown.
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers.setdefault("Access-Control-Allow-Headers", "*")
+            response.headers.setdefault("Access-Control-Expose-Headers", "*")
         return response
 
     @app.middleware("http")
