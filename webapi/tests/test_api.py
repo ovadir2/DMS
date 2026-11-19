@@ -5031,3 +5031,29 @@ def test_a_refusal_to_a_page_of_the_repository_still_carries_the_header(tmp_path
         assert r.status_code == expected, call
         assert r.headers.get("access-control-allow-origin") == "*", f"{call} is hidden behind Failed to fetch"
         assert "detail" in r.json()
+
+
+def test_the_bridge_finds_the_folder_of_a_windows_path(tmp_path):
+    """The page is told which folder it lives in by stripping the file name off its own path. The pattern
+    reached the browser matching a forward slash only, so on E:\\...\\KPI.html nothing was stripped and the
+    page asked the DMS for KPI.html\\Current_ReadOnly - which is not there, and came back as a permissions
+    refusal about a file nobody has."""
+    import re
+    from dms_api.main import BRIDGE
+    line = [x for x in BRIDGE.decode().splitlines() if "folder:" in x][0]
+    assert "[\\\\/]" in line, f"the bridge strips only one kind of separator: {line.strip()}"
+
+    app = create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER,
+                              sharepoint="memory", admins=[USER]))
+    c = TestClient(app)
+    kpis = tmp_path / "01_General" / "Commercial" / "KPIs" / "Sales"
+    (kpis / "Current_ReadOnly").mkdir(parents=True)
+    (kpis / "Sales.html").write_text("<html>x</html>", encoding="utf-8")
+    opened = c.get("/api/files/dashboard", params={"path": str(kpis / "Sales.html")}, follow_redirects=False)
+    assert opened.status_code in (200, 307)
+    t = opened.headers.get("location", "").split("t=")[-1] if opened.status_code == 307 else ""
+    if t:
+        gone = c.get("/api/kpi/files", params={"t": t, "path": str(kpis / "Sales.html" / "Current_ReadOnly")})
+        assert gone.status_code == 404 and "is not there" in gone.json()["detail"]
+        here = c.get("/api/kpi/files", params={"t": t, "path": str(kpis / "Current_ReadOnly")})
+        assert here.status_code == 200, here.text

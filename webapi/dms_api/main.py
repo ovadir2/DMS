@@ -2171,6 +2171,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         here = os.path.normcase(os.path.normpath(full))
         if here != folder and not here.startswith(folder + os.sep):
             raise HTTPException(403, "This page may only read the folder it was opened from")
+        if not os.path.exists(files.extended(full)):
+            # Windows answers "no access" for a path that is not there at all, and the page then shows the
+            # person a permissions message about a file nobody has. Say what is true instead.
+            raise HTTPException(404, f"{os.path.basename(full) or full} is not there: this page asked for "
+                                     f"{full}")
         if security.may_see(email, full) is False:
             raise HTTPException(403, "You do not have access to this file")
         return full
@@ -4222,7 +4227,7 @@ BRIDGE = b"""<script>
   var here = new URLSearchParams(location.search);
   var me = here.get('path') || '';
   window.DMS = { key: key, api: '/api/kpi', file: me,
-                 folder: me.replace(/[\\/][^\\/]*$/, ''),        // the folder this page lives in
+                 folder: me.replace(/[\\\\/][^\\\\/]*$/, ''),    // the folder this page lives in (a Windows path: \\ or /)
                  logo: '/dms/logo.png', icon: '/dms/icon.png' };
   var FOLDER = /^(?:https?:\\/\\/[^\\/]+)?\\/api\\/(?:browse|list|files|folder|folders|levels)\\/?(?:\\?(.*))?$/i;
   var FILE = /^(?:https?:\\/\\/[^\\/]+)?\\/api\\/(?:files\\/(?:download|text|raw)|file|download|open|content|read|preview)\\/?(?:\\?(.*))?$/i;
