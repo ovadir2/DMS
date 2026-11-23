@@ -60,6 +60,13 @@
 01_General\HR\Policies
 01_General\HR\KPIs
 01_General\Training
+01_General\Training\Courses
+01_General\Training\Courses\<CourseID>
+01_General\Training\Forms_Templates
+01_General\Training\Training_Plans
+01_General\Training\Session_Records
+01_General\Training\Session_Records\<YYYY>
+01_General\Training\External_Providers
 01_General\Training\KPIs
 01_General\Finance
 01_General\Finance\KPIs

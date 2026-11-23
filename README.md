@@ -241,6 +241,8 @@ through its paces yet. What was asked for and is not there yet has a table of it
 
 | REQ-P100 | A document keeps the revision its file name already carried | A file arriving as `FO-1404-47-V01_EFEM_TP_CABLE-_11.05.2025.docx` is revision 01, not 1 by default: the DMS reads `V01`, `v.21`, `Rev 7`, `version 3` wherever it sits in the name - after the document number as it usually does here, or at the end - with the separators people really use (`-`, `_`, space, none). It is offered on the register dialog, where the person confirms or changes it, and a year, a date or `Inv 203` is never mistaken for one | Built |
 
+| REQ-P101 | Training is a department, not a part of HR | `01_General\Training` holds the courses (`Courses\<CourseID>`), the training forms, the plans, the signed attendance sheets by year (`Session_Records\<YYYY>`) and the external providers - so Training and Quality work with course material without any access to an employee's file. One employee's own records (a signed record, a certificate, an OJT sign-off) are filed in `HR\Employees\<Synel id>\07_Training`, and a work instruction stays where it was written, referred to by its document id | Built |
+
 ### Asked for, and not built yet
 
 | | What it would be | Why it is not done |

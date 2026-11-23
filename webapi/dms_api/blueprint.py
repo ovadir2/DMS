@@ -161,6 +161,26 @@ MANAGEMENT["Quality and Standards"] = ("Quality and standards", "איכות ות
 
 # Every department measures itself, and the numbers belong where the work is: one KPIs folder in each, so a
 # KPI pack is looked for in the same place whichever department it is, and nobody invents a name for it.
+# Training stays a department of its own, beside HR and not under it: Training and Quality work with course
+# material and training forms, and must not see an employee's file (pay, CV, medical). What belongs to one
+# employee - a signed record, a certificate, an OJT sign-off - is filed in that employee's own 07_Training.
+MANAGEMENT["Training"] = ("Training", "הדרכה", N({
+    "Courses": ("Courses", "קורסים", N({
+        "*": ("", "", {}, "One course, by its HRPortal course id (TRN-0001)", "קורס אחד, לפי מזהה הקורס")}),
+        "Course content, one folder per course", "תוכן הקורסים, תיקייה לכל קורס"),
+    "Forms_Templates": ("Training forms", "טפסי הדרכה", {},
+                        "The controlled training forms; only a released revision is offered",
+                        "טפסי ההדרכה המבוקרים; מוצעת רק גרסה משוחררת"),
+    "Training_Plans": ("Training plans", "תוכניות הדרכה", {},
+                       "The annual plan and the approved training matrix", "התוכנית השנתית ומטריצת ההדרכה"),
+    "Session_Records": ("Session records", "רשומות מפגשי הדרכה", N({
+        "*": ("", "", {}, "One year of signed attendance sheets", "שנה אחת של דפי נוכחות חתומים")}),
+        "Signed attendance sheets of group sessions", "דפי נוכחות חתומים של מפגשים קבוצתיים"),
+    "External_Providers": ("External providers", "ספקי הדרכה חיצוניים", {},
+                           "Agreements and course descriptions of external trainers, with nobody's certificates",
+                           "הסכמים ותיאורי קורסים של מדריכים חיצוניים, ללא תעודות אישיות")}),
+    "Courses, forms, plans and the records of what was taught", "קורסים, טפסים, תוכניות ורשומות ההדרכה")
+
 KPIS = ("KPIs", "מדדים", {}, "The department's measures and the data behind them", "המדדים של המחלקה והנתונים שמאחוריהם")
 for _k, _n in list(MANAGEMENT.items()):
     MANAGEMENT[_k] = (_n[0], _n[1], N({**(_n[2] or {}), "KPIs": KPIS})) + tuple(_n[3:])
@@ -438,7 +458,8 @@ def folder_list() -> list[str]:
     def walk(tree, prefix):
         for name, v in tree.items():
             key = {"02_Customers": "<Customer>", PRODUCTS[-1]: "<Product>",
-                   "Employees": "<SynelEmployeeId>"}.get(prefix[-1] if prefix else "", None) \
+                   "Employees": "<SynelEmployeeId>", "Courses": "<CourseID>",
+                   "Session_Records": "<YYYY>"}.get(prefix[-1] if prefix else "", None) \
                 if name == "*" else name
             if key is None:
                 continue

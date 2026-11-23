@@ -5215,3 +5215,30 @@ def test_the_revision_is_read_from_the_file_name_and_confirmed(tmp_path):
     bad = c.post("/api/documents", json={"path": str(h), "documentType": "נוהל", "documentArea": "איכות",
                                          "revision": "twenty"})
     assert bad.status_code == 400 and "revision number" in bad.json()["detail"]
+
+
+def test_training_is_a_department_of_its_own(tmp_path):
+    """Training and Quality work with course material and training forms, and must not see an employee's
+    file. So Training is a department beside HR, with its own folders - and what belongs to one employee
+    (a signed record, a certificate) is filed in that employee's own 07_Training, not here."""
+    from dms_api import blueprint
+    tree = blueprint.folder_list()
+    for want in ("01_General\\Training\\Courses", "01_General\\Training\\Courses\\<CourseID>",
+                 "01_General\\Training\\Forms_Templates", "01_General\\Training\\Training_Plans",
+                 "01_General\\Training\\Session_Records", "01_General\\Training\\Session_Records\\<YYYY>",
+                 "01_General\\Training\\External_Providers", "01_General\\Training\\KPIs"):
+        assert want in tree, want
+    assert "01_General\\HR\\Employees\\<SynelEmployeeId>\\07_Training" in tree   # the employee's own records
+    assert not [x for x in tree if x.startswith("01_General\\HR\\Training")]     # not under HR
+
+    both = blueprint.describe(["01_General", "Training", "Courses"])
+    assert both and both["he"] == "קורסים"
+    assert blueprint.describe(["01_General", "Training", "Session_Records"])["he"] == "רשומות מפגשי הדרכה"
+
+    # a course folder is made on the page like any folder of a department, and keeps its name
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    courses = tmp_path / "Root" / "01_General" / "Training" / "Courses"
+    courses.mkdir(parents=True)
+    made = c.post("/api/folders", json={"parent": str(courses), "name": "TRN-0001"})
+    assert made.status_code in (200, 201), made.text
+    assert (courses / "TRN-0001").is_dir() and not list((courses / "TRN-0001").iterdir())
