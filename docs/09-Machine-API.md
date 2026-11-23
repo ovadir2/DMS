@@ -396,11 +396,22 @@ Every employee Synel knows gets one folder in the DMS, under `01_General\HR\Empl
 employee id. HRPortal asks; the DMS makes it, because the DMS owns its folders.
 
 ```
-GET  /api/v1/employees/folders          -> {"folder": "...", "exists": true, "employees": ["000123"], "skeleton": "Employee_Skeleton"}
-GET  /api/v1/employees/000123/folder    -> {"synelEmployeeId": "000123", "exists": true, "folder": "..."}
+GET  /api/v1/employees/folders          -> {"folder": "...", "exists": true, "employees": ["000123"], "skeleton": "Employee_Skeleton",
+                                            "structure": ["01_Personal", "02_Employment", ...]}
+GET  /api/v1/employees/000123/folder    -> {"synelEmployeeId": "000123", "exists": true, "folder": "...",
+                                            "skeleton": "Employee_Skeleton", "structure": ["01_Personal", ...],
+                                            "missing": [], "complete": true}
 POST /api/v1/employees/000123/folder    -> 201 {"created": true, "how": "14 folders from Employee_Skeleton; ..."}
-                                           200 {"created": false} when it is already there
+                                           200 {"created": false, "added": 0, "complete": true} already there
+                                           200 {"created": false, "added": 1, "complete": true} a folder the
+                                               skeleton has gained since was filled in
 ```
+
+- **The shape is the skeleton's, always.** `structure` is what every employee file must hold, `missing` what
+  this one has not got, `complete` whether it is up to the shape. HR adds a folder to `Employee_Skeleton`
+  (a new kind of document every employee will have): the files cut before that do not have it, so the next
+  `POST` fills it in and copies its permissions - the same call the job already makes every fifteen
+  minutes, and still `200`, still nothing duplicated. Documents are never copied, only folders.
 
 - The file is **cut from `Employee_Skeleton`**: its subfolders and the AD permissions on them - so the
   restricted folders (`04_Compensation`, `12_Disciplinary`, `13_Medical`) stay restricted in every employee's

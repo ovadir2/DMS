@@ -465,7 +465,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         short = ([[os.path.join(s.repository_root, k), v] for k, v in s.short_paths.items()] if ntlm.is_local(request)
                  else ([[os.path.join(s.repository_root, k), v] for k, v in s.client_short_paths.items()]
                        + ([[s.repository_root, s.client_root.rstrip("\\/")]] if s.client_root else [])))
-        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "firstLoadApprover": s.first_load_approver, "shareDays": s.ex_days, "customersFolder": s.customers_folder, "root": s.repository_root, "shortPaths": short,
+        return {"authMode": s.auth_mode, "playground": s.sharepoint == "memory", "notify": s.approvals == "page" and s.notify, "fileService": s.file_service_seconds > 0, "firstLoadApprover": s.first_load_approver, "shareDays": s.ex_days, "customersFolder": s.customers_folder, "employeesFolder": s.employees_folder, "employeeSkeleton": s.employee_skeleton, "root": s.repository_root, "shortPaths": short,
                 "approvals": s.approvals, "fileLinker": bool(s.fl_check_url and s.fl_update_url),
                 "site": s.site_url if s.sharepoint != "memory" else "", "tenantId": s.tenant_id, "clientId": s.spa_client_id,
                 "scope": s.api_scope,
@@ -1333,8 +1333,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "You do not have permission to create folders here")
         shape = in_skeleton(parent)
         if shape:
-            raise HTTPException(403, f"{shape} is the shape every new customer is cut from, and it is not "
-                                     f"changed from here: a new customer goes under {s.customers_folder}, "
+            employee = is_employee_skeleton(shape)
+            what = "employee file" if employee else "customer"
+            where = s.employees_folder if employee else s.customers_folder
+            raise HTTPException(403, f"{shape} is the shape every new {what} is cut from, and it is not "
+                                     f"changed from here: a new {what} goes under {where}, "
                                      f"and the shape itself is changed on the file server.")
         try:
             path = files.make_folder(s.repository_root, parent, req.name)
@@ -2504,8 +2507,24 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                 if api_may_see(who, e.path):
                     found.append(e.name)
         logger.info("api %s GET /api/v1/employees/folders -> %d", who["name"], len(found))
-        return JSONResponse({"folder": base, "exists": True, "employees": found, "skeleton": shape},
+        _shape, shape_folders = employee_shape()
+        return JSONResponse({"folder": base, "exists": True, "employees": found, "skeleton": shape,
+                             "structure": ["\\".join(r) for r in shape_folders]},
                             headers={"Cache-Control": "no-store"})
+
+    def employee_shape() -> tuple[str, list[tuple[str, ...]]]:
+        """The folders every employee file must have: the skeleton's, or the blueprint's where there is no
+        skeleton on the file server. Workflow folders are never part of it - the DMS makes those itself."""
+        from . import skeleton as _skeleton
+        shape = _skeleton.find(s.repository_root, s.employees_folder, s.employee_skeleton,
+                               _skeleton.EMPLOYEE_LOOKS_LIKE)
+        if shape:
+            return shape, _skeleton.folders_of(shape)
+        return "", [tuple(rel) for rel in blueprint.leaves(blueprint.EMPLOYEE)]
+
+    def employee_missing(here: str, shape_folders: list[tuple[str, ...]]) -> list[str]:
+        """What this employee file has not got of the shape, as paths relative to it, parents first."""
+        return ["\\".join(rel) for rel in shape_folders if not os.path.isdir(os.path.join(here, *rel))]
 
     @app.get("/api/v1/employees/{employee}/folder")
     def api_employee_folder(request: Request, employee: str,
@@ -2523,7 +2542,12 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "That account may not read the employee files")
         here = os.path.join(base, one)
         there = os.path.isdir(here)
-        return JSONResponse({"synelEmployeeId": one, "exists": there, "folder": here if there else ""},
+        shape, shape_folders = employee_shape()
+        missing = employee_missing(here, shape_folders) if there else ["\\".join(r) for r in shape_folders]
+        return JSONResponse({"synelEmployeeId": one, "exists": there, "folder": here if there else "",
+                             "skeleton": os.path.basename(shape) if shape else None,
+                             "structure": ["\\".join(r) for r in shape_folders],
+                             "missing": missing, "complete": there and not missing},
                             headers={"Cache-Control": "no-store"})
 
     @app.post("/api/v1/employees/{employee}/folder", status_code=201)
@@ -2542,9 +2566,36 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                      f"blueprint folders, or make {base} by hand.")
         here = os.path.join(base, one)
         if os.path.isdir(here):
+            # It is there: bring it up to the shape. A folder added to the skeleton after the file was cut
+            # (a new kind of HR document) is otherwise missing from every file made before it, and HRPortal
+            # would have nowhere to file that document. The permissions come with it, as at the cut.
+            shape, shape_folders = employee_shape()
+            missing = employee_missing(here, shape_folders)
+            if not missing:
+                return JSONResponse({"synelEmployeeId": one, "folder": here, "created": False, "added": 0,
+                                     "complete": True, "how": "it was already there, with every folder of "
+                                     f"{os.path.basename(shape) or 'the blueprint'}"},
+                                    status_code=200, headers={"Cache-Control": "no-store"})
+            if security.may_see(who.get("as") or "", here, security.WRITE) is False:
+                raise HTTPException(403, f"{who['name']} acts as {who.get('as')}, who may not add to {here}")
+            for rel in missing:
+                os.makedirs(os.path.join(here, *rel.split("\\")), exist_ok=True)
+            how = f"{len(missing)} folder(s) added from {os.path.basename(shape) or 'the blueprint'}: {', '.join(missing)}"
+            if shape:
+                import threading as _threading
+                _threading.Thread(target=_skeleton.permissions, args=(shape, here), daemon=True,
+                                  name="dms-employee").start()
+                how += "; their permissions are being copied"
+            logger.info("api %s POST /api/v1/employees/%s/folder -> %s", who["name"], one, how)
+            try:
+                sp().audit(document_id=f"HR-{one}", event=s.choices["PermissionChanged"], from_status="",
+                           to_status="", actor=who.get("as") or who["name"],
+                           details=f"Employee file brought up to the shape: {here} ({how})")
+            except Exception as e:  # noqa: BLE001 - the folders are there; the audit is not worth failing it
+                logger.info("the employee file of %s was not written to the Control Audit: %s", one, e)
             return JSONResponse({"synelEmployeeId": one, "folder": here, "created": False,
-                                 "how": "it was already there"}, status_code=200,
-                                headers={"Cache-Control": "no-store"})
+                                 "added": len(missing), "complete": True, "how": how},
+                                status_code=200, headers={"Cache-Control": "no-store"})
         if security.may_see(who.get("as") or "", base, security.WRITE) is False:
             raise HTTPException(403, f"{who['name']} acts as {who.get('as')}, who may not add to {base}")
         shape = _skeleton.find(s.repository_root, s.employees_folder, s.employee_skeleton,
@@ -3833,8 +3884,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def no_files_in_skeleton(path: str) -> None:
         name = in_skeleton(path)
         if name:
-            raise HTTPException(403, f"{name} is the shape every new customer is cut from, not a customer: "
-                                     f"its folders are kept, its documents are not. File this in a customer.")
+            what = "employee file" if is_employee_skeleton(name) else "customer"
+            raise HTTPException(403, f"{name} is the shape every new {what} is cut from, not a {what}: "
+                                     f"its folders are kept, its documents are not. File this in a {what}.")
 
     def customer_names(user: User) -> list[str]:
         try:

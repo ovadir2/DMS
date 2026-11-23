@@ -5124,7 +5124,11 @@ def test_an_employee_file_is_cut_from_the_employee_skeleton(tmp_path):
     employees = root / "01_General" / "HR" / "Employees"
 
     nothing = c.get("/api/v1/employees/000123/folder", headers=key).json()
-    assert nothing == {"synelEmployeeId": "000123", "exists": False, "folder": ""}
+    assert {k: nothing[k] for k in ("synelEmployeeId", "exists", "folder")} == {
+        "synelEmployeeId": "000123", "exists": False, "folder": ""}
+    # and what a file of that employee would have to hold, so HRPortal can show it before it is made
+    assert nothing["skeleton"] == "Employee_Skeleton" and nothing["structure"] == nothing["missing"]
+    assert nothing["complete"] is False
 
     made = c.post("/api/v1/employees/000123/folder", headers=key)
     assert made.status_code == 201, made.text
@@ -5146,6 +5150,31 @@ def test_an_employee_file_is_cut_from_the_employee_skeleton(tmp_path):
     assert listed["skeleton"] == "Employee_Skeleton"
 
 
+def test_an_employee_file_is_brought_up_to_the_skeleton(tmp_path):
+    """HR adds a folder to the skeleton (a new kind of document every employee will have). The files cut
+    before that do not have it, and HRPortal would have nowhere to file the document. Asking for the folder
+    again fills in what is missing - the same call the job already makes every fifteen minutes."""
+    c, s, root = _hr_env(tmp_path)
+    key = {"X-DMS-Api-Key": "k"}
+    employees = root / "01_General" / "HR" / "Employees"
+    assert c.post("/api/v1/employees/000123/folder", headers=key).status_code == 201
+
+    (employees / "Employee_Skeleton" / "15_Visa").mkdir()          # the shape gains a folder
+    look = c.get("/api/v1/employees/000123/folder", headers=key).json()
+    assert look["exists"] and look["complete"] is False and look["missing"] == ["15_Visa"]
+
+    again = c.post("/api/v1/employees/000123/folder", headers=key)
+    assert again.status_code == 200, again.text
+    body = again.json()
+    assert body["created"] is False and body["added"] == 1 and body["complete"] is True
+    assert "15_Visa" in body["how"]
+    assert (employees / "000123" / "15_Visa").is_dir()
+    assert not (employees / "000123" / "15_Visa" / "note.txt").exists()   # the shape, never its documents
+
+    once_more = c.post("/api/v1/employees/000123/folder", headers=key).json()
+    assert once_more["added"] == 0 and once_more["complete"] is True
+
+
 def test_an_employee_file_needs_a_synel_id_and_the_right_key(tmp_path):
     """The id becomes a folder name, so it is letters, digits, - and _ and nothing else; and making one is
     a scope of its own - a key that may only read documents cannot make folders in HR."""
@@ -5163,6 +5192,28 @@ def test_an_employee_file_needs_a_synel_id_and_the_right_key(tmp_path):
     reader, _s2, _r2 = _hr_env(tmp_path / "two", scopes=("documents",))
     assert reader.get("/api/v1/employees/folders", headers=key).status_code == 200      # reading is allowed
     assert reader.post("/api/v1/employees/000999/folder", headers=key).status_code == 403
+
+
+def test_the_employee_skeleton_refusal_talks_about_employees(tmp_path):
+    """Standing in Employee_Skeleton and making a folder was refused with the customer skeleton's words -
+    "a new customer goes under 02_Customers" - which is no help to whoever is making an employee file. The
+    page now makes it under Employees instead, and the refusal, where it is still right, says so."""
+    c, s, root = _hr_env(tmp_path)
+    shape = root / "01_General" / "HR" / "Employees" / "Employee_Skeleton"
+    r = c.post("/api/folders", json={"parent": str(shape), "name": "000124"})
+    assert r.status_code == 403
+    said = r.json()["detail"]
+    assert "employee file" in said and "customer" not in said, said
+    assert s.employees_folder.replace("/", "\\") in said or s.employees_folder in said, said
+
+    # and the page is told where the employee files live, so it can send the folder there itself
+    cfg = c.get("/api/client-config").json()
+    assert cfg["employeesFolder"] == s.employees_folder and cfg["employeeSkeleton"] == "Employee_Skeleton"
+
+    # the folder itself is made under Employees, cut from the skeleton
+    made = c.post("/api/folders", json={"parent": str(root / "01_General" / "HR" / "Employees"), "name": "000124"})
+    assert made.status_code == 201, made.text
+    assert (root / "01_General" / "HR" / "Employees" / "000124" / "01_Personal").is_dir()
 
 
 def test_the_employee_skeleton_is_a_shape_on_the_page_too(tmp_path):

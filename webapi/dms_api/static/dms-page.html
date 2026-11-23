@@ -2032,10 +2032,18 @@ const customersRoot = () => (cfg.root || '').replace(/[\\/]+$/, '') + '\\' + (cf
 // A customer is made under Customers, wherever the command was clicked: in the customers folder itself, or
 // standing in the skeleton, which is a shape and holds no customers of its own.
 const inSkeleton = p => /[\\/]customer[ _-]?skel(e)?ton(?:[\\/]|$)/i.test(p || '');
+// The same for an employee file: standing in Employee_Skeleton, the new folder is an employee, and it goes
+// under Employees - the skeleton is a shape and holds no employees of its own.
+const employeesRoot = () => (cfg.root || '').replace(/[\\/]+$/, '') + '\\' +
+                            (cfg.employeesFolder || '01_General/HR/Employees').replace(/\//g, '\\');
+const inEmployeeSkeleton = p => /[\\/]employees?[ _-]?skel(e)?ton(?:[\\/]|$)/i.test(p || '');
 const newFolderDialog = parent => (isCustomersRoot(parent) || inSkeleton(parent))
   ? simpleDialog(T.newCustomerTitle, T.customerName, '', '/api/folders',
                  name => ({ parent: customersRoot(), name }))
-  : simpleDialog(T.newFolder, T.folderName, '', '/api/folders', name => ({ parent, name }));
+  : inEmployeeSkeleton(parent)
+    ? simpleDialog(T.newFolder, T.folderName, '', '/api/folders',
+                   name => ({ parent: employeesRoot(), name }))
+    : simpleDialog(T.newFolder, T.folderName, '', '/api/folders', name => ({ parent, name }));
 const renameDialog = path => simpleDialog(T.rename, T.newName, path.split(/[\\/]/).pop(), '/api/items/rename', newName => ({ path, newName }));
 // Release without workflow (one row or the ticked files): Not registered, In Work or Submitted
 async function releasePaths(paths) {
