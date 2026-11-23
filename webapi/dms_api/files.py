@@ -494,15 +494,36 @@ def contains_workflow_folder(folder: str) -> bool:
     return False
 
 
-_REV = re.compile(r"^(?P<base>.*?)[ _\-]*rev\.?\s*(?P<rev>\d+)(?:_draft)?$", re.I)
+# How a revision is written in a file name, by whoever wrote it: Rev02, Rev 2, rev.2, _Rev2_DRAFT, v21,
+# V.21, ver 3, version 3, (v4) - and here it is usually not at the end but right after the document's own
+# number: FO-1404-47-V01_EFEM_TP_CABLE-_11.05.2025.docx. So the marker is looked for anywhere in the name,
+# and the last one wins (the DMS writes its own _RevNN at the end). The marker must stand on its own - a
+# separator, a digit or the start before it - the separators people use are not fixed, so FO-1404-47V01,
+# FO 1404 47 V 01 and FO-1404-47-V01 all read the same - and no digit glued to the number after it, so
+# "Inv 203", "Invoice 2024" and the date in 11.05.2025 are not read as revisions (the letter before the v
+# is what tells them apart). At most three digits: a year is not a
+# revision. A decimal (v2.1) is taken by its major, because revisions here are 01, 02, 03.
+_REV = re.compile(r"(?:(?<=^)|(?<=[ _\-\(\[.])|(?<=\d))(?:rev(?:ision)?|ver(?:sion)?|v)[ _\-.]*"
+                  r"(?P<rev>\d{1,3})(?:\.\d+)?(?![\d])[ _\-]*[\)\]]?", re.I)
+_TIDY = re.compile(r"[ _\-]{2,}")
 
 
 def parse_revision(filename: str) -> tuple[str, int | None, str]:
-    """'CRU 4 FCT Quote_Rev1.xlsx' -> ('CRU 4 FCT Quote', 1, '.xlsx'); without a revision -> (stem, None, ext)."""
+    """'CRU 4 FCT Quote_Rev1.xlsx' -> ('CRU 4 FCT Quote', 1, '.xlsx'); 'FO-1404-47-V01_EFEM.docx' ->
+    ('FO-1404-47_EFEM', 1, '.docx'); without a revision -> (stem, None, ext).
+
+    The base is the name without the revision token, so the next revision of a document keeps everything
+    its name said - the number, the description and the date - and carries the DMS's own _RevNN."""
     stem, ext = os.path.splitext(filename)
     stem = re.sub(r"_DRAFT$", "", stem, flags=re.I)
-    m = _REV.match(stem)
-    return (m.group("base").rstrip(" _-"), int(m.group("rev")), ext) if m else (stem, None, ext)
+    found = list(_REV.finditer(stem))
+    if not found:
+        return stem, None, ext
+    m = found[-1]
+    base = (stem[:m.start()] + " " + stem[m.end():]) if m.end() < len(stem) else stem[:m.start()]
+    base = re.sub(r"[\(\[]\s*[\)\]]", " ", base)             # "Layout ()" after (v4) came out
+    base = _TIDY.sub(lambda x: x.group(0)[0], base.strip(" _-([")).strip(" _-([)]")
+    return (base or stem[:m.start()].strip(" _-") or stem), int(m.group("rev")), ext
 
 
 def copy_writable(source: str, target: str) -> str:

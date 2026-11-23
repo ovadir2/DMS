@@ -5173,3 +5173,45 @@ def test_no_employees_folder_at_all_is_said_plainly(tmp_path):
     assert c.get("/api/v1/employees/000123/folder", headers=key).json()["exists"] is False
     r = c.post("/api/v1/employees/000123/folder", headers=key)
     assert r.status_code == 409 and "New-DmsFileServerTree" in r.json()["detail"]
+
+
+def test_the_revision_is_read_from_the_file_name_and_confirmed(tmp_path):
+    """A file that arrives as "Spec v21.docx" is revision 21, not 1 - whoever wrote that name meant it. The
+    DMS reads it, offers it on the register dialog, and the person confirms or changes it."""
+    from dms_api.files import parse_revision
+    for name, want in (("Quote_Rev1.xlsx", 1), ("Procedure Rev 02.docx", 2), ("Spec rev.7.pdf", 7),
+                       ("Drawing v21.dwg", 21), ("Plan V.21.xlsx", 21), ("Manual ver 3.docx", 3),
+                       ("Policy version 4.docx", 4), ("Layout (v4).pdf", 4), ("Quote v2.1.xlsx", 2),
+                       # here it usually sits after the document's number, and the separators vary
+                       ("FO-1404-47-V01_EFEM_TP_CABLE-_11.05.2025.docx", 1),
+                       ("FO-1404-47V01_EFEM.docx", 1), ("FO 1404 47 V 01 EFEM.docx", 1),
+                       ("FO-1404-47 - V01 - EFEM.docx", 1), ("FO_1404_47_v.01_EFEM.docx", 1),
+                       ("FO-1404-47-V01_EFEM_Rev02.docx", 2)):     # the DMS's own, at the end, wins
+        assert parse_revision(name)[1] == want, name
+    # what is left of the name keeps everything the name said, without the version token
+    assert parse_revision("FO-1404-47-V01_EFEM_TP_CABLE-_11.05.2025.docx")[0].startswith("FO-1404-47")
+    assert "EFEM_TP_CABLE" in parse_revision("FO-1404-47-V01_EFEM_TP_CABLE-_11.05.2025.docx")[0]
+    for name in ("CRU 4 FCT Quote.xlsx", "Invoice 2024.pdf", "Inv 203.pdf", "Inv203.pdf", "Part V.docx",
+                 "Report 11.05.2025.docx", "DMS walk 2026-11-19 1830.txt"):
+        assert parse_revision(name)[1] is None, f"{name} is not a revision"
+
+    c, sp, s, q, d, fs = _approved_env(tmp_path)
+    f = q / "Spec v21.docx"
+    f.write_text("x", encoding="utf-8")
+    told = c.get("/api/classify", params={"path": str(f)}).json()
+    assert told["revision"] == "21" and "Spec v21.docx" in told["revisionFrom"] and told["title"] == "Spec"
+
+    one = c.post("/api/documents", json={"path": str(f), "documentType": "נוהל", "documentArea": "איכות"}).json()
+    assert sp.document(one["id"])["draftRevision"] == "21"          # inherited, without being asked
+
+    g = q / "Note v3.docx"
+    g.write_text("x", encoding="utf-8")
+    two = c.post("/api/documents", json={"path": str(g), "documentType": "נוהל", "documentArea": "איכות",
+                                         "revision": "7"}).json()
+    assert sp.document(two["id"])["draftRevision"] == "07"          # what the person confirmed wins
+
+    h = q / "Other v3.docx"
+    h.write_text("x", encoding="utf-8")
+    bad = c.post("/api/documents", json={"path": str(h), "documentType": "נוהל", "documentArea": "איכות",
+                                         "revision": "twenty"})
+    assert bad.status_code == 400 and "revision number" in bad.json()["detail"]

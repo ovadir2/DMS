@@ -239,6 +239,8 @@ through its paces yet. What was asked for and is not there yet has a table of it
 
 | REQ-P99 | Every employee has one file, cut from a shape | `01_General\HR\Employees\<Synel id>`, made from `Employee_Skeleton`: its fourteen folders and the AD permissions on them, so what is restricted there (pay, disciplinary, medical) is restricted in every employee's file, and never its documents. HRPortal asks through `/api/v1/employees/...` (scope `employees`), the page cuts one when a folder is made under Employees, and `New-DmsEmployee.ps1` does a whole company at once | Built |
 
+| REQ-P100 | A document keeps the revision its file name already carried | A file arriving as `FO-1404-47-V01_EFEM_TP_CABLE-_11.05.2025.docx` is revision 01, not 1 by default: the DMS reads `V01`, `v.21`, `Rev 7`, `version 3` wherever it sits in the name - after the document number as it usually does here, or at the end - with the separators people really use (`-`, `_`, space, none). It is offered on the register dialog, where the person confirms or changes it, and a year, a date or `Inv 203` is never mistaken for one | Built |
+
 ### Asked for, and not built yet
 
 | | What it would be | Why it is not done |

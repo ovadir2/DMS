@@ -504,6 +504,18 @@
       "title": "Path",
       "type": "string"
      },
+     "revision": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "The revision this document starts at. Left out, the DMS reads it from the file name (v21, Rev.7, version 3) and falls back to 01",
+      "title": "Revision"
+     },
      "submit": {
       "default": false,
       "description": "Also submit it for approval",

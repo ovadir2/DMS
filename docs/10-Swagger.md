@@ -10,7 +10,7 @@ Four calls, and nothing else: ask for a ticket, read what is released, fetch wha
 | **The document** | `https://dms.rh.tech/api/openapi.json`, and `dms-swagger.json` beside this file, to generate a client without reaching the server |
 | **The rest of it** | WidgetBuilder's publish call: `08-WidgetBuilder-Contract.md`. The search, the page key and the AI's guide: `09-Machine-API.md`. The DMS page's own ~80 endpoints: `/api/openapi-all.json` |
 
-Written from DMS 77ad194.
+Written from DMS 7a6f3f1.
 
 ## How a caller is known
 

@@ -79,6 +79,9 @@ class RegisterRequest(BaseModel):
     documentArea: str | None = Field(None, description="Defaults to the area of the blueprint folder")
     controlMode: str | None = None
     documentId: str | None = Field(None, description="Defaults to <prefix>-<item id>, e.g. DMS-00012")
+    revision: str | None = Field(None, description="The revision this document starts at. Left out, the DMS "
+                                                   "reads it from the file name (v21, Rev.7, version 3) and "
+                                                   "falls back to 01")
     submit: bool = Field(False, description="Also submit it for approval")
     approvers: list[str] | None = Field(None, description="Chosen approvers (emails); all must approve. Empty: the Approver Matrix")
 
@@ -741,7 +744,15 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     def classify_folder(path: str, _: User = Depends(current_user)):
         """What a file saved in this folder (or this file) inherits from the blueprint."""
         full = files.resolve(s.repository_root, path)
-        return classify(full if os.path.isdir(full) else os.path.dirname(full))
+        out = dict(classify(full if os.path.isdir(full) else os.path.dirname(full)))
+        if not os.path.isdir(full):
+            # What the file's own name says its revision is (v21, Rev.7, version 3). The page offers it and
+            # the person confirms it - a guess from a file name is a suggestion, never a decision.
+            base, rev, _ext = files.parse_revision(os.path.basename(full))
+            out["revision"] = f"{rev:02d}" if rev else ""
+            out["revisionFrom"] = os.path.basename(full) if rev else ""
+            out["title"] = base
+        return out
 
     @app.get("/api/customers")
     def customers(q: str = "", user: User = Depends(current_user)):
@@ -3614,7 +3625,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         doc = sp().create_document(title=title, path=path, document_type=document_type,
                                    document_area=document_area, owner_email=user.email,
                                    control_mode=req.controlMode or bp["controlMode"], document_id=req.documentId)
-        rev = files.parse_revision(os.path.basename(path))[1]
+        # The revision the person confirmed in the dialog, or what the file's own name says, or 01. A
+        # document that arrives as "Spec v21.docx" starts at 21, not at 1, and its next revision is 22.
+        if req.revision is not None and str(req.revision).strip():
+            if not re.fullmatch(r"\d{1,3}", str(req.revision).strip()):
+                raise HTTPException(400, f"{req.revision!r} is not a revision number (1 to 3 digits)")
+            rev = int(str(req.revision).strip())
+        else:
+            rev = files.parse_revision(os.path.basename(path))[1]
         sp().update(doc["id"], {"DraftRevision": f"{rev or 1:02d}"})
         sp().audit(document_id=doc["documentId"], event=s.choices["Created"], from_status="",
                    to_status=s.choices["Working"], actor=user.email,
