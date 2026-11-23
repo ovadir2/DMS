@@ -59,6 +59,9 @@ about it, exactly as a person is not.
 | `GET /api/v1/approved-documents` | everything released: `Current_ReadOnly` everywhere, with the document id, the name, the revision, the Markdown the AI reads and the file itself |
 | `GET /api/v1/departments` | the departments under General, with the KPIs folder of each |
 | `GET /api/v1/customers` | the customers, with the KPIs folder of each |
+| `GET /api/v1/employees/folders` | the employee files that exist, by Synel id |
+| `GET /api/v1/employees/{id}/folder` | whether one employee has a file, and where |
+| `POST /api/v1/employees/{id}/folder` | make it, cut from the employee skeleton (scope `employees`) |
 | `POST /api/v1/kpi/publish` | the WidgetBuilder's page and data (the only thing a key may write) |
 
 `GET /api/v1/documents` answers the same released documents from the register rather than from the folders;
@@ -386,6 +389,30 @@ Every row of the list carries `url`, `markdownUrl`, `size`, `modifiedUtc` and `e
   removed when it leaves `Current_ReadOnly`, so an index that follows the list cannot quote an old one.
 
 The ticket expires with the person's session; ask for a new one from the page rather than storing it.
+
+## The employee files (HRPortal)
+
+Every employee Synel knows gets one folder in the DMS, under `01_General\HR\Employees`, named by the Synel
+employee id. HRPortal asks; the DMS makes it, because the DMS owns its folders.
+
+```
+GET  /api/v1/employees/folders          -> {"folder": "...", "exists": true, "employees": ["000123"], "skeleton": "Employee_Skeleton"}
+GET  /api/v1/employees/000123/folder    -> {"synelEmployeeId": "000123", "exists": true, "folder": "..."}
+POST /api/v1/employees/000123/folder    -> 201 {"created": true, "how": "14 folders from Employee_Skeleton; ..."}
+                                           200 {"created": false} when it is already there
+```
+
+- The file is **cut from `Employee_Skeleton`**: its subfolders and the AD permissions on them - so the
+  restricted folders (`04_Compensation`, `12_Disciplinary`, `13_Medical`) stay restricted in every employee's
+  file - and never its documents. Without a skeleton on the file server the blueprint's fourteen folders are
+  made and the answer says no permissions were copied.
+- The id is a folder name: `^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`, leading zeros kept, and never the skeleton's
+  own name. Anything else is `400`.
+- A missing file is `200` with `exists: false`, never `404` - a `404` means the DMS does not have the
+  endpoint at all.
+- Reading takes the scope `employees` or `documents`; making one takes `employees`, and the key's AD account
+  needs Modify on the Employees folder. Every file made is written to the service log and the Control Audit.
+- `scripts\New-DmsEmployee.ps1` does the same from the server, for bulk loading.
 
 ## POST /api/v1/kpi/publish
 

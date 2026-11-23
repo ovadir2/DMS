@@ -237,6 +237,8 @@ through its paces yet. What was asked for and is not there yet has a table of it
 
 | REQ-P98 | What the AI indexes is built for the person asking, when they ask | No folder of copies: `approved-documents?ticket=…&format=ndjson&inline=true` streams every Markdown that person may read, a document per line, with the text in the line. `manifest=true` says how many and how big in one cheap call, the whole set carries an `ETag` so an unchanged repository answers `304`, and `since=` narrows it to what moved. Nothing is written to disk, nothing outlives the person's ticket | Built |
 
+| REQ-P99 | Every employee has one file, cut from a shape | `01_General\HR\Employees\<Synel id>`, made from `Employee_Skeleton`: its fourteen folders and the AD permissions on them, so what is restricted there (pay, disciplinary, medical) is restricted in every employee's file, and never its documents. HRPortal asks through `/api/v1/employees/...` (scope `employees`), the page cuts one when a folder is made under Employees, and `New-DmsEmployee.ps1` does a whole company at once | Built |
+
 ### Asked for, and not built yet
 
 | | What it would be | Why it is not done |

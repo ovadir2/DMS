@@ -154,6 +154,8 @@ the workflow and blueprint folders stay out of reach either way.
 
 | Key | Default | What it does |
 | --- | --- | --- |
+| `DMS_EMPLOYEES_FOLDER` | `01_General/HR/Employees` | One folder per employee, by Synel employee id. HRPortal asks the DMS to make them; the DMS owns them |
+| `DMS_EMPLOYEE_SKELETON` | `Employee_Skeleton` | The folder an employee file is cut from: its subfolders and the AD permissions on them (the restricted ones stay restricted), never its documents |
 | `DMS_OCR` | `1` | Read a scan with Tesseract when nothing else can: the last resort, after the DMS's own readers, markitdown and SharePoint's PDF all came back empty. It needs Tesseract installed beside the DMS (`pytesseract`, `Pillow`, `PyMuPDF`, and the language data); without them it quietly does nothing and the document gets a card. `0` turns it off |
 | `DMS_OCR_LANGUAGES` | `heb+eng` | The Tesseract language data installed on the server |
 | `DMS_OCR_MAX_PAGES` | `20` | Of one PDF: a three hundred page scan is not worth the wait |
@@ -232,6 +234,7 @@ the workflow and blueprint folders stay out of reach either way.
 | `Repair-DmsRegister.ps1` | After files or folders were removed on the file server itself: a record whose file moved is pointed at it, a record whose file is gone is archived and says so in Control Audit, Markdown beside nothing and stale check-outs go, missing blueprint folders are listed |
 | `Sync-DmsFileServer.ps1` | **After files were added or deleted by hand on the file server**: one pass over everything - records against files, files nobody registered, read-only flags, dashboards, Markdown, missing blueprint folders |
 | `Sync-DmsCustomerAccess.ps1` | The skeleton's permissions, folder by folder, onto customers that already exist: a group named after the skeleton becomes that customer's own (`RH-DMS-Customer_Skeleton-RW` ← `RH-DMS-Elbit-RW`), and a folder whose group AD does not have is left alone and named in the report. Shows what it would do; `-Apply` writes |
+| `New-DmsEmployee.ps1` | An employee file (or a list of them, `-FromCsv`) cut from `Employee_Skeleton`: the folders and the permissions, no documents. Shows what it would do; `-Apply` writes |
 | `New-DmsCustomer.ps1` | A new customer cut from `Customer_Skeleton`: its folders and the NTFS permissions on them. `-MakeSkeletonFrom Customer_A` does the one-time rename |
 | `New-DmsApiKey.ps1` | A key for an application that calls the DMS (`/api/v1/...`), with a name and what it may read (`docs/09-Machine-API.md`) |
 | `New-DmsNotifyFlowPackage.ps1` | The Power Automate flow that sends the notifications (DC-P2): the DMS writes a row to the DMS Notifications list at every step and the flow sends it as mail and to Teams. The approvals themselves stay on the DMS page |

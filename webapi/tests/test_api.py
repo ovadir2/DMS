@@ -5057,3 +5057,119 @@ def test_the_bridge_finds_the_folder_of_a_windows_path(tmp_path):
         assert gone.status_code == 404 and "is not there" in gone.json()["detail"]
         here = c.get("/api/kpi/files", params={"t": t, "path": str(kpis / "Current_ReadOnly")})
         assert here.status_code == 200, here.text
+
+
+def _hr_env(tmp_path, scopes=("employees", "documents")):
+    """A DMS with the HR tree on the file server and a key for HRPortal."""
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    (root / "01_General" / "HR" / "Employees" / "Employee_Skeleton" / "04_Compensation").mkdir(parents=True)
+    for name in ("01_Personal", "13_Medical"):
+        (root / "01_General" / "HR" / "Employees" / "Employee_Skeleton" / name).mkdir(parents=True)
+    # a file left in the skeleton is not part of the shape and must not be copied
+    (root / "01_General" / "HR" / "Employees" / "Employee_Skeleton" / "01_Personal" / "note.txt").write_text("x")
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                 admins=[USER], api_keys={"k": {"name": "hrportal", "scopes": list(scopes),
+                                                "as": "svc_hrportal@rh.co.il"}})
+    return TestClient(create_app(s, MemorySharePoint(s))), s, root
+
+
+def test_an_employee_file_is_cut_from_the_employee_skeleton(tmp_path):
+    """HRPortal asks, the DMS makes: one folder per employee, the skeleton's subfolders and the AD
+    permissions on them, and never its documents. Asking twice changes nothing."""
+    c, s, root = _hr_env(tmp_path)
+    key = {"X-DMS-Api-Key": "k"}
+    employees = root / "01_General" / "HR" / "Employees"
+
+    nothing = c.get("/api/v1/employees/000123/folder", headers=key).json()
+    assert nothing == {"synelEmployeeId": "000123", "exists": False, "folder": ""}
+
+    made = c.post("/api/v1/employees/000123/folder", headers=key)
+    assert made.status_code == 201, made.text
+    body = made.json()
+    assert body["created"] and body["synelEmployeeId"] == "000123"
+    here = employees / "000123"
+    assert (here / "01_Personal").is_dir() and (here / "04_Compensation").is_dir()
+    assert not (here / "01_Personal" / "note.txt").exists()     # the shape, not the skeleton's files
+
+    again = c.post("/api/v1/employees/000123/folder", headers=key)
+    assert again.status_code == 200 and again.json()["created"] is False
+    assert len([p for p in employees.iterdir() if p.is_dir()]) == 2   # the skeleton and the one employee
+
+    there = c.get("/api/v1/employees/000123/folder", headers=key).json()
+    assert there["exists"] and there["folder"] == str(here)
+
+    listed = c.get("/api/v1/employees/folders", headers=key).json()
+    assert listed["exists"] and listed["employees"] == ["000123"]
+    assert listed["skeleton"] == "Employee_Skeleton"
+
+
+def test_an_employee_file_needs_a_synel_id_and_the_right_key(tmp_path):
+    """The id becomes a folder name, so it is letters, digits, - and _ and nothing else; and making one is
+    a scope of its own - a key that may only read documents cannot make folders in HR."""
+    c, s, root = _hr_env(tmp_path)
+    key = {"X-DMS-Api-Key": "k"}
+    for bad in ("a b", "Employee_Skeleton", "x" * 40, "employee skeleton", ".hidden", "000123!"):
+        r = c.post(f"/api/v1/employees/{bad}/folder", headers=key)
+        assert r.status_code == 400, f"{bad!r} was accepted: {r.status_code} {r.text[:120]}"
+    # a path is not an id at all: it is not even a route of this API
+    for shaped in ("a/b", ".."):
+        assert c.post(f"/api/v1/employees/{shaped}/folder", headers=key).status_code == 404
+    kids = [p.name for p in (root / "01_General" / "HR" / "Employees").iterdir()]
+    assert kids == ["Employee_Skeleton"], kids
+
+    reader, _s2, _r2 = _hr_env(tmp_path / "two", scopes=("documents",))
+    assert reader.get("/api/v1/employees/folders", headers=key).status_code == 200      # reading is allowed
+    assert reader.post("/api/v1/employees/000999/folder", headers=key).status_code == 403
+
+
+def test_the_employee_skeleton_is_a_shape_on_the_page_too(tmp_path):
+    """Nothing is filed in the employee skeleton and no folder is made in it from the page - the same rule
+    as the customer skeleton, for the same reason: it would be copied into every file cut after it."""
+    c, s, root = _hr_env(tmp_path)
+    shape = root / "01_General" / "HR" / "Employees" / "Employee_Skeleton"
+    assert c.post("/api/folders", json={"parent": str(shape), "name": "x"}).status_code == 403
+    (shape / "01_Personal" / "draft.docx").write_text("x")
+    assert c.post("/api/documents", json={"path": str(shape / "01_Personal" / "draft.docx"),
+                                          "documentType": "x", "documentArea": "y"}).status_code == 403
+
+    # a folder made under Employees from the page is an employee file, cut from the skeleton
+    made = c.post("/api/folders", json={"parent": str(root / "01_General" / "HR" / "Employees"),
+                                        "name": "000777"})
+    assert made.status_code in (200, 201), made.text
+    assert (root / "01_General" / "HR" / "Employees" / "000777" / "13_Medical").is_dir()
+
+
+def test_without_a_skeleton_the_blueprint_shape_is_made_and_says_so(tmp_path):
+    """A file server with no Employee_Skeleton: the DMS still knows the fourteen folders, but the AD
+    permissions live on the folders and there is nothing to copy them from - so the answer says it."""
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    (root / "01_General" / "HR" / "Employees").mkdir(parents=True)
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                 admins=[USER], api_keys={"k": {"name": "hrportal", "scopes": ["employees"],
+                                                "as": "svc_hrportal@rh.co.il"}})
+    c = TestClient(create_app(s, MemorySharePoint(s)))
+    r = c.post("/api/v1/employees/000500/folder", headers={"X-DMS-Api-Key": "k"})
+    assert r.status_code == 201, r.text
+    assert "no permissions were copied" in r.json()["how"]
+    assert (root / "01_General" / "HR" / "Employees" / "000500" / "14_Offboarding").is_dir()
+
+
+def test_no_employees_folder_at_all_is_said_plainly(tmp_path):
+    """Before the blueprint has been pushed to the file server: the list says exists=false (not an error),
+    and making one says which script to run rather than creating a tree nobody asked for."""
+    from dms_api.memory import MemorySharePoint
+    root = tmp_path / "Root"
+    (root / "01_General").mkdir(parents=True)
+    s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
+                 admins=[USER], api_keys={"k": {"name": "hrportal", "scopes": ["employees"],
+                                                "as": "svc_hrportal@rh.co.il"}})
+    c = TestClient(create_app(s, MemorySharePoint(s)))
+    key = {"X-DMS-Api-Key": "k"}
+    listed = c.get("/api/v1/employees/folders", headers=key).json()
+    assert listed == {"folder": str(root / "01_General" / "HR" / "Employees"), "exists": False,
+                      "employees": [], "skeleton": None}
+    assert c.get("/api/v1/employees/000123/folder", headers=key).json()["exists"] is False
+    r = c.post("/api/v1/employees/000123/folder", headers=key)
+    assert r.status_code == 409 and "Update-DmsBlueprint" in r.json()["detail"]

@@ -1342,6 +1342,16 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             if shape and os.path.normcase(shape) != os.path.normcase(path):
                 count, how = _skeleton.copy(shape, path)
                 log(user, "new-customer", f"{path} from {os.path.basename(shape)}: {count} folders, {how}")
+        elif os.path.normcase(os.path.dirname(path)) == os.path.normcase(employees_root()):
+            # An employee file, cut from the employee skeleton exactly as a customer is from theirs
+            sub = blueprint.leaves(blueprint.EMPLOYEE)
+            from . import skeleton as _skeleton
+            shape = _skeleton.find(s.repository_root, s.employees_folder, s.employee_skeleton,
+                                   _skeleton.EMPLOYEE_LOOKS_LIKE)
+            if shape and os.path.normcase(shape) != os.path.normcase(path):
+                count, how = _skeleton.copy(shape, path)
+                log(user, "new-employee", f"{path} from {os.path.basename(shape)}: {count} folders, {how}")
+                sub = []
         elif blueprint.product_index(parts) == len(parts) - 1:
             sub = blueprint.leaves(blueprint.PROJECT)
         for rel in sub:
@@ -2444,6 +2454,112 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                              "counts": {"departments": departments.get("count", 0),
                                         "customers": customers.get("count", 0)}},
                             headers={"Cache-Control": "no-store"})
+
+    # ---- the employee files, for HRPortal -------------------------------------------------------------
+    SYNEL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
+
+    def synel_id(value: str) -> str:
+        """An employee's Synel id as a folder name: letters, digits, - and _, leading zeros kept, and never
+        the skeleton's own name. A name, a path or a dot is not an id and never becomes a folder."""
+        one = (value or "").strip()
+        if not SYNEL_ID.match(one) or is_employee_skeleton(one):
+            raise HTTPException(400, f"{value!r} is not a Synel employee id")
+        return one
+
+    @app.get("/api/v1/employees/folders")
+    def api_employee_folders(request: Request,
+                             ticket: str = Query("", description="An indexing ticket, instead of a key")):
+        """The employee files the DMS holds, by Synel id. The skeleton is not one of them.
+
+        For HRPortal: it asks after each Synel sync which files exist, and reports a folder that matches no
+        employee to HR rather than touching it. AD decides here as everywhere - an account that may not read
+        the Employees folder is told nothing."""
+        from fastapi.responses import JSONResponse
+        who = api_reader(request, ("employees", "documents"), ticket)
+        base = employees_root()
+        if not os.path.isdir(base):
+            return JSONResponse({"folder": base, "exists": False, "employees": [], "skeleton": None},
+                                headers={"Cache-Control": "no-store"})
+        if not api_may_see(who, base):
+            raise HTTPException(403, "That account may not read the employee files")
+        found, shape = [], None
+        with os.scandir(base) as it:
+            for e in sorted(it, key=lambda x: x.name.lower()):
+                if not e.is_dir() or e.name.startswith("."):
+                    continue
+                if is_employee_skeleton(e.name):
+                    shape = e.name
+                    continue
+                if api_may_see(who, e.path):
+                    found.append(e.name)
+        logger.info("api %s GET /api/v1/employees/folders -> %d", who["name"], len(found))
+        return JSONResponse({"folder": base, "exists": True, "employees": found, "skeleton": shape},
+                            headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/v1/employees/{employee}/folder")
+    def api_employee_folder(request: Request, employee: str,
+                            ticket: str = Query("", description="An indexing ticket, instead of a key")):
+        """Whether this employee has a file in the DMS, and where it is.
+
+        A file that is there but empty answers exists=true - which the released-documents list cannot say,
+        and is what HRPortal needs to know before onboarding. A file that is not there is answered 200 with
+        exists=false, never 404: a 404 means to HRPortal that this DMS does not have the endpoint at all."""
+        from fastapi.responses import JSONResponse
+        who = api_reader(request, ("employees", "documents"), ticket)
+        one = synel_id(employee)
+        base = employees_root()
+        if os.path.isdir(base) and not api_may_see(who, base):
+            raise HTTPException(403, "That account may not read the employee files")
+        here = os.path.join(base, one)
+        there = os.path.isdir(here)
+        return JSONResponse({"synelEmployeeId": one, "exists": there, "folder": here if there else ""},
+                            headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/v1/employees/{employee}/folder", status_code=201)
+    def api_make_employee_folder(request: Request, employee: str):
+        """Make this employee's file, cut from the employee skeleton: its folders and the AD permissions on
+        them, and no documents. Asking twice is not an error - the second time answers 200 and changes
+        nothing, which is what a job that runs every fifteen minutes needs."""
+        from fastapi.responses import JSONResponse
+        from . import skeleton as _skeleton
+        who = api_caller(request, "employees")
+        one = synel_id(employee)
+        base = employees_root()
+        if not os.path.isdir(base):
+            raise HTTPException(409, f"There is no employee folder on this DMS yet ({base}). Run "
+                                     f"scripts\\Update-DmsBlueprint.ps1 on the server.")
+        here = os.path.join(base, one)
+        if os.path.isdir(here):
+            return JSONResponse({"synelEmployeeId": one, "folder": here, "created": False,
+                                 "how": "it was already there"}, status_code=200,
+                                headers={"Cache-Control": "no-store"})
+        if security.may_see(who.get("as") or "", base, security.WRITE) is False:
+            raise HTTPException(403, f"{who['name']} acts as {who.get('as')}, who may not add to {base}")
+        shape = _skeleton.find(s.repository_root, s.employees_folder, s.employee_skeleton,
+                               _skeleton.EMPLOYEE_LOOKS_LIKE)
+        if shape:
+            count, how = _skeleton.copy(shape, here)
+            how = f"{count} folders from {os.path.basename(shape)}; {how}"
+        else:
+            # No skeleton on this file server: the blueprint still knows the shape, but the permissions
+            # live on the folders and there is nothing to copy them from. Say so rather than pretend.
+            made = blueprint.leaves(blueprint.EMPLOYEE)
+            os.makedirs(here, exist_ok=True)
+            for rel in made:
+                os.makedirs(os.path.join(here, *rel), exist_ok=True)
+            how = (f"{len(made)} folders from the blueprint; there is no {s.employee_skeleton} on the file "
+                   f"server, so no permissions were copied")
+        logger.info("api %s POST /api/v1/employees/%s/folder -> %s", who["name"], one, how)
+        sp_log = f"{one}: {how}"
+        try:
+            sp().audit(document_id=f"HR-{one}", event=s.choices["PermissionChanged"], from_status="",
+                       to_status="", actor=who.get("as") or who["name"],
+                       details=f"Employee file made in the DMS: {here} ({how})")
+        except Exception as e:  # noqa: BLE001 - the folder is made; the audit is not worth failing it
+            logger.info("the employee file of %s was not written to the Control Audit: %s", one, e)
+        logger.info("new-employee %s", sp_log)
+        return JSONResponse({"synelEmployeeId": one, "folder": here, "created": True, "how": how},
+                            status_code=201, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/v1/file")
     def api_file(request: Request, path: str,
@@ -3673,12 +3789,26 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return bool(name) and (name.lower() == (s.customer_skeleton or "").lower()
                                or bool(_skeleton.LOOKS_LIKE.match(name)))
 
+    def employees_root() -> str:
+        """Where the employee files live: 01_General\\HR\\Employees by default (DMS_EMPLOYEES_FOLDER)."""
+        return os.path.join(s.repository_root, *s.employees_folder.replace("/", "\\").split("\\"))
+
+    def is_employee_skeleton(name: str) -> bool:
+        from . import skeleton as _skeleton
+        return bool(name) and (name.lower() == (s.employee_skeleton or "").lower()
+                               or bool(_skeleton.EMPLOYEE_LOOKS_LIKE.match(name)))
+
     def in_skeleton(path: str) -> str:
-        """The name of the skeleton, when this path is inside it. Its folders are the shape of a customer;
-        a document kept there would be copied into every customer made after it."""
+        """The name of the skeleton, when this path is inside it - the customers' one, or the employees'.
+        Its folders are the shape of the next customer (or the next employee file); a document kept there
+        would be copied into every one made after it."""
         parts = rel_parts(path)
         if len(parts) >= 2 and parts[0].lower() == s.customers_folder.lower() and is_skeleton(parts[1]):
             return parts[1]
+        here = [p.lower() for p in s.employees_folder.replace("/", "\\").split("\\")]
+        if (len(parts) >= len(here) + 1 and [p.lower() for p in parts[:len(here)]] == here
+                and is_employee_skeleton(parts[len(here)])):
+            return parts[len(here)]
         return ""
 
     def no_files_in_skeleton(path: str) -> None:

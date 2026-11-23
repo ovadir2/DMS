@@ -113,8 +113,44 @@ MANAGEMENT["Supply_Chain"] = ("Supply chain", "שרשרת אספקה", N({
     "Planning_logistic": ("Planning and logistics", "תכנון ולוגיסטיקה", {}, "Planning, forecasts, shipping", "תכנון, תחזיות, משלוחים")}),
     "Purchasing, planning and logistics", "רכש, תכנון ולוגיסטיקה")
 
-MANAGEMENT["HR"] = ("HR", "משאבי אנוש", N({"Shared": ("Shared", "משותף", {}, "Files shared with potential employees and the share log",
-                                                     "קבצים ששותפו עם מועמדים לעבודה ויומן השיתופים")}))
+# One folder per employee, and one folder that is the shape they are cut from - the same idea as the
+# customer skeleton: the folders are here, the AD permissions on them live on the file server and are
+# copied from the skeleton, so the three restricted folders stay restricted in every employee's file.
+EMPLOYEE = N({k: (en, he, {}, note, note_he) for k, en, he, note, note_he in (
+    ("01_Personal", "Personal details and contact", "פרטים אישיים ויצירת קשר", "", ""),
+    ("02_Employment", "Employment details", "פרטי העסקה", "", ""),
+    ("03_Contracts", "Contracts and amendments", "חוזים ותיקונים", "", ""),
+    ("04_Compensation", "Pay and compensation", "מסמכי שכר ותגמול",
+     "Restricted HR group only", "לקבוצת משאבי אנוש המורשית בלבד"),
+    ("05_Attendance_Leave", "Attendance and leave", "נוכחות והיעדרויות", "", ""),
+    ("06_Onboarding", "Onboarding", "קליטה", "", ""),
+    ("07_Training", "Training and certification", "הדרכות והסמכות", "", ""),
+    ("08_Performance", "Performance reviews", "הערכת ביצועים", "", ""),
+    ("09_Equipment", "Equipment issued", "ציוד מוקצה", "", ""),
+    ("10_Correspondence", "HR correspondence", "התכתבויות משאבי אנוש", "", ""),
+    ("11_Acknowledgments", "Acknowledgments", "אישורי קריאה", "", ""),
+    ("12_Disciplinary", "Disciplinary", "משמעת",
+     "Restricted HR group only", "לקבוצת משאבי אנוש המורשית בלבד"),
+    ("13_Medical", "Medical", "רפואי",
+     "Restricted HR group only", "לקבוצת משאבי אנוש המורשית בלבד"),
+    ("14_Offboarding", "Offboarding", "סיום העסקה", "", ""))})
+
+MANAGEMENT["HR"] = ("HR", "משאבי אנוש", N({
+    "Shared": ("Shared", "משותף", {}, "Files shared with potential employees and the share log",
+               "קבצים ששותפו עם מועמדים לעבודה ויומן השיתופים"),
+    "Employees": ("Employees", "תיקי עובדים", N({
+        "Employee_Skeleton": ("Employee skeleton", "שלד תיק עובד", EMPLOYEE,
+                              "The shape every employee file is cut from: its folders and the AD "
+                              "permissions on them, never a document",
+                              "השלד שכל תיק עובד נגזר ממנו: התיקיות וההרשאות עליהן, ללא מסמכים"),
+        "*": ("", "", EMPLOYEE, "One employee, by their Synel employee ID", "עובד אחד, לפי מספר עובד בסינל")}),
+        "One folder per employee, cut from the skeleton", "תיקייה לכל עובד, נגזרת מהשלד"),
+    "Forms_Templates": ("HR forms and templates", "טפסי משאבי אנוש", {},
+                        "The forms HR offers; only a released revision is offered to an employee",
+                        "הטפסים של משאבי אנוש; מוצעת רק גרסה משוחררת"),
+    "Policies": ("HR policies", "נהלי משאבי אנוש", {},
+                 "Controlled HR policies employees read and acknowledge",
+                 "נהלי משאבי אנוש מבוקרים שהעובדים קוראים ומאשרים")}))
 MANAGEMENT["Commercial"] = ("Commercial", "מסחרי", N({"Pricing": ("Pricing", "תמחור", {})}))
 MANAGEMENT["Supply_chain"] = ("Supply chain", "שרשרת אספקה", N({"Planners": ("Planners", "תכנון", {})}))
 # Quality and Standards is a department of the skeleton; what people arrange inside it is theirs. Those
@@ -401,7 +437,9 @@ def folder_list() -> list[str]:
 
     def walk(tree, prefix):
         for name, v in tree.items():
-            key = {"02_Customers": "<Customer>", PRODUCTS[-1]: "<Product>"}.get(prefix[-1] if prefix else "", None) if name == "*" else name
+            key = {"02_Customers": "<Customer>", PRODUCTS[-1]: "<Product>",
+                   "Employees": "<SynelEmployeeId>"}.get(prefix[-1] if prefix else "", None) \
+                if name == "*" else name
             if key is None:
                 continue
             path = prefix + [key]

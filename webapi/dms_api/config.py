@@ -109,6 +109,10 @@ class Settings:
     # The customer folder a new customer is cut from: its folders and, on the file server, the AD
     # permissions on them. Empty or missing: the blueprint folders are made and nothing is copied.
     customer_skeleton: str = "Customer_Skeleton"
+    # One folder per employee, cut from a skeleton of its own - the same idea, under HR (HRPortal asks the
+    # DMS to make them; the DMS owns its folders).
+    employees_folder: str = "01_General/HR/Employees"
+    employee_skeleton: str = "Employee_Skeleton"
     # Applications that call the DMS without a person behind them: name:key:scopes, separated by |.
     # Empty: no application can call it, and the machine API answers nothing.
     api_keys: dict = field(default_factory=dict)
@@ -215,6 +219,8 @@ class Settings:
             # It was called the KPI Builder; an .env that still says so is read all the same
             kpi_builder_url=(e("DMS_WIDGET_BUILDER_URL", "") or e("DMS_KPI_BUILDER_URL", "")).strip(),
             customer_skeleton=e("DMS_CUSTOMER_SKELETON", "Customer_Skeleton").strip(),
+            employees_folder=e("DMS_EMPLOYEES_FOLDER", "01_General/HR/Employees").strip().strip("/\\"),
+            employee_skeleton=e("DMS_EMPLOYEE_SKELETON", "Employee_Skeleton").strip(),
             api_keys=_api_keys(e("DMS_API_KEYS", "")),
             page_sandbox=e("DMS_PAGE_SANDBOX", "1").strip().lower() not in ("0", "false", "no", "off"),
             submitted_editable=e("DMS_SUBMITTED_EDITABLE", "true").lower() not in ("0", "false", "no", "off"),

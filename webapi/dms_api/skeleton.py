@@ -19,11 +19,15 @@ import threading
 
 log = logging.getLogger("dms_api.skeleton")
 LOOKS_LIKE = re.compile(r"^customer[ _-]?skel(e)?ton$", re.I)
+# The same shape, for the employee files under HR: a folder named Employee_Skelton answers too, as a
+# misspelled customer skeleton does - the name on the file server is whatever somebody typed that day.
+EMPLOYEE_LOOKS_LIKE = re.compile(r"^employees?[ _-]?skel(e)?ton$", re.I)
 
 
-def find(root: str, customers_folder: str, named: str = "") -> str | None:
-    """The skeleton folder, by the name it was given or by the look of its name."""
-    base = os.path.join(root, customers_folder)
+def find(root: str, folder: str, named: str = "", looks_like: re.Pattern | None = None) -> str | None:
+    """The skeleton folder inside that folder, by the name it was given or by the look of its name."""
+    base = os.path.join(root, *folder.replace("\\", "/").split("/"))
+    pattern = looks_like or LOOKS_LIKE
     if not os.path.isdir(base):
         return None
     if named:
@@ -33,7 +37,7 @@ def find(root: str, customers_folder: str, named: str = "") -> str | None:
     try:
         with os.scandir(base) as it:
             for e in it:
-                if e.is_dir() and LOOKS_LIKE.match(e.name):
+                if e.is_dir() and pattern.match(e.name):
                     return e.path
     except OSError:
         return None

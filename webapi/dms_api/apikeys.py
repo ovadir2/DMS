@@ -23,7 +23,7 @@ import os
 import secrets
 
 log = logging.getLogger("dms_api.api")
-SCOPES = ("customers", "documents", "files", "kpi")
+SCOPES = ("customers", "documents", "employees", "files", "kpi")
 
 
 def parse(value: str) -> dict[str, dict]:
