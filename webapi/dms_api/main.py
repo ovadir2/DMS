@@ -2527,7 +2527,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         base = employees_root()
         if not os.path.isdir(base):
             raise HTTPException(409, f"There is no employee folder on this DMS yet ({base}). Run "
-                                     f"scripts\\Update-DmsBlueprint.ps1 on the server.")
+                                     f"scripts\\New-DmsFileServerTree.ps1 on the server to make the "
+                                     f"blueprint folders, or make {base} by hand.")
         here = os.path.join(base, one)
         if os.path.isdir(here):
             return JSONResponse({"synelEmployeeId": one, "folder": here, "created": False,

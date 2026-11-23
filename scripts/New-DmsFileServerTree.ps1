@@ -300,7 +300,10 @@ foreach ($t in $top.Keys) {
 $bpFile = Join-Path $PSScriptRoot 'blueprint-folders.txt'
 if (-not (Test-Path -LiteralPath $bpFile)) { throw "Missing $bpFile (git pull)" }
 $bp = @(Get-Content -LiteralPath $bpFile -Encoding UTF8 | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$ManagementFolders = @($bp | Where-Object { $_ -like '01_General\*' } | ForEach-Object { $_.Substring('01_General\'.Length) })
+# <SynelEmployeeId> stands for one employee's folder, as <Customer> stands for one customer: a placeholder
+# is a shape, never a folder to make here.
+$ManagementFolders = @($bp | Where-Object { $_ -like '01_General\*' -and $_ -notlike '*<*' } |
+    ForEach-Object { $_.Substring('01_General\'.Length) })
 $CustomerTree = @($bp | Where-Object { $_ -like '02_Customers\<Customer>\*' -and $_ -notlike '*<Product>*' } |
     ForEach-Object { $_.Substring('02_Customers\<Customer>\'.Length) })
 $ProjectTree = @($bp | Where-Object { $_ -like '02_Customers\<Customer>\Develop\Products\<Product>\*' } |
