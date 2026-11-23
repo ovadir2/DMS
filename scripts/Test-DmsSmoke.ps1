@@ -254,6 +254,16 @@ Write-Host ""
 Section "Signing in: the DMS answers as the person at the keyboard"
 $me = Call GET "/api/me" $null $null
 $cfg = Call GET "/api/client-config" $null $null
+# The walk works with the DMS's test accounts and nobody else - the person it acts as, the real account
+# behind it (it submits one document as itself, so that account becomes an initiator), and the approver.
+if (-not $AnyPerson) {
+    foreach ($who in @($me.email, $me.actingFrom)) {
+        if ($who -and -not (Test-DmsAccount $who)) {
+            throw ("the DMS answers as '$who', which is not one of its test accounts " +
+                   "($($TestAccounts -join ', ')). Sign in as dms-lab or roneno, or run with -AnyPerson.")
+        }
+    }
+}
 Check 'REQ-P03' "the DMS knows who is calling, by AD" { "signed in as $($me.email)$(if ($me.actingFrom) { "  (really $($me.actingFrom))" })" }
 Check 'REQ-P31' "Acting as is a super user seeing as somebody, and the real account is kept" {
     if ($As) { [bool]$me.actingFrom } else { $true } }
