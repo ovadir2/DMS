@@ -49,12 +49,24 @@
 .PARAMETER As
     Run as this person (a super user only; the DMS checks). Left out, it runs as you.
 
+.PARAMETER DocumentType
+    The document types the three workflow documents are registered as. One type is used for all of them;
+    several are used in turn, so one walk covers more than one type. Left out: the first type the register
+    offers that the Approver Matrix has no rule for - and failing that, נוהל. Every type is checked against
+    the register's own choices before the walk starts, and the walk always names its approvers, so no type
+    ever sends a test document to the people the Matrix names.
+
+.PARAMETER DocumentArea
+    The area they are registered under (default מערכות מידע), checked the same way.
+
 .PARAMETER Approver
     Who the document is sent to. It cannot be the person the walk runs as, and - without -AnyPerson - it is
     one of the DMS's test accounts (dms-lab, roneno).
 
 .EXAMPLE
     .\scripts\Test-DmsSmoke.ps1 -As RH\dms-lab -Approver roneno@rh.co.il
+.EXAMPLE
+    .\scripts\Test-DmsSmoke.ps1 -As RH\dms-lab -Approver roneno@rh.co.il -DocumentType 'נוהל','הוראת עבודה','טופס'
 .EXAMPLE
     .\scripts\Test-DmsSmoke.ps1 -Clean
 #>
@@ -64,6 +76,8 @@ param(
     [string]$As = '',
     [string]$Approver = '',
     [string]$Folder = '01_General\IT\DMS-Selftest',
+    [string[]]$DocumentType = @(),
+    [string]$DocumentArea = 'מערכות מידע',
     [string]$Delegate = '',
     [string]$ShareWith = '',
     [string]$ShareCustomer = '',
@@ -264,6 +278,31 @@ if (-not $AnyPerson) {
         }
     }
 }
+# The types the three workflow documents are registered as. Given ones are checked against the register's
+# own choices - a type it does not know is refused by the DMS document by document, which reads as a walk
+# that failed. Left out, the walk takes נוהל if the register has it, else the first type it offers.
+$options = Call GET "/api/options" $null $null
+$types = @($options.DocumentType)
+if (-not $DocumentType) {
+    $DocumentType = @(if ($types -contains 'נוהל') { 'נוהל' } elseif ($types) { $types[0] } else { 'נוהל' })
+}
+foreach ($t in $DocumentType) {
+    if ($types -and ($types -notcontains $t)) {
+        throw "the register has no document type '$t'. It offers: $($types -join ', ')"
+    }
+}
+if ($options.DocumentArea -and ($options.DocumentArea -notcontains $DocumentArea)) {
+    throw "the register has no area '$DocumentArea'. It offers: $($options.DocumentArea -join ', ')"
+}
+$script:typeAt = 0
+function Next-DmsType {
+    # one type for every document, or several used in turn, so one walk covers more than one of them
+    $t = $DocumentType[$script:typeAt % $DocumentType.Count]
+    $script:typeAt++
+    return $t
+}
+Check 'REQ-P16' "the register's own document types are used, not words made up here" {
+    "registering as $($DocumentType -join ', ') under $DocumentArea" }
 Check 'REQ-P03' "the DMS knows who is calling, by AD" { "signed in as $($me.email)$(if ($me.actingFrom) { "  (really $($me.actingFrom))" })" }
 Check 'REQ-P31' "Acting as is a super user seeing as somebody, and the real account is kept" {
     if ($As) { [bool]$me.actingFrom } else { $true } }
@@ -300,7 +339,7 @@ Check 'REQ-P88' "a file is dropped into the folder, with AD asked for Modify" {
 Section "A document, end to end: registered, sent, approved, released"
 $doc = $null
 Check 'REQ-P42/P43' "it is registered and sent to an approver" {
-    $script:doc = Call POST "/api/documents" @{ path = $up.path; documentType = 'נוהל'; documentArea = 'מערכות מידע';
+    $script:doc = Call POST "/api/documents" @{ path = $up.path; documentType = (Next-DmsType); documentArea = $DocumentArea;
                                                 submit = $true; approvers = @($Approver) } $null
     "$($doc.documentId) waiting for $Approver" }
 Check 'REQ-P36' "the file moved to Submitted" {
@@ -439,7 +478,7 @@ $doc4 = Join-Path $env:TEMP "DMS walk withdrawn $stamp.txt"
 $w1 = $null
 Check 'REQ-P47' "a submission can be taken back by its owner" {
     $put = Send-File $doc4 $here @{}
-    $script:w1 = Call POST "/api/documents" @{ path = $put.path; documentType = 'נוהל'; documentArea = 'מערכות מידע';
+    $script:w1 = Call POST "/api/documents" @{ path = $put.path; documentType = (Next-DmsType); documentArea = $DocumentArea;
                                                submit = $true; approvers = @($Approver) } $null
     $back = Call POST "/api/documents/$($w1.id)/withdraw" @{} $null
     if ($back.statusKey -ne 'Working') { throw "it is $($back.statusKey), not Working" }
@@ -607,7 +646,7 @@ Check 'REQ-P56' "a document is left waiting for the person the walk runs as" {
     try {
         $put = Send-File $doc3 $here @{}
         $who = $me.email              # the DMS knows people by email: RH\name is not an approver
-        $w = Call POST "/api/documents" @{ path = $put.path; documentType = 'נוהל'; documentArea = 'מערכות מידע';
+        $w = Call POST "/api/documents" @{ path = $put.path; documentType = (Next-DmsType); documentArea = $DocumentArea;
                                            submit = $true; approvers = @($who) } $null
         "$($w.documentId) is waiting for $who"
     } finally { $script:headers = $keep } }
