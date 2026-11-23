@@ -17,6 +17,8 @@ import re
 import subprocess
 import threading
 
+from .config import WORKFLOW_FOLDERS
+
 log = logging.getLogger("dms_api.skeleton")
 LOOKS_LIKE = re.compile(r"^customer[ _-]?skel(e)?ton$", re.I)
 # The same shape, for the employee files under HR: a folder named Employee_Skelton answers too, as a
@@ -45,10 +47,15 @@ def find(root: str, folder: str, named: str = "", looks_like: re.Pattern | None 
 
 
 def folders_of(path: str) -> list[tuple[str, ...]]:
-    """Every folder under the skeleton, as name tuples, parents first. Its files are not part of the shape."""
+    """Every folder under the skeleton, as name tuples, parents first. Its files are not part of the shape.
+
+    Working / Submitted / Current_ReadOnly / Obsolete_ReadOnly are not part of the shape either: they are
+    not blueprint folders anywhere, the DMS makes them beside a document when it goes through the workflow.
+    A skeleton should hold none; if somebody made one there by hand, it is skipped rather than copied.
+    """
     out: list[tuple[str, ...]] = []
     for folder, dirs, _names in os.walk(path):
-        dirs.sort()
+        dirs[:] = sorted(d for d in dirs if d not in WORKFLOW_FOLDERS)
         rel = os.path.relpath(folder, path)
         if rel != ".":
             out.append(tuple(rel.replace("\\", "/").split("/")))
@@ -77,9 +84,10 @@ def permissions(skeleton: str, target: str) -> str:
     """The permissions each folder carries, copied onto the same folder of the new customer.
 
     robocopy is the one thing that copies a folder's own security with it: /E every folder, /XF * nothing of
-    what is in them, /COPYALL the permissions, the owner and the auditing beside the dates."""
+    what is in them, /XD never a workflow folder (the DMS makes those, not the skeleton), /COPYALL the permissions, the owner and the auditing beside the dates."""
     try:
-        r = subprocess.run(["robocopy", skeleton, target, "/E", "/XF", "*", "/COPYALL", "/DCOPY:DAT",
+        r = subprocess.run(["robocopy", skeleton, target, "/E", "/XF", "*", "/XD", *WORKFLOW_FOLDERS,
+                            "/COPYALL", "/DCOPY:DAT",
                             "/R:1", "/W:1", "/NFL", "/NDL", "/NJH", "/NJS", "/NP"],
                            capture_output=True, text=True, timeout=600)
         # robocopy says 0-7 for "did something, or nothing to do"; 8 and up is a failure.

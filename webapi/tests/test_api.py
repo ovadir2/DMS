@@ -4596,8 +4596,9 @@ def test_markdown_of_two_documents_with_the_same_name(tmp_path):
     """A procedure and its workbook can sit in one folder under one base name - Procedure.docx and
     Procedure.xlsx. Each gets a Markdown of its own: the second one used to overwrite the first's, so the
     AI read one document twice and never saw the other."""
-    from openpyxl import Workbook
-    from docx import Document as Docx
+    # The readers are optional: a machine without them cannot write these two documents, so it cannot test it.
+    Workbook = pytest.importorskip("openpyxl", reason="openpyxl is not installed").Workbook
+    Docx = pytest.importorskip("docx", reason="python-docx is not installed").Document
     import dms_api.markdown as md
     folder = tmp_path / "Current_ReadOnly"
     folder.mkdir()
@@ -5072,6 +5073,27 @@ def _hr_env(tmp_path, scopes=("employees", "documents")):
                  admins=[USER], api_keys={"k": {"name": "hrportal", "scopes": list(scopes),
                                                 "as": "svc_hrportal@rh.co.il"}})
     return TestClient(create_app(s, MemorySharePoint(s))), s, root
+
+
+def test_a_workflow_folder_in_a_skeleton_is_not_part_of_the_shape(tmp_path):
+    """Working / Submitted / Current_ReadOnly / Obsolete_ReadOnly are not blueprint folders anywhere: the
+    DMS makes them beside a document when it goes through the workflow. A skeleton holds none, and one made
+    there by hand is skipped rather than copied into every new folder."""
+    from dms_api import skeleton
+    shape = tmp_path / "Employee_Skeleton"
+    (shape / "01_Personal").mkdir(parents=True)
+    (shape / "07_Training" / "Current_ReadOnly").mkdir(parents=True)
+    (shape / "Working" / "02_Draft").mkdir(parents=True)
+
+    folders = skeleton.folders_of(str(shape))
+    assert ("01_Personal",) in folders and ("07_Training",) in folders
+    assert all(not {"Working", "Current_ReadOnly"} & set(rel) for rel in folders), folders
+
+    count, how = skeleton.copy(str(shape), str(tmp_path / "000123"), wait=True)
+    assert count == 2 and (tmp_path / "000123" / "07_Training").is_dir()
+    assert not (tmp_path / "000123" / "Working").exists()
+    assert not (tmp_path / "000123" / "07_Training" / "Current_ReadOnly").exists()
+    assert how
 
 
 def test_an_employee_file_is_cut_from_the_employee_skeleton(tmp_path):

@@ -406,6 +406,9 @@ POST /api/v1/employees/000123/folder    -> 201 {"created": true, "how": "14 fold
   restricted folders (`04_Compensation`, `12_Disciplinary`, `13_Medical`) stay restricted in every employee's
   file - and never its documents. Without a skeleton on the file server the blueprint's fourteen folders are
   made and the answer says no permissions were copied.
+- `Working`, `Submitted`, `Current_ReadOnly` and `Obsolete_ReadOnly` are **not** blueprint folders, here or
+  anywhere else: the DMS makes them beside a document when it goes through the workflow. A skeleton holds
+  none, and one made in a skeleton by hand is skipped rather than copied into every employee's file.
 - The id is a folder name: `^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`, leading zeros kept, and never the skeleton's
   own name. Anything else is `400`.
 - A missing file is `200` with `exists: false`, never `404` - a `404` means the DMS does not have the
