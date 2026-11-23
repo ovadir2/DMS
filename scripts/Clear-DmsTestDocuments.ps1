@@ -53,7 +53,7 @@ function Call($method, $path, $body) {
     return Invoke-RestMethod -Uri $u -Method $method -UseDefaultCredentials -Headers $headers -TimeoutSec 180
 }
 
-Write-Host "=== The DMS at $Url: documents whose title starts with $($Title -join ', ')" -ForegroundColor Cyan
+Write-Host "=== The DMS at ${Url}: documents whose title starts with $($Title -join ', ')" -ForegroundColor Cyan
 $all = @(Call GET "/api/documents" $null)
 $mine = @($all | Where-Object { $d = $_; ($Title | Where-Object { $d.title -like "$_*" }).Count -gt 0 })
 if (-not $mine) { Write-Host "Nothing to remove ($($all.Count) document(s) in the register)." -ForegroundColor Green; return }

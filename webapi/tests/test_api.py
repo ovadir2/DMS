@@ -4486,6 +4486,26 @@ def test_a_script_line_that_continues_a_string_is_wrapped():
     assert not bad, "a continued string needs parentheses:\n" + "\n".join(bad)
 
 
+def test_no_script_writes_a_variable_followed_by_a_colon_in_a_string():
+    """"$Url: documents" is a parse error, not a sentence: PowerShell reads $Url: as a drive-qualified
+    variable and the whole script refuses to run. In a string the name is wrapped: ${Url}."""
+    import glob
+    import re as _re
+    known = ("script", "env", "global", "local", "private", "using", "workflow")
+    bad = []
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for path in sorted(glob.glob(os.path.join(here, "..", "scripts", "*.ps1"))):
+        for i, line in enumerate(open(path, encoding="utf-8-sig").read().splitlines()):
+            if '"' not in line:
+                continue
+            for m in _re.finditer(r"\$([A-Za-z_][A-Za-z0-9_]*):", line):
+                if m.group(1).lower() in known or line.lstrip().startswith("#"):
+                    continue
+                if line.count('"', 0, m.start()) % 2 == 1:        # inside a double-quoted string
+                    bad.append(f"{os.path.basename(path)}:{i + 1}: ${m.group(1)}: -> ${{{m.group(1)}}}:")
+    assert not bad, "PowerShell reads these as a drive, not a variable:\n" + "\n".join(bad)
+
+
 def test_no_script_names_a_function_after_a_powershell_alias():
     """PowerShell looks for an alias before a function, so `function Group` is never called: every
     `Group "..."` runs Group-Object instead, quietly, with no output and no error. That is how the walk
