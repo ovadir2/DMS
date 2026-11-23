@@ -53,14 +53,22 @@ function Call($method, $path, $body) {
     return Invoke-RestMethod -Uri $u -Method $method -UseDefaultCredentials -Headers $headers -TimeoutSec 180
 }
 
+function Test-Wanted($text) {
+    foreach ($p in $Title) { if ("$text".StartsWith($p, [StringComparison]::OrdinalIgnoreCase)) { return $true } }
+    return $false
+}
+
 Write-Host "=== The DMS at ${Url}: documents whose title starts with $($Title -join ', ')" -ForegroundColor Cyan
-$all = @(Call GET "/api/documents" $null)
-$mine = @($all | Where-Object { $d = $_; ($Title | Where-Object { $d.title -like "$_*" }).Count -gt 0 })
-if (-not $mine) { Write-Host "Nothing to remove ($($all.Count) document(s) in the register)." -ForegroundColor Green; return }
+$all = @()
+foreach ($d in (Call GET "/api/documents" $null)) { $all += $d }     # one by one: the register is a list
+$mine = @()
+foreach ($d in $all) { if ((Test-Wanted $d.title) -or (Test-Wanted $d.documentId)) { $mine += $d } }
+Write-Host "  $($all.Count) document(s) in the register, $($mine.Count) of them test documents"
+if ($mine.Count -eq 0) { Write-Host "Nothing to remove." -ForegroundColor Green; return }
 
 foreach ($d in $mine) {
-    $where = if ($d.currentUncPath) { $d.currentUncPath } else { $d.workingUncPath }
-    Write-Host ("  {0,-12} {1,-34} {2,-10} {3}" -f $d.documentId, $d.title, $d.statusKey, $where)
+    $where = if ($d.currentUncPath) { "$($d.currentUncPath)" } else { "$($d.workingUncPath)" }
+    Write-Host ("  {0,-12} {1,-34} {2,-10} {3}" -f "$($d.documentId)", "$($d.title)", "$($d.statusKey)", $where)
 }
 if (-not $Apply) {
     Write-Host ""
@@ -73,8 +81,11 @@ $left = @()
 $folders = @()
 foreach ($d in $mine) {
     $id = $d.documentId
-    $path = if ($d.currentUncPath) { $d.currentUncPath } else { $d.workingUncPath }
-    if ($path) { $folders += (Split-Path (Split-Path $path -Parent) -Leaf) }
+    $path = if ($d.currentUncPath) { "$($d.currentUncPath)" } else { "$($d.workingUncPath)" }
+    if ($path) {
+        $parent = Split-Path $path -Parent
+        if ($parent) { $folders += (Split-Path $parent -Leaf) }
+    }
     if ($d.statusKey -eq 'Submitted') {
         try { Call POST "/api/documents/$($d.id)/withdraw" @{} | Out-Null; Write-Host "  $id taken back out of Approvals" }
         catch { Write-Host "  $id could not be taken back: $(Why $_)" -ForegroundColor Yellow }
