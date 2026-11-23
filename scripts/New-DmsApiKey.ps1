@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     A key for an application that calls the DMS (not a person).
 .DESCRIPTION
@@ -9,12 +9,15 @@
     This prints the line to paste into webapi\.env after DMS_API_KEYS= (several callers separated by |).
     The DMS never shows a key again, and never writes one to the log or into an answer.
 
-    Scopes: customers, documents, files, kpi (the WidgetBuilder: it also publishes).
+    Scopes: customers, documents, employees (the HR employee files), files, kpi (the WidgetBuilder:
+    it also publishes).
 
     -ActsAs is the AD account the caller acts as. An application is not a super user: every answer is
     filtered against that account's own AD rights, folder by folder. A key without one is told nothing.
 .EXAMPLE
     .\scripts\New-DmsApiKey.ps1 -Name priority -Scopes customers,documents -ActsAs svc_priority@rh.co.il
+.EXAMPLE
+    .\scripts\New-DmsApiKey.ps1 -Name hrportal -Scopes documents,employees -ActsAs svc_hrportal@rh.co.il
 #>
 [CmdletBinding()]
 param(
