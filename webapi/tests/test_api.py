@@ -5172,4 +5172,4 @@ def test_no_employees_folder_at_all_is_said_plainly(tmp_path):
                       "employees": [], "skeleton": None}
     assert c.get("/api/v1/employees/000123/folder", headers=key).json()["exists"] is False
     r = c.post("/api/v1/employees/000123/folder", headers=key)
-    assert r.status_code == 409 and "Update-DmsBlueprint" in r.json()["detail"]
+    assert r.status_code == 409 and "New-DmsFileServerTree" in r.json()["detail"]
