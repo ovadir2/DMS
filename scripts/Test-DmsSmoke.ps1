@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Walks the whole DMS as one user, against the installation that is really running, and says which
     requirement each step proves.
@@ -20,8 +20,16 @@
 
 .PARAMETER Delegate
     A third person, for passing an approval on: it cannot be the approver, and cannot be the person the walk
-    runs as, who owns the document. Left out, the walk takes one of the accounts the DMS offers for
-    "Acting as" that is neither, so nothing has to be named; with none to be had, that one step is skipped.
+    runs as, who owns the document. Left out, the walk takes one of the DMS's own test accounts that is
+    neither; with none to be had, that one step is skipped.
+
+    The walk only ever works with the DMS's own test accounts - dms-lab and roneno - so a run never sends a
+    real person an approval, a delegation or a share they did not ask for. -AnyPerson lifts that, for a run
+    somebody has agreed to beforehand.
+
+.PARAMETER AnyPerson
+    Let -As, -Approver and -Delegate name somebody who is not one of the DMS's test accounts. Only for a run
+    the people named have agreed to: the walk really sends them approvals.
 
 .PARAMETER ShareWith
     Share the released document with this address, as the page's Share does: the file is copied to the
@@ -42,10 +50,11 @@
     Run as this person (a super user only; the DMS checks). Left out, it runs as you.
 
 .PARAMETER Approver
-    Who the document is sent to. It cannot be the person the walk runs as.
+    Who the document is sent to. It cannot be the person the walk runs as, and - without -AnyPerson - it is
+    one of the DMS's test accounts (dms-lab, roneno).
 
 .EXAMPLE
-    .\scripts\Test-DmsSmoke.ps1 -As RH\dms-lab -Approver roneno@rh.co.il -Delegate someone.else@rh.co.il
+    .\scripts\Test-DmsSmoke.ps1 -As RH\dms-lab -Approver roneno@rh.co.il
 .EXAMPLE
     .\scripts\Test-DmsSmoke.ps1 -Clean
 #>
@@ -60,9 +69,27 @@ param(
     [string]$ShareCustomer = '',
     [string]$Report = '',
     [switch]$Detailed,
+    [switch]$AnyPerson,
     [switch]$Clean
 )
 $ErrorActionPreference = 'Stop'
+# The walk is a walk through the real DMS: every approval, delegation and share it asks for really goes out.
+# So it works with the DMS's own test accounts and nobody else, unless somebody says otherwise (-AnyPerson).
+$TestAccounts = @('dms-lab', 'roneno')
+function Test-DmsAccount($who) {
+    if (-not $who) { return $true }
+    $name = ($who -split '[\\@]')[-1]
+    if ($who -like '*@*') { $name = ($who -split '@')[0] }
+    return $TestAccounts -contains $name.ToLower()
+}
+if (-not $AnyPerson) {
+    foreach ($p in @(@{ n = '-As'; v = $As }, @{ n = '-Approver'; v = $Approver }, @{ n = '-Delegate'; v = $Delegate })) {
+        if (-not (Test-DmsAccount $p.v)) {
+            throw ("$($p.n) is '$($p.v)': the walk sends real approvals, so it works with the DMS's test " +
+                   "accounts only ($($TestAccounts -join ', ')). Add -AnyPerson if that person agreed to it.")
+        }
+    }
+}
 . "$PSScriptRoot\_DmsDefaults.ps1"
 if (-not $Url) { $Url = Get-DmsDefault Url }
 $root = Get-DmsEnvValue 'DMS_REPOSITORY_ROOT'
@@ -412,11 +439,13 @@ Check 'REQ-P47' "a submission can be taken back by its owner" {
 # So the walk tries them in turn and keeps the first the DMS accepts. A domain account (RH\name) is given
 # as it is; the DMS reads it as that person.
 $candidates = if ($Delegate) { @($Delegate) } else {
-    @($me.actingUsers | Where-Object { $_ -and $_ -ne $me.email -and $_ -ne $Approver -and ($As -eq '' -or $_ -ne $As) })
+    @($me.actingUsers | Where-Object { $_ -and $_ -ne $me.email -and $_ -ne $Approver -and ($As -eq '' -or $_ -ne $As) -and
+                                       ($AnyPerson -or (Test-DmsAccount $_)) })
 }
 if (-not $candidates) {
     Skip 'REQ-P50' "an approval is passed to somebody else for this cycle" `
-         "there is nobody to pass it to: the approver and the owner are the only accounts here - give -Delegate <someone>"
+         ("there is nobody to pass it to: the owner and the approver are the DMS's only test accounts - " +
+          "give -Delegate <someone> -AnyPerson for a run that person agreed to")
 } else {
 Check 'REQ-P50' "an approval can be passed to somebody else for this cycle" {
     # it was taken back a moment ago: send it again, and say which step refused rather than its number
