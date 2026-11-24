@@ -1673,21 +1673,21 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         """Documents waiting for this user's approval (DMS_APPROVALS=page)."""
         if s.approvals != "page":
             return []
-        by_doc, rules, out = events_by_doc(), {}, []
+        began, by_doc, rules, out = time.time(), events_by_doc(), {}, []
+        wanted = []
         for d in sp().documents():
             if d.get("lifecycleStatus") != s.choices["Submitted"]:
                 continue
             events = by_doc.get(d.get("documentId") or "", [])
             st = approval_state(d, events, rules)
             if user.email in st["pending"] or (everyone and is_admin(user)):
+                wanted.append((d, events, st))
+        # Each row needs SharePoint: where its copy is, and whether somebody edited it there. One after the
+        # other that is a round trip per row and the page waits for all of them; together it is one wait.
+        ready = review_ready(wanted)
+        for d, events, st in wanted:
                 submitted = next((e for e in events if e["event"] == s.choices["SubmittedEvent"]), None)
-                file = submitted_file(d)
-                kept = review_ensure(d) or {}
-                if review_on() and not kept.get("url"):
-                    logger.warning("no copy in SharePoint for %s: an approver cannot open it to write in it",
-                                   d.get("documentId") or d.get("id"))
-                if file and kept.get("name"):   # closed in Word for the web: it is back here before the row is drawn
-                    review_pull(d.get("documentId") or "", kept["name"], file, doc_id=d.get("documentId") or "")
+                file, kept = ready.get(d.get("documentId") or "", ("", {}))
                 out.append({**with_key(d), **st, "submittedUtc": submitted["utc"] if submitted else None,
                             "submittedBy": submitted["actor"] if submitted else None, "file": file,
                             # read only, always: an approval never changes the document, and an approver's
@@ -1743,7 +1743,31 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                      + (f". The DMS last heard from SharePoint: {last_sp_error()}"
                                         if last_sp_error() else "")),
                             "mine": user.email in st["pending"]})
+        if wanted:
+            logger.info("approvals: %d row(s) for %s in %.1fs", len(out), user.email, time.time() - began)
         return sorted(out, key=lambda x: x.get("submittedUtc") or "")
+
+    def review_ready(rows: list[tuple]) -> dict[str, tuple[str, dict]]:
+        """The SharePoint side of every row of Approvals, for all of them at once: where the copy is, and
+        what came back from it. One document at a time, the page waited for one round trip after another -
+        with half a dozen waiting approvals that is the ten seconds people were seeing."""
+        def one(row: tuple) -> tuple[str, tuple[str, dict]]:
+            d = row[0]
+            doc_id = d.get("documentId") or ""
+            file = submitted_file(d)
+            kept = review_ensure(d) or {}
+            if review_on() and not kept.get("url"):
+                logger.warning("no copy in SharePoint for %s: an approver cannot open it to write in it",
+                               doc_id or d.get("id"))
+            if file and kept.get("name"):   # closed in Word for the web: it is back here before the row is drawn
+                review_pull(doc_id, kept["name"], file, doc_id=doc_id)
+            return doc_id, (file, kept)
+
+        if len(rows) < 2 or not review_on():
+            return dict(one(r) for r in rows)
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(8, len(rows)), thread_name_prefix="dms-approvals") as pool:
+            return dict(pool.map(one, rows))
 
     CHANGED_IN_REVIEW = "The document was changed in SharePoint while it was being approved"
 
@@ -1876,6 +1900,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
 
     REVIEW: dict[str, dict] = {}            # documentId -> {"name": ..., "url": ...} while it is being approved
     PULLED: dict[str, float] = {}           # documentId -> when SharePoint may be asked again about its copy
+    PUT_OFF: dict[str, float] = {}          # documentId -> when a copy may be put there again, after a failure
 
     def share_link(key: str, name: str, people: list[str], *, edit: bool, subject: str = "") -> str | None:
         """Open that one copy to whoever the DMS sends to it. The DMS account makes a company link, so anyone
@@ -1944,6 +1969,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             view = share_link(doc_id, name, [], edit=False) if link else None
             REVIEW[doc_id] = {"name": name, "url": link or there, "viewUrl": view}
             return REVIEW[doc_id]
+        if PUT_OFF.get(doc_id, 0) > time.time():
+            return REVIEW.get(doc_id)      # it did not work a moment ago: not again on this page load
+        PUT_OFF[doc_id] = time.time() + s.review_pull_seconds
         st = approval_state(d, events_by_doc().get(doc_id, []), {})
         review_start(d, st["pending"])
         return REVIEW.get(doc_id)
