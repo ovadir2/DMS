@@ -1838,6 +1838,39 @@ def test_main_search_covers_folders_file_names_and_document_ids(tmp_path):
     assert ("file", "CRU 4 FCT Quote_Rev1.xlsx") not in names("quote fct")              # not listed twice
 
 
+def test_the_search_of_last_resort_is_not_repeated_for_every_row(tmp_path):
+    """A record whose file is really gone ends in relocate, which walks the whole repository. Approvals and
+    My workflows ask for every document they draw, so that walk ran once per row, several times per row, on
+    a file server of any size - which is what made those two pages slow. It is remembered for a minute; a
+    file that appears where it belongs is still found at once, because only the last step is cached."""
+    from dms_api import file_service as fs
+    root = tmp_path / "Root"
+    (root / "01_General" / "Procedures").mkdir(parents=True)
+    gone = str(root / "01_General" / "Procedures" / "QP-9.docx")
+    walks = {"n": 0}
+    real = fs.relocate
+
+    def counted(*a, **k):
+        walks["n"] += 1
+        return real(*a, **k)
+
+    fs.forget_found()
+    fs.relocate = counted
+    try:
+        assert fs.find_file(str(root), gone) is None
+        assert fs.find_file(str(root), gone) is None
+        assert fs.find_file(str(root), gone) is None
+        assert walks["n"] == 1, f"the repository was walked {walks['n']} times for one missing file"
+
+        # ...and the file that turns up where the record says it is needs no walk at all
+        (root / "01_General" / "Procedures" / "QP-9.docx").write_text("x")
+        assert fs.find_file(str(root), gone) == gone
+        assert walks["n"] == 1
+    finally:
+        fs.relocate = real
+        fs.forget_found()
+
+
 def test_a_record_follows_its_file_into_the_workflow_folders(tmp_path):
     """An approval moves the file to Current_ReadOnly while the record still names the place it came from:
     the row followed the record, found nothing and offered no way in at all."""

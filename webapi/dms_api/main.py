@@ -1753,6 +1753,14 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         to end. Returns True when something came back."""
         if not review_on() or not target or not files.is_file(target):
             return False
+        # Asking SharePoint whether the copy is newer is a round trip, and Approvals asks for every document
+        # it draws, every time the page is opened. Once every DMS_REVIEW_PULL_SECONDS per document is enough
+        # to catch a document closed in Word for the web; the approval itself always pulls, through
+        # review_fetch, so nothing an approver wrote is ever lost to this.
+        now = time.time()
+        if PULLED.get(key, 0) > now:
+            return False
+        PULLED[key] = now + s.review_pull_seconds
         try:
             info = sp().review_info(document_id=key, name=name)
             when = (info or {}).get("modified")
@@ -1867,6 +1875,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return bool(s.review_library) and hasattr(sp(), "review_put")
 
     REVIEW: dict[str, dict] = {}            # documentId -> {"name": ..., "url": ...} while it is being approved
+    PULLED: dict[str, float] = {}           # documentId -> when SharePoint may be asked again about its copy
 
     def share_link(key: str, name: str, people: list[str], *, edit: bool, subject: str = "") -> str | None:
         """Open that one copy to whoever the DMS sends to it. The DMS account makes a company link, so anyone

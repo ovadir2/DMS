@@ -89,6 +89,7 @@ def _move(source: str, target: str, replace: bool = False) -> str:
     os.replace(source, target)
     if ro:
         _set_read_only(target, True)
+    forget_found()          # the file is somewhere else now: the next page looks for it afresh
     return target
 
 
@@ -190,12 +191,48 @@ def _by_name(root: str, name: str, sha: str | None = None, like: str = "") -> st
     return found[0] if len(found) == 1 else None
 
 
+# What the search of last resort answered a moment ago. Approvals and My workflows ask for every document
+# they draw, and a record whose file has moved (or is really gone) ends in relocate, which walks the whole
+# repository - on a file server of any size that is seconds, once per row, several times per row. Only that
+# last step is remembered: everything before it is a handful of stats, cheap and always right, so a file
+# that appears where it belongs is found at once and never hidden by this.
+_FOUND: dict[tuple[str, str, str], tuple[str | None, float]] = {}
+_FOUND_SECONDS = float(os.environ.get("DMS_FIND_CACHE_SECONDS", "60") or 0)
+_FOUND_LOCK = threading.Lock()
+
+
+def forget_found(path: str | None = None) -> None:
+    """Forget what the search of last resort answered - for one path, or for all of them. The DMS calls it
+    whenever it moves a file itself, so a page drawn right after an approval looks again."""
+    with _FOUND_LOCK:
+        if path is None:
+            _FOUND.clear()
+            return
+        key = os.path.normcase(path)
+        for k in [k for k in _FOUND if k[1] == key or (_FOUND[k][0] and os.path.normcase(_FOUND[k][0] or "") == key)]:
+            _FOUND.pop(k, None)
+
+
+def _relocate_cached(root: str, path: str | None, sha: str | None) -> str | None:
+    if _FOUND_SECONDS <= 0 or not path:
+        return relocate(root, path, sha)
+    key = (os.path.normcase(root or ""), os.path.normcase(path), (sha or "").lower())
+    with _FOUND_LOCK:
+        kept = _FOUND.get(key)
+    if kept and kept[1] > time.time() and (kept[0] is None or _exists_file(kept[0])):
+        return kept[0]
+    answer = relocate(root, path, sha)
+    with _FOUND_LOCK:
+        _FOUND[key] = (answer, time.time() + _FOUND_SECONDS)
+    return answer
+
+
 def find_file(root: str, path: str | None, sha: str | None = None) -> str | None:
     """Where the record's file actually is now. A record keeps the path the file had when it was written, and
     the file moves on its own: an approval takes it to Current_ReadOnly, a submission to Submitted, a return
     back to Working. The file is looked for at the recorded path, then under each workflow folder of the same
     place (and without one, for a path that names a workflow folder it has since left), and last by relocate
-    for a repository that was laid out differently."""
+    for a repository that was laid out differently - that last search is remembered for a minute."""
     here = to_root(root, path)
     if _exists_file(here):
         return here
@@ -208,7 +245,7 @@ def find_file(root: str, path: str | None, sha: str | None = None) -> str | None
         found = find_submitted(folder, name)     # Submitted keeps older runs under a name with a timestamp
         if found:
             return found
-    return relocate(root, path, sha)
+    return _relocate_cached(root, path, sha)
 
 
 def _exists_file(path: str | None) -> bool:

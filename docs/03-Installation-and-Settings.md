@@ -175,6 +175,8 @@ the workflow and blueprint folders stay out of reach either way.
 | --- | --- | --- |
 | `DMS_APPROVALS` | `flow` | `page`: approvals happen in the DMS, and nothing outside it is needed. `flow`: Power Automate / Teams, for a site that has them |
 | `DMS_REVIEW_SITE_URL`, `DMS_REVIEW_LIBRARY` | `Approvals` | Where the editing copy lives |
+| `DMS_REVIEW_PULL_SECONDS` | `45` | How often Approvals asks SharePoint whether a copy was edited there. It asked for every document on every load, which is a round trip per row; the approval itself always pulls, so nothing an approver wrote is lost to this |
+| `DMS_FIND_CACHE_SECONDS` | `60` | How long the search of last resort is remembered. A record whose file is gone makes the DMS walk the whole repository; Approvals and My workflows ask for every row. `0` turns it off |
 | `DMS_VIEW_LIBRARY` | `Views` | Where a reading copy is made before the DMS fetches it and deletes it. The DMS makes this library read only: it stops inheriting the site's permissions and everyone who could write there is left with Read, so a reader cannot type into the copy made for them. It is set at the first reading copy after a restart, so a library created by hand is corrected on its own |
 | `DMS_WIDGET_BUILDER_URL` | - | WidgetBuilder's address: `https://widgetbuilder.rh.tech`. It was called the KPI Builder, and `DMS_KPI_BUILDER_URL` is still read where an installation kept that line. Empty: the page offers no **＋ New KPI** or **Edit KPI** (there is nowhere to open), and the Builder can still publish through `/api/v1/kpi/publish` |
 | `DMS_CHECKOUT_HOURS` | `8` | A document left open for editing comes back by itself after this |

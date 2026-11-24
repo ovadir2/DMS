@@ -88,6 +88,7 @@ class Settings:
     approvals: str = "flow"                 # flow (DC-P1 in Teams) | page (approve on the DMS page; turn DC-P1 off)
     review_site_url: str = ""               # DMS_REVIEW_SITE_URL: the site approvers open the document on (default: the DC site)
     review_library: str = "Approvals"       # the library there; empty turns the SharePoint review off
+    review_pull_seconds: int = 45           # how often Approvals asks SharePoint whether a copy was edited
     view_library: str = "Views"             # where a copy only to be read goes: no standing rights for anybody
     checkout_hours: int = 8                 # DMS_CHECKOUT_HOURS: a file left out for editing comes back by itself
     view_minutes: int = 30                  # DMS_VIEW_MINUTES: a copy only being read goes away this soon
@@ -206,6 +207,7 @@ class Settings:
             approvals=e("DMS_APPROVALS", "flow"),
             review_site_url=e("DMS_REVIEW_SITE_URL", "").rstrip("/"),
             review_library=e("DMS_REVIEW_LIBRARY", "Approvals").strip("/"),
+            review_pull_seconds=int(e("DMS_REVIEW_PULL_SECONDS", "45") or 45),
             view_library=e("DMS_VIEW_LIBRARY", "Views").strip("/"),
             checkout_hours=int(e("DMS_CHECKOUT_HOURS", "8") or 8),
             view_minutes=int(e("DMS_VIEW_MINUTES", "30") or 30),
