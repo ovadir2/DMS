@@ -135,9 +135,32 @@ EMPLOYEE = N({k: (en, he, {}, note, note_he) for k, en, he, note, note_he in (
      "Restricted HR group only", "לקבוצת משאבי אנוש המורשית בלבד"),
     ("14_Offboarding", "Offboarding", "סיום העסקה", "", ""))})
 
+# A candidate is not an employee yet: no Synel number, so no employee file - and a CV that came FROM a
+# person must not sit in Shared, whose files are shared OUT by link. So candidates have folders of their
+# own, cut from a skeleton of their own, and on the day the person is hired what was filed there moves into
+# their employee file. Rejected or cancelled, the folder is moved whole to the obsolete tree, read only.
+CANDIDATE = N({k: (en, he, {}, "", "") for k, en, he in (
+    ("01_CV", "CV", "קורות חיים"),
+    ("02_Interviews", "Interviews", "ראיונות"),
+    ("03_Approval", "Hiring approval", "אישור גיוס"))})
+
 MANAGEMENT["HR"] = ("HR", "משאבי אנוש", N({
     "Shared": ("Shared", "משותף", {}, "Files shared with potential employees and the share log",
                "קבצים ששותפו עם מועמדים לעבודה ויומן השיתופים"),
+    "Candidates": ("Candidates", "מועמדים", N({
+        "Candidate_Skeleton": ("Candidate skeleton", "שלד תיק מועמד", CANDIDATE,
+                               "The shape every candidate folder is cut from: its folders and the AD "
+                               "permissions on them, never a document",
+                               "השלד שכל תיק מועמד נגזר ממנו: התיקיות וההרשאות עליהן, ללא מסמכים"),
+        "*": ("", "", CANDIDATE, "One candidate, by their HRPortal candidate number (CAND-0001)",
+              "מועמד אחד, לפי מספר המועמד ב-HRPortal")}),
+        "One folder per candidate, cut from the skeleton", "תיקייה לכל מועמד, נגזרת מהשלד"),
+    "Candidates_Obsolete_ReadOnly": ("Candidates - archive (read only)", "מועמדים - ארכיון לקריאה בלבד", {},
+                                     "Rejected or cancelled candidates, moved here whole and read only",
+                                     "מועמדים שנדחו או שהגיוס בוטל, מועברים לכאן בשלמותם ולקריאה בלבד"),
+    "Employees_Obsolete_ReadOnly": ("Employees - archive (read only)", "תיקי עובדים - ארכיון לקריאה בלבד", {},
+                                    "Former employees' files, moved here whole and read only, never deleted",
+                                    "תיקי עובדים שעזבו, מועברים לכאן בשלמותם ולקריאה בלבד, ואינם נמחקים"),
     "Employees": ("Employees", "תיקי עובדים", N({
         "Employee_Skeleton": ("Employee skeleton", "שלד תיק עובד", EMPLOYEE,
                               "The shape every employee file is cut from: its folders and the AD "
@@ -458,7 +481,8 @@ def folder_list() -> list[str]:
     def walk(tree, prefix):
         for name, v in tree.items():
             key = {"02_Customers": "<Customer>", PRODUCTS[-1]: "<Product>",
-                   "Employees": "<SynelEmployeeId>", "Courses": "<CourseID>",
+                   "Employees": "<SynelEmployeeId>", "Candidates": "<CandidateId>",
+                   "Courses": "<CourseID>",
                    "Session_Records": "<YYYY>"}.get(prefix[-1] if prefix else "", None) \
                 if name == "*" else name
             if key is None:

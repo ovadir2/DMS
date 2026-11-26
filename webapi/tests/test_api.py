@@ -5113,7 +5113,7 @@ def test_the_bridge_finds_the_folder_of_a_windows_path(tmp_path):
         assert here.status_code == 200, here.text
 
 
-def _hr_env(tmp_path, scopes=("employees", "documents")):
+def _hr_env(tmp_path, scopes=("employees", "documents"), **more):
     """A DMS with the HR tree on the file server and a key for HRPortal."""
     from dms_api.memory import MemorySharePoint
     root = tmp_path / "Root"
@@ -5122,10 +5122,173 @@ def _hr_env(tmp_path, scopes=("employees", "documents")):
         (root / "01_General" / "HR" / "Employees" / "Employee_Skeleton" / name).mkdir(parents=True)
     # a file left in the skeleton is not part of the shape and must not be copied
     (root / "01_General" / "HR" / "Employees" / "Employee_Skeleton" / "01_Personal" / "note.txt").write_text("x")
+    for name in ("01_CV", "02_Interviews", "03_Approval"):
+        (root / "01_General" / "HR" / "Candidates" / "Candidate_Skeleton" / name).mkdir(parents=True)
+    (root / "01_General" / "HR" / "Candidates_Obsolete_ReadOnly").mkdir(parents=True, exist_ok=True)
+    (root / "01_General" / "HR" / "Employees_Obsolete_ReadOnly").mkdir(parents=True, exist_ok=True)
     s = Settings(repository_root=str(root), auth_mode="dev", dev_user=USER, sharepoint="memory",
                  admins=[USER], api_keys={"k": {"name": "hrportal", "scopes": list(scopes),
-                                                "as": "svc_hrportal@rh.co.il"}})
+                                                "as": "svc_hrportal@rh.co.il"}}, **more)
     return TestClient(create_app(s, MemorySharePoint(s))), s, root
+
+
+def test_a_candidate_folder_is_cut_from_the_candidate_skeleton(tmp_path):
+    """A candidate is not an employee yet, and their CV came FROM them: it may not sit in HR\\Shared, whose
+    files are shared OUT by link. HRPortal asks, the DMS makes the folder from Candidate_Skeleton - its
+    three subfolders, the permissions on them, and never its documents. Asking twice changes nothing."""
+    c, s, root = _hr_env(tmp_path)
+    key = {"X-DMS-Api-Key": "k"}
+    candidates = root / "01_General" / "HR" / "Candidates"
+
+    nothing = c.get("/api/v1/candidates/CAND-0001/folder", headers=key).json()
+    assert nothing["exists"] is False and nothing["folder"] == ""
+    assert nothing["released"] == {"01_CV": [], "02_Interviews": [], "03_Approval": []}
+
+    made = c.post("/api/v1/candidates/CAND-0001/folder", headers=key)
+    assert made.status_code == 201, made.text
+    here = candidates / "CAND-0001"
+    assert (here / "01_CV").is_dir() and (here / "03_Approval").is_dir()
+
+    again = c.post("/api/v1/candidates/CAND-0001/folder", headers=key)
+    assert again.status_code == 200 and again.json()["created"] is False
+    assert len([p for p in candidates.iterdir() if p.is_dir()]) == 2    # the skeleton and the one candidate
+
+    for bad in ("..", "CAND-1", "Candidate_Skeleton", "000123"):
+        assert c.post(f"/api/v1/candidates/{bad}/folder", headers=key).status_code in (400, 404)
+
+
+def test_a_candidate_folder_lists_only_released_documents(tmp_path):
+    """HRPortal opens "Start evaluation" on a released CV and "Approve hiring" on a released approval. A
+    draft, or a revision still waiting for an approver, is not an answer - it is not approved yet."""
+    c, s, root = _hr_env(tmp_path)
+    key = {"X-DMS-Api-Key": "k"}
+    c.post("/api/v1/candidates/CAND-0007/folder", headers=key)
+    cv = root / "01_General" / "HR" / "Candidates" / "CAND-0007" / "01_CV"
+    (cv / "draft.docx").write_text("x")
+    (cv / "CV.docx").write_text("x")
+
+    c.post("/api/documents", json={"path": str(cv / "draft.docx"), "title": "A draft CV"})
+    released = c.post("/api/files/release", json={"paths": [str(cv / "CV.docx")]})
+    assert released.status_code == 200 and released.json()["results"][0]["ok"], released.text
+
+    answer = c.get("/api/v1/candidates/CAND-0007/folder", headers=key).json()
+    names = [d["title"] for d in answer["released"]["01_CV"]]
+    assert len(names) == 1 and "draft" not in names[0].lower(), answer["released"]
+    assert answer["released"]["03_Approval"] == []
+
+
+def test_a_hired_candidate_moves_into_the_employee_file(tmp_path):
+    """The day they are hired, what was filed about them becomes part of their employee file: the documents
+    move into 02_Employment with the folders they were in, the register is corrected so it points at where
+    the files now are, and the emptied candidate folder goes to the archive."""
+    c, s, root = _hr_env(tmp_path)
+    key = {"X-DMS-Api-Key": "k"}
+    hr = root / "01_General" / "HR"
+    c.post("/api/v1/candidates/CAND-0002/folder", headers=key)
+    cv = hr / "Candidates" / "CAND-0002" / "01_CV"
+    (cv / "CV.docx").write_text("x")
+    done = c.post("/api/files/release", json={"paths": [str(cv / "CV.docx")]})
+    assert done.status_code == 200 and done.json()["results"][0]["ok"], done.text
+
+    too_early = c.post("/api/v1/candidates/CAND-0002/hire", headers=key, json={"synelEmployeeId": "000123"})
+    assert too_early.status_code == 409, too_early.text         # the employee file is asked for first
+
+    c.post("/api/v1/employees/000123/folder", headers=key)
+    hired = c.post("/api/v1/candidates/CAND-0002/hire", headers=key, json={"synelEmployeeId": "000123"})
+    assert hired.status_code == 200, hired.text
+    body = hired.json()
+    assert body["moved"] >= 1 and body["synelEmployeeId"] == "000123"
+    there = hr / "Employees" / "000123" / "02_Employment" / "01_CV" / "Current_ReadOnly" / "CV.docx"
+    assert there.is_file(), list((hr / "Employees" / "000123" / "02_Employment").rglob("*"))
+    assert not (hr / "Candidates" / "CAND-0002").exists()
+    assert (hr / "Candidates_Obsolete_ReadOnly" / "CAND-0002").is_dir()
+
+    # the record followed the file, so the document is still answerable where it now lives
+    doc = [d for d in c.get("/api/documents").json() if d.get("currentUncPath")][0]
+    assert "02_Employment" in doc["currentUncPath"], doc["currentUncPath"]
+
+    once_more = c.post("/api/v1/candidates/CAND-0002/hire", headers=key, json={"synelEmployeeId": "000123"})
+    assert once_more.status_code == 200 and once_more.json()["moved"] == 0
+
+
+def test_a_rejected_candidate_is_archived_and_the_page_cannot_touch_it(tmp_path):
+    """Rejected or cancelled: the folder moves whole to the archive and is read only. Asked twice it says
+    so rather than failing, and nothing in the archive can be changed from the page."""
+    c, s, root = _hr_env(tmp_path)
+    key = {"X-DMS-Api-Key": "k"}
+    hr = root / "01_General" / "HR"
+    c.post("/api/v1/candidates/CAND-0003/folder", headers=key)
+    (hr / "Candidates" / "CAND-0003" / "01_CV" / "CV.docx").write_text("x")
+
+    gone = c.post("/api/v1/candidates/CAND-0003/folder/obsolete", headers=key)
+    assert gone.status_code == 200 and gone.json()["moved"] is True
+    archived = hr / "Candidates_Obsolete_ReadOnly" / "CAND-0003"
+    assert (archived / "01_CV" / "CV.docx").is_file()
+    assert not (hr / "Candidates" / "CAND-0003").exists()
+
+    again = c.post("/api/v1/candidates/CAND-0003/folder/obsolete", headers=key).json()
+    assert again["moved"] is False and again["exists"] is True
+    assert c.get("/api/v1/candidates/CAND-0003/folder", headers=key).json()["obsolete"] is True
+
+    assert c.post("/api/folders", json={"parent": str(archived), "name": "x"}).status_code == 403
+    assert c.post("/api/items/rename", json={"path": str(archived), "newName": "y"}).status_code == 403
+    assert c.post("/api/items/delete", json={"path": str(archived)}).status_code == 403
+
+
+def test_an_employee_who_left_is_archived_and_a_rehire_brings_the_file_back(tmp_path):
+    """An employee file is never deleted: when they leave it moves whole to the archive, read only, and
+    the listing stops offering it. A rehire brings the same folder back with everything in it, rather than
+    cutting an empty one and losing what was filed."""
+    c, s, root = _hr_env(tmp_path)
+    key = {"X-DMS-Api-Key": "k"}
+    hr = root / "01_General" / "HR"
+    c.post("/api/v1/employees/000200/folder", headers=key)
+    (hr / "Employees" / "000200" / "01_Personal" / "contract.docx").write_text("x")
+
+    left = c.post("/api/v1/employees/000200/folder/obsolete", headers=key)
+    assert left.status_code == 200 and left.json()["moved"] is True
+    assert (hr / "Employees_Obsolete_ReadOnly" / "000200" / "01_Personal" / "contract.docx").is_file()
+    assert "000200" not in c.get("/api/v1/employees/folders", headers=key).json()["employees"]
+    look = c.get("/api/v1/employees/000200/folder", headers=key).json()
+    assert look["exists"] is False and look["obsolete"] is True
+
+    twice = c.post("/api/v1/employees/000200/folder/obsolete", headers=key).json()
+    assert twice["moved"] is False and twice["exists"] is True
+
+    back = c.post("/api/v1/employees/000200/folder", headers=key)
+    assert back.status_code == 200 and back.json()["how"] == "restored from obsolete"
+    assert (hr / "Employees" / "000200" / "01_Personal" / "contract.docx").is_file()
+    assert not (hr / "Employees_Obsolete_ReadOnly" / "000200").exists()
+
+
+def test_the_retention_job_deletes_only_what_hr_asked_it_to(tmp_path):
+    """A CV of somebody who does not work here is kept only as long as HR said. Nothing is deleted while
+    the setting is empty, which is how the DMS ships, and nothing that is younger than the period."""
+    import os
+    import time
+    from datetime import datetime, timedelta, timezone
+    from dms_api import candidate_retention as cr
+    from dms_api.memory import MemorySharePoint
+
+    c, s, root = _hr_env(tmp_path)
+    archive = root / "01_General" / "HR" / "Candidates_Obsolete_ReadOnly"
+    old, new = archive / "CAND-0004", archive / "CAND-0005"
+    for folder in (old, new):
+        (folder / "01_CV").mkdir(parents=True)
+        (folder / "01_CV" / "CV.docx").write_text("x")
+    long_ago = time.time() - 400 * 24 * 3600
+    os.utime(old, (long_ago, long_ago))
+
+    assert cr.due(s) == []                       # the setting is empty: nothing is ever due
+    assert cr.run_once(MemorySharePoint(s), s) == []
+    assert old.is_dir()
+
+    keeping = Settings(**{**s.__dict__, "candidate_retention_months": 12})
+    due = [os.path.basename(p) for p, _when in cr.due(keeping)]
+    assert due == ["CAND-0004"], due
+    gone = cr.run_once(MemorySharePoint(keeping), keeping)
+    assert len(gone) == 1 and not old.exists() and new.is_dir()
+
 
 
 def test_a_workflow_folder_in_a_skeleton_is_not_part_of_the_shape(tmp_path):

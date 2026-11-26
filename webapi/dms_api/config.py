@@ -114,6 +114,11 @@ class Settings:
     # DMS to make them; the DMS owns its folders).
     employees_folder: str = "01_General/HR/Employees"
     employee_skeleton: str = "Employee_Skeleton"
+    employees_obsolete: str = "01_General/HR/Employees_Obsolete_ReadOnly"
+    candidates_folder: str = "01_General/HR/Candidates"
+    candidate_skeleton: str = "Candidate_Skeleton"
+    candidates_obsolete: str = "01_General/HR/Candidates_Obsolete_ReadOnly"
+    candidate_retention_months: int = 0     # 0 (the default): an obsolete candidate folder is never deleted
     # Applications that call the DMS without a person behind them: name:key:scopes, separated by |.
     # Empty: no application can call it, and the machine API answers nothing.
     api_keys: dict = field(default_factory=dict)
@@ -223,6 +228,13 @@ class Settings:
             customer_skeleton=e("DMS_CUSTOMER_SKELETON", "Customer_Skeleton").strip(),
             employees_folder=e("DMS_EMPLOYEES_FOLDER", "01_General/HR/Employees").strip().strip("/\\"),
             employee_skeleton=e("DMS_EMPLOYEE_SKELETON", "Employee_Skeleton").strip(),
+            employees_obsolete=e("DMS_EMPLOYEES_OBSOLETE_FOLDER",
+                                 "01_General/HR/Employees_Obsolete_ReadOnly").strip().strip("/\\"),
+            candidates_folder=e("DMS_CANDIDATES_FOLDER", "01_General/HR/Candidates").strip().strip("/\\"),
+            candidate_skeleton=e("DMS_CANDIDATE_SKELETON", "Candidate_Skeleton").strip(),
+            candidates_obsolete=e("DMS_CANDIDATES_OBSOLETE_FOLDER",
+                                  "01_General/HR/Candidates_Obsolete_ReadOnly").strip().strip("/\\"),
+            candidate_retention_months=int(e("DMS_CANDIDATE_RETENTION_MONTHS", "0") or 0),
             api_keys=_api_keys(e("DMS_API_KEYS", "")),
             page_sandbox=e("DMS_PAGE_SANDBOX", "1").strip().lower() not in ("0", "false", "no", "off"),
             submitted_editable=e("DMS_SUBMITTED_EDITABLE", "true").lower() not in ("0", "false", "no", "off"),

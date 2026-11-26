@@ -72,6 +72,10 @@ class DeleteRequest(BaseModel):
     path: str
 
 
+class HireRequest(BaseModel):
+    synelEmployeeId: str = Field(description="The Synel employee id the candidate was registered under")
+
+
 class RegisterRequest(BaseModel):
     path: str = Field(description="UNC path of the file, inside the repository root")
     title: str | None = Field(None, description="Defaults to the file name without the extension")
@@ -210,6 +214,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
     if own_register:
         from . import exchange_expiry
         exchange_expiry.start(app.state.sp, s)
+        from . import candidate_retention
+        candidate_retention.start(app.state.sp, s)
     app.state.ai = ai or OpenWebUI(s)
     app.state.rag = RagTools(s)
     from .filelinker import FileLinker
@@ -877,6 +883,21 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return len(p) >= 3 and p[2].lower() == shared and (p[0].lower() == s.customers_folder.lower()
                                                            or [x.lower() for x in p[:2]] == ["01_general", "hr"])
 
+    ARCHIVE = ("The HR archive is kept by the DMS (read only): a file that was moved there is a record")
+
+    def in_hr_archive(full: str) -> bool:
+        """Inside the HR archives: the file of somebody who left, or a candidate who was not hired. The DMS
+        moved the whole folder there and made it read only; it is kept as a record, not worked in. A rehire
+        is the one way back, and that goes through the API, not through the page."""
+        here = os.path.normcase(full)
+        for folder in (s.employees_obsolete, s.candidates_obsolete):
+            if not folder:
+                continue
+            root = os.path.normcase(os.path.join(s.repository_root, *folder.replace("/", "\\").split("\\")))
+            if here == root or here.startswith(root + os.sep):
+                return True
+        return False
+
     @app.get("/api/browse")
     def browse(path: str | None = None, user: User = Depends(current_user)):
         """One folder of the repository: its folders and its files, with what may be done to each.
@@ -1130,6 +1151,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                      "Ask IT for it, or use a folder you may change.")
         if in_shared_folder(os.path.join(target_dir, "x")):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only)")
+        if in_hr_archive(target_dir):
+            raise HTTPException(403, f"{ARCHIVE} and nothing is filed in it")
         no_files_in_skeleton(target_dir)
         from . import noworkflow
         # A dashboard page is a tool, not a document: it is saved where it was dropped, left writable so it
@@ -1329,13 +1352,17 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "Workflow folders are managed by the DMS")
         if in_shared_folder(os.path.join(parent, "x")):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only)")
+        if in_hr_archive(parent):
+            raise HTTPException(403, f"{ARCHIVE} and no folder is made in it")
         if not may_add(user, parent):
             raise HTTPException(403, "You do not have permission to create folders here")
         shape = in_skeleton(parent)
         if shape:
-            employee = is_employee_skeleton(shape)
-            what = "employee file" if employee else "customer"
-            where = s.employees_folder if employee else s.customers_folder
+            what, where = "customer", s.customers_folder
+            if is_employee_skeleton(shape):
+                what, where = "employee file", s.employees_folder
+            elif is_candidate_skeleton(shape):
+                what, where = "candidate folder", s.candidates_folder
             raise HTTPException(403, f"{shape} is the shape every new {what} is cut from, and it is not "
                                      f"changed from here: a new {what} goes under {where}, "
                                      f"and the shape itself is changed on the file server.")
@@ -1387,6 +1414,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             files.check_editable(s.repository_root, full, s.protected_depth)   # workflow folders first: clearest reason
         if holds_share_log(full) or in_shared_folder(full):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only) and cannot be renamed")
+        if in_hr_archive(full):
+            raise HTTPException(403, f"{ARCHIVE} and cannot be renamed")
         if (blueprint.describe(rel_parts(full)) or {}).get("kind") not in (None, "project"):   # a project folder is the user's
             raise HTTPException(403, "This folder is part of the company skeleton (blueprint) and cannot be renamed. Its content can.")
         d = registered_inside(full)
@@ -1456,6 +1485,9 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             files.check_editable(s.repository_root, full, s.protected_depth)
         if holds_share_log(full) or in_shared_folder(full):
             raise HTTPException(403, "The customer's Shared folder is kept by the DMS (read only) and cannot be deleted")
+        if in_hr_archive(full):
+            raise HTTPException(403, f"{ARCHIVE} and is not deleted from here "
+                                     f"(a candidate folder goes by the retention period, an employee file never)")
         if (blueprint.describe(rel_parts(full)) or {}).get("kind") not in (None, "project"):   # a project folder is the user's
             raise HTTPException(403, "This folder is part of the company skeleton (blueprint) and cannot be deleted. Its content can.")
         d = registered_inside(full)
@@ -2014,7 +2046,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         except OSError:
             return True
         return (flagged or os.path.basename(os.path.dirname(full)) in WORKFLOW_FOLDERS[2:]
-                or holds_share_log(full) or in_shared_folder(full))
+                or holds_share_log(full) or in_shared_folder(full) or in_hr_archive(full))
 
     def checkout_state(full: str, user: User, data: dict | None = None) -> dict | None:
         """What the page shows on the row: who has the document out for editing, and, for this person's own copy,
@@ -2579,6 +2611,11 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "That account may not read the employee files")
         here = os.path.join(base, one)
         there = os.path.isdir(here)
+        if not there and os.path.isdir(os.path.join(hr_obsolete_root(), one)):
+            # Moved to the archive when they left. Not 404: that would read as "this DMS has no employees".
+            return JSONResponse({"synelEmployeeId": one, "exists": False, "obsolete": True, "folder": "",
+                                 "structure": [], "missing": [], "complete": False},
+                                headers={"Cache-Control": "no-store"})
         shape, shape_folders = employee_shape()
         missing = employee_missing(here, shape_folders) if there else ["\\".join(r) for r in shape_folders]
         return JSONResponse({"synelEmployeeId": one, "exists": there, "folder": here if there else "",
@@ -2602,6 +2639,24 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
                                      f"scripts\\New-DmsFileServerTree.ps1 on the server to make the "
                                      f"blueprint folders, or make {base} by hand.")
         here = os.path.join(base, one)
+        gone = os.path.join(hr_obsolete_root(), one)
+        if not os.path.isdir(here) and os.path.isdir(gone):
+            # A rehire: the file is in the obsolete tree, with everything that was ever filed in it. It
+            # comes back as it is - nothing is cut afresh, nothing of theirs is lost - and the skeleton's
+            # permissions are put back on it, because the obsolete tree took them away.
+            os.replace(gone, here)
+            shape = _skeleton.find(s.repository_root, s.employees_folder, s.employee_skeleton,
+                                   _skeleton.EMPLOYEE_LOOKS_LIKE)
+            unprotect(here)
+            if shape:
+                import threading as _threading
+                _threading.Thread(target=_skeleton.permissions, args=(shape, here), daemon=True,
+                                  name="dms-employee").start()
+            audit_hr(who, f"HR-{one}", f"Employee file restored from the archive: {here}")
+            logger.info("api %s POST /api/v1/employees/%s/folder -> restored from obsolete", who["name"], one)
+            return JSONResponse({"synelEmployeeId": one, "folder": here, "created": False, "added": 0,
+                                 "complete": True, "how": "restored from obsolete"},
+                                status_code=200, headers={"Cache-Control": "no-store"})
         if os.path.isdir(here):
             # It is there: bring it up to the shape. A folder added to the skeleton after the file was cut
             # (a new kind of HR document) is otherwise missing from every file made before it, and HRPortal
@@ -2660,6 +2715,170 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         logger.info("new-employee %s", sp_log)
         return JSONResponse({"synelEmployeeId": one, "folder": here, "created": True, "how": how},
                             status_code=201, headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/v1/employees/{employee}/folder/obsolete")
+    def api_employee_folder_obsolete(request: Request, employee: str):
+        """An employee has left: their file moves whole to the archive and becomes read only.
+
+        Nothing is deleted, ever - an employee file is a record of the company's obligations as much as of
+        the person. A rehire brings the same folder back (POST .../folder), with everything in it."""
+        from fastapi.responses import JSONResponse
+        who = api_caller(request, "employees")
+        one = synel_id(employee)
+        here = os.path.join(employees_root(), one)
+        gone = os.path.join(hr_obsolete_root(), one)
+        if not os.path.isdir(here):
+            there = os.path.isdir(gone)
+            return JSONResponse({"synelEmployeeId": one, "path": gone if there else "", "moved": False,
+                                 "exists": there}, headers={"Cache-Control": "no-store"})
+        if security.may_see(who.get("as") or "", employees_root(), security.WRITE) is False:
+            raise HTTPException(403, f"{who['name']} acts as {who.get('as')}, who may not change the employee files")
+        moved = move_to_archive(here, gone, who, f"HR-{one}", "Employee file moved to the archive")
+        logger.info("api %s POST /api/v1/employees/%s/folder/obsolete -> %s", who["name"], one, moved)
+        return JSONResponse({"synelEmployeeId": one, "path": gone, "moved": True, "exists": True},
+                            headers={"Cache-Control": "no-store"})
+
+    # ---- the candidate folders, for HRPortal ----------------------------------------------------------
+    # A candidate is not an employee yet: no Synel number, so no employee file. Their CV came FROM them and
+    # must not sit in HR\Shared, whose files are shared OUT by link. On the day they are hired what was
+    # filed here moves into their employee file; rejected, the folder is archived whole.
+    CANDIDATE_ID = re.compile(r"^CAND-[0-9]{4,8}$")
+
+    def candidate_id(value: str) -> str:
+        one = (value or "").strip()
+        if not CANDIDATE_ID.match(one) or is_candidate_skeleton(one):
+            raise HTTPException(400, f"{value!r} is not a candidate number (CAND-0001)")
+        return one
+
+    def released_in(folder: str) -> list[dict]:
+        """The documents of that folder whose revision is released - what HRPortal may act on. A draft or
+        one still waiting for an approver is not in the answer: it is not approved yet."""
+        out, key = [], os.path.normcase(folder) + os.sep
+        for d in sp().documents():
+            if d.get("lifecycleStatus") != s.choices["Approved_ReadOnly"]:
+                continue
+            current = d.get("currentUncPath") or ""
+            if not current or not os.path.normcase(current).startswith(key):
+                continue
+            out.append({"documentId": d.get("documentId") or "", "revision": d.get("currentRevision") or "",
+                        "title": d.get("title") or os.path.basename(current),
+                        "releasedAt": d.get("modified") or "", "file": current})
+        return sorted(out, key=lambda x: x["documentId"])
+
+    @app.get("/api/v1/candidates/{candidate}/folder")
+    def api_candidate_folder(request: Request, candidate: str,
+                             ticket: str = Query("", description="An indexing ticket, instead of a key")):
+        """Whether this candidate has a folder, and what is released in each part of it.
+
+        HRPortal opens "Start evaluation" when 01_CV holds a released document, and "Approve hiring" when
+        03_Approval does. A folder that is not there is 200 with exists=false, never 404."""
+        from fastapi.responses import JSONResponse
+        who = api_reader(request, ("employees", "documents"), ticket)
+        one = candidate_id(candidate)
+        base = candidates_root()
+        if os.path.isdir(base) and not api_may_see(who, base):
+            raise HTTPException(403, "That account may not read the candidate folders")
+        here = os.path.join(base, one)
+        there = os.path.isdir(here)
+        shape, shape_folders = candidate_shape()
+        parts = [r[0] for r in shape_folders if len(r) == 1]
+        released = {name: (released_in(os.path.join(here, name)) if there else []) for name in parts}
+        if not there and os.path.isdir(os.path.join(candidates_obsolete_root(), one)):
+            return JSONResponse({"candidateId": one, "exists": False, "obsolete": True, "folder": "",
+                                 "released": released}, headers={"Cache-Control": "no-store"})
+        return JSONResponse({"candidateId": one, "exists": there, "folder": here if there else "",
+                             "skeleton": os.path.basename(shape) if shape else None,
+                             "structure": ["\\".join(r) for r in shape_folders], "released": released},
+                            headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/v1/candidates/{candidate}/folder", status_code=201)
+    def api_make_candidate_folder(request: Request, candidate: str):
+        """Make this candidate's folder, cut from the candidate skeleton: its folders and the AD
+        permissions on them, and no documents. Asking twice answers 200 and changes nothing."""
+        from fastapi.responses import JSONResponse
+        from . import skeleton as _skeleton
+        who = api_caller(request, "employees")
+        one = candidate_id(candidate)
+        base = candidates_root()
+        if not os.path.isdir(base):
+            raise HTTPException(409, f"There is no candidates folder on this DMS yet ({base}). Run "
+                                     f"scripts\\New-DmsFileServerTree.ps1 on the server to make the "
+                                     f"blueprint folders, or make {base} by hand.")
+        here = os.path.join(base, one)
+        if os.path.isdir(here):
+            return JSONResponse({"candidateId": one, "folder": here, "created": False,
+                                 "how": "it was already there"}, status_code=200,
+                                headers={"Cache-Control": "no-store"})
+        if security.may_see(who.get("as") or "", base, security.WRITE) is False:
+            raise HTTPException(403, f"{who['name']} acts as {who.get('as')}, who may not add to {base}")
+        shape = _skeleton.find(s.repository_root, s.candidates_folder, s.candidate_skeleton,
+                               _skeleton.CANDIDATE_LOOKS_LIKE)
+        if shape:
+            count, how = _skeleton.copy(shape, here)
+            how = f"{count} folders from {os.path.basename(shape)}; {how}"
+        else:
+            made = blueprint.leaves(blueprint.CANDIDATE)
+            os.makedirs(here, exist_ok=True)
+            for rel in made:
+                os.makedirs(os.path.join(here, *rel), exist_ok=True)
+            how = (f"{len(made)} folders from the blueprint; there is no {s.candidate_skeleton} on the file "
+                   f"server, so no permissions were copied")
+        audit_hr(who, f"HR-{one}", f"Candidate folder made in the DMS: {here} ({how})")
+        logger.info("api %s POST /api/v1/candidates/%s/folder -> %s", who["name"], one, how)
+        return JSONResponse({"candidateId": one, "folder": here, "created": True, "how": how},
+                            status_code=201, headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/v1/candidates/{candidate}/hire")
+    def api_candidate_hired(request: Request, candidate: str, req: HireRequest):
+        """The candidate was hired: what was filed about them becomes part of their employee file.
+
+        Every document moves into Employees\<SynelId>\02_Employment - the files themselves, their
+        workflow folders and their records, which are corrected so the register follows - and the emptied
+        candidate folder goes to the archive. Asked again it moves nothing and says so."""
+        from fastapi.responses import JSONResponse
+        who = api_caller(request, "employees")
+        one = candidate_id(candidate)
+        synel = synel_id(req.synelEmployeeId)
+        here = os.path.join(candidates_root(), one)
+        employee = os.path.join(employees_root(), synel, "02_Employment")
+        if not os.path.isdir(os.path.join(employees_root(), synel)):
+            raise HTTPException(409, f"There is no employee file for {synel} yet: ask for it first "
+                                     f"(POST /api/v1/employees/{synel}/folder)")
+        if not os.path.isdir(here):
+            return JSONResponse({"candidateId": one, "synelEmployeeId": synel, "moved": 0, "to": employee,
+                                 "exists": False}, headers={"Cache-Control": "no-store"})
+        if security.may_see(who.get("as") or "", employees_root(), security.WRITE) is False:
+            raise HTTPException(403, f"{who['name']} acts as {who.get('as')}, who may not change the employee files")
+        os.makedirs(employee, exist_ok=True)
+        moved = move_tree_contents(here, employee)
+        if moved:
+            register_follows(here, employee)
+        gone = os.path.join(candidates_obsolete_root(), one)
+        move_to_archive(here, gone, who, f"HR-{one}",
+                        f"Candidate hired as {synel}: {moved} item(s) moved to {employee}")
+        logger.info("api %s POST /api/v1/candidates/%s/hire -> %d item(s) to %s", who["name"], one, moved, employee)
+        return JSONResponse({"candidateId": one, "synelEmployeeId": synel, "moved": moved, "to": employee,
+                             "exists": True}, headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/v1/candidates/{candidate}/folder/obsolete")
+    def api_candidate_folder_obsolete(request: Request, candidate: str):
+        """Rejected, or the hiring was cancelled: the folder moves whole to the archive, read only. It is
+        deleted only by the retention job, and only when HR has set a retention period."""
+        from fastapi.responses import JSONResponse
+        who = api_caller(request, "employees")
+        one = candidate_id(candidate)
+        here = os.path.join(candidates_root(), one)
+        gone = os.path.join(candidates_obsolete_root(), one)
+        if not os.path.isdir(here):
+            there = os.path.isdir(gone)
+            return JSONResponse({"candidateId": one, "path": gone if there else "", "moved": False,
+                                 "exists": there}, headers={"Cache-Control": "no-store"})
+        if security.may_see(who.get("as") or "", candidates_root(), security.WRITE) is False:
+            raise HTTPException(403, f"{who['name']} acts as {who.get('as')}, who may not change the candidate folders")
+        move_to_archive(here, gone, who, f"HR-{one}", "Candidate folder moved to the archive")
+        logger.info("api %s POST /api/v1/candidates/%s/folder/obsolete", who["name"], one)
+        return JSONResponse({"candidateId": one, "path": gone, "moved": True, "exists": True},
+                            headers={"Cache-Control": "no-store"})
 
     @app.get("/api/v1/file")
     def api_file(request: Request, path: str,
@@ -3905,6 +4124,124 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         return bool(name) and (name.lower() == (s.employee_skeleton or "").lower()
                                or bool(_skeleton.EMPLOYEE_LOOKS_LIKE.match(name)))
 
+    def under_root(folder: str) -> str:
+        return os.path.join(s.repository_root, *folder.replace("/", "\\").split("\\"))
+
+    def hr_obsolete_root() -> str:
+        """Where the files of people who have left are kept: read only, never deleted."""
+        return under_root(s.employees_obsolete)
+
+    def candidates_root() -> str:
+        """Where the candidate folders live: 01_General\\HR\\Candidates by default."""
+        return under_root(s.candidates_folder)
+
+    def candidates_obsolete_root() -> str:
+        """Rejected or cancelled candidates, moved here whole. The only folders the DMS ever deletes by
+        itself, and only when HR has set a retention period (DMS_CANDIDATE_RETENTION_MONTHS)."""
+        return under_root(s.candidates_obsolete)
+
+    def is_candidate_skeleton(name: str) -> bool:
+        from . import skeleton as _skeleton
+        return bool(name) and (name.lower() == (s.candidate_skeleton or "").lower()
+                               or bool(_skeleton.CANDIDATE_LOOKS_LIKE.match(name)))
+
+    def candidate_shape() -> tuple[str, list[tuple[str, ...]]]:
+        """The folders every candidate folder must have: the skeleton's, or the blueprint's without one."""
+        from . import skeleton as _skeleton
+        shape = _skeleton.find(s.repository_root, s.candidates_folder, s.candidate_skeleton,
+                               _skeleton.CANDIDATE_LOOKS_LIKE)
+        if shape:
+            return shape, _skeleton.folders_of(shape)
+        return "", [tuple(rel) for rel in blueprint.leaves(blueprint.CANDIDATE)]
+
+    def audit_hr(who: dict, ref: str, details: str) -> None:
+        """One Control Audit row for a folder the DMS made or moved for HRPortal. A folder that was made is
+        not worth failing on an audit that SharePoint refused, so this never raises."""
+        try:
+            sp().audit(document_id=ref, event=s.choices["PermissionChanged"], from_status="", to_status="",
+                       actor=who.get("as") or who.get("name") or "DMS", details=details)
+        except Exception as e:  # noqa: BLE001
+            logger.info("%s was not written to the Control Audit: %s", ref, e)
+
+    def unprotect(folder: str) -> None:
+        """Take the read-only flag off everything in a folder that is coming back into use (a rehire)."""
+        from .file_service import _set_read_only
+        for here, _dirs, names in os.walk(folder):
+            for n in names:
+                try:
+                    _set_read_only(os.path.join(here, n), False)
+                except OSError:
+                    pass
+
+    def move_to_archive(here: str, gone: str, who: dict, ref: str, details: str) -> str:
+        """A whole folder into an archive tree, read only. The folder keeps its name there, so the same
+        person or candidate is found again, and nothing in it is touched but the read-only flag."""
+        from .file_service import _protect, _set_read_only
+        os.makedirs(os.path.dirname(gone), exist_ok=True)
+        if os.path.isdir(gone):           # moved once before and made again since: keep both, by the clock
+            gone = f"{gone}_{datetime.now():%Y%m%d%H%M%S}"
+        os.replace(here, gone)
+        for folder, _dirs, names in os.walk(gone):
+            for n in names:
+                try:
+                    _set_read_only(os.path.join(folder, n), True)
+                except OSError:
+                    pass
+        _protect(gone)
+        audit_hr(who, ref, f"{details}: {gone}")
+        return gone
+
+    def move_tree_contents(here: str, target: str) -> int:
+        """Everything filed under one folder into another, keeping the subfolder it was in (so a document
+        that was in 01_CV arrives in 02_Employment\\01_CV, with its workflow folders). Returns how many
+        files moved."""
+        from .file_service import _set_read_only
+        moved = 0
+        for folder, _dirs, names in os.walk(here):
+            rel = os.path.relpath(folder, here)
+            for n in names:
+                src = os.path.join(folder, n)
+                dst_folder = target if rel == "." else os.path.join(target, rel)
+                os.makedirs(dst_folder, exist_ok=True)
+                dst = os.path.join(dst_folder, n)
+                if os.path.exists(dst):
+                    base, ext = os.path.splitext(dst)
+                    dst = f"{base}_{datetime.now():%Y%m%d%H%M%S}{ext}"
+                read_only = False
+                try:
+                    read_only = not os.access(src, os.W_OK)
+                    if read_only:
+                        _set_read_only(src, False)
+                except OSError:
+                    pass
+                os.replace(src, dst)
+                if read_only:
+                    try:
+                        _set_read_only(dst, True)
+                    except OSError:
+                        pass
+                moved += 1
+        from .file_service import forget_found
+        forget_found()
+        return moved
+
+    def register_follows(was: str, now: str) -> None:
+        """The documents moved with the person: their records are corrected, so the register points at
+        where the file is and not at the folder it was filed in as a candidate."""
+        old = os.path.normcase(was) + os.sep
+        for d in sp().documents():
+            fields = {}
+            for field, key in (("WorkingUncPath", "workingUncPath"), ("CurrentUncPath", "currentUncPath")):
+                path = d.get(key) or ""
+                if path and os.path.normcase(path).startswith(old):
+                    fields[field] = os.path.join(now, os.path.relpath(path, was))
+            if fields:
+                try:
+                    sp().update(d["id"], fields)
+                    logger.info("%s now points at %s", d.get("documentId"), list(fields.values())[0])
+                except Exception as e:  # noqa: BLE001 - the files moved; a record that did not is logged
+                    logger.warning("%s was not corrected after the move: %s", d.get("documentId"), e)
+
     def in_skeleton(path: str) -> str:
         """The name of the skeleton, when this path is inside it - the customers' one, or the employees'.
         Its folders are the shape of the next customer (or the next employee file); a document kept there
@@ -3912,16 +4249,19 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         parts = rel_parts(path)
         if len(parts) >= 2 and parts[0].lower() == s.customers_folder.lower() and is_skeleton(parts[1]):
             return parts[1]
-        here = [p.lower() for p in s.employees_folder.replace("/", "\\").split("\\")]
-        if (len(parts) >= len(here) + 1 and [p.lower() for p in parts[:len(here)]] == here
-                and is_employee_skeleton(parts[len(here)])):
-            return parts[len(here)]
+        for folder, looks_like in ((s.employees_folder, is_employee_skeleton),
+                                   (s.candidates_folder, is_candidate_skeleton)):
+            here = [p.lower() for p in folder.replace("/", "\\").split("\\")]
+            if (len(parts) >= len(here) + 1 and [p.lower() for p in parts[:len(here)]] == here
+                    and looks_like(parts[len(here)])):
+                return parts[len(here)]
         return ""
 
     def no_files_in_skeleton(path: str) -> None:
         name = in_skeleton(path)
         if name:
-            what = "employee file" if is_employee_skeleton(name) else "customer"
+            what = ("employee file" if is_employee_skeleton(name)
+                    else "candidate folder" if is_candidate_skeleton(name) else "customer")
             raise HTTPException(403, f"{name} is the shape every new {what} is cut from, not a {what}: "
                                      f"its folders are kept, its documents are not. File this in a {what}.")
 
@@ -4326,7 +4666,7 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
         raw = open(full, "rb").read()
         text = raw.decode("utf-8-sig" if raw[:3] == b"\xef\xbb\xbf" else "utf-8", errors="replace")
         can_write = (may_write(user, full) and not files.is_read_only(full)
-                     and not (holds_share_log(full) or in_shared_folder(full)))
+                     and not (holds_share_log(full) or in_shared_folder(full) or in_hr_archive(full)))
         return {"path": full, "name": os.path.basename(full), "text": text, "canWrite": can_write}
 
     @app.post("/api/files/text")
@@ -4339,6 +4679,8 @@ def create_app(settings: Settings | None = None, sharepoint: SharePoint | None =
             raise HTTPException(403, "This file is released by the DMS (read only)")
         if holds_share_log(full) or in_shared_folder(full):
             raise HTTPException(403, "The Shared folder is kept by the DMS (read only)")
+        if in_hr_archive(full):
+            raise HTTPException(403, ARCHIVE)
         if len(req.text.encode("utf-8")) > TEXT_MAX:
             raise HTTPException(413, "The text is too large")
         bom = open(full, "rb").read(3) == b"\xef\xbb\xbf"       # keep the file as Windows wrote it

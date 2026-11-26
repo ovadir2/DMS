@@ -369,6 +369,20 @@
     "title": "HTTPValidationError",
     "type": "object"
    },
+   "HireRequest": {
+    "properties": {
+     "synelEmployeeId": {
+      "description": "The Synel employee id the candidate was registered under",
+      "title": "Synelemployeeid",
+      "type": "string"
+     }
+    },
+    "required": [
+     "synelEmployeeId"
+    ],
+    "title": "HireRequest",
+    "type": "object"
+   },
    "KpiOpen": {
     "properties": {
      "folder": {

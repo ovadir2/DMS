@@ -390,6 +390,38 @@ Every row of the list carries `url`, `markdownUrl`, `size`, `modifiedUtc` and `e
 
 The ticket expires with the person's session; ask for a new one from the page rather than storing it.
 
+## The candidate folders (HRPortal)
+
+A candidate is not an employee yet - no Synel number, so no employee file - and the CV came FROM them, so it
+must not sit in `HR\Shared`, whose files are shared OUT by link. Candidates get folders of their own under
+`01_General\HR\Candidates`, named by the HRPortal candidate number (`CAND-0001`), cut from
+`Candidate_Skeleton` (`01_CV`, `02_Interviews`, `03_Approval`). Scope `employees`.
+
+```
+GET  /api/v1/candidates/CAND-0001/folder         -> {"candidateId": "...", "exists": true, "folder": "...",
+                                                     "structure": ["01_CV", ...],
+                                                     "released": {"01_CV": [{documentId, revision, title, releasedAt}],
+                                                                  "02_Interviews": [], "03_Approval": []}}
+POST /api/v1/candidates/CAND-0001/folder         -> 201 made from the skeleton; 200 {"created": false} already there
+POST /api/v1/candidates/CAND-0001/hire           body {"synelEmployeeId": "000123"}
+                                                 -> 200 {"moved": 3, "to": "...\Employees\000123\02_Employment"}
+                                                    409 when the employee file does not exist yet
+POST /api/v1/candidates/CAND-0001/folder/obsolete -> 200 {"moved": true}; again {"moved": false}
+```
+
+- `released` lists only documents whose revision is approved and released (in `Current_ReadOnly`). A draft or
+  one still waiting for an approver is not there. HRPortal opens "Start evaluation" when `01_CV` has one and
+  "Approve hiring" when `03_Approval` has one.
+- **Hired:** every document moves into `Employees\<SynelId>\02_Employment`, keeping the subfolder it was
+  filed in and its workflow folders, and the register is corrected so each record points at where its file
+  now is. The emptied candidate folder is archived. Asked again it moves nothing (`"moved": 0`).
+- **Rejected or cancelled:** the folder moves whole to `HR\Candidates_Obsolete_ReadOnly`, read only. It is
+  deleted only by the retention job, and only when HR has set `DMS_CANDIDATE_RETENTION_MONTHS` - each
+  deletion is one Control Audit row.
+- Nothing in either HR archive can be added to, renamed or deleted from the page.
+- The candidate number is `^CAND-[0-9]{4,8}$`, and never the skeleton's name. Anything else is `400`; a
+  missing folder is `200` with `exists: false`, never `404`.
+
 ## The employee files (HRPortal)
 
 Every employee Synel knows gets one folder in the DMS, under `01_General\HR\Employees`, named by the Synel
@@ -422,6 +454,11 @@ POST /api/v1/employees/000123/folder    -> 201 {"created": true, "how": "14 fold
   none, and one made in a skeleton by hand is skipped rather than copied into every employee's file.
 - The id is a folder name: `^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`, leading zeros kept, and never the skeleton's
   own name. Anything else is `400`.
+- **Somebody who left:** `POST /api/v1/employees/{synelId}/folder/obsolete` moves the file whole to
+  `HR\Employees_Obsolete_ReadOnly`, read only. Nothing is ever deleted: an employee file is a record of the
+  company's obligations as much as of the person. The listing stops offering it and `GET .../folder` answers
+  `{"exists": false, "obsolete": true}`. A rehire is the same `POST .../folder` as always: the folder comes
+  back with everything in it (`"how": "restored from obsolete"`), not an empty one cut afresh.
 - A missing file is `200` with `exists: false`, never `404` - a `404` means the DMS does not have the
   endpoint at all.
 - Reading takes the scope `employees` or `documents`; making one takes `employees`, and the key's AD account

@@ -24,6 +24,8 @@ LOOKS_LIKE = re.compile(r"^customer[ _-]?skel(e)?ton$", re.I)
 # The same shape, for the employee files under HR: a folder named Employee_Skelton answers too, as a
 # misspelled customer skeleton does - the name on the file server is whatever somebody typed that day.
 EMPLOYEE_LOOKS_LIKE = re.compile(r"^employees?[ _-]?skel(e)?ton$", re.I)
+# ...and for a candidate file, which is the same shape again: a folder cut from one folder.
+CANDIDATE_LOOKS_LIKE = re.compile(r"^candidates?[ _-]?skel(e)?ton$", re.I)
 
 
 def find(root: str, folder: str, named: str = "", looks_like: re.Pattern | None = None) -> str | None:

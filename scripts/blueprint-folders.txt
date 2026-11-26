@@ -25,6 +25,17 @@
 01_General\RA_Certifications\KPIs
 01_General\HR
 01_General\HR\Shared
+01_General\HR\Candidates
+01_General\HR\Candidates\Candidate_Skeleton
+01_General\HR\Candidates\Candidate_Skeleton\01_CV
+01_General\HR\Candidates\Candidate_Skeleton\02_Interviews
+01_General\HR\Candidates\Candidate_Skeleton\03_Approval
+01_General\HR\Candidates\<CandidateId>
+01_General\HR\Candidates\<CandidateId>\01_CV
+01_General\HR\Candidates\<CandidateId>\02_Interviews
+01_General\HR\Candidates\<CandidateId>\03_Approval
+01_General\HR\Candidates_Obsolete_ReadOnly
+01_General\HR\Employees_Obsolete_ReadOnly
 01_General\HR\Employees
 01_General\HR\Employees\Employee_Skeleton
 01_General\HR\Employees\Employee_Skeleton\01_Personal

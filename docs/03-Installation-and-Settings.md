@@ -155,6 +155,11 @@ the workflow and blueprint folders stay out of reach either way.
 | Key | Default | What it does |
 | --- | --- | --- |
 | `DMS_EMPLOYEES_FOLDER` | `01_General/HR/Employees` | One folder per employee, by Synel employee id. HRPortal asks the DMS to make them; the DMS owns them |
+| `DMS_EMPLOYEES_OBSOLETE_FOLDER` | `01_General/HR/Employees_Obsolete_ReadOnly` | Where the file of somebody who left is kept: moved there whole, read only, never deleted. A rehire brings the same folder back |
+| `DMS_CANDIDATES_FOLDER` | `01_General/HR/Candidates` | One folder per candidate (`CAND-0001`), for the CV, the interview notes and the hiring approval. A candidate has no Synel number, so no employee file yet |
+| `DMS_CANDIDATE_SKELETON` | `Candidate_Skeleton` | The folder a candidate folder is cut from (`01_CV`, `02_Interviews`, `03_Approval`), with the AD permissions on them and never its documents |
+| `DMS_CANDIDATES_OBSOLETE_FOLDER` | `01_General/HR/Candidates_Obsolete_ReadOnly` | Rejected or cancelled candidates, moved there whole and read only |
+| `DMS_CANDIDATE_RETENTION_MONTHS` | `0` | How long an archived candidate folder is kept. `0` (the default): never deleted. HR decides the number; each deletion is a Control Audit row |
 | `DMS_EMPLOYEE_SKELETON` | `Employee_Skeleton` | The folder an employee file is cut from: its subfolders and the AD permissions on them (the restricted ones stay restricted), never its documents |
 | `DMS_OCR` | `1` | Read a scan with Tesseract when nothing else can: the last resort, after the DMS's own readers, markitdown and SharePoint's PDF all came back empty. It needs Tesseract installed beside the DMS (`pytesseract`, `Pillow`, `PyMuPDF`, and the language data); without them it quietly does nothing and the document gets a card. `0` turns it off |
 | `DMS_OCR_LANGUAGES` | `heb+eng` | The Tesseract language data installed on the server |
