@@ -20,6 +20,7 @@
 01_General\Supply_chain\Planners
 01_General\Supply_chain\KPIs
 01_General\Quality and Standards
+01_General\Quality and Standards\DMS_Validation
 01_General\Quality and Standards\KPIs
 01_General\RA_Certifications
 01_General\RA_Certifications\KPIs

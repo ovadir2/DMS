@@ -1,0 +1,17 @@
+{
+  "softwareRevision": "01",
+  "status": "in validation",
+  "validatedCommit": "",
+  "validatedOn": "",
+  "standard": "ISO 9001:2015 clause 7.5 / AS9100D, GAMP 5 category 5",
+  "documents": [
+    {"id": "VAL-001", "title": "Validation Plan", "revision": "01"},
+    {"id": "VAL-002", "title": "IQ Protocol", "revision": "01"},
+    {"id": "VAL-003", "title": "OQ Protocol", "revision": "01"},
+    {"id": "VAL-004", "title": "PQ Protocol", "revision": "01"},
+    {"id": "VAL-005", "title": "Requirements Traceability Matrix", "revision": "01"},
+    {"id": "VAL-006", "title": "Validation Summary Report", "revision": "01"},
+    {"id": "VAL-007", "title": "Validation Log", "revision": "01"},
+    {"id": "VAL-008", "title": "Change Impact Assessment", "revision": "01"}
+  ]
+}

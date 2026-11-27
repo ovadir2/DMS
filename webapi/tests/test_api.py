@@ -3319,6 +3319,60 @@ def test_blueprint_folders_locked_user_folders_and_projects_free(tmp_path):
     assert c.post("/api/items/delete", json={"path": str(prj / "PRJ-300_Radar")}).status_code == 200
 
 
+def test_the_dms_says_which_software_revision_it_is(tmp_path):
+    """A validated system has to be able to say which revision it is, and the revision cannot be a note in
+    somebody's folder: it travels with the code, in docs/validation/validation.json, and the DMS answers
+    with it. A build that is not the validated one says so rather than claiming to be."""
+    import json
+    import pathlib
+    from dms_api import validation
+    here = pathlib.Path(__file__).resolve().parents[2]
+    data = json.loads((here / "docs" / "validation" / "validation.json").read_text(encoding="utf-8"))
+
+    assert data["softwareRevision"].isdigit() and len(data["softwareRevision"]) == 2, data["softwareRevision"]
+    # every document of the set has a source file, so the Word set can always be built from the repository
+    for d in data["documents"]:
+        found = list((here / "docs" / "validation").glob(f"{d['id']}*.md"))
+        assert found, f"{d['id']} is in validation.json with no document behind it"
+
+    st = validation.state()
+    assert st["softwareRevision"] == data["softwareRevision"]
+    said = validation.health("abc1234")
+    assert said["softwareRevision"] == data["softwareRevision"]
+    assert said["runningValidatedBuild"] is (data["validatedCommit"][:7] == "abc1234")
+
+    c = TestClient(create_app(Settings(repository_root=str(tmp_path), auth_mode="dev", dev_user=USER,
+                                       sharepoint="memory")))
+    health = c.get("/api/health").json()
+    assert health["softwareRevision"] == data["softwareRevision"]
+    assert "runningValidatedBuild" in health and "validationStatus" in health
+    assert c.get("/api/client-config").json()["softwareRevision"] == data["softwareRevision"]
+
+
+def test_the_validation_set_is_built_as_word_with_the_logo(tmp_path):
+    """The validation documents are controlled documents: they go into the DMS as Word files carrying the
+    rh logo, their number and the software revision - built from the Markdown that is reviewed in git, so
+    the released document and the source can never say different things."""
+    pytest.importorskip("docx", reason="python-docx is not installed")
+    import pathlib
+    from dms_api import validation_docs
+    out = tmp_path / "set"
+    made = validation_docs.write_all(str(out), revision="07")
+    names = [os.path.basename(m) for m in made]
+    assert any(n.startswith("VAL-001") and n.endswith("_Rev07.docx") for n in names), names
+    assert any(n.startswith("VAL-008") for n in names), names        # the change impact assessment
+    assert sum(1 for n in names if n.endswith(".docx")) >= 8, names
+
+    from docx import Document
+    doc = Document(str(out / [n for n in names if n.startswith("VAL-001")][0]))
+    header = doc.sections[0].header
+    assert "VAL-001" in header.paragraphs[0].text and "Revision 07" in header.paragraphs[0].text
+    assert header.paragraphs[0].runs[0]._element.findall(
+        ".//{http://schemas.openxmlformats.org/drawingml/2006/main}blip"), "the logo is not in the header"
+    assert "uncontrolled" in doc.sections[0].footer.paragraphs[0].text
+    assert pathlib.Path(made[-1]).suffix == ".md"                    # the index of the set
+
+
 def test_blueprint_folder_list_matches_the_tree_script_file():
     import pathlib
     from dms_api import blueprint

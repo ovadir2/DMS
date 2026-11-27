@@ -179,7 +179,15 @@ MANAGEMENT["Supply_chain"] = ("Supply chain", "שרשרת אספקה", N({"Plann
 # Quality and Standards is a department of the skeleton; what people arrange inside it is theirs. Those
 # folders used to be part of the blueprint, which made them grey - not to be renamed or deleted by anyone -
 # and that is not what they are.
-MANAGEMENT["Quality and Standards"] = ("Quality and standards", "איכות ותקנים", {},
+# One folder in Quality and Standards is the DMS's own: the validation of the DMS itself - the plan, the
+# protocols and the signed reports - is a controlled document set like any other, and it is kept where the
+# quality documents are. Each revision of the software is a revision of these, released into their
+# Current_ReadOnly, and the revision it replaces moves to Obsolete_ReadOnly beside it.
+MANAGEMENT["Quality and Standards"] = ("Quality and standards", "איכות ותקנים", N({
+    "DMS_Validation": ("DMS validation", "ולידציה של ה-DMS", {},
+                       "The validation of the DMS itself: plan, protocols, signed reports, one revision "
+                       "per software revision",
+                       "הוולידציה של ה-DMS עצמו: תוכנית, פרוטוקולים ודוחות חתומים, גרסה לכל גרסת תוכנה")}),
                                        "Company quality procedures and standards", "נהלי האיכות והתקנים של החברה")
 
 # Every department measures itself, and the numbers belong where the work is: one KPIs folder in each, so a
