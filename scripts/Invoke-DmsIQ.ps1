@@ -113,7 +113,18 @@ Step 'IQ-06' 'The service answers, and says which build it is' 'status ok, the r
     $h = Invoke-RestMethod "$($Url.TrimEnd('/'))/api/health" -UseDefaultCredentials -TimeoutSec 60
     if ("$($h.status)" -ne 'ok') { throw "health says $($h.status)" }
     if (-not $h.rootReachable)   { throw "the repository root is not reachable from the service: $($h.repositoryRoot)" }
-    "version $($h.version), root $($h.repositoryRoot), certificate $($h.certDaysLeft) day(s) left"
+    "version $($h.version), software revision $($h.softwareRevision), root $($h.repositoryRoot), certificate $($h.certDaysLeft) day(s) left"
+}
+
+Step 'IQ-18' 'One version: the installation is the revision being validated' 'the DMS and the validation set agree' {
+    $h = Invoke-RestMethod "$($Url.TrimEnd('/'))/api/health" -UseDefaultCredentials -TimeoutSec 60
+    $state = Get-Content -LiteralPath (Join-Path $App 'docs\validation\validation.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ("$($h.softwareRevision)" -ne "$($state.softwareRevision)") {
+        throw "the DMS is running software revision '$($h.softwareRevision)' and the validation set is revision '$($state.softwareRevision)'"
+    }
+    $running = (& git -C $App rev-parse --short HEAD)
+    if ("$($h.version)" -ne "$running") { throw "the service is running build $($h.version), the checkout is $running - restart the DMS" }
+    "software revision $($h.softwareRevision), build $($h.version), one version everywhere"
 }
 
 Step 'IQ-07' 'The repository root, and the DMS can write in it' 'the path exists and is writable by the service account' {
@@ -215,6 +226,7 @@ $out += "|---|---|"
 $out += "| Executed | $(Get-Date -Format 'yyyy-MM-dd HH:mm') |"
 $out += "| By | $env:USERDOMAIN\$env:USERNAME on $env:COMPUTERNAME |"
 $out += "| System | $Url (IIS site $Site, $App) |"
+$out += "| Software revision | $((Get-Content -LiteralPath (Join-Path $App 'docs\validation\validation.json') -Raw -Encoding UTF8 | ConvertFrom-Json).softwareRevision) |"
 $out += "| Result | $pass of $($steps.Count) automated step(s) passed, $fail failed |"
 $out += ""
 $out += "## Automated steps"

@@ -6,7 +6,7 @@
 | System | RH DMS (Document Management System), `https://dms.rh.tech` |
 | Owner | Ronen Ovadia, IT |
 | Process owner | Document Control |
-| Version | 1.0 |
+| Software revision | 01 - the whole validation set carries one version (`validation.json`) |
 | Status | For approval |
 
 ## 1. Purpose
@@ -36,12 +36,20 @@ its internals are not), HRPortal, WidgetBuilder and the AI server - each validat
 | Electronic signatures | Not claimed. Approvals are authenticated AD identities recorded in the audit, not 21 CFR Part 11 signatures. If Part 11 becomes a requirement this plan is re-issued |
 | Risk | Medium. Wrong release or wrong visibility of a controlled document is the risk that matters; data loss is covered by the file server's own backup |
 
-Validation is performed in three qualifications, each with a protocol executed and signed before the next
-begins:
+The system is specified first and qualified in stages, each executed and signed before the next begins:
 
-- **IQ** - the system is installed and configured as specified (VAL-002).
-- **OQ** - each specified function behaves as specified, including the negative cases (VAL-003).
-- **PQ** - the system performs in real use, with real documents and real people, over an agreed period (VAL-004).
+- **SRS-001** - the specification everything else is measured against. Nothing is tested that is not here.
+- **SQA-001** - development verification, **before** the system is installed: the build was written,
+  reviewed and tested to a standard, and every requirement verified by test passes. Qualification of an
+  unqualified build is wasted work, so this gate comes first.
+- **IQ** (VAL-002) - the system is installed and configured as specified.
+- **OQ** (VAL-003) - each specified function behaves as specified, including the negative cases.
+- **PQ** (VAL-004) - the system performs in real use, with real documents and real people, over an agreed period.
+
+**One version for the whole validation.** The software revision in `docs/validation/validation.json` is
+the revision of every document of the set and of the build being qualified. Each executor records it and
+refuses to qualify a build of another revision; raising it is one command, so the set is never
+half-revised. A report that names another version is a deviation.
 
 Supporting evidence: the automated test suite (`webapi/tests`, 250 tests) and the end-to-end walk
 (`scripts/Test-DmsSmoke.ps1`), both run against the production installation and attached to the OQ report.
@@ -92,6 +100,8 @@ the approval rules, the permission model or the release path requires Quality's 
 
 | Id | Document |
 |---|---|
+| SRS-001 | Software Requirements Specification - the baseline |
+| SQA-001 | Software Quality Assurance plan and test report - the gate before IQ |
 | VAL-001 | This plan |
 | VAL-002 | IQ protocol and report |
 | VAL-003 | OQ protocol and report |

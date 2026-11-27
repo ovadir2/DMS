@@ -2,6 +2,7 @@
 
 | | |
 |---|---|
+| Software revision | 01 - the whole validation set carries one version (`validation.json`) |
 | System | RH DMS, production installation |
 | Purpose | To show the DMS does, in real use, what Document Control needs it to do |
 | Pre-requisite | VAL-002 and VAL-003 executed and signed; training recorded |

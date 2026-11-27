@@ -5,13 +5,18 @@ way. Everything here is the evidence of that.
 
 ## The documents
 
+Order: **SRS-001 → SQA-001 → IQ → OQ → PQ → VAL-006**. One version, in `validation.json`, for the
+software and for every document of the set.
+
 | Id | Document | What it is for |
 |---|---|---|
+| SRS-001 | Software Requirements Specification | What the system must do: 65 requirements, each with a risk class and how it is verified |
+| SQA-001 | Software Quality Assurance | The gate before IQ: the suite, the static checks, and the qualification of every requirement verified by test. Executed by `scripts\Invoke-DmsSQA.ps1` |
 | VAL-001 | Validation Plan | Scope, approach, responsibilities, acceptance criteria, change control |
 | VAL-002 | IQ Protocol | The installation is as specified. Executed by `scripts\Invoke-DmsIQ.ps1` |
 | VAL-003 | OQ Protocol | Each function behaves as specified. Executed by `scripts\Invoke-DmsOQ.ps1` |
 | VAL-004 | PQ Protocol | The system performs in real use, over 10 working days |
-| VAL-005 | Traceability Matrix | Every requirement to the step that proves it |
+| VAL-005 | Traceability Matrix | Every requirement to the step that proves it - generated, never written by hand |
 | VAL-006 | Validation Summary Report | The result, the deviations, the conclusion |
 | VAL-007 | Validation Log | One row per change after acceptance |
 | VAL-008 | Change Impact Assessment | One per change, before it is deployed |
@@ -31,9 +36,10 @@ they are never apart.
 2. Fill in a copy of **VAL-008** for it: what it touches, the risk, which validation documents are revised,
    which OQ steps are re-executed. A change to the approval rules, the permission model or the release path
    needs Quality's approval before it is deployed.
-3. Run the automated suite, and the OQ steps the assessment names (`Invoke-DmsOQ.ps1` runs the lot).
-4. Raise the revision in `validation.json` (01 -> 02), add the row to **VAL-007**, and revise the documents
-   the assessment named.
+3. Run `scripts\Invoke-DmsSQA.ps1`: the suite, the static and drift checks, and the qualification of
+   every SRS requirement. Then the OQ steps the assessment names (`Invoke-DmsOQ.ps1` runs the lot).
+4. Raise the revision of the whole set at once - `cd webapi; .\.venv\Scripts\python -m dms_api.validation --bump 02` -
+   add the row to **VAL-007**, and revise the documents the assessment named.
 5. Deploy, then run `scripts\Invoke-DmsIQ.ps1` against the new build.
 6. Publish: `scripts\Publish-DmsValidation.ps1 -Apply`. Each document becomes the next revision of its own
    record in `01_General\Quality and Standards\DMS_Validation`; the DMS moves the revision it replaces to

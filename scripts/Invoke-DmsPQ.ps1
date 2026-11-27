@@ -48,6 +48,11 @@ function Hours($a, $b) {
 Write-Host "=== PQ of the DMS at $u, $($From.ToString('yyyy-MM-dd')) to $($To.ToString('yyyy-MM-dd'))" -ForegroundColor Cyan
 $health = Call '/api/health'
 Write-Host "  build $($health.version), software revision $($health.softwareRevision) ($($health.validationStatus))"
+$state = Get-Content -LiteralPath (Join-Path $App 'docs\validation\validation.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+if ("$($health.softwareRevision)" -ne "$($state.softwareRevision)") {
+    Write-Host ("  the DMS ran revision $($health.softwareRevision) and the validation set is revision " +
+                "$($state.softwareRevision): the report records both, and the difference is a deviation.") -ForegroundColor Yellow
+}
 
 # ---------------------------------------------------------------- what happened in the period
 $all = Call '/api/my-workflows?everyone=true'
@@ -130,6 +135,7 @@ $out += "| Period | $($From.ToString('yyyy-MM-dd')) to $($To.ToString('yyyy-MM-d
 $out += "| Written | $(Get-Date -Format 'yyyy-MM-dd HH:mm') by $env:USERDOMAIN\$env:USERNAME |"
 $out += "| System | $u |"
 $out += "| Build / software revision | $($health.version) / $($health.softwareRevision) ($($health.validationStatus)) |"
+$out += "| Validation set revision | $($state.softwareRevision)$(if ("$($health.softwareRevision)" -ne "$($state.softwareRevision)") { " - **different from the running revision: a deviation**" }) |"
 $out += ""
 $out += "## Measured"
 $out += ""

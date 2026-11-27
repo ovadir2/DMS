@@ -35,6 +35,15 @@ if (-not $Report) { $Report = Join-Path $env:TEMP ("DMS-OQ {0:yyyy-MM-dd HHmm}.m
 $protocol = Join-Path $App 'docs\validation\VAL-003-OQ-Protocol.md'
 if (-not (Test-Path -LiteralPath $protocol)) { throw "The OQ protocol is not here: $protocol" }
 
+# One version for the whole validation: qualify the revision the set is written for, or say so and stop.
+$state = Get-Content -LiteralPath (Join-Path $App 'docs\validation\validation.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$health = Invoke-RestMethod "$($Url.TrimEnd('/'))/api/health" -UseDefaultCredentials -TimeoutSec 60
+if ("$($health.softwareRevision)" -ne "$($state.softwareRevision)") {
+    throw ("The DMS is running software revision '$($health.softwareRevision)' and the validation set is " +
+           "revision '$($state.softwareRevision)'. One version for the whole validation: deploy the " +
+           "revision being validated, or raise the set (py -m dms_api.validation --bump NN).")
+}
+
 # ---------------------------------------------------------------- the automated suite
 $suite = [pscustomobject]@{ Ran = $false; Passed = 0; Failed = 0; Line = 'not run' }
 if (-not $SkipTests) {
@@ -110,7 +119,8 @@ $out += "|---|---|"
 $out += "| Executed | $(Get-Date -Format 'yyyy-MM-dd HH:mm') |"
 $out += "| By | $env:USERDOMAIN\$env:USERNAME on $env:COMPUTERNAME |"
 $out += "| System | $Url |"
-$out += "| Build | $((Invoke-RestMethod "$($Url.TrimEnd('/'))/api/health" -UseDefaultCredentials).version) |"
+$out += "| Build | $($health.version) |"
+$out += "| Software revision | $($state.softwareRevision) ($($state.status)) |"
 $out += "| Automated suite | $($suite.Line) |"
 $out += "| Walk | as $As, approver $Approver - full output in $walkReport |"
 $out += "| Result | $pass passed, $fail failed, $witness awaiting a witness |"

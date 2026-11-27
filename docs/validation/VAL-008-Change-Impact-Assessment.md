@@ -7,6 +7,7 @@ VAL-007 (the validation log).
 
 | | |
 |---|---|
+| Software revision | 01 - the whole validation set carries one version (`validation.json`) |
 | Change | |
 | Raised by | |
 | Date | |

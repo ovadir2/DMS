@@ -2,6 +2,7 @@
 
 | | |
 |---|---|
+| Software revision | 01 - the whole validation set carries one version (`validation.json`) |
 | System | RH DMS, production server RHFS02, IIS site `DMS`, `https://dms.rh.tech` |
 | Purpose | To show the DMS is installed and configured as specified before any function is tested |
 | Executed by | | 

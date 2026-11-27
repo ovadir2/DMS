@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 
 log = logging.getLogger("dms_api.validation")
 
@@ -50,3 +51,73 @@ def health(version: str) -> dict:
     return {"softwareRevision": st["softwareRevision"], "validationStatus": st["status"],
             "validatedCommit": st["validatedCommit"], "validatedOn": st["validatedOn"],
             "runningValidatedBuild": validated}
+
+
+def folder() -> str:
+    return os.path.dirname(_path())
+
+
+def consistency() -> dict[str, list[str]]:
+    """One version for the whole validation, or none of it is evidence.
+
+    Every document of the set carries the software revision of validation.json, every document listed has
+    a file, and every document file is listed. A report produced against another version is a deviation,
+    which is why the executors record the revision they ran against.
+    """
+    st = state()
+    rev, here = st["softwareRevision"], folder()
+    listed = {d["id"]: d for d in st["documents"]}
+    files = {}
+    for name in sorted(os.listdir(here)):
+        if not name.endswith(".md") or name == "README.md":
+            continue
+        doc_id = name.split("-")[0] + "-" + name.split("-")[1]
+        files[doc_id] = os.path.join(here, name)
+    wrong = []
+    for doc_id, path in files.items():
+        with open(path, encoding="utf-8") as f:
+            said = re.search(r"^\| Software revision \| (\S+)", f.read(), re.M)
+        if not said:
+            wrong.append(f"{doc_id} does not say which revision it is")
+        elif said.group(1) != rev:
+            wrong.append(f"{doc_id} says revision {said.group(1)}, the set is {rev}")
+    return {"documents with the wrong version": wrong,
+            "listed with no document": sorted(set(listed) - set(files)),
+            "documents not listed": sorted(set(files) - set(listed))}
+
+
+def bump(revision: str) -> list[str]:
+    """Raise the whole set to a new revision at once: validation.json and the version line of every
+    document. The one way the version is ever changed, so the set cannot be half-revised."""
+    if not re.fullmatch(r"\d{2}", revision):
+        raise ValueError("A revision is two digits, as everywhere else in the DMS: 01, 02, 03")
+    with open(_path(), encoding="utf-8") as f:
+        data = json.load(f)
+    data["softwareRevision"] = revision
+    with open(_path(), "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    changed = []
+    here = folder()
+    for name in sorted(os.listdir(here)):
+        if not name.endswith(".md") or name == "README.md":
+            continue
+        path = os.path.join(here, name)
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        new = re.sub(r"^(\| Software revision \| )\S+", r"\g<1>" + revision, text, count=1, flags=re.M)
+        if new != text:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(new)
+            changed.append(name)
+    return changed
+
+
+if __name__ == "__main__":   # pragma: no cover - the command
+    import sys
+    if "--bump" in sys.argv:
+        where = sys.argv[sys.argv.index("--bump") + 1]
+        for name in bump(where):
+            print(f"{name} -> revision {where}")
+    else:
+        print(json.dumps({**state(), "consistency": consistency()}, indent=2, ensure_ascii=False))

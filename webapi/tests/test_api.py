@@ -3319,6 +3319,45 @@ def test_blueprint_folders_locked_user_folders_and_projects_free(tmp_path):
     assert c.post("/api/items/delete", json={"path": str(prj / "PRJ-300_Radar")}).status_code == 200
 
 
+def test_the_whole_validation_set_carries_one_version():
+    """One version for the whole validation, or none of it is evidence. The plan, the SRS, the SQA, the
+    three protocols, the matrix, the summary, the log and the change assessment all say the same revision
+    as the software, every document listed has a file and every file is listed - and raising the revision
+    is one command, so the set can never be half-revised."""
+    from dms_api import validation
+    said = validation.consistency()
+    assert said == {"documents with the wrong version": [], "listed with no document": [],
+                    "documents not listed": []}, said
+    assert validation.state()["softwareRevision"].isdigit()
+
+
+def test_the_traceability_matrix_is_generated_and_complete():
+    """The matrix is what says every requirement is tested and every test has a reason, so it is built
+    from SRS-001 and VAL-003 rather than kept by hand - and this fails when the file on disk is behind,
+    when a requirement has no step, or when a step cites no requirement."""
+    import pathlib
+    from dms_api import traceability
+    on_disk = pathlib.Path(traceability.MATRIX).read_text(encoding="utf-8")
+    assert on_disk.strip() == traceability.matrix().strip(), (
+        "docs\\validation\\VAL-005 is behind: run py -m dms_api.traceability --write")
+    assert traceability.gaps() == {"requirements with no step": [], "steps with no requirement": []}
+
+
+def test_every_requirement_that_says_it_is_tested_names_its_tests():
+    """A requirement verified by T has to name the tests that qualify it, and those tests have to exist.
+    Without this the qualification report says PASS for a requirement nothing checks."""
+    from dms_api import qualification
+    said = qualification.check()
+    assert said == {"requirements verified by test with no test named": [],
+                    "mapped tests that do not exist": [],
+                    "mapped requirements that are not in the SRS": []}, said
+    # and the report accounts for every requirement, not only the tested ones
+    from dms_api import traceability
+    text = qualification.report("")
+    for r in traceability.requirements():
+        assert r["id"] in text, f"{r['id']} is missing from the qualification report"
+
+
 def test_the_dms_says_which_software_revision_it_is(tmp_path):
     """A validated system has to be able to say which revision it is, and the revision cannot be a note in
     somebody's folder: it travels with the code, in docs/validation/validation.json, and the DMS answers

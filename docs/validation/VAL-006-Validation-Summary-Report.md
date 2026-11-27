@@ -2,6 +2,7 @@
 
 | | |
 |---|---|
+| Software revision | 01 - the whole validation set carries one version (`validation.json`) |
 | System | RH DMS, `https://dms.rh.tech` |
 | Build validated (`/api/health` → `version`) | |
 | Period | IQ ______ · OQ ______ · PQ ______ to ______ |
